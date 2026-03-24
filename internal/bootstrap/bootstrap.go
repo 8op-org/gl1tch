@@ -136,7 +136,6 @@ func Run() error {
 		return fmt.Errorf("finding home dir: %w", err)
 	}
 	cfgDir := filepath.Join(home, configSubdir)
-	pluginsDir := filepath.Join(cfgDir, "plugins")
 
 	confPath, err := WriteTmuxConf(cfgDir, self)
 	if err != nil {
@@ -163,7 +162,7 @@ func Run() error {
 	}
 	defer busSrv.Stop()
 
-	plugins, err := discovery.Discover(pluginsDir)
+	plugins, err := discovery.Discover(cfgDir)
 	if err != nil {
 		return fmt.Errorf("discovering plugins: %w", err)
 	}
