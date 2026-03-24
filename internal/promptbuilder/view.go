@@ -291,7 +291,7 @@ func (b *BubbleModel) View() string {
 
 	header := titleStyle.Render("PIPELINE BUILDER") +
 		lipgloss.NewStyle().Width(w-20).Render("") +
-		dimStep.Render("[?] help  [x]")
+		dimStep.Render("[?] help")
 	nameRow := labelStyle.Render("NAME: ") + b.inner.Name()
 	footer := statusBar.Render("[+] add  [←→] cycle  [tab] next field  [↑↓] steps  [s] save  [esc] quit")
 
