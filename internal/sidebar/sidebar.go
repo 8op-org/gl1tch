@@ -217,6 +217,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor >= len(m.windows) && m.cursor > 0 {
 				m.cursor = len(m.windows) - 1
 			}
+
+		case "p":
+			if m.self != "" {
+				exec.Command("tmux", "new-window", "-t", "orcai",
+					"-n", "prompt-builder", m.self, "_promptbuilder").Run() //nolint:errcheck
+			}
 		}
 	}
 
@@ -311,7 +317,7 @@ func buildSidebarView(width int, windows []Window, cursor int) string {
 	}
 
 	// ── Footer ────────────────────────────────────────────────────────────────
-	const footerText = "n new  x kill  ↑↓ nav"
+	const footerText = "n new  p build  x kill  ↑↓ nav"
 	rows = append(rows, divider, aBlue+footerText+aReset)
 
 	return strings.Join(rows, "\n")
