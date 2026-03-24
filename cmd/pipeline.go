@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/promptbuilder"
@@ -28,9 +29,11 @@ var pipelineBuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Open the interactive pipeline builder",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		providers := picker.BuildProviders()
+
 		mgr := plugin.NewManager()
-		for _, name := range []string{"claude", "gemini", "openspec", "openclaw"} {
-			mgr.Register(plugin.NewCliAdapter(name, name+" CLI adapter", name))
+		for _, prov := range providers {
+			mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", prov.ID))
 		}
 
 		m := promptbuilder.New(mgr)
@@ -39,9 +42,9 @@ var pipelineBuildCmd = &cobra.Command{
 		m.AddStep(pipeline.Step{ID: "step1", Plugin: "claude", Model: "claude-sonnet-4-6"})
 		m.AddStep(pipeline.Step{ID: "output", Type: "output"})
 
-		bubble := promptbuilder.NewBubble(m, nil)
-		p := tea.NewProgram(bubble, tea.WithAltScreen())
-		if _, err := p.Run(); err != nil {
+		bubble := promptbuilder.NewBubble(m, providers)
+		prog := tea.NewProgram(bubble, tea.WithAltScreen())
+		if _, err := prog.Run(); err != nil {
 			return fmt.Errorf("pipeline builder: %w", err)
 		}
 		return nil
@@ -71,9 +74,10 @@ var pipelineRunCmd = &cobra.Command{
 			return err
 		}
 
+		runProviders := picker.BuildProviders()
 		mgr := plugin.NewManager()
-		for _, n := range []string{"claude", "gemini", "openspec", "openclaw"} {
-			mgr.Register(plugin.NewCliAdapter(n, n+" CLI adapter", n))
+		for _, prov := range runProviders {
+			mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", prov.ID))
 		}
 
 		result, err := pipeline.Run(cmd.Context(), p, mgr, "")

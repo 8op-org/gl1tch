@@ -4,22 +4,25 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/plugin"
 )
 
 // Run launches the prompt builder as a standalone BubbleTea program.
 func Run() {
+	providers := picker.BuildProviders()
+
 	mgr := plugin.NewManager()
-	for _, name := range []string{"claude", "gemini", "openspec", "openclaw"} {
-		mgr.Register(plugin.NewCliAdapter(name, name+" CLI adapter", name))
+	for _, p := range providers {
+		mgr.Register(plugin.NewCliAdapter(p.ID, p.Label+" CLI adapter", p.ID))
 	}
 
 	m := New(mgr)
 	m.SetName("new-pipeline")
 
-	bubble := NewBubble(m, nil)
-	p := tea.NewProgram(bubble, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	bubble := NewBubble(m, providers)
+	prog := tea.NewProgram(bubble, tea.WithAltScreen())
+	if _, err := prog.Run(); err != nil {
 		fmt.Printf("prompt builder error: %v\n", err)
 	}
 }
