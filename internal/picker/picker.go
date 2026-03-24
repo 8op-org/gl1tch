@@ -767,6 +767,29 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// renderMatchHighlights returns name with fuzzy-matched characters highlighted in pink ANSI.
+// When matchIndexes is empty, the name is returned unchanged.
+func renderMatchHighlights(name string, matchIndexes []int) string {
+	if len(matchIndexes) == 0 {
+		return name
+	}
+	matched := make(map[int]bool, len(matchIndexes))
+	for _, idx := range matchIndexes {
+		matched[idx] = true
+	}
+	const pink = "\x1b[38;5;212m"
+	const reset = "\x1b[0m"
+	var sb strings.Builder
+	for i, r := range name {
+		if matched[i] {
+			sb.WriteString(pink + string(r) + reset)
+		} else {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
 func (m pickerModel) View() string {
 	if m.quit {
 		return ""
@@ -813,34 +836,55 @@ func (m pickerModel) View() string {
 		Padding(0, 1)
 
 	switch m.state {
-	case StateProvider:
+	case StateSearch:
 		rows = append(rows, headerStyle.Render("ORCAI  New Session"))
 
-		if len(m.sessions) > 0 {
-			rows = append(rows, sectionStyle.Render("── existing ──"))
-			for i, s := range m.sessions {
-				if m.pCursor == i {
-					rows = append(rows, activeStyle.Render("▎ "+s.Name))
+		inputStyle := lipgloss.NewStyle().Foreground(styles.Comment).Width(w).Padding(0, 1)
+		rows = append(rows, inputStyle.Render(m.searchInput.View()))
+
+		if len(m.filteredItems) == 0 {
+			rows = append(rows, inactiveStyle.Render("  no matches"))
+		} else {
+			lastKind := ""
+			for i, item := range m.filteredItems {
+				if item.Kind != lastKind {
+					// Pluralise for display: "skills", "agents", "providers", "sessions", "pipelines"
+					groupLabel := item.Kind + "s"
+					rows = append(rows, sectionStyle.Render("── "+groupLabel+" ──"))
+					lastKind = item.Kind
+				}
+
+				nameStr := renderMatchHighlights(item.Name, item.MatchIndexes())
+				suffix := ""
+				if item.SourceTag != "" {
+					suffix = "  " + item.SourceTag
+				} else if item.Kind == "provider" && item.Description == "select model" {
+					suffix = " ›"
+				}
+
+				if i == m.itemCursor {
+					rows = append(rows, activeStyle.Render("▎ "+nameStr+suffix))
 				} else {
-					rows = append(rows, inactiveStyle.Render("  "+s.Name))
+					rows = append(rows, inactiveStyle.Render("  "+nameStr+suffix))
 				}
 			}
-			rows = append(rows, sectionStyle.Render("── new ──"))
 		}
+		rows = append(rows, footerStyle.Render("↑↓ nav  enter select  type to search"))
 
-		for i, p := range m.providers {
-			label := p.Label
-			if len(p.Models) > 0 {
-				label += " ›"
-			}
-			idx := len(m.sessions) + i
-			if idx == m.pCursor {
-				rows = append(rows, activeStyle.Render("▎ "+label))
+	case StateProvider:
+		title := "ORCAI  Select Provider"
+		if m.selectedItem != nil {
+			title = "ORCAI  Launch: " + m.selectedItem.Name
+		}
+		rows = append(rows, headerStyle.Render(title))
+		for i, p := range m.skillProviders {
+			if i == m.spCursor {
+				rows = append(rows, activeStyle.Render("▎ "+p.Label))
 			} else {
-				rows = append(rows, inactiveStyle.Render("  "+label))
+				rows = append(rows, inactiveStyle.Render("  "+p.Label))
 			}
 		}
-		rows = append(rows, footerStyle.Render("↑↓ nav  enter select  q quit"))
+		rows = append(rows, footerStyle.Render("↑↓ nav  enter select  esc back"))
 
 	case StateModel:
 		p := m.providers[m.pCursor-len(m.sessions)]
