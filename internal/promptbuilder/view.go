@@ -22,11 +22,23 @@ var (
 	labelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))
 )
 
+var pluginList = []string{"claude", "gemini", "openspec", "openclaw"}
+
+var modelsByPlugin = map[string][]string{
+	"claude":   {"claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"},
+	"gemini":   {"gemini-2.0-flash", "gemini-1.5-pro"},
+	"openspec": {},
+	"openclaw": {},
+}
+
 // BubbleModel wraps Model and implements tea.Model.
 type BubbleModel struct {
-	inner  *Model
-	width  int
-	height int
+	inner       *Model
+	width       int
+	height      int
+	activeField int // 0=Plugin 1=Model 2=Prompt
+	pluginIndex int
+	modelIndex  int
 }
 
 // NewBubble creates a bubbletea-compatible model.
@@ -35,6 +47,59 @@ func NewBubble(m *Model) *BubbleModel {
 }
 
 func (b *BubbleModel) Init() tea.Cmd { return nil }
+
+func (b *BubbleModel) syncIndicesFromStep() {
+	steps := b.inner.Steps()
+	if len(steps) == 0 {
+		return
+	}
+	sel := steps[b.inner.SelectedIndex()]
+	for i, p := range pluginList {
+		if p == sel.Plugin {
+			b.pluginIndex = i
+			break
+		}
+	}
+	models := modelsByPlugin[pluginList[b.pluginIndex]]
+	for i, mo := range models {
+		if mo == sel.Model {
+			b.modelIndex = i
+			break
+		}
+	}
+}
+
+func (b *BubbleModel) applyPlugin() {
+	steps := b.inner.Steps()
+	if len(steps) == 0 {
+		return
+	}
+	idx := b.inner.SelectedIndex()
+	s := steps[idx]
+	s.Plugin = pluginList[b.pluginIndex]
+	b.modelIndex = 0
+	models := modelsByPlugin[s.Plugin]
+	if len(models) > 0 {
+		s.Model = models[0]
+	} else {
+		s.Model = ""
+	}
+	b.inner.UpdateStep(idx, s)
+}
+
+func (b *BubbleModel) applyModel() {
+	steps := b.inner.Steps()
+	if len(steps) == 0 {
+		return
+	}
+	idx := b.inner.SelectedIndex()
+	s := steps[idx]
+	models := modelsByPlugin[pluginList[b.pluginIndex]]
+	if len(models) > 0 {
+		s.Model = models[b.modelIndex]
+	}
+	b.inner.UpdateStep(idx, s)
+}
 
 func (b *BubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -45,13 +110,67 @@ func (b *BubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return b, tea.Quit
+
+		case key.Matches(msg, keys.Tab):
+			if len(b.inner.Steps()) > 0 {
+				b.activeField = (b.activeField + 1) % 3
+			}
+
+		case key.Matches(msg, keys.ShiftTab):
+			if len(b.inner.Steps()) > 0 {
+				b.activeField = (b.activeField + 2) % 3
+			}
+
 		case key.Matches(msg, keys.Up):
 			b.inner.SelectStep(b.inner.SelectedIndex() - 1)
+			b.activeField = 0
+			b.syncIndicesFromStep()
+
 		case key.Matches(msg, keys.Down):
 			b.inner.SelectStep(b.inner.SelectedIndex() + 1)
+			b.activeField = 0
+			b.syncIndicesFromStep()
+
+		case key.Matches(msg, keys.Left):
+			if len(b.inner.Steps()) == 0 {
+				break
+			}
+			switch b.activeField {
+			case 0:
+				b.pluginIndex = (b.pluginIndex - 1 + len(pluginList)) % len(pluginList)
+				b.applyPlugin()
+			case 1:
+				models := modelsByPlugin[pluginList[b.pluginIndex]]
+				if len(models) > 0 {
+					b.modelIndex = (b.modelIndex - 1 + len(models)) % len(models)
+					b.applyModel()
+				}
+			}
+
+		case key.Matches(msg, keys.Right):
+			if len(b.inner.Steps()) == 0 {
+				break
+			}
+			switch b.activeField {
+			case 0:
+				b.pluginIndex = (b.pluginIndex + 1) % len(pluginList)
+				b.applyPlugin()
+			case 1:
+				models := modelsByPlugin[pluginList[b.pluginIndex]]
+				if len(models) > 0 {
+					b.modelIndex = (b.modelIndex + 1) % len(models)
+					b.applyModel()
+				}
+			}
+
 		case key.Matches(msg, keys.AddStep):
 			id := fmt.Sprintf("step%d", len(b.inner.Steps())+1)
-			b.inner.AddStep(pipeline.Step{ID: id, Plugin: "claude"})
+			b.inner.AddStep(pipeline.Step{ID: id, Plugin: pluginList[0]})
+			b.inner.SelectStep(len(b.inner.Steps()) - 1)
+			b.activeField = 0
+			b.pluginIndex = 0
+			b.modelIndex = 0
+
 		case key.Matches(msg, keys.Save):
 			home, err := os.UserHomeDir()
 			if err == nil {
