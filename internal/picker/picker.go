@@ -315,11 +315,8 @@ func GetOrCreateWorktreeFrom(basePath, sessionName string) (worktreePath, repoRo
 		return "", ""
 	}
 
-	// Place the worktree as a sibling of the repo: <parent>/<repoName>-<session>
-	worktreePath = filepath.Join(
-		filepath.Dir(repoRoot),
-		filepath.Base(repoRoot)+"-"+sessionName,
-	)
+	// Place the worktree inside <repoRoot>/.worktrees/<sessionName>
+	worktreePath = filepath.Join(repoRoot, ".worktrees", sessionName)
 
 	// Reuse an existing worktree path rather than erroring.
 	if _, err := os.Stat(worktreePath); err == nil {
