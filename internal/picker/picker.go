@@ -424,6 +424,7 @@ type pickerModel struct {
 	openspecAvailable bool            // true when openspec CLI is in PATH
 	wfCursor          int             // cursor for workflow choice (0=fresh, 1=openspec)
 	launchedWorktree  string          // worktree path created by doLaunch (may be "")
+	workdirErr        string          // validation error shown in StateWorkdir
 
 	// ── fuzzy search (StateSearch) ──
 	searchInput   textinput.Model
@@ -530,7 +531,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Quit
 
 				case "pipeline":
-					m.workdirInput.SetValue("")
+					m.workdirInput.SetValue("~/")
+m.workdirInput.CursorEnd()
+m.workdirErr = ""
 					m.workdirInput.Focus()
 					m.state = StateWorkdir
 
@@ -550,7 +553,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state = StateModel
 					} else {
 						m.selectedModelID = ""
-						m.workdirInput.SetValue("")
+						m.workdirInput.SetValue("~/")
+m.workdirInput.CursorEnd()
+m.workdirErr = ""
 						m.workdirInput.Focus()
 						m.state = StateWorkdir
 					}
@@ -591,7 +596,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.skillProviders) > 0 {
 					m.selectedProvider = m.skillProviders[m.spCursor]
 					m.selectedModelID = ""
-					m.workdirInput.SetValue("")
+					m.workdirInput.SetValue("~/")
+m.workdirInput.CursorEnd()
+m.workdirErr = ""
 					m.workdirInput.Focus()
 					m.state = StateWorkdir
 				}
@@ -625,6 +632,16 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.workdirInput.Blur()
 				return m, nil
 			case "enter":
+				// Validate the directory exists before launching.
+				dir := expandPath(strings.TrimSpace(m.workdirInput.Value()))
+				if dir == "" {
+					dir, _ = os.UserHomeDir()
+				}
+				if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+					m.workdirErr = "not found: " + dir
+					return m, nil
+				}
+				m.workdirErr = ""
 				// Skills, agents, and pipelines bypass the OpenSpec workflow.
 				if m.selectedItem != nil {
 					m.doLaunch()
@@ -759,7 +776,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Existing session selected: focus the window and go to workflow.
 					m.selectedSession = session
 					focusWindow(session.Index)
-					m.workdirInput.SetValue("")
+					m.workdirInput.SetValue("~/")
+m.workdirInput.CursorEnd()
+m.workdirErr = ""
 					if !m.openspecAvailable {
 						return m, tea.Quit
 					}
@@ -774,7 +793,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Provider with no models: go straight to workdir.
 					m.selectedProvider = *provider
 					m.selectedModelID = ""
-					m.workdirInput.SetValue("")
+					m.workdirInput.SetValue("~/")
+m.workdirInput.CursorEnd()
+m.workdirErr = ""
 					m.workdirInput.Focus()
 					m.state = StateWorkdir
 				}
@@ -783,7 +804,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// StateModel — m.selectedProvider is already set by the StateSearch enter handler.
 				modelID := selectableModels(m.selectedProvider)[m.mCursor].ID
 				m.selectedModelID = modelID
-				m.workdirInput.SetValue("")
+				m.workdirInput.SetValue("~/")
+m.workdirInput.CursorEnd()
+m.workdirErr = ""
 				m.workdirInput.Focus()
 				m.state = StateWorkdir
 			}
@@ -934,10 +957,15 @@ func (m pickerModel) View() string {
 
 		bodyStyle := lipgloss.NewStyle().Width(w).Padding(1, 2)
 		labelStyle := lipgloss.NewStyle().Foreground(styles.Fg).Bold(true)
-		body := lipgloss.JoinVertical(lipgloss.Left,
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+		bodyParts := []string{
 			labelStyle.Render("Base directory:"),
 			m.workdirInput.View(),
-		)
+		}
+		if m.workdirErr != "" {
+			bodyParts = append(bodyParts, errStyle.Render(m.workdirErr))
+		}
+		body := lipgloss.JoinVertical(lipgloss.Left, bodyParts...)
 		rows = append(rows, bodyStyle.Render(body))
 		rows = append(rows, footerStyle.Render("enter confirm  esc back"))
 
