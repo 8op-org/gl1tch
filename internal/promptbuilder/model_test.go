@@ -67,3 +67,24 @@ func TestModel_ToPipeline(t *testing.T) {
 		t.Errorf("expected 2 steps, got %d", len(p.Steps))
 	}
 }
+
+func TestModel_UpdateStep(t *testing.T) {
+	m := promptbuilder.New(nil)
+	m.AddStep(pipeline.Step{ID: "a", Plugin: "claude"})
+	m.UpdateStep(0, pipeline.Step{ID: "a", Plugin: "gemini", Model: "gemini-2.0-flash"})
+	if m.Steps()[0].Plugin != "gemini" {
+		t.Fatalf("expected gemini, got %s", m.Steps()[0].Plugin)
+	}
+	if m.Steps()[0].Model != "gemini-2.0-flash" {
+		t.Fatalf("expected gemini-2.0-flash, got %s", m.Steps()[0].Model)
+	}
+}
+
+func TestModel_UpdateStep_OutOfRange(t *testing.T) {
+	m := promptbuilder.New(nil)
+	m.AddStep(pipeline.Step{ID: "a", Plugin: "claude"})
+	m.UpdateStep(99, pipeline.Step{ID: "x"}) // should be a no-op
+	if len(m.Steps()) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(m.Steps()))
+	}
+}

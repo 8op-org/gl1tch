@@ -43,6 +43,14 @@ func (m *Model) SelectStep(i int) {
 	m.selectedIndex = i
 }
 
+// UpdateStep replaces the step at index i. No-op if i is out of range.
+func (m *Model) UpdateStep(i int, s pipeline.Step) {
+	if i < 0 || i >= len(m.steps) {
+		return
+	}
+	m.steps[i] = s
+}
+
 // ToPipeline converts the current model state to a Pipeline.
 func (m *Model) ToPipeline() *pipeline.Pipeline {
 	steps := make([]pipeline.Step, len(m.steps))
