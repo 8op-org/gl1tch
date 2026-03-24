@@ -107,6 +107,15 @@ func (b *BubbleModel) applyModel() {
 	b.inner.UpdateStep(idx, s)
 }
 
+// renderSelector renders a cycle-selector field. Active fields show ◀ value ▶.
+func (b *BubbleModel) renderSelector(label, value string, fieldIdx int) string {
+	l := labelStyle.Render(label)
+	if b.activeField == fieldIdx && len(b.inner.Steps()) > 0 {
+		return l + selectedStep.Render("◀ "+value+" ▶") + "\n"
+	}
+	return l + value + "\n"
+}
+
 func (b *BubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -245,14 +254,35 @@ func (b *BubbleModel) View() string {
 		rightContent = titleStyle.Render(fmt.Sprintf("STEP %d — CONFIG", b.inner.SelectedIndex()+1)) + "\n"
 		rightContent += strings.Repeat("─", rightW-2) + "\n"
 		rightContent += labelStyle.Render("ID:      ") + sel.ID + "\n"
-		rightContent += labelStyle.Render("Plugin:  ") + sel.Plugin + "\n"
-		rightContent += labelStyle.Render("Model:   ") + sel.Model + "\n"
-		rightContent += labelStyle.Render("Prompt:  ") + sel.Prompt + "\n"
+
+		pluginVal := pluginList[b.pluginIndex]
+		rightContent += b.renderSelector("Plugin:  ", pluginVal, 0)
+
+		modelVal := sel.Model
+		if modelVal == "" {
+			modelVal = "(none)"
+		}
+		rightContent += b.renderSelector("Model:   ", modelVal, 1)
+
+		if b.activeField == 2 {
+			rightContent += labelStyle.Render("Prompt:  ") + b.promptInput.View() + "\n"
+		} else {
+			rightContent += labelStyle.Render("Prompt:  ") + sel.Prompt + "\n"
+		}
 		if sel.Condition.If != "" {
 			rightContent += labelStyle.Render("Cond:    ") + sel.Condition.If + "\n"
 			rightContent += labelStyle.Render("  then→  ") + sel.Condition.Then + "\n"
 			rightContent += labelStyle.Render("  else→  ") + sel.Condition.Else + "\n"
 		}
+	} else {
+		rightContent = "\n\n" +
+			dimStep.Render("  No steps yet.") + "\n\n" +
+			dimStep.Render("  Press [+] to add your first step.") + "\n" +
+			dimStep.Render("  Each step requires a provider (Plugin).") + "\n\n" +
+			dimStep.Render("  Once a step is selected:") + "\n" +
+			dimStep.Render("    [←→]  cycle Plugin or Model") + "\n" +
+			dimStep.Render("    [tab] move between fields") + "\n" +
+			dimStep.Render("    type  enter a Prompt")
 	}
 
 	left := lipgloss.NewStyle().Width(leftW).Height(h - 6).Render(leftContent)
@@ -263,7 +293,7 @@ func (b *BubbleModel) View() string {
 		lipgloss.NewStyle().Width(w-20).Render("") +
 		dimStep.Render("[?] help  [x]")
 	nameRow := labelStyle.Render("NAME: ") + b.inner.Name()
-	footer := statusBar.Render("[r] run  [s] save  [tab] next field  [↑↓] steps  [esc] quit")
+	footer := statusBar.Render("[+] add  [←→] cycle  [tab] next field  [↑↓] steps  [s] save  [esc] quit")
 
 	modal := borderStyle.Width(w).Render(
 		lipgloss.JoinVertical(lipgloss.Left,
