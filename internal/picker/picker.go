@@ -245,11 +245,26 @@ func currentPanePath() string {
 	return strings.TrimSpace(string(out))
 }
 
+// expandPath expands a leading ~ to the user's home directory.
+func expandPath(path string) string {
+	if path == "" {
+		return path
+	}
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			path = home + path[1:]
+		}
+	}
+	return path
+}
+
 // findGitRoot returns the top-level git directory containing path, or "".
 func findGitRoot(path string) string {
 	if path == "" {
 		return ""
 	}
+	path = expandPath(path)
 	out, err := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return ""
@@ -973,7 +988,7 @@ func (m *pickerModel) doLaunch() {
 		return // existing session already focused in Update
 	}
 
-	basePath := strings.TrimSpace(m.workdirInput.Value())
+	basePath := expandPath(strings.TrimSpace(m.workdirInput.Value()))
 	if basePath == "" {
 		basePath = currentPanePath()
 	}
