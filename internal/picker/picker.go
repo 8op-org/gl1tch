@@ -496,7 +496,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.state == StateSearch {
 			switch msg.String() {
-			case "ctrl+c", "q":
+			case "ctrl+c", "q", "esc":
 				m.quit = true
 				return m, tea.Quit
 
