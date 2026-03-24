@@ -707,7 +707,15 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc":
 			if m.state == StateModel {
-				m.state = StateProvider
+				// New flow (came from StateSearch): go back to search.
+				// Legacy flow (came from old StateProvider): go back to StateProvider.
+				if m.selectedItem != nil {
+					m.selectedItem = nil
+					m.state = StateSearch
+					m.searchInput.Focus()
+				} else {
+					m.state = StateProvider
+				}
 				m.mCursor = 0
 			} else {
 				m.quit = true
@@ -720,7 +728,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pCursor++
 				}
 			} else {
-				sel := selectableModels(m.providers[m.pCursor-len(m.sessions)])
+				sel := selectableModels(m.selectedProvider)
 				if m.mCursor < len(sel)-1 {
 					m.mCursor++
 				}
@@ -765,9 +773,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else {
 				// StateModel
-				p := m.providers[m.pCursor-len(m.sessions)]
-				modelID := selectableModels(p)[m.mCursor].ID
-				m.selectedProvider = p
+				// StateModel — m.selectedProvider is already set by the StateSearch enter handler.
+				modelID := selectableModels(m.selectedProvider)[m.mCursor].ID
 				m.selectedModelID = modelID
 				m.workdirInput.SetValue(currentPanePath())
 				m.workdirInput.Focus()
@@ -898,7 +905,7 @@ func (m pickerModel) View() string {
 		rows = append(rows, footerStyle.Render("↑↓ nav  enter select  esc back"))
 
 	case StateModel:
-		p := m.providers[m.pCursor-len(m.sessions)]
+		p := m.selectedProvider
 		rows = append(rows, headerStyle.Render("ORCAI  "+p.Label+" › Model"))
 		cursor := 0
 		for _, mo := range p.Models {
