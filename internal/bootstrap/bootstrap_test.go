@@ -43,9 +43,9 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 	}
 	conf := string(data)
 
-	// ctrl+; leader must be present.
-	if !strings.Contains(conf, "C-\\;") {
-		t.Error("tmux.conf missing C-\\; leader binding")
+	// ctrl+space leader must be present.
+	if !strings.Contains(conf, "C-Space") {
+		t.Error("tmux.conf missing C-Space leader binding")
 	}
 	// Backtick leader must be absent.
 	if strings.Contains(conf, "bind-key -n `") {
@@ -56,8 +56,8 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 		t.Error("tmux.conf still contains global ESC intercept")
 	}
 	// Status bar must contain chord hints.
-	if !strings.Contains(conf, "^; n new") {
-		t.Error("tmux.conf status-right missing '^; n new' hint")
+	if !strings.Contains(conf, "^spc n new") {
+		t.Error("tmux.conf status-right missing '^spc n new' hint")
 	}
 	// Sidebar toggle chord must be present.
 	if !strings.Contains(conf, "_sidebar-toggle") {

@@ -30,17 +30,17 @@ set -g window-status-format ""
 set -g window-status-current-format ""
 set -g status-left "#[fg=#bd93f9,bold] ORCAI #[default]"
 set -g status-left-length 20
-set -g status-right "#[fg=#6272a4] ^; n new  ^; p build   %H:%M "
-set -g status-right-length 40
+set -g status-right "#[fg=#6272a4] ^spc n new  ^spc p build   %H:%M "
+set -g status-right-length 44
 set -g mouse on
 set -g default-terminal "screen-256color"
 set -g base-index 0
 set -g pane-border-style "fg=#44475a"
 set -g pane-active-border-style "fg=#bd93f9"
 `
-	// ctrl+; enters the orcai-chord key table.
-	// Press ctrl+; again to open the help popup; press a chord key to act directly.
-	leaderBinding := "bind-key -n C-\\; switch-client -T orcai-chord\n"
+	// ctrl+space enters the orcai-chord key table.
+	// Press ctrl+space again to open the help popup; press a chord key to act directly.
+	leaderBinding := "bind-key -n C-Space switch-client -T orcai-chord\n"
 
 	// Chord bindings inside the orcai-chord key table.
 	chords := "bind-key -T orcai-chord q     { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help quit\" }\n" +
@@ -52,8 +52,8 @@ set -g pane-active-border-style "fg=#bd93f9"
 		"bind-key -T orcai-chord p     { switch-client -T root ; new-window -t orcai -n prompt-builder \"" + self + " _promptbuilder\" }\n" +
 		"bind-key -T orcai-chord t     { switch-client -T root ; run-shell \"" + self + " _sidebar-toggle\" }\n" +
 		"bind-key -T orcai-chord Escape switch-client -T root\n" +
-		// Pressing ctrl+; again while in chord table shows help immediately.
-		"bind-key -T orcai-chord C-\\; { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help\" }\n"
+		// Pressing ctrl+space again while in chord table shows help immediately.
+		"bind-key -T orcai-chord C-Space { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help\" }\n"
 
 	return base + leaderBinding + chords
 }
