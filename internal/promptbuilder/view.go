@@ -202,7 +202,7 @@ func (b *BubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 				next := (b.modelIndex - 1 + len(models)) % len(models)
-				for models[next].Separator {
+				for i := 0; i < len(models) && models[next].Separator; i++ {
 					next = (next - 1 + len(models)) % len(models)
 				}
 				b.modelIndex = next
@@ -223,7 +223,7 @@ func (b *BubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 				next := (b.modelIndex + 1) % len(models)
-				for models[next].Separator {
+				for i := 0; i < len(models) && models[next].Separator; i++ {
 					next = (next + 1) % len(models)
 				}
 				b.modelIndex = next
