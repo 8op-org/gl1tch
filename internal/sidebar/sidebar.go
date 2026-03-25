@@ -223,167 +223,125 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ── ANSI palette ───────────────────────────────────────────────────────────────
-
+// ── ANSI palette — ABS/Dracula BBS aesthetic ───────────────────────────────
 const (
-	aTeal   = "\x1b[38;5;87m"
-	aDimT   = "\x1b[38;5;66m"
-	aPink   = "\x1b[38;5;212m"
-	aBold   = "\x1b[1;38;5;212m"
-	aBlue   = "\x1b[38;5;61m"
-	aGreen  = "\x1b[38;5;84m"
-	aYellow = "\x1b[38;5;228m"
-	aSelBg  = "\x1b[48;5;236m"
-	aReset  = "\x1b[0m"
+	aBC    = "\x1b[36m"       // cyan — borders and general text
+	aBrC   = "\x1b[96m"       // bright cyan — section headers and key labels
+	aDim   = "\x1b[38;5;66m"  // dim teal — secondary text, [IDLE] badge
+	aWht   = "\x1b[97m"       // bright white — selected row text
+	aSelBg = "\x1b[48;5;235m" // dark background — cursor row highlight
+	aGrn   = "\x1b[92m"       // bright green — [BUSY] badge
+	aYlw   = "\x1b[93m"       // bright yellow — [WAIT] badge
+	aReset = "\x1b[0m"
 )
 
 // ── View helpers ───────────────────────────────────────────────────────────────
 
-func innerPad(s string, visibleLen, inner int) string {
-	pad := inner - visibleLen
+// visLen returns the number of visible (non-ANSI-escape) runes in s.
+func visLen(s string) int {
+	n, esc := 0, false
+	for _, r := range s {
+		if r == '\x1b' {
+			esc = true
+			continue
+		}
+		if esc {
+			if r == 'm' {
+				esc = false
+			}
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+// padToVis right-pads s with spaces until its visible length equals w.
+func padToVis(s string, w int) string {
+	vl := visLen(s)
+	if vl >= w {
+		return s
+	}
+	return s + strings.Repeat(" ", w-vl)
+}
+
+// boxTop renders the top edge of a box. If title is non-empty it is inset
+// into the border: ┌─── Title ───┐
+func boxTop(w int, title string) string {
+	if title == "" {
+		return aBC + "┌" + strings.Repeat("─", w-2) + "┐" + aReset
+	}
+	label := " " + title + " "
+	dashes := w - 2 - len(label)
+	if dashes < 0 {
+		dashes = 0
+	}
+	left := dashes / 2
+	right := dashes - left
+	return aBC + "┌" + strings.Repeat("─", left) + aBrC + label + aBC + strings.Repeat("─", right) + "┐" + aReset
+}
+
+// boxMid renders a horizontal rule inside a box (├─┤), with optional title.
+func boxMid(w int, title string) string {
+	if title == "" {
+		return aBC + "├" + strings.Repeat("─", w-2) + "┤" + aReset
+	}
+	label := " " + title + " "
+	dashes := w - 2 - len(label)
+	if dashes < 0 {
+		dashes = 0
+	}
+	left := dashes / 2
+	right := dashes - left
+	return aBC + "├" + strings.Repeat("─", left) + aBrC + label + aBC + strings.Repeat("─", right) + "┤" + aReset
+}
+
+// boxBot renders the bottom edge of a box.
+func boxBot(w int) string {
+	return aBC + "└" + strings.Repeat("─", w-2) + "┘" + aReset
+}
+
+// boxRow renders one content row inside a box, padded to width w.
+// content is an ANSI string; contentVis is its visible length.
+func boxRow(content string, contentVis, w int) string {
+	inner := w - 2
+	pad := inner - contentVis
 	if pad < 0 {
 		pad = 0
 	}
-	return s + strings.Repeat(" ", pad)
+	return aBC + "│" + aReset + content + strings.Repeat(" ", pad) + aBC + "│" + aReset
 }
 
-func borderTop(w int) string {
-	return aTeal + "╔" + strings.Repeat("═", w-2) + "╗" + aReset
+// boxEmpty renders a blank content row inside a box of width w.
+func boxEmpty(w int) string {
+	return aBC + "│" + strings.Repeat(" ", w-2) + "│" + aReset
 }
 
-func borderMid(w int) string {
-	return aTeal + "╠" + strings.Repeat("═", w-2) + "╣" + aReset
-}
-
-func borderThin(w int) string {
-	return aDimT + "╠" + strings.Repeat("─", w-2) + "╣" + aReset
-}
-
-func borderBot(w int) string {
-	return aTeal + "╚" + strings.Repeat("═", w-2) + "╝" + aReset
-}
-
-func borderRow(content, colour string, inner int, visLen int) string {
-	return aTeal + "║" + colour + innerPad(content, visLen, inner) + aReset + aTeal + "║" + aReset
+// sideBySide merges three equal-height column slices into one slice,
+// padding each column to colW visible characters with gap spaces between.
+func sideBySide(left, mid, right []string, colW, gap int) []string {
+	h := max(max(len(left), len(mid)), len(right))
+	sp := strings.Repeat(" ", gap)
+	rows := make([]string, h)
+	for i := range h {
+		l, m, r := "", "", ""
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < len(mid) {
+			m = mid[i]
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		rows[i] = padToVis(l, colW) + sp + padToVis(m, colW) + sp + r
+	}
+	return rows
 }
 
 // View renders the sidebar using an ABS-style (Agentic Bulletin System) layout.
 func (m Model) View() string {
-	w := m.width
-	if w <= 0 {
-		w = 32
-	}
-	inner := w - 2
-
-	// ── Header ────────────────────────────────────────────────────────────────
-	title := " ▒▒▒ ORCAI SYSOP MONITOR ▒▒▒"
-	titleVis := len([]rune(title))
-	subLine := fmt.Sprintf(" NODES: %d ACTIVE  %s", len(m.windows), time.Now().Format("15:04"))
-	subVis := len([]rune(subLine))
-
-	rows := []string{
-		borderTop(w),
-		borderRow(title, aBold, inner, titleVis),
-		borderRow(subLine, aBlue, inner, subVis),
-		borderMid(w),
-	}
-
-	// ── Node sections ─────────────────────────────────────────────────────────
-	byName := make(map[string]SessionTelemetry)
-	for _, st := range m.sessions {
-		byName[st.WindowName] = st
-	}
-
-	if len(m.windows) == 0 {
-		rows = append(rows, borderRow("   no nodes active", aDimT, inner, len("   no nodes active")))
-	} else {
-		for i, win := range m.windows {
-			nodeNum := i + 1
-			nodeLabel := fmt.Sprintf("NODE %02d", nodeNum)
-
-			st, hasTel := byName[win.Name]
-
-			// Status badge
-			var badge, badgeColour string
-			if !hasTel {
-				badge = "[WAIT]"
-				badgeColour = aYellow
-			} else if st.Status == "streaming" {
-				badge = "[BUSY]"
-				badgeColour = aGreen
-			} else {
-				badge = "[IDLE]"
-				badgeColour = aDimT
-			}
-
-			// Node header line — highlighted when cursor is here
-			headerContent := " " + nodeLabel + " " + badge
-			headerVis := 1 + len(nodeLabel) + 1 + len(badge)
-			if i == m.cursor {
-				rows = append(rows, aTeal+"║"+aSelBg+aPink+innerPad(headerContent, headerVis, inner)+aReset+aTeal+"║"+aReset)
-			} else {
-				rows = append(rows,
-					aTeal+"║"+aPink+nodeLabel+" "+badgeColour+badge+
-						strings.Repeat(" ", max(inner-headerVis, 0))+
-						aReset+aTeal+"║"+aReset)
-			}
-
-			// Name + provider line
-			provLine := "   " + win.Name
-			if hasTel && st.Provider != "" {
-				provLine = "   " + win.Name + "  " + st.Provider
-			}
-			rows = append(rows, borderRow(provLine, aTeal, inner, len([]rune(provLine))))
-
-			// Metrics line
-			var metricsLine string
-			var metricsVis int
-			if hasTel && st.InputTokens > 0 {
-				metricsLine = fmt.Sprintf("   %dk↑ %d↓  $%.3f", st.InputTokens/1000, st.OutputTokens, st.CostUSD)
-				metricsVis = len([]rune(metricsLine))
-				rows = append(rows, borderRow(metricsLine, aYellow, inner, metricsVis))
-			} else {
-				metricsLine = "   no data"
-				rows = append(rows, borderRow(metricsLine, aDimT, inner, len(metricsLine)))
-			}
-
-			// Divider between nodes (not after last)
-			if i < len(m.windows)-1 {
-				rows = append(rows, borderMid(w))
-			}
-		}
-	}
-
-	// ── Activity log ──────────────────────────────────────────────────────────
-	rows = append(rows, borderThin(w))
-
-	logHeader := " ── ACTIVITY LOG ──"
-	rows = append(rows, borderRow(logHeader, aDimT, inner, len([]rune(logHeader))))
-
-	if len(m.log) == 0 {
-		rows = append(rows, borderRow("  no activity", aDimT, inner, len("  no activity")))
-	} else {
-		for _, entry := range m.log {
-			var line string
-			if entry.Event == "done" && entry.CostUSD > 0 {
-				line = fmt.Sprintf("  %s NODE%02d done $%.3f",
-					entry.At.Format("15:04"), entry.Node, entry.CostUSD)
-			} else {
-				line = fmt.Sprintf("  %s NODE%02d %s",
-					entry.At.Format("15:04"), entry.Node, entry.Event)
-			}
-			rows = append(rows, borderRow(line, aDimT, inner, len([]rune(line))))
-		}
-	}
-
-	// ── Footer ────────────────────────────────────────────────────────────────
-	footer := " enter focus · x kill · ↑↓ nav"
-	rows = append(rows,
-		borderRow(footer, aBlue, inner, len([]rune(footer))),
-		borderBot(w),
-	)
-
-	return strings.Join(rows, "\n")
+	return "BBS sysop panel — coming in Task 4"
 }
 
 // Run starts the sysop panel as a bubbletea program.
