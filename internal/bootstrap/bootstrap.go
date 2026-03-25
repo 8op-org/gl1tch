@@ -141,7 +141,8 @@ func Run() error {
 		return fmt.Errorf("writing config: %w", err)
 	}
 
-	// Ensure plugin subdirectories exist on first run.
+	// Ensure user plugin subdirectories exist on first run.
+	// Note: plugins/ and pipelines/ are created on-demand by discovery.
 	for _, sub := range []string{"providers", "widgets", "themes"} {
 		if err := os.MkdirAll(filepath.Join(cfgDir, sub), 0o755); err != nil {
 			fmt.Fprintf(os.Stderr, "orcai: warning: could not create %s dir: %v\n", sub, err)

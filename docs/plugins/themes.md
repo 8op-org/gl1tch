@@ -78,6 +78,8 @@ The `statusbar.bg` and `statusbar.fg` fields accept either a literal hex colour 
 
 orcai loads bundled themes first, then user themes from `~/.config/orcai/themes/`. When two themes share the same `name`, the **user theme wins**. This lets you fully replace the ABS theme by creating a bundle named `abs` in your themes directory.
 
+**Note:** User theme discovery (`~/.config/orcai/themes/`) is implemented and tested. Wiring it into the orcai startup sequence (so themes are selectable via `orcai theme set`) is planned for a follow-on step.
+
 ## Switching the active theme
 
 ```

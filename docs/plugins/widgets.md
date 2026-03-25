@@ -36,6 +36,8 @@ Place the manifest and binary together under:
 
 orcai scans `~/.config/orcai/widgets/` at startup, loading each subdirectory that contains a valid `widget.yaml`.
 
+**Note:** Automatic widget discovery and launch at orcai startup is scaffolded and will be wired into the main startup sequence in an upcoming release. For now, widgets can be launched manually via `internal/widgets.Launch()` or by direct `tmux new-window` invocation.
+
 ## Bus protocol
 
 orcai runs a Unix socket event bus daemon (`busd`) that all widgets connect to.
