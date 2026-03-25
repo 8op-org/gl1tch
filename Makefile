@@ -6,19 +6,17 @@ all: build run
 
 run: build
 	-tmux kill-session -t orcai 2>/dev/null
+	rm -f ~/.config/orcai/layout.yaml ~/.config/orcai/keybindings.yaml
 	bin/$(BINARY)
 
 build:
 	go build -o bin/$(BINARY) .
-	go build -o bin/orcai-welcome ./cmd/orcai-welcome/
-	go build -o bin/orcai-picker ./cmd/orcai-picker/
-	go build -o bin/orcai-sysop ./cmd/orcai-sysop/
 
 test:
 	go test ./...
 
 clean:
-	rm -f bin/$(BINARY) bin/$(BINARY)-debug bin/orcai-welcome bin/orcai-picker bin/orcai-sysop
+	rm -f bin/$(BINARY) bin/$(BINARY)-debug
 
 debug-build:
 	go build -gcflags="all=-N -l" -o bin/$(BINARY)-debug .

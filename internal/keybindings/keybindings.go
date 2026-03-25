@@ -20,6 +20,20 @@ var actionMap = map[string][]string{
 	"open-sysop":            {"display-popup", "-E", "-w", "120", "-h", "40", "orcai-sysop"},
 	"open-welcome":          {"new-window", "orcai-welcome"},
 	"open-prompt-builder":   {"display-popup", "-E", "-w", "120", "-h", "40", "orcai", "_promptbuilder"},
+	// Window management
+	"new-window":  {"new-window"},
+	"prev-window": {"previous-window"},
+	"next-window": {"next-window"},
+	// Pane splitting
+	"split-pane-right": {"split-window", "-h"},
+	"split-pane-down":  {"split-window", "-v"},
+	"kill-pane":        {"kill-pane"},
+	"kill-window":      {"kill-window"},
+	// Pane navigation
+	"select-pane-left":  {"select-pane", "-L"},
+	"select-pane-right": {"select-pane", "-R"},
+	"select-pane-up":    {"select-pane", "-U"},
+	"select-pane-down":  {"select-pane", "-D"},
 }
 
 // Binding pairs a tmux key with an orcai action name.

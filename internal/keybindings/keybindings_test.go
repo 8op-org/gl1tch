@@ -72,3 +72,39 @@ func TestApply_UnknownAction(t *testing.T) {
 		t.Fatalf("Apply unknown action: unexpected error: %v", err)
 	}
 }
+
+// TestActionMap_WindowActions verifies that window/pane management actions are
+// present in actionMap and resolve to the expected tmux command arguments.
+func TestActionMap_WindowActions(t *testing.T) {
+	cases := []struct {
+		action   string
+		wantArgs []string
+	}{
+		{"new-window", []string{"new-window"}},
+		{"prev-window", []string{"previous-window"}},
+		{"next-window", []string{"next-window"}},
+		{"split-pane-right", []string{"split-window", "-h"}},
+		{"split-pane-down", []string{"split-window", "-v"}},
+		{"kill-pane", []string{"kill-pane"}},
+		{"select-pane-left", []string{"select-pane", "-L"}},
+		{"select-pane-right", []string{"select-pane", "-R"}},
+		{"select-pane-up", []string{"select-pane", "-U"}},
+		{"select-pane-down", []string{"select-pane", "-D"}},
+	}
+	for _, tc := range cases {
+		args, ok := actionMap[tc.action]
+		if !ok {
+			t.Errorf("action %q not found in actionMap", tc.action)
+			continue
+		}
+		if len(args) != len(tc.wantArgs) {
+			t.Errorf("action %q: got args %v, want %v", tc.action, args, tc.wantArgs)
+			continue
+		}
+		for i, want := range tc.wantArgs {
+			if args[i] != want {
+				t.Errorf("action %q: args[%d] = %q, want %q", tc.action, i, args[i], want)
+			}
+		}
+	}
+}

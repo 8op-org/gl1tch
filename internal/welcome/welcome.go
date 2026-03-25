@@ -1,4 +1,4 @@
-// Package welcome implements the ABS welcome dashboard BubbleTea widget.
+// Package welcome implements the ABBS welcome dashboard BubbleTea widget.
 //
 // It is used by the `orcai welcome` cobra subcommand. Unlike the standalone
 // orcai-welcome binary, this version exits normally when the user dismisses the
@@ -70,7 +70,7 @@ type palette struct {
 	reset  string
 }
 
-// absDefaults returns the ABS/Dracula default palette.
+// absDefaults returns the ABBS/Dracula default palette.
 func absDefaults() palette {
 	return palette{
 		purple: "\x1b[38;5;141m",
@@ -114,8 +114,8 @@ func buildWelcomeArt(width int, p palette) string {
 		p.pink + " ▓▒░" + p.blue + "  Your AI Workspace" + pad(inner-logoPrefixLen) +
 		p.purple + "║" + p.reset
 
-	const subtitlePrefixLen = 38
-	subtitleLine := p.purple + "║" + p.blue + "      tmux · AI agents · open sessions" +
+	const subtitlePrefixLen = 41
+	subtitleLine := p.purple + "║" + p.blue + "      ABBS · tmux · AI agents · open sessions" +
 		pad(inner-subtitlePrefixLen) + p.purple + "║" + p.reset
 
 	mid := p.purple + "╠" + strings.Repeat("═", inner) + "╣" + p.reset
@@ -141,13 +141,18 @@ func buildHelp(width int, p palette) string {
 		"",
 		p.blue + "    " + p.pink + "n" + p.dim + "  new session   " + p.blue + "(pick AI provider + model)" + p.reset,
 		p.blue + "    " + p.pink + "t" + p.dim + "  sysop panel   " + p.blue + "(agent monitor in current window)" + p.reset,
-		p.blue + "    " + p.pink + "p" + p.dim + "  prompt builder" + p.blue + p.reset,
+		p.blue + "    " + p.pink + "p" + p.dim + "  prompt builder" + p.reset,
 		p.blue + "    " + p.pink + "q" + p.dim + "  quit ORCAI" + p.reset,
 		p.blue + "    " + p.pink + "d" + p.dim + "  detach        " + p.blue + "(reconnect later: orcai)" + p.reset,
+		p.blue + "    " + p.pink + "c" + p.dim + "  new shell window" + p.reset,
+		p.blue + "    " + p.pink + "x" + p.dim + "  kill pane   " + p.pink + "X" + p.dim + "  kill window" + p.reset,
+		p.blue + "    " + p.pink + "|" + p.dim + "  split right   " + p.pink + "-" + p.dim + "  split down" + p.reset,
+		p.blue + "    " + p.pink + "←→↑↓" + p.dim + "  navigate panes" + p.reset,
 		"",
 		col,
 		"",
-		p.dim + "  ── enter new session · any key continue ──" + p.reset,
+		p.blue + "  " + p.pink + "enter" + p.dim + "  connect / new session  " + p.blue + "(pick provider + model)" + p.reset,
+		p.dim + "  q" + p.reset + p.blue + "  quit ORCAI" + p.dim + "  ·  enter" + p.reset + p.blue + "  connect" + p.reset,
 	}
 	return strings.Join(lines, "\n")
 }
@@ -158,26 +163,45 @@ type model struct {
 	width        int
 	height       int
 	self         string
+	pickerCmd    []string
 	palette      palette
 	launchPicker bool
 }
 
-// resolvePickerBin returns the path to the orcai-picker binary.
-func resolvePickerBin() string {
-	if bin, err := exec.LookPath("orcai-picker"); err == nil {
-		return bin
-	}
+// resolveSelf returns the absolute path to the running orcai binary.
+func resolveSelf() string {
 	self, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
-		self = resolved
+		return resolved
 	}
-	return filepath.Join(filepath.Dir(self), "orcai-picker")
+	return self
+}
+
+// resolvePickerCmd returns the tmux display-popup command args for the picker.
+// Checks PATH for an orcai-picker override binary first; falls back to the
+// orcai picker subcommand.
+func resolvePickerCmd(self string) []string {
+	if bin, err := exec.LookPath("orcai-picker"); err == nil {
+		return []string{bin}
+	}
+	return []string{self, "picker"}
+}
+
+// tmuxExec returns a tea.Cmd that runs a tmux command as a fire-and-forget
+// side effect. The welcome widget stays open; the returned message is nil.
+func tmuxExec(args ...string) tea.Cmd {
+	return func() tea.Msg {
+		exec.Command("tmux", args...).Run() //nolint:errcheck
+		return nil
+	}
 }
 
 func newModel() model {
+	self := resolveSelf()
 	return model{
-		self:    resolvePickerBin(),
-		palette: absDefaults(),
+		self:      self,
+		pickerCmd: resolvePickerCmd(self),
+		palette:   absDefaults(),
 	}
 }
 
@@ -191,10 +215,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case themeChangedMsg:
 		m.palette = paletteForTheme(msg.ThemeName)
 	case tea.KeyMsg:
-		if msg.String() == "enter" && m.self != "" {
-			m.launchPicker = true
+		switch msg.Type {
+		case tea.KeyUp:
+			return m, tmuxExec("select-pane", "-U")
+		case tea.KeyDown:
+			return m, tmuxExec("select-pane", "-D")
+		case tea.KeyLeft:
+			return m, tmuxExec("select-pane", "-L")
+		case tea.KeyRight:
+			return m, tmuxExec("select-pane", "-R")
 		}
-		return m, tea.Quit
+		switch msg.String() {
+		case "q", "esc", "ctrl+c":
+			return m, tea.Quit
+		case "n", "enter":
+			m.launchPicker = true
+			return m, tea.Quit
+		case "t":
+			return m, tmuxExec("split-window", "-h", "-l", "40%", m.self+" sysop")
+		case "p":
+			return m, tmuxExec("new-window", "-n", "prompt-builder", m.self+" _promptbuilder")
+		case "d":
+			return m, tmuxExec("detach-client")
+		case "c":
+			return m, tmuxExec("new-window")
+		case "x":
+			return m, tmuxExec("kill-pane")
+		case "X":
+			return m, tmuxExec("kill-window")
+		case "|":
+			return m, tmuxExec("split-window", "-h")
+		case "-":
+			return m, tmuxExec("split-window", "-v")
+		}
 	}
 	return m, nil
 }
@@ -281,8 +334,9 @@ func Run(busSocket string) error {
 		return fmt.Errorf("welcome: %w", err)
 	}
 
-	if m, ok := finalModel.(model); ok && m.launchPicker && m.self != "" {
-		exec.Command("tmux", "display-popup", "-E", "-w", "120", "-h", "40", m.self).Run() //nolint:errcheck
+	if m, ok := finalModel.(model); ok && m.launchPicker && len(m.pickerCmd) > 0 {
+		args := append([]string{"display-popup", "-E", "-w", "120", "-h", "40"}, m.pickerCmd...)
+		exec.Command("tmux", args...).Run() //nolint:errcheck
 	}
 
 	return nil
