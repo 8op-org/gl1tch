@@ -2,26 +2,27 @@ package bridge
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/adam-stokes/orcai/internal/providers"
 	bridgepb "github.com/adam-stokes/orcai/proto/bridgepb"
 )
 
 // Manager spawns and manages provider adapter subprocesses.
+//
+// NOTE: The gRPC bridge adapter model is being replaced by the plugin system v2
+// direct-launch approach. Start() is a no-op stub until the new widget-based
+// session launcher is wired in. Available() still reflects detected providers.
 type Manager struct {
 	cwd       string
 	socketDir string
 	adapters  []*adapterEntry
 	cancel    context.CancelFunc
+	reg       *providers.Registry
 }
 
 type adapterEntry struct {
@@ -32,87 +33,22 @@ type adapterEntry struct {
 	descResp *bridgepb.DescribeResponse
 }
 
-// New creates a manager for the given working directory.
-func New(cwd string) *Manager {
-	return &Manager{cwd: cwd}
+// New creates a manager for the given working directory and config dir.
+// configDir is used to load user-installed provider profiles.
+func New(cwd, configDir string) *Manager {
+	reg, _ := providers.NewRegistry(filepath.Join(configDir, "providers"))
+	return &Manager{cwd: cwd, reg: reg}
 }
 
-// Start spawns all provider adapters and waits for them to be ready.
-// The adapters run under an independent background context so that
-// cancelling the caller's ctx (e.g. a startup timeout) does not kill them.
-// Call Stop to shut them down gracefully.
+// Start is a no-op stub. The gRPC bridge subprocess model is superseded by the
+// plugin system v2 direct session launcher (see internal/widgets). This method
+// exists for API compatibility while the migration completes.
 func (m *Manager) Start(_ context.Context) error {
-	dir, err := os.MkdirTemp("", "stok-bridge-*")
-	if err != nil {
-		return fmt.Errorf("create socket dir: %w", err)
-	}
-	m.socketDir = dir
-
-	self, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("resolve executable: %w", err)
-	}
-
-	mgrCtx, cancel := context.WithCancel(context.Background())
-	m.cancel = cancel
-
-	reg, err := providers.NewRegistry("")
-	if err != nil {
-		cancel()
-		return fmt.Errorf("load provider registry: %w", err)
-	}
-
-	for _, profile := range reg.Available() {
-		name := profile.Name
-		sockPath := filepath.Join(dir, name+".sock")
-		proc := exec.CommandContext(mgrCtx, self, "bridge", name,
-			"--socket", sockPath,
-			"--cwd", m.cwd,
-		)
-		proc.Stderr = os.Stderr
-		if err := proc.Start(); err != nil {
-			cancel()
-			return fmt.Errorf("start %s adapter: %w", name, err)
-		}
-
-		conn, err := dialWithRetry(sockPath, 2*time.Second)
-		if err != nil {
-			proc.Process.Kill()
-			cancel()
-			return fmt.Errorf("dial %s adapter: %w", name, err)
-		}
-
-		client := bridgepb.NewProviderBridgeClient(conn)
-		desc, err := client.Describe(mgrCtx, &bridgepb.DescribeRequest{})
-		if err != nil {
-			conn.Close()
-			proc.Process.Kill()
-			cancel()
-			return fmt.Errorf("describe %s adapter: %w", name, err)
-		}
-
-		m.adapters = append(m.adapters, &adapterEntry{
-			name:     name,
-			proc:     proc,
-			conn:     conn,
-			client:   client,
-			descResp: desc,
-		})
-	}
-
 	return nil
 }
 
-// Stop gracefully shuts down all adapters.
-func (m *Manager) Stop(ctx context.Context) {
-	for _, a := range m.adapters {
-		// Best-effort graceful shutdown.
-		ctx2, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		a.client.Shutdown(ctx2, &bridgepb.ShutdownRequest{})
-		cancel()
-		a.conn.Close()
-		a.proc.Process.Kill()
-	}
+// Stop is a no-op while Start is a stub.
+func (m *Manager) Stop(_ context.Context) {
 	if m.cancel != nil {
 		m.cancel()
 	}
@@ -121,8 +57,8 @@ func (m *Manager) Stop(ctx context.Context) {
 	}
 }
 
-// Client returns the gRPC client for the named adapter (e.g. "claude").
-// Returns nil if the adapter is not running.
+// Client returns the gRPC client for the named adapter.
+// Returns nil while the bridge is in stub mode.
 func (m *Manager) Client(name string) bridgepb.ProviderBridgeClient {
 	for _, a := range m.adapters {
 		if a.name == name {
@@ -141,25 +77,11 @@ func (m *Manager) Capabilities() []*bridgepb.Capability {
 	return all
 }
 
-// dialWithRetry attempts to dial a Unix socket, retrying until timeout.
-func dialWithRetry(socketPath string, timeout time.Duration) (*grpc.ClientConn, error) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			// Verify socket is accepting connections before creating gRPC client.
-			c, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
-			if err == nil {
-				c.Close()
-				conn, err := grpc.NewClient("unix://"+socketPath,
-					grpc.WithTransportCredentials(insecure.NewCredentials()),
-				)
-				if err == nil {
-					return conn, nil
-				}
-			}
-		}
-		time.Sleep(20 * time.Millisecond)
+// AvailableProviders returns provider profiles whose binaries are in PATH.
+func (m *Manager) AvailableProviders() []providers.Profile {
+	if m.reg == nil {
+		return nil
 	}
-	return nil, fmt.Errorf("timeout waiting for socket %s", socketPath)
+	return m.reg.Available()
 }
 
