@@ -1,0 +1,13 @@
+name: opencode
+binary: opencode
+display_name: OpenCode
+api_key_env: ""
+models:
+  - id: auto
+    display: "Auto (local config)"
+    cost_input_per_1m: 0.00
+    cost_output_per_1m: 0.00
+session:
+  window_name: "{{.name}}:{{.model}}"
+  launch_args: []
+  env: {}

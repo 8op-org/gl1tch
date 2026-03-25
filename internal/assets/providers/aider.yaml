@@ -1,0 +1,26 @@
+name: aider
+binary: aider
+display_name: Aider
+api_key_env: OPENAI_API_KEY
+models:
+  - id: gpt-4o
+    display: "GPT-4o"
+    cost_input_per_1m: 2.50
+    cost_output_per_1m: 10.00
+  - id: gpt-4o-mini
+    display: "GPT-4o Mini"
+    cost_input_per_1m: 0.15
+    cost_output_per_1m: 0.60
+  - id: claude-sonnet-4-6
+    display: "Claude Sonnet 4.6"
+    cost_input_per_1m: 3.00
+    cost_output_per_1m: 15.00
+  - id: claude-opus-4-6
+    display: "Claude Opus 4.6"
+    cost_input_per_1m: 15.00
+    cost_output_per_1m: 75.00
+session:
+  window_name: "{{.name}}:{{.model}}"
+  launch_args: []
+  env:
+    ANTHROPIC_API_KEY: ""

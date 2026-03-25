@@ -1,0 +1,17 @@
+name: abs
+display_name: "ABS Dark"
+palette:
+  bg:      "#282a36"
+  fg:      "#f8f8f2"
+  accent:  "#bd93f9"
+  dim:     "#6272a4"
+  border:  "#44475a"
+  error:   "#ff5555"
+  success: "#50fa7b"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+splash: splash.ans

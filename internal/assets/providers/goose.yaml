@@ -1,0 +1,21 @@
+name: goose
+binary: goose
+display_name: Goose
+api_key_env: ANTHROPIC_API_KEY
+models:
+  - id: claude-opus-4-6
+    display: "Claude Opus 4.6"
+    cost_input_per_1m: 15.00
+    cost_output_per_1m: 75.00
+  - id: claude-sonnet-4-6
+    display: "Claude Sonnet 4.6"
+    cost_input_per_1m: 3.00
+    cost_output_per_1m: 15.00
+  - id: claude-haiku-3-5
+    display: "Claude Haiku 3.5"
+    cost_input_per_1m: 0.80
+    cost_output_per_1m: 4.00
+session:
+  window_name: "{{.name}}:{{.model}}"
+  launch_args: []
+  env: {}
