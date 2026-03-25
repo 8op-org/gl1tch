@@ -66,7 +66,7 @@ func listWindows() []Window {
 type SessionTelemetry struct {
 	WindowName   string
 	Provider     string
-	Status       string // "streaming" | "done" | "error"
+	Status       string // "streaming" | "done"
 	InputTokens  int
 	OutputTokens int
 	CostUSD      float64
@@ -83,29 +83,53 @@ type TelemetryMsg struct {
 	CostUSD      float64
 }
 
+// logEntry records a single telemetry event for the activity log.
+type logEntry struct {
+	At         time.Time
+	Node       int // 1-based node number at time of event
+	WindowName string
+	Event      string // "streaming" | "done"
+	CostUSD    float64
+}
+
 type tickMsg time.Time
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// Model is the bubbletea agent context panel model.
+// Model is the bubbletea BBS sysop panel model.
 type Model struct {
 	windows  []Window
 	cursor   int
 	width    int
 	height   int
 	sessions map[string]SessionTelemetry // keyed by session_id
+	log      []logEntry                  // activity log, newest-first, capped at 12
 	busConn  *grpc.ClientConn
 }
 
 // NewWithWindows creates a Model with a fixed window list — used in tests.
 func NewWithWindows(windows []Window) Model {
-	return Model{windows: windows, sessions: make(map[string]SessionTelemetry)}
+	return Model{
+		windows:  windows,
+		sessions: make(map[string]SessionTelemetry),
+		log:      []logEntry{},
+	}
 }
 
 // Cursor returns the current cursor position — used in tests.
 func (m Model) Cursor() int { return m.cursor }
+
+// nodeIndexFor returns the 1-based node number for a window name, or 0 if not found.
+func (m Model) nodeIndexFor(windowName string) int {
+	for i, w := range m.windows {
+		if w.Name == windowName {
+			return i + 1
+		}
+	}
+	return 0
+}
 
 // busAddrPath returns the path to the bus address file.
 func busAddrPath() (string, error) {
@@ -176,6 +200,7 @@ func New() Model {
 	m := Model{
 		windows:  listWindows(),
 		sessions: make(map[string]SessionTelemetry),
+		log:      []logEntry{},
 	}
 	if addr := readBusAddr(); addr != "" {
 		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -205,6 +230,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			OutputTokens: msg.OutputTokens,
 			CostUSD:      msg.CostUSD,
 		}
+		// Prepend to activity log and cap at 12.
+		node := m.nodeIndexFor(msg.WindowName)
+		entry := logEntry{
+			At:         time.Now(),
+			Node:       node,
+			WindowName: msg.WindowName,
+			Event:      msg.Status,
+			CostUSD:    msg.CostUSD,
+		}
+		m.log = append([]logEntry{entry}, m.log...)
+		if len(m.log) > 12 {
+			m.log = m.log[:12]
+		}
 		var next tea.Cmd
 		if m.busConn != nil {
 			next = subscribeCmd(m.busConn)
@@ -222,7 +260,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			out, err := exec.Command("tmux", "display-message", "-p", "#{window_width}").Output()
 			if err == nil {
 				if totalWidth, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil && totalWidth > 0 {
-					target := totalWidth / 4
+					target := totalWidth * 3 / 10 // 30%
 					if target > 0 && m.width != target {
 						exec.Command("tmux", "resize-pane", "-t", pane,
 							"-x", strconv.Itoa(target)).Run() //nolint:errcheck
@@ -274,7 +312,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ANSI colour constants (Dracula palette, 256-colour).
+// ── ANSI palette ───────────────────────────────────────────────────────────────
+
 const (
 	aTeal   = "\x1b[38;5;87m"
 	aDimT   = "\x1b[38;5;66m"
@@ -287,104 +326,155 @@ const (
 	aReset  = "\x1b[0m"
 )
 
+// ── View helpers ───────────────────────────────────────────────────────────────
+
+func innerPad(s string, visibleLen, inner int) string {
+	pad := inner - visibleLen
+	if pad < 0 {
+		pad = 0
+	}
+	return s + strings.Repeat(" ", pad)
+}
+
+func borderTop(w int) string {
+	return aTeal + "╔" + strings.Repeat("═", w-2) + "╗" + aReset
+}
+
+func borderMid(w int) string {
+	return aTeal + "╠" + strings.Repeat("═", w-2) + "╣" + aReset
+}
+
+func borderThin(w int) string {
+	return aDimT + "╠" + strings.Repeat("─", w-2) + "╣" + aReset
+}
+
+func borderBot(w int) string {
+	return aTeal + "╚" + strings.Repeat("═", w-2) + "╝" + aReset
+}
+
+func borderRow(content, colour string, inner int, visLen int) string {
+	return aTeal + "║" + colour + innerPad(content, visLen, inner) + aReset + aTeal + "║" + aReset
+}
+
 func (m Model) View() string {
 	w := m.width
 	if w <= 0 {
-		w = 28
+		w = 32
+	}
+	inner := w - 2
+
+	// ── Header ────────────────────────────────────────────────────────────────
+	title := " ▒▒▒ ORCAI SYSOP MONITOR ▒▒▒"
+	titleVis := len([]rune(title))
+	subLine := fmt.Sprintf(" NODES: %d ACTIVE  %s", len(m.windows), time.Now().Format("15:04"))
+	subVis := len([]rune(subLine))
+
+	rows := []string{
+		borderTop(w),
+		borderRow(title, aBold, inner, titleVis),
+		borderRow(subLine, aBlue, inner, subVis),
+		borderMid(w),
 	}
 
-	pad := func(n int) string {
-		if n <= 0 {
-			return ""
-		}
-		return strings.Repeat(" ", n)
-	}
-	truncate := func(name string, maxCols int) string {
-		runes := []rune(name)
-		if len(runes) <= maxCols {
-			return name
-		}
-		if maxCols <= 1 {
-			return "…"
-		}
-		return string(runes[:maxCols-1]) + "…"
-	}
-
-	// ── Banner ────────────────────────────────────────────────────────────────
-	const centerLen = 18
-	sideLen := max((w-centerLen)/2, 0)
-	rightLen := max(w-centerLen-sideLen, 0)
-
-	var dotsRow strings.Builder
-	for i := 0; i < w; i++ {
-		switch i {
-		case sideLen, sideLen + centerLen - 1:
-			dotsRow.WriteString(aDimT + "▪" + aReset)
-		default:
-			dotsRow.WriteByte(' ')
-		}
-	}
-
-	bannerRow := aTeal + strings.Repeat("═", sideLen) + "╢" +
-		" " + aPink + "░▒▓ " + aBold + "ORCAI" + aReset + aPink + " ▓▒░" + aReset +
-		aTeal + " ╟" + strings.Repeat("═", rightLen) + aReset
-
-	divider := aDimT + strings.Repeat("─", w) + aReset
-
-	rows := []string{dotsRow.String(), bannerRow, divider}
-
-	// ── Session list with telemetry overlay ───────────────────────────────────
+	// ── Node sections ─────────────────────────────────────────────────────────
 	byName := make(map[string]SessionTelemetry)
 	for _, st := range m.sessions {
 		byName[st.WindowName] = st
 	}
 
 	if len(m.windows) == 0 {
-		rows = append(rows, aBlue+"  no sessions yet"+aReset)
+		rows = append(rows, borderRow("   no nodes active", aDimT, inner, len("   no nodes active")))
 	} else {
-		maxName := max(w-3, 1)
 		for i, win := range m.windows {
-			name := truncate(win.Name, maxName)
-			nameLen := len([]rune(name))
-			trailing := max(w-2-nameLen, 0)
+			nodeNum := i + 1
+			nodeLabel := fmt.Sprintf("NODE %02d", nodeNum)
 
-			var nameLine string
-			if i == m.cursor {
-				nameLine = aSelBg + aPink + "▎ " + name + pad(trailing) + aReset
+			st, hasTel := byName[win.Name]
+
+			// Status badge
+			var badge, badgeColour string
+			if !hasTel {
+				badge = "[WAIT]"
+				badgeColour = aYellow
+			} else if st.Status == "streaming" {
+				badge = "[BUSY]"
+				badgeColour = aGreen
 			} else {
-				nameLine = aBlue + "  " + name + aReset
+				badge = "[IDLE]"
+				badgeColour = aDimT
 			}
-			rows = append(rows, nameLine)
 
-			if st, ok := byName[win.Name]; ok {
-				statusIcon := aGreen + "●" + aReset
-				statusLabel := "running"
-				if st.Status == "done" {
-					statusIcon = aDimT + "○" + aReset
-					statusLabel = "idle   "
-				}
-				var telLine string
-				if st.InputTokens > 0 {
-					telLine = fmt.Sprintf("  %s %s %dk↑ %d↓ $%.3f",
-						statusIcon, statusLabel,
-						st.InputTokens/1000, st.OutputTokens, st.CostUSD)
-				} else {
-					telLine = fmt.Sprintf("  %s %s", statusIcon, statusLabel)
-				}
-				rows = append(rows, aYellow+telLine+aReset)
+			// Node header line — highlighted when cursor is here
+			headerContent := " " + nodeLabel + " " + badge
+			headerVis := 1 + len(nodeLabel) + 1 + len(badge)
+			if i == m.cursor {
+				rows = append(rows, aTeal+"║"+aSelBg+aPink+innerPad(headerContent, headerVis, inner)+aReset+aTeal+"║"+aReset)
 			} else {
-				rows = append(rows, aDimT+"  no data"+aReset)
+				rows = append(rows,
+					aTeal+"║"+aPink+nodeLabel+" "+badgeColour+badge+
+						strings.Repeat(" ", max(inner-headerVis, 0))+
+						aReset+aTeal+"║"+aReset)
+			}
+
+			// Name + provider line
+			provLine := "   " + win.Name
+			if hasTel && st.Provider != "" {
+				provLine = "   " + win.Name + "  " + st.Provider
+			}
+			rows = append(rows, borderRow(provLine, aTeal, inner, len([]rune(provLine))))
+
+			// Metrics line
+			var metricsLine string
+			var metricsVis int
+			if hasTel && st.InputTokens > 0 {
+				metricsLine = fmt.Sprintf("   %dk↑ %d↓  $%.3f", st.InputTokens/1000, st.OutputTokens, st.CostUSD)
+				metricsVis = len([]rune(metricsLine))
+				rows = append(rows, borderRow(metricsLine, aYellow, inner, metricsVis))
+			} else {
+				metricsLine = "   no data"
+				rows = append(rows, borderRow(metricsLine, aDimT, inner, len(metricsLine)))
+			}
+
+			// Divider between nodes (not after last)
+			if i < len(m.windows)-1 {
+				rows = append(rows, borderMid(w))
 			}
 		}
 	}
 
+	// ── Activity log ──────────────────────────────────────────────────────────
+	rows = append(rows, borderThin(w))
+
+	logHeader := " ── ACTIVITY LOG ──"
+	rows = append(rows, borderRow(logHeader, aDimT, inner, len([]rune(logHeader))))
+
+	if len(m.log) == 0 {
+		rows = append(rows, borderRow("  no activity", aDimT, inner, len("  no activity")))
+	} else {
+		for _, entry := range m.log {
+			var line string
+			if entry.Event == "done" && entry.CostUSD > 0 {
+				line = fmt.Sprintf("  %s NODE%02d done $%.3f",
+					entry.At.Format("15:04"), entry.Node, entry.CostUSD)
+			} else {
+				line = fmt.Sprintf("  %s NODE%02d %s",
+					entry.At.Format("15:04"), entry.Node, entry.Event)
+			}
+			rows = append(rows, borderRow(line, aDimT, inner, len([]rune(line))))
+		}
+	}
+
 	// ── Footer ────────────────────────────────────────────────────────────────
-	rows = append(rows, divider, aBlue+"enter focus  x kill  ↑↓ nav"+aReset)
+	footer := " enter focus · x kill · ↑↓ nav"
+	rows = append(rows,
+		borderRow(footer, aBlue, inner, len([]rune(footer))),
+		borderBot(w),
+	)
 
 	return strings.Join(rows, "\n")
 }
 
-// Run starts the sidebar as a bubbletea program.
+// Run starts the sysop panel as a bubbletea program.
 func Run() {
 	p := tea.NewProgram(New(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
@@ -392,18 +482,23 @@ func Run() {
 	}
 }
 
-// ── Sidebar toggle ────────────────────────────────────────────────────────────
+// ── Panel toggle ───────────────────────────────────────────────────────────────
 
-func sidebarVisiblePath() (string, error) {
+// panelVisiblePath returns the marker file path for the current tmux window.
+func panelVisiblePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "orcai", ".sidebar-visible"), nil
+	winIdx := os.Getenv("TMUX_WINDOW_INDEX")
+	if winIdx == "" {
+		winIdx = "0"
+	}
+	return filepath.Join(home, ".config", "orcai", ".panel-"+winIdx), nil
 }
 
-func isSidebarVisible() bool {
-	path, err := sidebarVisiblePath()
+func isPanelVisible() bool {
+	path, err := panelVisiblePath()
 	if err != nil {
 		return false
 	}
@@ -414,8 +509,8 @@ func isSidebarVisible() bool {
 	return strings.TrimSpace(string(data)) == "true"
 }
 
-func setSidebarVisible(visible bool) {
-	path, err := sidebarVisiblePath()
+func setPanelVisible(visible bool) {
+	path, err := panelVisiblePath()
 	if err != nil {
 		return
 	}
@@ -426,20 +521,20 @@ func setSidebarVisible(visible bool) {
 	os.WriteFile(path, []byte(val), 0o644) //nolint:errcheck
 }
 
-// RunToggle shows or hides the sidebar pane based on the current marker file state.
+// RunToggle shows or hides the sysop panel in the current tmux window.
 func RunToggle() {
 	self, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
 
-	if isSidebarVisible() {
+	if isPanelVisible() {
 		exec.Command("tmux", "kill-pane", "-t", ".0").Run() //nolint:errcheck
-		setSidebarVisible(false)
+		setPanelVisible(false)
 	} else {
 		exec.Command("tmux", "split-window",
-			"-d", "-h", "-b", "-f", "-l", "25%",
-			"-t", "orcai:0", self, "_sidebar").Run() //nolint:errcheck
-		setSidebarVisible(true)
+			"-d", "-h", "-b", "-l", "30%",
+			self, "_sidebar").Run() //nolint:errcheck
+		setPanelVisible(true)
 	}
 }

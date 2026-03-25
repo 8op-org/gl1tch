@@ -38,8 +38,7 @@ func TestParseWindows_OnlyHome(t *testing.T) {
 	}
 }
 
-// Navigation tests use tea.KeyRunes because Task 2 implements a custom
-// Update() that dispatches on msg.String(), matching "j", "k", "down", "up".
+// Navigation tests use tea.KeyRunes because Update() dispatches on msg.String().
 func TestCursorDown(t *testing.T) {
 	m := sidebar.NewWithWindows([]sidebar.Window{
 		{Index: 1, Name: "claude-1"},
@@ -100,10 +99,22 @@ func TestViewContainsWindowName(t *testing.T) {
 func TestViewContainsHeader(t *testing.T) {
 	m := sidebar.NewWithWindows([]sidebar.Window{})
 	view := m.View()
-	// Footer should show nav hints but NOT new-session/prompt-builder (moved to status bar).
+	// BBS sysop header must be present.
+	if !strings.Contains(view, "╔") {
+		t.Errorf("View() missing outer border '╔':\n%s", view)
+	}
+	if !strings.Contains(view, "SYSOP MONITOR") {
+		t.Errorf("View() missing 'SYSOP MONITOR' header:\n%s", view)
+	}
+	// Footer nav hints inside the border.
 	if !strings.Contains(view, "enter focus") {
 		t.Errorf("View() does not contain footer hint 'enter focus':\n%s", view)
 	}
+	// Old banner style must be gone.
+	if strings.Contains(view, "═╢") {
+		t.Errorf("View() still contains old '═╢ ORCAI ╟═' banner:\n%s", view)
+	}
+	// New/build hints must not appear.
 	if strings.Contains(view, "n new") {
 		t.Errorf("View() still contains removed 'n new' footer hint:\n%s", view)
 	}
@@ -115,15 +126,75 @@ func TestViewContainsActiveAccent(t *testing.T) {
 		{Index: 2, Name: "opencode-2"},
 	})
 	view := m.View()
-	// The first window (cursor=0) should have the active accent.
-	// Find the line containing claude-1 and verify it has the accent.
+	// cursor=0 → NODE 01 line should have the selection background escape.
 	for line := range strings.SplitSeq(view, "\n") {
-		if strings.Contains(line, "claude-1") {
-			if !strings.Contains(line, "▎") {
-				t.Errorf("active window line missing accent '▎': %q", line)
+		if strings.Contains(line, "NODE 01") {
+			// Selection background ANSI code must be present on this line.
+			if !strings.Contains(line, "\x1b[48;5;236m") {
+				t.Errorf("active node line missing selection background: %q", line)
 			}
 			return
 		}
 	}
-	t.Errorf("View() does not contain a line with 'claude-1':\n%s", view)
+	t.Errorf("View() does not contain a 'NODE 01' line:\n%s", view)
+}
+
+func TestViewActivityLog(t *testing.T) {
+	m := sidebar.NewWithWindows([]sidebar.Window{
+		{Index: 1, Name: "claude-1"},
+	})
+	// Send a telemetry event.
+	m2, _ := m.Update(sidebar.TelemetryMsg{
+		SessionID:    "s1",
+		WindowName:   "claude-1",
+		Provider:     "claude-sonnet-4",
+		Status:       "done",
+		InputTokens:  5000,
+		OutputTokens: 200,
+		CostUSD:      0.018,
+	})
+	view := m2.(sidebar.Model).View()
+	if !strings.Contains(view, "ACTIVITY LOG") {
+		t.Errorf("View() missing ACTIVITY LOG section:\n%s", view)
+	}
+	// Should contain the event entry (done with cost).
+	if !strings.Contains(view, "done") && !strings.Contains(view, "0.018") {
+		t.Errorf("View() activity log missing event entry:\n%s", view)
+	}
+}
+
+func TestViewNodeStatus(t *testing.T) {
+	m := sidebar.NewWithWindows([]sidebar.Window{
+		{Index: 1, Name: "claude-1"},
+	})
+
+	// No telemetry → [WAIT]
+	if !strings.Contains(m.View(), "[WAIT]") {
+		t.Errorf("expected [WAIT] for no-data node:\n%s", m.View())
+	}
+
+	// Streaming → [BUSY]
+	m2, _ := m.Update(sidebar.TelemetryMsg{
+		SessionID:  "s1",
+		WindowName: "claude-1",
+		Provider:   "claude-sonnet-4",
+		Status:     "streaming",
+	})
+	if !strings.Contains(m2.(sidebar.Model).View(), "[BUSY]") {
+		t.Errorf("expected [BUSY] after streaming event:\n%s", m2.(sidebar.Model).View())
+	}
+
+	// Done → [IDLE]
+	m3, _ := m2.(sidebar.Model).Update(sidebar.TelemetryMsg{
+		SessionID:    "s1",
+		WindowName:   "claude-1",
+		Provider:     "claude-sonnet-4",
+		Status:       "done",
+		InputTokens:  5000,
+		OutputTokens: 200,
+		CostUSD:      0.018,
+	})
+	if !strings.Contains(m3.(sidebar.Model).View(), "[IDLE]") {
+		t.Errorf("expected [IDLE] after done event:\n%s", m3.(sidebar.Model).View())
+	}
 }
