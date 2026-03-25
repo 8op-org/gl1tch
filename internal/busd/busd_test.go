@@ -1,7 +1,6 @@
 package busd_test
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -46,8 +45,8 @@ func startDaemon(t *testing.T) (*busd.Daemon, string) {
 }
 
 // dialSocket opens a connection to sockPath, sends a registration frame, and
-// returns the connection and a line scanner ready for reading events.
-func dialSocket(t *testing.T, sockPath string, name string, subscribe []string) (net.Conn, *bufio.Scanner) {
+// returns the connection.
+func dialSocket(t *testing.T, sockPath string, name string, subscribe []string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("unix", sockPath)
 	if err != nil {
@@ -62,30 +61,49 @@ func dialSocket(t *testing.T, sockPath string, name string, subscribe []string) 
 		t.Fatalf("write registration: %v", err)
 	}
 
-	sc := bufio.NewScanner(conn)
-	return conn, sc
+	return conn
 }
 
-// readEvent waits up to timeout for a newline-terminated JSON event frame.
-func readEvent(t *testing.T, sc *bufio.Scanner, timeout time.Duration) map[string]any {
+// readEvent waits up to 2 seconds for a newline-terminated JSON event frame.
+// A read deadline is set on the connection before scanning so the goroutine
+// unblocks when the connection is closed by test cleanup (preventing races).
+func readEvent(t *testing.T, conn net.Conn) busd.Event {
 	t.Helper()
-	done := make(chan map[string]any, 1)
-	go func() {
-		if sc.Scan() {
-			var m map[string]any
-			_ = json.Unmarshal(sc.Bytes(), &m)
-			done <- m
-		} else {
-			done <- nil
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck
+
+	buf := make([]byte, 0, 4096)
+	tmp := make([]byte, 1)
+	for {
+		_, err := conn.Read(tmp)
+		if err != nil {
+			t.Fatalf("readEvent: read error: %v", err)
 		}
-	}()
-	select {
-	case m := <-done:
-		return m
-	case <-time.After(timeout):
-		t.Fatal("timed out waiting for event")
-		return nil
+		if tmp[0] == '\n' {
+			break
+		}
+		buf = append(buf, tmp[0])
 	}
+
+	conn.SetReadDeadline(time.Time{}) //nolint:errcheck
+
+	var ev busd.Event
+	if err := json.Unmarshal(buf, &ev); err != nil {
+		t.Fatalf("readEvent: unmarshal error: %v", err)
+	}
+	return ev
+}
+
+// waitFor polls cond every 2ms until it returns true or timeout elapses.
+func waitFor(t *testing.T, cond func() bool, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for condition")
 }
 
 // ---- tests ------------------------------------------------------------------
@@ -123,21 +141,18 @@ func TestSocketPath_Fallback(t *testing.T) {
 func TestPubSub_MatchingSubscription(t *testing.T) {
 	d, sockPath := startDaemon(t)
 
-	_, sc := dialSocket(t, sockPath, "weather", []string{"theme.changed"})
+	conn := dialSocket(t, sockPath, "weather", []string{"theme.changed"})
 
-	// Brief pause to let the daemon register the client.
-	time.Sleep(20 * time.Millisecond)
+	// Wait until the daemon has registered the client before publishing.
+	waitFor(t, func() bool { return d.ClientCount() > 0 }, 500*time.Millisecond)
 
 	if err := d.Publish("theme.changed", map[string]string{"theme": "dracula"}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
-	evt := readEvent(t, sc, 2*time.Second)
-	if evt == nil {
-		t.Fatal("expected event, got nil")
-	}
-	if got, ok := evt["event"].(string); !ok || got != "theme.changed" {
-		t.Errorf("event[\"event\"] = %v; want \"theme.changed\"", evt["event"])
+	ev := readEvent(t, conn)
+	if ev.Event != "theme.changed" {
+		t.Errorf("event.Event = %q; want \"theme.changed\"", ev.Event)
 	}
 }
 
@@ -145,20 +160,17 @@ func TestPubSub_MatchingSubscription(t *testing.T) {
 func TestPubSub_WildcardSubscription(t *testing.T) {
 	d, sockPath := startDaemon(t)
 
-	_, sc := dialSocket(t, sockPath, "sessionwatcher", []string{"session.*"})
+	conn := dialSocket(t, sockPath, "sessionwatcher", []string{"session.*"})
 
-	time.Sleep(20 * time.Millisecond)
+	waitFor(t, func() bool { return d.ClientCount() > 0 }, 500*time.Millisecond)
 
 	if err := d.Publish("session.started", map[string]string{"id": "abc"}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
-	evt := readEvent(t, sc, 2*time.Second)
-	if evt == nil {
-		t.Fatal("expected wildcard event, got nil")
-	}
-	if got := evt["event"].(string); got != "session.started" {
-		t.Errorf("event[\"event\"] = %q; want \"session.started\"", got)
+	ev := readEvent(t, conn)
+	if ev.Event != "session.started" {
+		t.Errorf("event.Event = %q; want \"session.started\"", ev.Event)
 	}
 }
 
@@ -167,10 +179,10 @@ func TestPubSub_WildcardSubscription(t *testing.T) {
 func TestPubSub_NonMatchingSubscription(t *testing.T) {
 	d, sockPath := startDaemon(t)
 
-	conn, _ := dialSocket(t, sockPath, "weather", []string{"theme.changed"})
+	conn := dialSocket(t, sockPath, "weather", []string{"theme.changed"})
 	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) //nolint:errcheck
 
-	time.Sleep(20 * time.Millisecond)
+	waitFor(t, func() bool { return d.ClientCount() > 0 }, 500*time.Millisecond)
 
 	// Publish an event the client is NOT subscribed to.
 	if err := d.Publish("session.started", nil); err != nil {
@@ -193,15 +205,15 @@ func TestPubSub_NonMatchingSubscription(t *testing.T) {
 func TestPubSub_DisconnectedClientPruned(t *testing.T) {
 	d, sockPath := startDaemon(t)
 
-	conn, _ := dialSocket(t, sockPath, "quitter", []string{"theme.changed"})
+	conn := dialSocket(t, sockPath, "quitter", []string{"theme.changed"})
 
-	time.Sleep(20 * time.Millisecond)
+	waitFor(t, func() bool { return d.ClientCount() > 0 }, 500*time.Millisecond)
 
 	// Disconnect the client abruptly.
 	conn.Close()
 
-	// Give the daemon a moment to detect the closure.
-	time.Sleep(20 * time.Millisecond)
+	// Wait for the daemon to detect the closure (client count back to zero).
+	waitFor(t, func() bool { return d.ClientCount() == 0 }, 500*time.Millisecond)
 
 	// Publishing must not panic and should succeed (client pruned silently).
 	if err := d.Publish("theme.changed", nil); err != nil {

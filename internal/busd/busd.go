@@ -37,6 +37,13 @@ func SocketPath() (string, error) {
 	return filepath.Join(cache, "orcai", "bus.sock"), nil
 }
 
+// Event is the decoded form of a server-to-client wire frame. It is exported
+// so test helpers can unmarshal received frames into a typed value.
+type Event struct {
+	Event   string `json:"event"`
+	Payload any    `json:"payload"`
+}
+
 // eventFrame is the wire format sent from the server to connected clients.
 type eventFrame struct {
 	Event   string `json:"event"`
@@ -72,6 +79,14 @@ func New() *Daemon {
 		clients: make(map[*client]struct{}),
 		done:    make(chan struct{}),
 	}
+}
+
+// ClientCount returns the number of currently registered clients.
+// Exported for testing only.
+func (d *Daemon) ClientCount() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return len(d.clients)
 }
 
 // Start begins listening on the Unix socket resolved by SocketPath(). It is
@@ -134,21 +149,34 @@ func (d *Daemon) Publish(topic string, payload any) error {
 	}
 	frame = append(frame, '\n')
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	var dead []*client
+	// Snapshot matching clients under a read lock so concurrent Publish calls
+	// and handleConn registrations are not serialized behind a write lock.
+	d.mu.RLock()
+	var targets []*client
 	for c := range d.clients {
-		if !c.matches(topic) {
-			continue
+		if c.matches(topic) {
+			targets = append(targets, c)
 		}
+	}
+	d.mu.RUnlock()
+
+	// Write to each client without holding any lock. client.send is
+	// internally synchronized, so concurrent Publish calls are safe.
+	var dead []*client
+	for _, c := range targets {
 		if err := c.send(frame); err != nil {
 			dead = append(dead, c)
 		}
 	}
-	for _, c := range dead {
-		c.close()
-		delete(d.clients, c)
+
+	// Prune dead clients under a single write lock.
+	if len(dead) > 0 {
+		d.mu.Lock()
+		for _, c := range dead {
+			delete(d.clients, c)
+			c.close()
+		}
+		d.mu.Unlock()
 	}
 	return nil
 }
@@ -180,6 +208,10 @@ func (d *Daemon) handleConn(conn net.Conn) {
 	// Block until the client disconnects (reads EOF or error).
 	c.wait()
 
+	// Invariant: if Stop() already ran it replaced d.clients with a fresh map,
+	// so the delete below is a harmless no-op. c.close() is idempotent (guarded
+	// by c.closed), so calling it here after Stop() has already closed it is
+	// also safe. No special ordering between handleConn and Stop is required.
 	d.mu.Lock()
 	delete(d.clients, c)
 	d.mu.Unlock()

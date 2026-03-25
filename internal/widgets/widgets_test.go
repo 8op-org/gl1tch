@@ -153,7 +153,9 @@ func TestLaunch_BadBinary(t *testing.T) {
 	// lets us confirm Launch propagates exec errors without requiring a live
 	// tmux session.
 	err := widgets.Launch(m, "no-such-session-xyzzy")
-	// We expect an error here because the session doesn't exist.
-	// The important thing is that Launch doesn't panic.
-	_ = err
+	// tmux new-window returns a non-zero exit code when targeting a session that
+	// does not exist, so Launch must propagate that as a non-nil error.
+	if err == nil {
+		t.Error("Launch with bad session expected error, got nil")
+	}
 }

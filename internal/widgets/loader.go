@@ -1,7 +1,9 @@
 package widgets
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -15,7 +17,7 @@ import (
 func Discover(dir string) ([]Manifest, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("widgets: read dir %s: %w", dir, err)
@@ -29,7 +31,7 @@ func Discover(dir string) ([]Manifest, error) {
 		manifestPath := filepath.Join(dir, e.Name(), ManifestFile)
 		data, err := os.ReadFile(manifestPath)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, fs.ErrNotExist) {
 				// Subdirectory has no widget.yaml — skip it.
 				continue
 			}
@@ -38,6 +40,9 @@ func Discover(dir string) ([]Manifest, error) {
 		var m Manifest
 		if err := yaml.Unmarshal(data, &m); err != nil {
 			return nil, fmt.Errorf("widgets: parse manifest %s: %w", manifestPath, err)
+		}
+		if m.Name == "" || m.Binary == "" {
+			return nil, fmt.Errorf("widgets: manifest %q missing required field (name or binary)", manifestPath)
 		}
 		manifests = append(manifests, m)
 	}
