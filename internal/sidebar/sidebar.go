@@ -234,7 +234,7 @@ const (
 	aReset = "\x1b[0m"
 )
 
-// buildSidebarView renders the sidebar using an open BBS-style layout:
+// buildSidebarView renders the sidebar using an open ABS-style layout:
 //
 //	  ▪                      ▪   ← dim teal dots above T-junctions
 //	══╢  ░▒▓ ORCAI ▓▒░  ╟══     ← teal banner with pink logo
