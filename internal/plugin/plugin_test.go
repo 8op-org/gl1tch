@@ -1,6 +1,9 @@
 package plugin_test
 
 import (
+	"bytes"
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -98,5 +101,73 @@ func TestManager_LoadWrappersFromDir_EmptyDir(t *testing.T) {
 	}
 	if len(m.List()) != 0 {
 		t.Errorf("expected 0 plugins, got %d", len(m.List()))
+	}
+}
+
+// TestHierarchicalNaming verifies category.action lookup and _action var injection.
+func TestHierarchicalNaming(t *testing.T) {
+	m := plugin.NewManager()
+
+	// Register a plugin as the category handler.
+	var capturedVars map[string]string
+	base := &plugin.StubPlugin{
+		PluginName: "providers.claude",
+		ExecuteFn: func(ctx context.Context, input string, vars map[string]string, w io.Writer) error {
+			capturedVars = vars
+			_, err := w.Write([]byte("ok"))
+			return err
+		},
+	}
+
+	if err := m.Register(base); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// Register under category "providers.claude" with action "chat".
+	m.RegisterCategory("providers.claude", "chat", base)
+
+	// Direct lookup should still work.
+	p, ok := m.Get("providers.claude")
+	if !ok {
+		t.Fatal("expected direct lookup to succeed")
+	}
+	if p.Name() != "providers.claude" {
+		t.Errorf("expected direct name, got %q", p.Name())
+	}
+
+	// Category.action lookup.
+	pAction, ok := m.Get("providers.claude.chat")
+	if !ok {
+		t.Fatal("expected category.action lookup to succeed")
+	}
+
+	// Execute the wrapper and verify _action is injected.
+	capturedVars = nil
+	ctx := context.Background()
+	var buf bytes.Buffer
+	if err := pAction.Execute(ctx, "test", map[string]string{}, &buf); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if capturedVars["_action"] != "chat" {
+		t.Errorf("expected _action='chat', got %q", capturedVars["_action"])
+	}
+
+	// Lookup for unknown action still uses category if category exists.
+	pOther, ok := m.Get("providers.claude.summarize")
+	if !ok {
+		t.Fatal("expected category lookup with unknown action to succeed")
+	}
+	capturedVars = nil
+	if err := pOther.Execute(ctx, "test", map[string]string{}, &buf); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if capturedVars["_action"] != "summarize" {
+		t.Errorf("expected _action='summarize', got %q", capturedVars["_action"])
+	}
+
+	// Unknown top-level name returns not found.
+	_, ok = m.Get("nonexistent")
+	if ok {
+		t.Error("expected not found for nonexistent")
 	}
 }

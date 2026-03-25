@@ -2,15 +2,19 @@ package pipeline
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
 // Interpolate replaces all {{key}} and {{dot.path}} placeholders in s with
-// values from vars. For dot-separated keys like {{s1.out}}, it walks the
-// nested map structure. Values of any type are coerced to string via fmt.Sprint.
-// Unknown keys are left unchanged.
+// values from vars. For dot-separated keys like {{step.fetch.data.url}}, it
+// walks the nested map structure. Values of any type are coerced to string via
+// fmt.Sprint. Unknown keys are left unchanged.
+//
+// Legacy backwards-compat: {{<ID>.out}} where <ID> contains no dots is first
+// tried as a flat key lookup (e.g. vars["s1.out"]), then as step.<ID>.data.value
+// in the nested map. A deprecation warning is logged on the second path.
 func Interpolate(s string, vars map[string]any) string {
-	// Replace each {{...}} placeholder.
 	var result strings.Builder
 	remaining := s
 	for {
@@ -29,7 +33,7 @@ func Interpolate(s string, vars map[string]any) string {
 		result.WriteString(remaining[:start])
 		key := remaining[start+2 : end]
 
-		if v, ok := resolvePath(vars, key); ok {
+		if v, ok := resolveKey(vars, key); ok {
 			result.WriteString(fmt.Sprint(v))
 		} else {
 			// Leave placeholder unchanged.
@@ -43,17 +47,43 @@ func Interpolate(s string, vars map[string]any) string {
 	return result.String()
 }
 
-// resolvePath looks up key in vars. It first tries an exact key match (supporting
-// keys with literal dots like "s1.out"), then falls back to dot-path traversal
-// for nested maps ("step.fetch.data.url" → vars["step"]["fetch"]["data"]["url"]).
-func resolvePath(vars map[string]any, key string) (any, bool) {
-	// Exact key match first (handles flat keys like "s1.out").
+// resolveKey resolves a template key against vars. Resolution order:
+//  1. Exact flat key (e.g. "s1.out" stored as a top-level key).
+//  2. Hierarchical dot-path traversal (e.g. "step.fetch.data.url").
+//  3. Legacy shim: if the key is "<ID>.out" with no dots in <ID>,
+//     try "step.<ID>.data.value" with a deprecation warning.
+func resolveKey(vars map[string]any, key string) (any, bool) {
+	// 1. Exact flat key.
 	if v, ok := vars[key]; ok {
 		return v, true
 	}
-	// Fall back to hierarchical dot-path traversal.
+
+	// 2. Hierarchical dot-path traversal.
+	if v, ok := resolvePath(vars, key); ok {
+		return v, true
+	}
+
+	// 3. Legacy shim: {{<ID>.out}} → step.<ID>.data.value
+	if strings.HasSuffix(key, ".out") {
+		id := strings.TrimSuffix(key, ".out")
+		if !strings.Contains(id, ".") {
+			newKey := "step." + id + ".data.value"
+			if v, ok := resolvePath(vars, newKey); ok {
+				log.Printf("[pipeline] DEPRECATED: {{%s}} — use {{%s}} instead", key, newKey)
+				return v, true
+			}
+		}
+	}
+
+	return nil, false
+}
+
+// resolvePath looks up key in vars by walking the nested map using dot-path
+// traversal. E.g. "step.fetch.data.url" → vars["step"]["fetch"]["data"]["url"].
+func resolvePath(vars map[string]any, key string) (any, bool) {
 	if !strings.Contains(key, ".") {
-		return nil, false
+		v, ok := vars[key]
+		return v, ok
 	}
 	parts := strings.SplitN(key, ".", 2)
 	v, ok := vars[parts[0]]

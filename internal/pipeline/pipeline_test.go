@@ -98,3 +98,76 @@ func TestInterpolate_NonStringValue(t *testing.T) {
 		t.Errorf("got %q", result)
 	}
 }
+
+// TestTemplateInterpolation tests for the new nested path and legacy compat features.
+func TestTemplateInterpolation(t *testing.T) {
+	t.Run("nested step.id.data.key path", func(t *testing.T) {
+		vars := map[string]any{
+			"step": map[string]any{
+				"fetch": map[string]any{
+					"data": map[string]any{
+						"url": "https://example.com",
+					},
+				},
+			},
+		}
+		result := pipeline.Interpolate("url={{step.fetch.data.url}}", vars)
+		if result != "url=https://example.com" {
+			t.Errorf("expected nested path resolution, got %q", result)
+		}
+	})
+
+	t.Run("missing nested path left unchanged", func(t *testing.T) {
+		vars := map[string]any{
+			"step": map[string]any{},
+		}
+		result := pipeline.Interpolate("{{step.missing.data.key}}", vars)
+		if result != "{{step.missing.data.key}}" {
+			t.Errorf("expected unchanged placeholder, got %q", result)
+		}
+	})
+
+	t.Run("legacy {{ID.out}} falls back to step.ID.data.value", func(t *testing.T) {
+		vars := map[string]any{
+			"step": map[string]any{
+				"s1": map[string]any{
+					"data": map[string]any{
+						"value": "legacy output",
+					},
+				},
+			},
+		}
+		result := pipeline.Interpolate("{{s1.out}}", vars)
+		if result != "legacy output" {
+			t.Errorf("expected legacy compat, got %q", result)
+		}
+	})
+
+	t.Run("flat key takes precedence over nested path", func(t *testing.T) {
+		vars := map[string]any{
+			"s1.out": "flat value",
+			"step": map[string]any{
+				"s1": map[string]any{
+					"data": map[string]any{"value": "nested value"},
+				},
+			},
+		}
+		result := pipeline.Interpolate("{{s1.out}}", vars)
+		// Flat key takes precedence.
+		if result != "flat value" {
+			t.Errorf("expected flat key precedence, got %q", result)
+		}
+	})
+
+	t.Run("multi-segment keys resolve via dot traversal", func(t *testing.T) {
+		vars := map[string]any{
+			"param": map[string]any{
+				"key": "myvalue",
+			},
+		}
+		result := pipeline.Interpolate("value={{param.key}}", vars)
+		if result != "value=myvalue" {
+			t.Errorf("expected dot traversal, got %q", result)
+		}
+	})
+}

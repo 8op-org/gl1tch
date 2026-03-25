@@ -19,17 +19,21 @@ type SidecarSchema struct {
 	Args         []string `yaml:"args"`
 	InputSchema  string   `yaml:"input_schema"`
 	OutputSchema string   `yaml:"output_schema"`
+	// Category is an optional hierarchical prefix (e.g. "providers.claude").
+	// When set, the adapter is also registered under "category.name" in the Manager.
+	Category string `yaml:"category"`
 }
 
 // CliAdapter wraps an arbitrary CLI tool as a Tier 2 Plugin.
 // Input is written to the subprocess stdin; stdout/stderr is streamed to the writer.
 // args are fixed command-line arguments prepended to every Execute call.
 type CliAdapter struct {
-	name string
-	desc string
-	cmd  string
-	args []string
-	caps []Capability
+	name     string
+	desc     string
+	cmd      string
+	args     []string
+	caps     []Capability
+	category string // optional; set from sidecar YAML
 }
 
 // NewCliAdapter creates a Tier 2 plugin that wraps cmd.
@@ -38,6 +42,8 @@ func NewCliAdapter(name, description, cmd string, args ...string) *CliAdapter {
 }
 
 // NewCliAdapterFromSidecar loads a CliAdapter from a sidecar YAML file.
+// If the sidecar has a category field, Category is set on the adapter so that
+// callers (e.g. Manager.LoadWrappersFromDir) can call RegisterCategory.
 func NewCliAdapterFromSidecar(path string) (*CliAdapter, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -54,11 +60,12 @@ func NewCliAdapterFromSidecar(path string) (*CliAdapter, error) {
 		{Name: schema.Name, InputSchema: schema.InputSchema, OutputSchema: schema.OutputSchema},
 	}
 	return &CliAdapter{
-		name: schema.Name,
-		desc: schema.Description,
-		cmd:  schema.Command,
-		args: schema.Args,
-		caps: caps,
+		name:     schema.Name,
+		desc:     schema.Description,
+		cmd:      schema.Command,
+		args:     schema.Args,
+		caps:     caps,
+		category: schema.Category,
 	}, nil
 }
 
@@ -66,6 +73,9 @@ func (c *CliAdapter) Name() string              { return c.name }
 func (c *CliAdapter) Description() string        { return c.desc }
 func (c *CliAdapter) Capabilities() []Capability { return c.caps }
 func (c *CliAdapter) Close() error               { return nil }
+
+// Category returns the optional hierarchical category prefix. Empty if not set.
+func (c *CliAdapter) Category() string { return c.category }
 
 // Execute spawns the subprocess, writes input to stdin, and streams stdout to w.
 // vars is accepted for interface compatibility but is not passed to the subprocess;

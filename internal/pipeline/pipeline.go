@@ -3,16 +3,18 @@ package pipeline
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Pipeline is the top-level definition loaded from a .pipeline.yaml file.
 type Pipeline struct {
-	Name    string         `yaml:"name"`
-	Version string         `yaml:"version"`
-	Steps   []Step         `yaml:"steps"`
-	Vars    map[string]any `yaml:"vars"` // Pipeline-level seed context available to all steps.
+	Name        string         `yaml:"name"`
+	Version     string         `yaml:"version"`
+	Steps       []Step         `yaml:"steps"`
+	Vars        map[string]any `yaml:"vars"` // Pipeline-level seed context available to all steps.
+	MaxParallel int            `yaml:"max_parallel"` // Maximum concurrent steps; defaults to 8 when zero.
 }
 
 // Step is one unit of work in a pipeline.
@@ -34,8 +36,36 @@ type Step struct {
 	Executor string `yaml:"executor"`
 	// Args supersedes Vars when set; supports nested values for structured plugin input.
 	Args map[string]any `yaml:"args"`
-	// Needs lists step IDs that must complete before this step runs (DAG — implemented in pipeline-enhancements).
+	// Needs lists step IDs that must complete before this step runs (DAG).
 	Needs []string `yaml:"needs"`
+	// Retry describes the retry policy for this step. Nil means no retry.
+	Retry *RetryPolicy `yaml:"retry"`
+	// OnFailure names a step ID to run if this step fails after all retry attempts.
+	OnFailure string `yaml:"on_failure"`
+	// ForEach is a template expression or newline-separated list of items.
+	// When set, the step is expanded into N cloned steps, one per item.
+	ForEach string `yaml:"for_each"`
+}
+
+// RetryPolicy specifies how a step should be retried on failure.
+type RetryPolicy struct {
+	MaxAttempts int      `yaml:"max_attempts"`
+	Interval    Duration `yaml:"interval"`
+	// On controls when to retry: "always" (default) or "on_failure".
+	On string `yaml:"on"`
+}
+
+// Duration wraps time.Duration to support YAML unmarshalling from strings like "2s".
+type Duration struct{ time.Duration }
+
+// UnmarshalYAML parses a duration string (e.g. "2s", "500ms") into a Duration.
+func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
+	dur, err := time.ParseDuration(value.Value)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q: %w", value.Value, err)
+	}
+	d.Duration = dur
+	return nil
 }
 
 // Condition describes a branch: if expression is true go to Then, else go to Else.
@@ -46,6 +76,7 @@ type Condition struct {
 }
 
 // Load reads and validates a Pipeline from r.
+// Returns an error if the YAML is invalid, name is missing, or the step DAG contains a cycle.
 func Load(r io.Reader) (*Pipeline, error) {
 	var p Pipeline
 	dec := yaml.NewDecoder(r)
@@ -54,6 +85,10 @@ func Load(r io.Reader) (*Pipeline, error) {
 	}
 	if p.Name == "" {
 		return nil, fmt.Errorf("pipeline yaml: name is required")
+	}
+	// Validate DAG — detect cycles before execution.
+	if _, err := buildDAG(p.Steps); err != nil {
+		return nil, fmt.Errorf("pipeline yaml: %w", err)
 	}
 	return &p, nil
 }
