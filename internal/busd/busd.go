@@ -183,4 +183,5 @@ func (d *Daemon) handleConn(conn net.Conn) {
 	d.mu.Lock()
 	delete(d.clients, c)
 	d.mu.Unlock()
+	c.close()
 }
