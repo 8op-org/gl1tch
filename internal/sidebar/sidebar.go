@@ -356,6 +356,7 @@ func borderRow(content, colour string, inner int, visLen int) string {
 	return aTeal + "║" + colour + innerPad(content, visLen, inner) + aReset + aTeal + "║" + aReset
 }
 
+// View renders the sidebar using an ABS-style (Agentic Bulletin System) layout.
 func (m Model) View() string {
 	w := m.width
 	if w <= 0 {

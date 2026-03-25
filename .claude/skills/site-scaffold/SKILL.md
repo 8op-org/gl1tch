@@ -1,31 +1,36 @@
 ---
 name: site-scaffold
-description: Scaffold or regenerate the orcai GitHub Pages site structure at docs/ with full BBS/ANSI aesthetic — Dracula palette, hex-dump canvas wallpaper, monospace grid, ANSI art hero, VT323 headers, dot-separated nav. Use when adding a new page or resetting the site structure.
+description: Scaffold or regenerate the orcai ABS (Agentic Bulletin System) site at site/src/pages/ — Dracula palette, hex-dump canvas wallpaper, JetBrains Mono, ANSI art hero, dot-separated nav. Use when adding a new page to the Astro site.
 disable-model-invocation: true
 ---
 
-Scaffold or update the orcai GitHub Pages site at docs/.
+Scaffold or update the orcai ABS (Agentic Bulletin System) site at site/src/pages/.
 
-When invoked with a page name as argument, create that page. With no argument, scaffold the full site.
+When invoked with a page name as argument, create that Astro page. With no argument, scaffold a new page stub.
 
-## Site Structure
+## Site Structure (Astro 6, base: /orcai)
 
-docs/
-  index.html              — BBS welcome screen, ANSI logo hero, hex dump bg
-  getting-started.html    — Terminal-style install + first run guide
-  plugins.html            — Plugin system with ASCII architecture diagrams
-  pipelines.html          — Pipeline builder YAML reference
-  css/bbs.css             — Dracula palette, CRT scanlines, BBS components
-  js/bbs.js               — Hex canvas, typewriter, copy buttons, keyboard nav
-  ans/                    — Converted ANSI art HTML fragments
-  _config.yml             — GitHub Pages config (theme: null)
-  .nojekyll               — Disable Jekyll
+site/src/
+  pages/               — Astro pages using BBS.astro layout
+  layouts/
+    Base.astro         — html/head/body shell, loads bbs.css + bbs.js
+    BBS.astro          — Base + Nav + Footer
+  components/
+    Nav.astro          — Fixed top bar, activePage prop, · separators
+    Footer.astro       — [ ORCAI ABS ] [ MIT ] etc.
+    SysinfoBox.astro   — CSS-bordered table (no manual char padding)
+    FeatureCard.astro  — Feature grid cards
+    AnsiLogo.astro     — ANSI block logo
+  content/             — Content Collections (changelog, registry, pipelines)
+site/public/
+  css/bbs.css          — Dracula palette, CRT scanlines, ABS components
+  js/bbs.js            — Hex canvas, typewriter, color cycling, keyboard nav
 
 ## Aesthetic Rules (ENFORCE ON ALL PAGES)
 
 - Background: #282a36 ONLY. No white, light, or gradient backgrounds.
-- Fonts: VT323 (Google Fonts) for display/headers. Share Tech Mono for body.
-- Nav: Fixed top bar, 1px border in --purple, dot-separated links
+- Font: JetBrains Mono (Google Fonts) throughout — full box-drawing glyph coverage
+- Nav: Written once in Nav.astro, activePage prop sets active link
 - Box-drawing: Use ║╔╗╚╝─│┌┐└┘· for all UI frames
 - Colors: Only Dracula palette vars (--purple, --pink, --cyan, --green, --yellow, --red, --comment)
 - NO Bootstrap, NO Tailwind, NO utility frameworks
@@ -34,11 +39,19 @@ docs/
 
 ## When Adding a New Page
 
-1. Read docs/index.html to understand the nav structure
-2. Read docs/css/bbs.css for existing styles to reuse
-3. Create the new page following the same header/nav/footer pattern
-4. Add the page to the nav bar in ALL existing pages
-5. Follow the BBS content style: ASCII boxes, terminal prompts, monospace tables
+1. Create site/src/pages/<name>.astro using BBS layout:
+   ```astro
+   ---
+   import BBS from '../layouts/BBS.astro';
+   ---
+   <BBS title="Page Name" activePage="page-key">
+     <div class="content content-padded" style="position:relative;z-index:1">
+       ...
+     </div>
+   </BBS>
+   ```
+2. Add the page key + href to navItems array in site/src/components/Nav.astro
+3. Follow ABS content style: ASCII boxes, terminal prompts, monospace tables
 
 ## Palette Reference (from sdk/styles/styles.go)
 
