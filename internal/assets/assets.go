@@ -12,5 +12,5 @@ var ProviderFS embed.FS
 
 // ThemeFS contains all bundled theme bundles, including manifests and assets.
 //
-//go:embed themes/**/*
+//go:embed themes
 var ThemeFS embed.FS
