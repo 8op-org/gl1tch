@@ -339,9 +339,224 @@ func sideBySide(left, mid, right []string, colW, gap int) []string {
 	return rows
 }
 
-// View renders the sidebar using an ABS-style (Agentic Bulletin System) layout.
+// sessionForWindow returns the SessionTelemetry for the given window name
+// (searching by WindowName across all session entries) and whether one exists.
+func (m Model) sessionForWindow(windowName string) (SessionTelemetry, bool) {
+	for _, st := range m.sessions {
+		if st.WindowName == windowName {
+			return st, true
+		}
+	}
+	return SessionTelemetry{}, false
+}
+
+// buildNodesColumn renders the "Active Nodes" column as a slice of lines of width w.
+func (m Model) buildNodesColumn(w int) []string {
+	inner := w - 2
+	rows := []string{boxTop(w, "Active Nodes")}
+
+	if len(m.windows) == 0 {
+		nodesLine := aDim + "  no active nodes" + aReset
+		rows = append(rows, boxRow(nodesLine, 18, w))
+	}
+
+	for i, win := range m.windows {
+		st, hasTel := m.sessionForWindow(win.Name)
+
+		var badge, badgeCol string
+		switch {
+		case !hasTel:
+			badge, badgeCol = "[WAIT]", aYlw
+		case st.Status == "streaming":
+			badge, badgeCol = "[BUSY]", aGrn
+		default:
+			badge, badgeCol = "[IDLE]", aDim
+		}
+
+		keyLabel := fmt.Sprintf("[%d]", i+1)
+		maxName := inner - len(keyLabel) - 2 - len(badge)
+		if maxName < 1 {
+			maxName = 1
+		}
+		name := win.Name
+		if len(name) > maxName {
+			name = name[:maxName-1] + "…"
+		}
+		dotCount := inner - len(keyLabel) - 1 - len(name) - 1 - len(badge)
+		if dotCount < 1 {
+			dotCount = 1
+		}
+
+		contentVis := len(keyLabel) + 1 + len(name) + dotCount + len(badge)
+
+		if i == m.cursor {
+			content := aSelBg + aBrC + keyLabel + " " + aWht + name +
+				aDim + strings.Repeat(".", dotCount) +
+				badgeCol + badge + aReset
+			rows = append(rows, aBC+"│"+content+strings.Repeat(" ", max(inner-contentVis, 0))+aBC+"│"+aReset)
+		} else {
+			content := aBrC + keyLabel + " " + aBC + name +
+				aDim + strings.Repeat(".", dotCount) +
+				badgeCol + badge + aReset
+			rows = append(rows, boxRow(content, contentVis, w))
+		}
+	}
+
+	rows = append(rows, boxBot(w))
+	return rows
+}
+
+// buildDetailsColumn renders the "Node Details" column for the cursor node.
+func (m Model) buildDetailsColumn(w int) []string {
+	rows := []string{boxTop(w, "Node Details")}
+
+	if len(m.windows) == 0 || m.cursor >= len(m.windows) {
+		rows = append(rows, boxRow(aDim+"  no node selected"+aReset, 18, w))
+		rows = append(rows, boxBot(w))
+		return rows
+	}
+
+	win := m.windows[m.cursor]
+	st, hasTel := m.sessionForWindow(win.Name)
+
+	field := func(label, value string) string {
+		dots := 12 - len(label)
+		if dots < 1 {
+			dots = 1
+		}
+		line := "  " + aBrC + label + " " + aDim + strings.Repeat(".", dots) + " " + aBC + value + aReset
+		return boxRow(line, 2+len(label)+1+dots+1+len(value), w)
+	}
+
+	rows = append(rows, field("Window", win.Name))
+
+	if hasTel {
+		rows = append(rows, field("Provider", st.Provider))
+
+		var statusVal string
+		if st.Status == "streaming" {
+			statusVal = aGrn + "streaming" + aReset
+		} else {
+			statusVal = aDim + st.Status + aReset
+		}
+		statusLine := "  " + aBrC + "Status" + " " + aDim + strings.Repeat(".", 7) + " " + statusVal + aReset
+		rows = append(rows, boxRow(statusLine, 2+6+1+7+1+len(st.Status), w))
+
+		if st.InputTokens > 0 {
+			tokens := fmt.Sprintf("%dk↑ / %d↓", st.InputTokens/1000, st.OutputTokens)
+			rows = append(rows, field("Tokens", tokens))
+			cost := fmt.Sprintf("$%.4f", st.CostUSD)
+			rows = append(rows, field("Cost", cost))
+		}
+	} else {
+		rows = append(rows, boxRow(aDim+"  no telemetry yet"+aReset, 18, w))
+	}
+
+	rows = append(rows, boxBot(w))
+	return rows
+}
+
+// buildLogColumn renders the "ACTIVITY LOG" column.
+func (m Model) buildLogColumn(w int) []string {
+	rows := []string{boxTop(w, "ACTIVITY LOG")}
+
+	if len(m.log) == 0 {
+		rows = append(rows, boxRow(aDim+"  no activity"+aReset, 13, w))
+	}
+
+	for _, entry := range m.log {
+		nodeLabel := fmt.Sprintf("NODE%02d", entry.Node)
+		var line string
+		if entry.Event == "done" && entry.CostUSD > 0 {
+			line = fmt.Sprintf("  %s  %s  done  $%.3f",
+				entry.At.Format("15:04"), nodeLabel, entry.CostUSD)
+		} else {
+			line = fmt.Sprintf("  %s  %s  %s",
+				entry.At.Format("15:04"), nodeLabel, entry.Event)
+		}
+		rows = append(rows, boxRow(aDim+line+aReset, len(line), w))
+	}
+
+	rows = append(rows, boxBot(w))
+	return rows
+}
+
+// View renders the sysop panel with a BBS-style three-column layout.
 func (m Model) View() string {
-	return "BBS sysop panel — coming in Task 4"
+	w := m.width
+	if w <= 0 {
+		w = 120
+	}
+
+	gap := 2
+	colW := (w - gap*2) / 3
+
+	var lines []string
+
+	// ── Title bar ─────────────────────────────────────────────────────────────
+	title := "ABS · SYSOP MONITOR"
+	titleVis := len(title)
+	pad := (w - 2 - titleVis) / 2
+	if pad < 0 {
+		pad = 0
+	}
+	centred := strings.Repeat(" ", pad) + aBrC + title + aReset
+	lines = append(lines,
+		boxTop(w, ""),
+		boxRow(centred, pad+titleVis, w),
+		boxBot(w),
+		"",
+	)
+
+	// ── Three columns ──────────────────────────────────────────────────────────
+	left := m.buildNodesColumn(colW)
+	mid := m.buildDetailsColumn(colW)
+	right := m.buildLogColumn(colW)
+	lines = append(lines, sideBySide(left, mid, right, colW, gap)...)
+	lines = append(lines, "")
+
+	// ── Actions bar ────────────────────────────────────────────────────────────
+	actionsContent := "  " + aBrC + "[enter]" + aBC + " focus    " +
+		aBrC + "[x]" + aBC + " kill    " +
+		aBrC + "[↑↓]" + aBC + " navigate    " +
+		aBrC + "[ctrl+c]" + aBC + " quit" + aReset
+	actionsVis := 2 + 7 + 10 + 3 + 9 + 4 + 12 + 8 + 5
+	lines = append(lines,
+		boxTop(w, ""),
+		boxRow(actionsContent, actionsVis, w),
+		boxBot(w),
+	)
+
+	// ── Status strip ───────────────────────────────────────────────────────────
+	var totalCost float64
+	var activeProvider string
+	var anyStreaming bool
+	for _, st := range m.sessions {
+		totalCost += st.CostUSD
+		if st.Provider != "" && activeProvider == "" {
+			activeProvider = st.Provider
+		}
+		if st.Status == "streaming" {
+			anyStreaming = true
+		}
+	}
+	sep := aDim + "  │  " + aReset
+	statusParts := []string{
+		fmt.Sprintf("%sNODES: %d ACTIVE%s", aBrC, len(m.windows), aReset),
+	}
+	if anyStreaming {
+		statusParts = append(statusParts, aGrn+"STREAMING"+aReset)
+	}
+	if activeProvider != "" {
+		statusParts = append(statusParts, aBC+strings.ToUpper(activeProvider)+aReset)
+	}
+	if totalCost > 0 {
+		statusParts = append(statusParts, aBC+fmt.Sprintf("$%.3f TOTAL", totalCost)+aReset)
+	}
+	statusParts = append(statusParts, aDim+time.Now().Format("15:04")+aReset)
+	lines = append(lines, strings.Join(statusParts, sep))
+
+	return strings.Join(lines, "\n")
 }
 
 // Run starts the sysop panel as a bubbletea program.
