@@ -729,10 +729,15 @@ func launchPipelineCmdCh(yamlPath, feedID string, ch chan tea.Msg, cancel contex
 		}
 
 		pub := &ChanPublisher{id: feedID, ch: ch}
-		_, runErr := pipeline.Run(context.Background(), p, mgr, "", pub)
+		output, runErr := pipeline.Run(context.Background(), p, mgr, "", pub)
 		if runErr != nil {
 			ch <- jobFailedMsg{id: feedID, err: runErr}
 		} else {
+			for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+				if line != "" {
+					ch <- FeedLineMsg{ID: feedID, Line: line}
+				}
+			}
 			ch <- jobDoneMsg{id: feedID}
 		}
 		return nil
@@ -903,7 +908,7 @@ func (m Model) buildBanner(w int) string {
 	logoLine := aPur + "║" + aPnk + " ░▒▓ " + aBld + "ORCAI" + aRst + aPnk + " ▓▒░" +
 		strings.Repeat(" ", logoPad) + aPur + "║" + aRst
 
-	const subtitleLen = 18
+	const subtitleLen = 20
 	subPad := max(inner-subtitleLen, 0)
 	subLine := aPur + "║" + aBrC + "  ABBS Switchboard  " +
 		strings.Repeat(" ", subPad) + aPur + "║" + aRst
@@ -971,16 +976,22 @@ func (m Model) buildAgentSection(w int) []string {
 			if label == "" {
 				label = prov.ID
 			}
-			maxLen := max(w-4, 1)
+			maxLen := max(w-5, 1)
 			if len(label) > maxLen {
 				label = label[:maxLen-1] + "…"
 			}
 			contentVis := 4 + len(label)
-			if i == m.agent.selectedProvider && m.agent.focused {
-				content := aSelBg + aWht + "  ▸ " + label + aRst
+			if i == m.agent.selectedProvider {
+				sel := ""
+				if m.agent.focused {
+					sel = aSelBg + aWht
+				} else {
+					sel = aBrC
+				}
+				content := sel + "  > " + label + aRst
 				rows = append(rows, aBC+"│"+content+strings.Repeat(" ", max(w-2-contentVis, 0))+aBC+"│"+aRst)
 			} else {
-				content := aBrC + "    " + aBC + label + aRst
+				content := aDim + "    " + aBC + label + aRst
 				rows = append(rows, boxRow(content, contentVis, w))
 			}
 		}
@@ -991,7 +1002,16 @@ func (m Model) buildAgentSection(w int) []string {
 		if prov != nil {
 			models = nonSepModels(prov.Models)
 		}
-		rows = append(rows, boxRow(aBrC+"  Model:"+aRst, 8, w))
+		// Breadcrumb: show which provider was selected.
+		provLabel := ""
+		if prov != nil {
+			provLabel = prov.Label
+			if provLabel == "" {
+				provLabel = prov.ID
+			}
+		}
+		crumb := "  " + aDim + provLabel + aRst + aBrC + " > model" + aRst
+		rows = append(rows, boxRow(crumb, 2+len(provLabel)+9, w))
 		if len(models) == 0 {
 			rows = append(rows, boxRow(aDim+"  no models"+aRst, 11, w))
 		} else {
@@ -1000,22 +1020,52 @@ func (m Model) buildAgentSection(w int) []string {
 				if label == "" {
 					label = mo.ID
 				}
-				maxLen := max(w-4, 1)
+				maxLen := max(w-5, 1)
 				if len(label) > maxLen {
 					label = label[:maxLen-1] + "…"
 				}
 				contentVis := 4 + len(label)
 				if i == m.agent.selectedModel && m.agent.focused {
-					content := aSelBg + aWht + "  ▸ " + label + aRst
+					content := aSelBg + aWht + "  > " + label + aRst
 					rows = append(rows, aBC+"│"+content+strings.Repeat(" ", max(w-2-contentVis, 0))+aBC+"│"+aRst)
 				} else {
-					content := aBrC + "    " + aBC + label + aRst
+					content := aDim + "    " + aBC + label + aRst
 					rows = append(rows, boxRow(content, contentVis, w))
 				}
 			}
 		}
 
 	case 2:
+		// Breadcrumb: show provider and model selection.
+		prov := m.currentProvider()
+		provLabel := ""
+		if prov != nil {
+			provLabel = prov.Label
+			if provLabel == "" {
+				provLabel = prov.ID
+			}
+		}
+		models := []picker.ModelOption{}
+		if prov != nil {
+			models = nonSepModels(prov.Models)
+		}
+		modelLabel := ""
+		if len(models) > 0 && m.agent.selectedModel < len(models) {
+			modelLabel = models[m.agent.selectedModel].Label
+			if modelLabel == "" {
+				modelLabel = models[m.agent.selectedModel].ID
+			}
+		}
+		crumb := "  " + aDim + provLabel
+		if modelLabel != "" {
+			crumb += " > " + modelLabel
+		}
+		crumb += aRst + aBrC + " > prompt" + aRst
+		crumbVis := 2 + len(provLabel) + len(modelLabel) + 9
+		if modelLabel != "" {
+			crumbVis += 3 // " > "
+		}
+		rows = append(rows, boxRow(crumb, crumbVis, w))
 		rows = append(rows, boxRow(aBrC+"  Prompt:"+aRst, 9, w))
 		promptView := m.agent.prompt.View()
 		promptLine := "  " + promptView
@@ -1035,7 +1085,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 	if len(m.feed) == 0 {
 		lines = append(lines, boxRow(aDim+"  no activity yet"+aRst, 17, width))
 	} else {
-		for i, entry := range m.feed {
+		for _, entry := range m.feed {
 			badge, badgeColor := statusBadge(entry.status)
 			ts := entry.ts.Format("15:04:05")
 			// title line
@@ -1046,18 +1096,13 @@ func (m Model) viewActivityFeed(height, width int) string {
 			titleVis := 2 + len(badge) + 1 + len(ts) + 2 + len(entry.title)
 			lines = append(lines, boxRow(titleLine, titleVis, width))
 
-			if i == m.feedSelected {
-				for _, outLine := range entry.lines {
-					maxLen := max(width-4, 1)
-					if len(outLine) > maxLen {
-						outLine = outLine[:maxLen-1] + "…"
-					}
-					content := aDim + "    " + outLine + aRst
-					lines = append(lines, boxRow(content, 4+len(outLine), width))
+			for _, outLine := range entry.lines {
+				maxLen := max(width-4, 1)
+				if len(outLine) > maxLen {
+					outLine = outLine[:maxLen-1] + "…"
 				}
-				if len(entry.lines) == 0 {
-					lines = append(lines, boxRow(aDim+"    (no output yet)"+aRst, 18, width))
-				}
+				content := aDim + "    " + outLine + aRst
+				lines = append(lines, boxRow(content, 4+len(outLine), width))
 			}
 		}
 	}
