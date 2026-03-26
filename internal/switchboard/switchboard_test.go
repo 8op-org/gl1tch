@@ -565,3 +565,145 @@ func TestFeedScrollIndicator_DownWhenContentBelow(t *testing.T) {
 	}
 }
 
+// ── Feed navigation (tasks 6.1–6.4) ──────────────────────────────────────────
+
+// TestTabFromAgent_FocusesFeed verifies that pressing Tab when the Agent Runner
+// is focused moves focus to the Activity Feed.
+func TestTabFromAgent_FocusesFeed(t *testing.T) {
+	m := switchboard.New()
+	// Use "a" key to focus the agent section.
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m3 := m2.(switchboard.Model)
+
+	// Press Tab — should transfer focus to feed.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m5 := m4.(switchboard.Model)
+
+	// Confirm feed is now focused by verifying j moves the feed cursor.
+	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m7 := m6.(switchboard.Model)
+	// If feed is focused, j will try to advance feedCursor. With no entries
+	// feedCursor stays 0 — so also confirm agent is no longer capturing j
+	// by checking that a subsequent Tab lands us back at launcher (feed→launcher).
+	m8, _ := m7.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m9 := m8.(switchboard.Model)
+	// After feed→Tab→launcher, pressing j should move launcher cursor (not feed).
+	// We can verify by confirming FeedCursor is still 0 (feed was focused but had
+	// no entries) and that the Tab succeeded without panicking.
+	if m9.FeedCursor() != 0 {
+		t.Errorf("feedCursor should be 0 after Tab-from-agent sequence, got %d", m9.FeedCursor())
+	}
+
+	// More direct: set feed focused directly, add entries, press j, check cursor.
+	m10 := switchboard.New()
+	m10 = m10.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
+	m10 = m10.AddFeedEntry("id2", "job two", switchboard.FeedDone, []string{"line c"})
+	// Focus agent via "a", then Tab to feed.
+	m11, _ := m10.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m12, _ := m11.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
+	m13 := m12.(switchboard.Model)
+	// Feed should now be focused — j should advance feedCursor.
+	m14, _ := m13.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m15 := m14.(switchboard.Model)
+	if m15.FeedCursor() == 0 {
+		t.Error("feedCursor should advance after j when feed is focused (after Tab from agent)")
+	}
+	// Also confirm agent is not focused: j would have moved launcher or agent
+	// differently. The FeedCursor() > 0 confirms feed captured the key.
+}
+
+// TestTabFromFeed_FocusesLauncher verifies that pressing Tab when the Activity
+// Feed is focused moves focus back to the Pipeline Launcher.
+func TestTabFromFeed_FocusesLauncher(t *testing.T) {
+	m := switchboard.NewWithPipelines([]string{"alpha", "beta"})
+	// Focus feed directly via the public setter.
+	m = m.SetFeedFocused(true)
+
+	// Press Tab — feed → launcher.
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m3 := m2.(switchboard.Model)
+
+	// Confirm feed is no longer focused: j should now move launcher cursor, not feed.
+	// Add feed entries so we can detect if feedCursor accidentally moved.
+	m3 = m3.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
+	cursorBefore := m3.FeedCursor()
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m5 := m4.(switchboard.Model)
+	if m5.FeedCursor() != cursorBefore {
+		t.Errorf("feedCursor should not change after Tab-from-feed (launcher should be focused), got %d → %d",
+			cursorBefore, m5.FeedCursor())
+	}
+	// Launcher cursor should have advanced (was 0, now 1 with 2 pipelines).
+	if m5.Cursor() != 1 {
+		t.Errorf("launcher cursor should be 1 after j (launcher focused after Tab-from-feed), got %d", m5.Cursor())
+	}
+}
+
+// TestFeedCursor_JKOnlyWhenFocused verifies that j and k only move feedCursor
+// when the Activity Feed is focused.
+func TestFeedCursor_JKOnlyWhenFocused(t *testing.T) {
+	// Scenario A: feed NOT focused — j and k should not change feedCursor.
+	m := switchboard.New()
+	m = m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b", "line c"})
+	m = m.AddFeedEntry("id2", "job two", switchboard.FeedDone, []string{"line d", "line e"})
+	// Default state: launcher focused, feed not focused.
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if got := m2.(switchboard.Model).FeedCursor(); got != 0 {
+		t.Errorf("feedCursor should be 0 when feed not focused after j, got %d", got)
+	}
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if got := m3.(switchboard.Model).FeedCursor(); got != 0 {
+		t.Errorf("feedCursor should be 0 when feed not focused after k, got %d", got)
+	}
+
+	// Scenario B: feed focused — j should advance feedCursor.
+	m4 := switchboard.New()
+	m4 = m4.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b", "line c"})
+	m4 = m4.AddFeedEntry("id2", "job two", switchboard.FeedDone, []string{"line d", "line e"})
+	m4 = m4.SetFeedFocused(true)
+	m5, _ := m4.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if got := m5.(switchboard.Model).FeedCursor(); got == 0 {
+		t.Error("feedCursor should advance after j when feed is focused")
+	}
+
+	// Scenario C: feed focused — k after j should decrement.
+	m6, _ := m5.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if got := m6.(switchboard.Model).FeedCursor(); got != 0 {
+		t.Errorf("feedCursor should decrement back to 0 after j then k, got %d", got)
+	}
+}
+
+// TestFeedCursor_GAndGJumps verifies that g goes to the first line and G goes
+// to the last line of the Activity Feed when feed is focused.
+func TestFeedCursor_GAndGJumps(t *testing.T) {
+	m := switchboard.New()
+	// Add entries with enough lines so last-line index is meaningfully > 0.
+	for i := range 5 {
+		m = m.AddFeedEntry(fmt.Sprintf("job%d", i), fmt.Sprintf("pipeline %d", i), switchboard.FeedDone,
+			[]string{"output line 1", "output line 2", "output line 3"})
+	}
+	m = m.SetFeedFocused(true)
+
+	// Press G — should jump to last line.
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	m3 := m2.(switchboard.Model)
+	if m3.FeedCursor() == 0 {
+		t.Error("feedCursor should be > 0 after G (jump to last line)")
+	}
+	lastCursor := m3.FeedCursor()
+
+	// Press g — should jump back to first line (0).
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	m5 := m4.(switchboard.Model)
+	if m5.FeedCursor() != 0 {
+		t.Errorf("feedCursor should be 0 after g (jump to first line), got %d", m5.FeedCursor())
+	}
+
+	// Press G again — should restore last-line index.
+	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	m7 := m6.(switchboard.Model)
+	if m7.FeedCursor() != lastCursor {
+		t.Errorf("feedCursor after second G should match first G result: want %d, got %d", lastCursor, m7.FeedCursor())
+	}
+}
+
