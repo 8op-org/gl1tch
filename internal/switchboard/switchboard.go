@@ -68,6 +68,7 @@ type feedEntry struct {
 	ts         time.Time
 	lines      []string
 	tmuxWindow string // fully-qualified target "session:orcai-<feedID>", empty if no window
+	logFile    string // /tmp/orcai-<feedID>.log — tailed in the tmux window
 }
 
 // ── Section types ─────────────────────────────────────────────────────────────
@@ -432,10 +433,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FeedLineMsg:
 		m = m.appendFeedLine(msg.ID, msg.Line)
-		// Append stripped line to the job's log file so the debug popup tail shows it.
-		if m.activeJob != nil && m.activeJob.logFile != "" {
-			line := stripANSI(msg.Line)
-			appendToFile(m.activeJob.logFile, line+"\n")
+		// Write to the entry's log file so the debug popup tail shows live output.
+		// Look up by ID so writing works even after activeJob is cleared.
+		for _, e := range m.feed {
+			if e.id == msg.ID && e.logFile != "" {
+				appendToFile(e.logFile, stripANSI(msg.Line)+"\n")
+				break
+			}
 		}
 		if m.activeJob != nil {
 			return m, drainChan(m.activeJob.ch)
@@ -810,6 +814,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 
 		windowName, logFile := createJobWindow(feedID)
 		entry.tmuxWindow = windowName
+		entry.logFile = logFile
 		m.feed[0] = entry
 
 		ch := make(chan tea.Msg, 256)
@@ -867,6 +872,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 
 		windowName, logFile := createJobWindow(feedID)
 		entry.tmuxWindow = windowName
+		entry.logFile = logFile
 		m.feed[0] = entry
 
 		provArgs := picker.PipelineLaunchArgs(prov.ID)
@@ -1417,8 +1423,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 				badgeColor, badge, aRst,
 				aDim, ts, aRst,
 				aBrC+entry.title+aRst)
-			titleVis := 2 + len(badge) + 1 + len(ts) + 2 + len(entry.title)
-			allLines = append(allLines, boxRow(titleLine, titleVis, width))
+			allLines = append(allLines, boxRow(titleLine, visLen(titleLine), width))
 
 			// Cap output lines per entry: show the last feedLinesPerEntry lines only.
 			const feedLinesPerEntry = 10
@@ -1433,12 +1438,14 @@ func (m Model) viewActivityFeed(height, width int) string {
 				allLines = append(allLines, boxRow(aDim+skipMsg+aRst, len(skipMsg), width))
 			}
 			for _, outLine := range entryLines {
-				maxLen := max(width-4, 1)
+				// Strip ANSI codes — feed renders with its own dim style.
+				outLine = stripANSI(outLine)
+				maxLen := max(width-6, 1)
 				if len(outLine) > maxLen {
 					outLine = outLine[:maxLen-1] + "…"
 				}
 				content := aDim + "    " + outLine + aRst
-				allLines = append(allLines, boxRow(content, 4+len(outLine), width))
+				allLines = append(allLines, boxRow(content, visLen(content), width))
 			}
 		}
 	}
@@ -1564,15 +1571,18 @@ func statusBadge(s FeedStatus) (string, string) {
 }
 
 // visLen returns the number of visible (non-ANSI-escape) runes in s.
+// Handles CSI sequences (\x1b[...X where X is any letter) and OSC sequences.
 func visLen(s string) int {
-	n, esc := 0, false
+	n := 0
+	esc := false // inside \x1b[... sequence
 	for _, r := range s {
 		if r == '\x1b' {
 			esc = true
 			continue
 		}
 		if esc {
-			if r == 'm' {
+			// End on any ASCII letter (A-Z, a-z) that terminates a CSI sequence.
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
 				esc = false
 			}
 			continue

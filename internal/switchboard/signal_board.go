@@ -94,7 +94,7 @@ func (m Model) buildSignalBoard(height, width int) []string {
 
 			rowContent := fmt.Sprintf("  [%s] %s  %-*s  %s",
 				led, ts, maxTitleLen, title, statusLabel)
-			rowVis := 2 + 3 + 1 + len(ts) + 2 + maxTitleLen + 2 + 7 // approximate
+			rowVis := visLen(rowContent)
 
 			if i == m.signalBoard.selectedIdx && m.signalBoardFocused {
 				// Highlight selected row.
