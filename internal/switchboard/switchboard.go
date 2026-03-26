@@ -223,6 +223,7 @@ type Model struct {
 	feedSelected          int // index into feed for expanded view
 	confirmQuit           bool
 	feedScrollOffset      int
+	feedCursor            int // absolute line index within all visible feed content
 	feedFocused           bool
 	signalBoard           SignalBoard
 	signalBoardFocused    bool
@@ -296,6 +297,9 @@ func (m Model) AgentModalOpen() bool { return m.agentModalOpen }
 
 // FeedScrollOffset returns the current feed scroll offset — used in tests.
 func (m Model) FeedScrollOffset() int { return m.feedScrollOffset }
+
+// FeedCursor returns the current feed cursor position — used in tests.
+func (m Model) FeedCursor() int { return m.feedCursor }
 
 // BuildAgentSection is an exported wrapper for tests.
 func (m Model) BuildAgentSection(w int) []string { return m.buildAgentSection(w) }
@@ -692,9 +696,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.signalBoardFocused = false
 			m.launcher.focused = true
 		} else if m.agent.focused {
-			// agent → signalBoard
+			// agent → feed
 			m.agent.focused = false
-			m.signalBoardFocused = true
+			m.feedFocused = true
+			m.feedCursor = 0
 		} else if m.launcher.focused {
 			m.launcher.focused = false
 			m.agent.focused = true
@@ -735,6 +740,41 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.agent.selectedProvider = 0
 		m.agent.selectedModel = 0
 		return m, nil
+
+	case "pgdown":
+		if m.feedFocused {
+			total := totalFeedLines(m.feed)
+			step := m.feedVisibleHeight()
+			m.feedCursor = min(m.feedCursor+step, max(0, total-1))
+			m.feedScrollOffset = m.feedCursor
+			m.clampFeedScroll()
+			return m, nil
+		}
+
+	case "pgup":
+		if m.feedFocused {
+			step := m.feedVisibleHeight()
+			m.feedCursor = max(m.feedCursor-step, 0)
+			m.feedScrollOffset = m.feedCursor
+			m.clampFeedScroll()
+			return m, nil
+		}
+
+	case "g":
+		if m.feedFocused {
+			m.feedCursor = 0
+			m.feedScrollOffset = 0
+			return m, nil
+		}
+
+	case "G":
+		if m.feedFocused {
+			total := totalFeedLines(m.feed)
+			m.feedCursor = max(0, total-1)
+			m.feedScrollOffset = m.feedCursor
+			m.clampFeedScroll()
+			return m, nil
+		}
 
 	case "j", "down":
 		return m.handleDown(), nil
@@ -781,9 +821,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
+// feedVisibleHeight returns an approximation of the number of visible lines in the feed panel.
+func (m Model) feedVisibleHeight() int {
+	h := m.height
+	if h <= 0 {
+		h = 40
+	}
+	v := h/2 - 4
+	if v < 1 {
+		v = 1
+	}
+	return v
+}
+
 func (m Model) handleDown() Model {
 	if m.feedFocused {
-		m.feedScrollOffset++
+		total := totalFeedLines(m.feed)
+		m.feedCursor = min(m.feedCursor+1, max(0, total-1))
+		m.feedScrollOffset = m.feedCursor
 		m.clampFeedScroll()
 		return m
 	}
@@ -810,9 +865,8 @@ func (m Model) handleDown() Model {
 
 func (m Model) handleUp() Model {
 	if m.feedFocused {
-		if m.feedScrollOffset > 0 {
-			m.feedScrollOffset--
-		}
+		m.feedCursor = max(m.feedCursor-1, 0)
+		m.feedScrollOffset = m.feedCursor
 		m.clampFeedScroll()
 		return m
 	}
@@ -1772,10 +1826,21 @@ func totalFeedLines(feed []feedEntry) int {
 func (m Model) viewActivityFeed(height, width int) string {
 	visibleH := height - 2 // minus top and bottom border
 
+	// feedRowAt appends a content row, applying the cursor highlight if the
+	// current line index matches feedCursor when the feed is focused.
+	appendRow := func(lines *[]string, content string) {
+		idx := len(*lines)
+		if m.feedFocused && idx == m.feedCursor {
+			*lines = append(*lines, boxRowCursor(content, width))
+		} else {
+			*lines = append(*lines, boxRow(content, width))
+		}
+	}
+
 	// Flatten all feed entries into content lines.
 	var allLines []string
 	if len(m.feed) == 0 {
-		allLines = append(allLines, boxRow(aDim+"  no activity yet"+aRst, width))
+		appendRow(&allLines, aDim+"  no activity yet"+aRst)
 	} else {
 		for _, entry := range m.feed {
 			badge, badgeColor := statusBadge(entry.status)
@@ -1784,7 +1849,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 				badgeColor, badge, aRst,
 				aDim, ts, aRst,
 				aBrC+entry.title+aRst)
-			allLines = append(allLines, boxRow(titleLine, width))
+			appendRow(&allLines, titleLine)
 
 			// Cap output lines per entry: show the last feedLinesPerEntry lines only.
 			const feedLinesPerEntry = 10
@@ -1796,8 +1861,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 			}
 			if skipped > 0 {
 				skipMsg := fmt.Sprintf("    … %d earlier lines (press f to scroll)", skipped)
-				skipFull := aDim + skipMsg + aRst
-				allLines = append(allLines, boxRow(skipFull, width))
+				appendRow(&allLines, aDim+skipMsg+aRst)
 			}
 			for _, outLine := range entryLines {
 				// Strip ANSI codes — feed renders with its own dim style.
@@ -1806,8 +1870,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 				if len(outLine) > maxLen {
 					outLine = outLine[:maxLen-1] + "…"
 				}
-				content := aDim + "    " + outLine + aRst
-				allLines = append(allLines, boxRow(content, width))
+				appendRow(&allLines, aDim+"    "+outLine+aRst)
 			}
 		}
 	}
@@ -1942,6 +2005,28 @@ func boxRow(content string, w int) string {
 	inner := w - 2
 	pad := max(inner-lipgloss.Width(content), 0)
 	return aBC + "│" + aRst + content + strings.Repeat(" ", pad) + aBC + "│" + aRst
+}
+
+// boxRowCursor renders a feed row with a "> " cursor marker prepended to the
+// content, keeping the total visible width equal to a normal boxRow.
+func boxRowCursor(content string, w int) string {
+	cursorMark := aBrC + "> " + aRst
+	// The cursor mark occupies 2 visible columns; reduce available content width
+	// accordingly so the overall row width stays at w.
+	inner := w - 2
+	cursorMarkVis := 2
+	contentWidth := lipgloss.Width(content)
+	// Trim content if it would overflow.
+	availForContent := inner - cursorMarkVis
+	if availForContent < 0 {
+		availForContent = 0
+	}
+	if contentWidth > availForContent {
+		content = truncate.String(stripANSI(content), uint(availForContent))
+		contentWidth = lipgloss.Width(content)
+	}
+	pad := max(availForContent-contentWidth, 0)
+	return aBC + "│" + aRst + cursorMark + content + strings.Repeat(" ", pad) + aBC + "│" + aRst
 }
 
 func statusBadge(s FeedStatus) (string, string) {
