@@ -55,19 +55,22 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 	if strings.Contains(conf, "bind-key -n Escape select-pane") {
 		t.Error("tmux.conf still contains global ESC intercept")
 	}
-	// Status bar must contain chord hints.
-	if !strings.Contains(conf, "^spc n new") {
-		t.Error("tmux.conf status-right missing '^spc n new' hint")
+	// Status bar must contain new hints; old ^spc n new hint must be gone.
+	if strings.Contains(conf, "^spc n new") {
+		t.Error("tmux.conf status-right still contains removed '^spc n new' hint")
 	}
 	if !strings.Contains(conf, "^spc c win") {
 		t.Error("tmux.conf status-right missing '^spc c win' hint")
 	}
+	if !strings.Contains(conf, "^spc j jump") {
+		t.Error("tmux.conf status-right missing '^spc j jump' hint")
+	}
 	if !strings.Contains(conf, "^spc t switchboard") {
 		t.Error("tmux.conf status-right missing '^spc t switchboard' hint")
 	}
-	// Sysop toggle chord must be present (either override binary or subcommand).
-	if !strings.Contains(conf, "sysop") {
-		t.Error("tmux.conf missing sysop toggle chord binding")
+	// ^spc t must use select-window, not display-popup.
+	if !strings.Contains(conf, "select-window -t orcai:0") {
+		t.Error("tmux.conf ^spc t binding must use select-window -t orcai:0")
 	}
 }
 
@@ -97,6 +100,7 @@ func TestBuildTmuxConf_WindowPaneChords(t *testing.T) {
 		{"orcai-chord Up", "select pane up"},
 		{"orcai-chord Down", "select pane down"},
 		{"orcai-chord x", "kill pane (x)"},
+		{"orcai-chord j", "session/window jump (j)"},
 	}
 	for _, c := range chords {
 		if !strings.Contains(conf, c.key) {
@@ -117,17 +121,12 @@ func TestBuildTmuxConf_WindowStatusFormats(t *testing.T) {
 	}
 	conf := string(data)
 
-	if strings.Contains(conf, `window-status-format ""`) {
-		t.Error("window-status-format is still suppressed (empty string)")
+	// Window list must be suppressed (blank format strings hide all windows).
+	if !strings.Contains(conf, `window-status-format ""`) {
+		t.Error("window-status-format must be blank to suppress window list")
 	}
-	if strings.Contains(conf, `window-status-current-format ""`) {
-		t.Error("window-status-current-format is still suppressed (empty string)")
-	}
-	if !strings.Contains(conf, "window-status-format") {
-		t.Error("window-status-format not set")
-	}
-	if !strings.Contains(conf, "window-status-current-format") {
-		t.Error("window-status-current-format not set")
+	if !strings.Contains(conf, `window-status-current-format ""`) {
+		t.Error("window-status-current-format must be blank to suppress window list")
 	}
 }
 

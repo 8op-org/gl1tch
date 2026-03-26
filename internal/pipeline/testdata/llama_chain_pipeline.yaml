@@ -1,0 +1,25 @@
+name: test-llama-chain
+version: "1"
+
+# Multi-step chain: model → assert → log
+# Tests sequential DAG execution with builtins.
+
+steps:
+  - id: ask
+    executor: ollama
+    model: llama3.2:latest
+    prompt: "Say hello in one sentence."
+
+  - id: assert-non-empty
+    executor: builtin.assert
+    needs: [ask]
+    args:
+      condition: "not_empty"
+      value: "{{step.ask.data.value}}"
+      message: "llama3.2 returned empty output"
+
+  - id: log-result
+    executor: builtin.log
+    needs: [assert-non-empty]
+    args:
+      message: "llama3.2 said: {{step.ask.data.value}}"

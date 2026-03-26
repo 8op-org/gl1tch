@@ -19,7 +19,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
 )
 
@@ -61,6 +60,9 @@ const (
 // agentInnerHeight is the fixed number of body rows inside the AGENT RUNNER box.
 const agentInnerHeight = 8
 
+// maxParallelJobs is the maximum number of jobs that can run concurrently.
+const maxParallelJobs = 8
+
 type feedEntry struct {
 	id         string
 	title      string
@@ -68,7 +70,8 @@ type feedEntry struct {
 	ts         time.Time
 	lines      []string
 	tmuxWindow string // fully-qualified target "session:orcai-<feedID>", empty if no window
-	logFile    string // /tmp/orcai-<feedID>.log — tailed in the tmux window
+	logFile    string // /tmp/orcai-<feedID>.log
+	doneFile   string // non-empty for window-mode jobs; written by the shell when the command exits
 }
 
 // ── Section types ─────────────────────────────────────────────────────────────
@@ -174,15 +177,13 @@ type Model struct {
 	feed               []feedEntry // ring buffer, cap 200
 	launcher           launcherSection
 	agent              agentSection
-	activeJob          *jobHandle
+	activeJobs         map[string]*jobHandle
 	feedSelected       int // index into feed for expanded view
 	confirmQuit        bool
 	feedScrollOffset   int
 	feedFocused        bool
 	signalBoard        SignalBoard
 	signalBoardFocused bool
-	debugPopupOpen     bool
-	debugPopupJobID    string
 }
 
 // New creates a new Switchboard Model, discovering pipelines and providers.
@@ -204,6 +205,7 @@ func New() Model {
 			prompt:    ta,
 		},
 		signalBoard: SignalBoard{activeFilter: "all"},
+		activeJobs:  make(map[string]*jobHandle),
 	}
 }
 
@@ -254,14 +256,26 @@ func (m Model) BuildSignalBoard(height, width int) []string { return m.buildSign
 // SignalBoardBlinkOn returns the current blink state — used in tests.
 func (m Model) SignalBoardBlinkOn() bool { return m.signalBoard.blinkOn }
 
-// DebugPopupOpen returns whether the debug popup is open — used in tests.
-func (m Model) DebugPopupOpen() bool { return m.debugPopupOpen }
+// ActiveJobsCount returns the number of currently active jobs — used in tests.
+func (m Model) ActiveJobsCount() int { return len(m.activeJobs) }
 
-// DebugPopupJobID returns the current popup job ID — used in tests.
-func (m Model) DebugPopupJobID() string { return m.debugPopupJobID }
+// AddActiveJob injects a fake job handle for testing purposes.
+func (m Model) AddActiveJob(id string) Model {
+	if m.activeJobs == nil {
+		m.activeJobs = make(map[string]*jobHandle)
+	}
+	m.activeJobs[id] = &jobHandle{id: id}
+	return m
+}
+
+// MaxParallelJobs returns the parallel job cap constant — used in tests.
+func MaxParallelJobs() int { return maxParallelJobs }
 
 // MakeTickMsg returns a tickMsg for use in tests.
 func MakeTickMsg() tea.Msg { return tickMsg(time.Now()) }
+
+// SignalBoardFocused returns the signal board focus state — used in tests.
+func (m Model) SignalBoardFocused() bool { return m.signalBoardFocused }
 
 // SetSignalBoardFocused sets the signal board focus state — used in tests.
 func (m Model) SetSignalBoardFocused(v bool) Model {
@@ -272,6 +286,22 @@ func (m Model) SetSignalBoardFocused(v bool) Model {
 	return m
 }
 
+// SetFeedFocused sets the feed focus state — used in tests.
+func (m Model) SetFeedFocused(v bool) Model {
+	m.feedFocused = v
+	m.launcher.focused = false
+	m.agent.focused = false
+	m.signalBoardFocused = false
+	return m
+}
+
+// SetFeedSelected sets the selected feed entry index — used in tests.
+func (m Model) SetFeedSelected(idx int) Model {
+	m.feedSelected = idx
+	return m
+}
+
+
 // AddFeedEntry adds a feed entry — used in tests.
 func (m Model) AddFeedEntry(id, title string, status FeedStatus, lines []string) Model {
 	entry := feedEntry{
@@ -280,6 +310,19 @@ func (m Model) AddFeedEntry(id, title string, status FeedStatus, lines []string)
 		status: status,
 		ts:     time.Now(),
 		lines:  lines,
+	}
+	m.feed = append([]feedEntry{entry}, m.feed...)
+	return m
+}
+
+// AddFeedEntryWithTmux adds a feed entry with a tmux window — used in tests.
+func (m Model) AddFeedEntryWithTmux(id, title string, status FeedStatus, tmuxWindow string) Model {
+	entry := feedEntry{
+		id:         id,
+		title:      title,
+		status:     status,
+		ts:         time.Now(),
+		tmuxWindow: tmuxWindow,
 	}
 	m.feed = append([]feedEntry{entry}, m.feed...)
 	return m
@@ -433,26 +476,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FeedLineMsg:
 		m = m.appendFeedLine(msg.ID, msg.Line)
-		// Write to the entry's log file so the debug popup tail shows live output.
-		// Look up by ID so writing works even after activeJob is cleared.
+		// For in-process (agent) jobs the log file is written here.
+		// Window-mode (pipeline) jobs write via tee in the shell — skip.
 		for _, e := range m.feed {
-			if e.id == msg.ID && e.logFile != "" {
+			if e.id == msg.ID && e.logFile != "" && e.doneFile == "" {
 				appendToFile(e.logFile, stripANSI(msg.Line)+"\n")
 				break
 			}
 		}
-		if m.activeJob != nil {
-			return m, drainChan(m.activeJob.ch)
+		// Re-issue drain only for the job that produced this message.
+		// Draining all jobs would accumulate goroutines and starve channels.
+		if jh, ok := m.activeJobs[msg.ID]; ok {
+			return m, drainChan(jh.ch)
 		}
 		return m, nil
 
 	case jobDoneMsg:
 		// Drain any remaining lines buffered in the channel before marking done.
-		if m.activeJob != nil {
+		if jh, ok := m.activeJobs[msg.id]; ok {
 		drainDone:
 			for {
 				select {
-				case buffered, ok := <-m.activeJob.ch:
+				case buffered, ok := <-jh.ch:
 					if !ok {
 						break drainDone
 					}
@@ -465,15 +510,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m = m.setFeedStatus(msg.id, FeedDone)
-		m.activeJob = nil
+		delete(m.activeJobs, msg.id)
 		return m, nil
 
 	case jobFailedMsg:
-		if m.activeJob != nil {
+		if jh, ok := m.activeJobs[msg.id]; ok {
 		drainFailed:
 			for {
 				select {
-				case buffered, ok := <-m.activeJob.ch:
+				case buffered, ok := <-jh.ch:
 					if !ok {
 						break drainFailed
 					}
@@ -489,7 +534,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m = m.appendFeedLine(msg.id, "error: "+msg.err.Error())
 		}
-		m.activeJob = nil
+		delete(m.activeJobs, msg.id)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -502,25 +547,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	key := msg.String()
 
-	// Debug popup intercepts all keys when open.
-	if m.debugPopupOpen {
-		switch key {
-		case "esc", "q":
-			m.debugPopupOpen = false
-		case "enter":
-			// debugPopupJobID is the fully-qualified "session:orcai-<feedID>" target.
-			exec.Command("tmux", "select-window", "-t", m.debugPopupJobID).Run() //nolint:errcheck
-			m.debugPopupOpen = false
-		}
-		return m, nil
-	}
-
 	// Confirm quit when a job is running.
 	if m.confirmQuit {
 		switch key {
 		case "y", "Y", "enter":
-			if m.activeJob != nil {
-				m.activeJob.cancel()
+			for _, jh := range m.activeJobs {
+				jh.cancel()
 			}
 			return m, tea.Quit
 		default:
@@ -545,7 +577,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+c":
-			if m.activeJob != nil {
+			if len(m.activeJobs) > 0 {
 				m.confirmQuit = true
 				return m, nil
 			}
@@ -558,7 +590,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.agent.prompt.Blur()
 			return m, nil
 		case "q":
-			if m.activeJob != nil {
+			if len(m.activeJobs) > 0 {
 				m.confirmQuit = true
 				return m, nil
 			}
@@ -572,14 +604,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	switch key {
 	case "ctrl+c":
-		if m.activeJob != nil {
+		if len(m.activeJobs) > 0 {
 			m.confirmQuit = true
 			return m, nil
 		}
 		return m, tea.Quit
 
 	case "q":
-		if m.activeJob != nil {
+		if len(m.activeJobs) > 0 {
 			m.confirmQuit = true
 			return m, nil
 		}
@@ -613,12 +645,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "f":
 		if m.signalBoardFocused {
 			m.signalBoard.cycleFilter()
+		} else {
+			// Toggle activity feed focus so ↑↓ scrolls through output lines.
+			m.launcher.focused = false
+			m.agent.focused = false
+			m.signalBoardFocused = false
+			m.feedFocused = !m.feedFocused
 		}
 		return m, nil
 
 	case "a":
 		m.launcher.focused = false
 		m.agent.focused = true
+		m.feedFocused = false
 		return m, nil
 
 	case "s":
@@ -661,6 +700,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.feedFocused {
 			m.feedFocused = false
 			m.launcher.focused = true
+			return m, nil
 		} else if m.signalBoardFocused {
 			m.signalBoardFocused = false
 			m.launcher.focused = true
@@ -780,21 +820,40 @@ func (m Model) agentAdvanceStep() Model {
 }
 
 func (m Model) handleEnter() (Model, tea.Cmd) {
-	// Signal board: open debug popup for selected row.
+	// Signal board: navigate directly into the job's tmux window.
 	if m.signalBoardFocused {
 		filtered := m.filteredFeed()
 		if len(filtered) > 0 && m.signalBoard.selectedIdx < len(filtered) {
-			m.debugPopupOpen = true
-			m.debugPopupJobID = filtered[m.signalBoard.selectedIdx].tmuxWindow
+			tw := filtered[m.signalBoard.selectedIdx].tmuxWindow
+			if tw != "" {
+				exec.Command("tmux", "select-window", "-t", tw).Run() //nolint:errcheck
+			}
 		}
 		return m, nil
 	}
 
 	// Launcher: launch selected pipeline.
-	if m.launcher.focused && m.activeJob == nil {
+	if m.launcher.focused {
 		if len(m.launcher.pipelines) == 0 {
 			return m, nil
 		}
+		// Enforce parallel job cap.
+		if len(m.activeJobs) >= maxParallelJobs {
+			feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
+			warnEntry := feedEntry{
+				id:     feedID,
+				title:  "warning",
+				status: FeedFailed,
+				ts:     time.Now(),
+				lines:  []string{"max parallel jobs reached (8)"},
+			}
+			m.feed = append([]feedEntry{warnEntry}, m.feed...)
+			if len(m.feed) > 200 {
+				m.feed = m.feed[:200]
+			}
+			return m, nil
+		}
+
 		name := m.launcher.pipelines[m.launcher.selected]
 		yamlPath := filepath.Join(pipelinesDir(), name+".pipeline.yaml")
 
@@ -812,18 +871,23 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		m.feedSelected = 0
 		m.feedScrollOffset = 0
 
-		windowName, logFile := createJobWindow(feedID)
+		// Run the pipeline directly in a background tmux window so the user
+		// gets real shell history and scrollback.
+		orcaiBin := orcaiBinaryPath()
+		shellCmd := orcaiBin + " pipeline run " + yamlPath
+		windowName, logFile, doneFile := createJobWindow(feedID, shellCmd, name)
 		entry.tmuxWindow = windowName
 		entry.logFile = logFile
+		entry.doneFile = doneFile
 		m.feed[0] = entry
 
 		ch := make(chan tea.Msg, 256)
 		_, cancel := context.WithCancel(context.Background())
-		m.activeJob = &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile}
+		m.activeJobs[feedID] = &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile}
 
-		cmd := launchPipelineCmdCh(yamlPath, feedID, ch, cancel)
-		drain := drainChan(ch)
-		return m, tea.Batch(cmd, drain)
+		// Watch the log file for output; detect completion via the done file.
+		startLogWatcher(feedID, logFile, doneFile, ch)
+		return m, drainChan(ch)
 	}
 
 	// Agent section: advance form or submit.
@@ -833,7 +897,20 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 			return m, nil
 		}
 		// Step 2: submit.
-		if m.activeJob != nil {
+		// Enforce parallel job cap.
+		if len(m.activeJobs) >= maxParallelJobs {
+			feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
+			warnEntry := feedEntry{
+				id:     feedID,
+				title:  "warning",
+				status: FeedFailed,
+				ts:     time.Now(),
+				lines:  []string{"max parallel jobs reached (8)"},
+			}
+			m.feed = append([]feedEntry{warnEntry}, m.feed...)
+			if len(m.feed) > 200 {
+				m.feed = m.feed[:200]
+			}
 			return m, nil
 		}
 		input := strings.TrimSpace(m.agent.prompt.Value())
@@ -870,7 +947,8 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		m.feedSelected = 0
 		m.feedScrollOffset = 0
 
-		windowName, logFile := createJobWindow(feedID)
+		// Agent runs in-process; window shows live output via tail.
+		windowName, logFile, _ := createJobWindow(feedID, "", title)
 		entry.tmuxWindow = windowName
 		entry.logFile = logFile
 		m.feed[0] = entry
@@ -888,7 +966,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 
 		ch := make(chan tea.Msg, 256)
 		_, cancel := context.WithCancel(context.Background())
-		m.activeJob = &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile}
+		m.activeJobs[feedID] = &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile}
 
 		cmd := runAgentCmdCh(adapter, input, vars, feedID, ch, cancel)
 		drain := drainChan(ch)
@@ -902,52 +980,6 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 	}
 
 	return m, nil
-}
-
-// launchPipelineCmdCh starts pipeline.Run in a goroutine, streaming output to ch.
-func launchPipelineCmdCh(yamlPath, feedID string, ch chan tea.Msg, cancel context.CancelFunc) tea.Cmd {
-	return func() tea.Msg {
-		defer cancel()
-
-		f, err := os.Open(yamlPath)
-		if err != nil {
-			ch <- jobFailedMsg{id: feedID, err: err}
-			return nil
-		}
-		defer f.Close()
-
-		p, err := pipeline.Load(f)
-		if err != nil {
-			ch <- jobFailedMsg{id: feedID, err: err}
-			return nil
-		}
-
-		mgr := plugin.NewManager()
-		providers := picker.BuildProviders()
-		for _, prov := range providers {
-			args := picker.PipelineLaunchArgs(prov.ID)
-			_ = mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", prov.ID, args...))
-		}
-		home, _ := os.UserHomeDir()
-		if home != "" {
-			wrappersDir := filepath.Join(home, ".config", "orcai", "wrappers")
-			mgr.LoadWrappersFromDir(wrappersDir) //nolint:errcheck
-		}
-
-		pub := &ChanPublisher{id: feedID, ch: ch}
-		output, runErr := pipeline.Run(context.Background(), p, mgr, "", pub)
-		if runErr != nil {
-			ch <- jobFailedMsg{id: feedID, err: runErr}
-		} else {
-			for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-				if line != "" {
-					ch <- FeedLineMsg{ID: feedID, Line: line}
-				}
-			}
-			ch <- jobDoneMsg{id: feedID}
-		}
-		return nil
-	}
 }
 
 // runAgentCmdCh starts CliAdapter.Execute in a goroutine, streaming output to ch.
@@ -964,6 +996,18 @@ func runAgentCmdCh(adapter *plugin.CliAdapter, input string, vars map[string]str
 		}
 		return nil
 	}
+}
+
+// orcaiBinaryPath returns the path to the running orcai binary, falling back
+// to a PATH lookup and finally the bare name.
+func orcaiBinaryPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return exe
+	}
+	if p, err := exec.LookPath("orcai"); err == nil {
+		return p
+	}
+	return "orcai"
 }
 
 // drainChan returns a tea.Cmd that blocks until a message arrives on ch.
@@ -1093,12 +1137,6 @@ func (m Model) View() string {
 		h = 40
 	}
 
-	// Debug popup takes over the full screen.
-	if m.debugPopupOpen {
-		return buildDebugPopup(h, w, m.debugPopupJobID) + "\n" +
-			aDim + "  esc: close  enter: attach to tmux window" + aRst
-	}
-
 	leftW := m.leftColWidth()
 	feedW := max(w-leftW-1, 20)
 	contentH := max(h-1, 5) // reserve one line for bottom bar
@@ -1215,8 +1253,8 @@ func (m Model) buildLauncherSection(w int) []string {
 	}
 
 	header := "PIPELINES"
-	if m.activeJob != nil {
-		header += " [running]"
+	if n := len(m.activeJobs); n > 0 {
+		header += fmt.Sprintf(" [%d running]", n)
 	}
 	rows := []string{boxTop(w, header, borderColor)}
 
@@ -1384,8 +1422,8 @@ func (m Model) buildAgentSection(w int) []string {
 				crumbVis += 3 // " > "
 			}
 			bodyRows = append(bodyRows, boxRow(crumb, crumbVis, w))
-			if m.activeJob != nil {
-				warn := aPnk + "  ⚠ job running — ctrl+c to cancel" + aRst
+			if len(m.activeJobs) > 0 {
+				warn := aPnk + fmt.Sprintf("  ⚠ %d job(s) running — ctrl+c to cancel", len(m.activeJobs)) + aRst
 				bodyRows = append(bodyRows, boxRow(warn, visLen(warn), w))
 			} else {
 				bodyRows = append(bodyRows, boxRow(aBrC+"  Prompt: (ctrl+s to submit)"+aRst, 27, w))
@@ -1449,8 +1487,9 @@ func (m Model) viewActivityFeed(height, width int) string {
 				entryLines = entryLines[skipped:]
 			}
 			if skipped > 0 {
-				skipMsg := fmt.Sprintf("    … %d earlier lines (scroll up to see)", skipped)
-				allLines = append(allLines, boxRow(aDim+skipMsg+aRst, len(skipMsg), width))
+				skipMsg := fmt.Sprintf("    … %d earlier lines (press f to scroll)", skipped)
+				skipFull := aDim + skipMsg + aRst
+				allLines = append(allLines, boxRow(skipFull, visLen(skipFull), width))
 			}
 			for _, outLine := range entryLines {
 				// Strip ANSI codes — feed renders with its own dim style.
@@ -1519,7 +1558,7 @@ func (m Model) viewBottomBar(width int) string {
 		parts = []string{
 			hint("↑↓", "nav"),
 			hint("f", "filter"),
-			hint("enter", "debug popup"),
+			hint("enter", "go to window"),
 			hint("tab", "focus"),
 			hint("q", "quit"),
 		}
@@ -1536,6 +1575,7 @@ func (m Model) viewBottomBar(width int) string {
 			hint("tab", "focus"),
 			hint("a", "agent"),
 			hint("s", "signals"),
+			hint("f", "feed"),
 			hint("r", "refresh"),
 			hint("↑↓", "nav"),
 			hint("q", "quit"),

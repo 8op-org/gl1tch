@@ -1,113 +1,16 @@
 package switchboard
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
-
-// buildDebugPopup renders an 80%-wide centered overlay box showing the captured
-// content of the tmux window for the given job. tmuxWindow is the fully-qualified
-// target "session:orcai-<feedID>" stored in jobHandle.
-func buildDebugPopup(termH, termW int, tmuxWindow string) string {
-	popW := termW * 80 / 100
-	if popW < 40 {
-		popW = 40
-	}
-	popH := termH * 80 / 100
-	if popH < 10 {
-		popH = 10
-	}
-
-	// Capture the tmux pane output for the job's window.
-	var content string
-	if tmuxWindow == "" {
-		content = "  no tmux window associated with this job"
-	} else {
-		out, err := exec.Command("tmux", "capture-pane", "-t", tmuxWindow, "-p", "-e").Output()
-		if err != nil {
-			content = "  window closed or not available"
-		} else {
-			content = string(out)
-		}
-	}
-
-	title := tmuxWindow
-	if title == "" {
-		title = "DEBUG"
-	}
-	return renderPopupBox(popH, popW, title, content)
-}
-
-// renderPopupBox draws a bordered box of height h and width w, with the given
-// title in the top border and content inside.
-func renderPopupBox(h, w int, title, content string) string {
-	if h < 3 {
-		h = 3
-	}
-	if w < 10 {
-		w = 10
-	}
-
-	bodyH := h - 2 // top + bottom border
-
-	// Split content into lines and clip/pad.
-	contentLines := strings.Split(content, "\n")
-	var bodyLines []string
-	for _, line := range contentLines {
-		// Strip trailing whitespace.
-		line = strings.TrimRight(line, " \t\r")
-		// Wrap/clip to fit inside box (w-2 for borders, -2 for padding).
-		innerW := w - 4
-		if innerW < 1 {
-			innerW = 1
-		}
-		if len(line) > innerW {
-			line = line[:innerW]
-		}
-		bodyLines = append(bodyLines, "  "+line)
-		if len(bodyLines) >= bodyH {
-			break
-		}
-	}
-	// Pad if fewer lines than bodyH.
-	for len(bodyLines) < bodyH {
-		bodyLines = append(bodyLines, "")
-	}
-
-	// Build the box.
-	label := " " + title + " "
-	dashes := max(w-2-len(label), 0)
-	left := dashes / 2
-	right := dashes - left
-	topBorder := aPur + "┌" + strings.Repeat("─", left) + aBrC + label + aPur + strings.Repeat("─", right) + "┐" + aRst
-
-	var rows []string
-	rows = append(rows, topBorder)
-	for i := 0; i < bodyH; i++ {
-		line := ""
-		if i < len(bodyLines) {
-			line = bodyLines[i]
-		}
-		// Pad line to fill inner width.
-		innerW := w - 2
-		padded := line
-		vl := len(padded) // approximate vis length (no ANSI in captured pane)
-		if vl < innerW {
-			padded += strings.Repeat(" ", innerW-vl)
-		}
-		if len(padded) > innerW {
-			padded = padded[:innerW]
-		}
-		rows = append(rows, aPur+"│"+aRst+padded+aPur+"│"+aRst)
-	}
-
-	botBorder := aPur + "└" + strings.Repeat("─", max(w-2, 0)) + "┘" + aRst
-	rows = append(rows, botBorder)
-
-	return strings.Join(rows, "\n")
-}
 
 // currentTmuxSession returns the name of the current tmux session by reading the
 // TMUX environment variable or falling back to `tmux display-message -p '#S'`.
@@ -125,33 +28,114 @@ func currentTmuxSession() string {
 	return ""
 }
 
-// createJobWindow creates a detached tmux window named "orcai-<feedID>" in the
-// current session. It starts `tail -f <logFile>` in the window so captured
-// pane output reflects live agent output written to logFile.
-// Returns (target, logFile). Both are empty strings if tmux is unavailable.
-func createJobWindow(feedID string) (target, logFile string) {
+// createJobWindow creates a detached tmux window named "orcai-<feedID>".
+//
+// label is the human-readable pipeline/agent name stored as the tmux user
+// option @orcai-label so the jump-window popup can display it instead of the
+// raw window name. Pass an empty string to skip setting the option.
+//
+// If shellCmd is non-empty the window runs the command, tees output to logFile,
+// and writes the exit code to doneFile. remain-on-exit keeps the window alive
+// after the command finishes so the user can inspect the scrollback. Use
+// startLogWatcher to receive FeedLineMsg / jobDoneMsg / jobFailedMsg events.
+//
+// If shellCmd is empty the window runs tail -f on logFile (legacy path for
+// in-process agent jobs that write to logFile themselves).
+//
+// Returns (target, logFile, doneFile). All empty strings if tmux is unavailable.
+func createJobWindow(feedID, shellCmd, label string) (target, logFile, doneFile string) {
 	if _, err := exec.LookPath("tmux"); err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	session := currentTmuxSession()
 	if session == "" {
-		return "", ""
+		return "", "", ""
 	}
 	windowName := "orcai-" + feedID
-	logFile = os.TempDir() + "/orcai-" + feedID + ".log"
+	logFile = fmt.Sprintf("%s/orcai-%s.log", os.TempDir(), feedID)
+	doneFile = fmt.Sprintf("%s/orcai-%s.done", os.TempDir(), feedID)
 	target = session + ":" + windowName
 
-	// Create an empty log file so tail -f doesn't fail immediately.
-	f, err := os.Create(logFile)
-	if err == nil {
-		f.Close()
+	// Pre-create empty log so the watcher can open it immediately.
+	os.WriteFile(logFile, nil, 0o600) //nolint:errcheck
+
+	var windowCmd string
+	if shellCmd != "" {
+		// Tee output to log file; write exit code to done file on completion.
+		// No exec $SHELL — remain-on-exit keeps the window alive so the user
+		// can inspect output. Window shows "[pane is dead]" when done.
+		windowCmd = fmt.Sprintf("{ %s ; } 2>&1 | tee %s ; echo $? > %s", shellCmd, logFile, doneFile)
+	} else {
+		// Legacy: in-process agent job — tail the log file live.
+		windowCmd = "tail -f " + logFile + " 2>/dev/null"
 	}
 
-	// Create the window and start tailing the log file.
-	exec.Command("tmux", "new-window", "-d", "-t", session, "-n", windowName).Run() //nolint:errcheck
-	exec.Command("tmux", "send-keys", "-t", target,
-		"tail -f "+logFile+" 2>/dev/null", "Enter").Run() //nolint:errcheck
-	return target, logFile
+	// Use -t "session:" (trailing colon) to always append at the end of the
+	// window list, avoiding index conflicts when multiple windows are created
+	// in rapid succession.
+	out, err := exec.Command("tmux", "new-window",
+		"-d", "-t", session+":", "-n", windowName,
+		"-P", "-F", "#{window_id}",
+		windowCmd,
+	).Output()
+	if err == nil {
+		if id := strings.TrimSpace(string(out)); id != "" {
+			target = session + ":" + id // stable @N ID, survives auto-rename
+		}
+	}
+
+	// Keep window alive after command exits and disable auto-rename.
+	exec.Command("tmux", "set-window-option", "-t", target, "remain-on-exit", "on").Run()    //nolint:errcheck
+	exec.Command("tmux", "set-window-option", "-t", target, "automatic-rename", "off").Run() //nolint:errcheck
+	if label != "" {
+		exec.Command("tmux", "set-window-option", "-t", target, "@orcai-label", label).Run() //nolint:errcheck
+	}
+
+	return target, logFile, doneFile
+}
+
+// startLogWatcher launches a background goroutine that tails logFile for new
+// content, sending FeedLineMsg values to ch. When doneFile appears it reads the
+// exit code and sends jobDoneMsg (exit 0) or jobFailedMsg (non-zero), then exits.
+func startLogWatcher(feedID, logFile, doneFile string, ch chan<- tea.Msg) {
+	go func() {
+		var offset int64
+		for {
+			time.Sleep(150 * time.Millisecond)
+
+			// Read any new bytes from the log file.
+			if f, err := os.Open(logFile); err == nil {
+				f.Seek(offset, io.SeekStart) //nolint:errcheck
+				data, _ := io.ReadAll(f)
+				f.Close()
+				if len(data) > 0 {
+					offset += int64(len(data))
+					for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+						if line != "" {
+							ch <- FeedLineMsg{ID: feedID, Line: line}
+						}
+					}
+				}
+			}
+
+			// Check for the done file.
+			raw, err := os.ReadFile(doneFile)
+			if err != nil {
+				continue // not done yet
+			}
+			code := strings.TrimSpace(string(raw))
+			if code == "" {
+				continue // file exists but not written yet
+			}
+			os.Remove(doneFile) //nolint:errcheck
+			if code == "0" {
+				ch <- jobDoneMsg{id: feedID}
+			} else {
+				ch <- jobFailedMsg{id: feedID, err: fmt.Errorf("pipeline exited with code %s", code)}
+			}
+			return
+		}
+	}()
 }
 
 var ansiEscRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)

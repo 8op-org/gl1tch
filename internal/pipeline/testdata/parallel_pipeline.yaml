@@ -1,0 +1,26 @@
+name: test-parallel-models
+version: "1"
+
+# Parallel pipeline: both model steps run concurrently, then log combines results.
+# Tests the DAG runner's parallel execution with max_parallel > 1.
+
+max_parallel: 4
+
+steps:
+  - id: ask-llama
+    executor: ollama
+    model: llama3.2:latest
+    prompt: "Say hello in one sentence."
+
+  - id: ask-qwen
+    executor: ollama
+    model: qwen2.5:latest
+    prompt: "Say hello in one sentence."
+
+  - id: log-both
+    executor: builtin.log
+    needs: [ask-llama, ask-qwen]
+    args:
+      message: |
+        llama: {{step.ask-llama.data.value}}
+        qwen: {{step.ask-qwen.data.value}}

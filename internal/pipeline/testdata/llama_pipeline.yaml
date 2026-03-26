@@ -1,0 +1,7 @@
+name: test-llama
+version: "1"
+steps:
+  - id: ask
+    executor: ollama
+    model: llama3.2
+    prompt: "Say hello in one sentence."

@@ -1,0 +1,7 @@
+name: test-qwen
+version: "1"
+steps:
+  - id: ask
+    executor: ollama
+    model: qwen2.5
+    prompt: "Say hello in one sentence."

@@ -11,6 +11,7 @@ import (
 	"github.com/adam-stokes/orcai/cmd"
 	"github.com/adam-stokes/orcai/internal/bootstrap"
 	"github.com/adam-stokes/orcai/internal/chordhelp"
+	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/promptbuilder"
 )
 
@@ -43,6 +44,9 @@ func main() {
 			} else {
 				chordhelp.Run()
 			}
+			return
+		case "_jump":
+			jumpwindow.Run()
 			return
 		case "bridge", "git", "weather", "code", "new", "kill", "help", "pipeline", "ollama", "_opsx", "completion",
 			"sysop", "picker", "welcome", "config":

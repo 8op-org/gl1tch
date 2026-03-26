@@ -35,17 +35,15 @@ func resolveCompanion(self, name, subcmd string) string {
 }
 
 func buildTmuxConf(self string) string {
-	picker := resolveCompanion(self, "orcai-picker", "picker")
-	sysop := resolveCompanion(self, "orcai-sysop", "sysop")
 	// Base tmux settings.
 	base := `set -g status-position bottom
 set -g status-style "fg=#bd93f9,bg=#282a36"
-set -g window-status-format "#[fg=#6272a4] #I:#W "
-set -g window-status-current-format "#[fg=#f8f8f2,bold] #I:#W "
+set -g window-status-format ""
+set -g window-status-current-format ""
 set -g status-left "#[fg=#bd93f9,bold] ORCAI #[default]"
 set -g status-left-length 20
-set -g status-right "#[fg=#6272a4] ^spc n new  ^spc c win  ^spc x kill  ^spc t switchboard   %H:%M "
-set -g status-right-length 80
+set -g status-right "#[fg=#6272a4] ^spc t switchboard  ^spc j jump  ^spc c win  ^spc q   %H:%M "
+set -g status-right-length 100
 set -g mouse on
 set -g default-terminal "screen-256color"
 set -g base-index 0
@@ -60,10 +58,10 @@ set -g pane-active-border-style "fg=#bd93f9"
 	chords := "bind-key -T orcai-chord q     { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help quit\" }\n" +
 		"bind-key -T orcai-chord d     { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help detach\" }\n" +
 		"bind-key -T orcai-chord r     { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help reload\" }\n" +
-		"bind-key -T orcai-chord n     { switch-client -T root ; display-popup -E -w 120 -h 40 \"" + picker + "\" }\n" +
 		"bind-key -T orcai-chord o     { switch-client -T root ; display-popup -E -w 68 -h 24 \"" + self + " ollama\" }\n" +
 		"bind-key -T orcai-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
-		"bind-key -T orcai-chord t     display-popup -E -w 100% -h 100% \"" + sysop + "\"\n" +
+		"bind-key -T orcai-chord t     select-window -t orcai:0\n" +
+		"bind-key -T orcai-chord j     { switch-client -T root ; display-popup -E -w 70 -h 24 \"" + self + " _jump\" }\n" +
 		// Window management
 		"bind-key -T orcai-chord c     { switch-client -T root ; new-window }\n" +
 		"bind-key -T orcai-chord [     { switch-client -T root ; previous-window }\n" +
@@ -77,8 +75,8 @@ set -g pane-active-border-style "fg=#bd93f9"
 		"bind-key -T orcai-chord Up    { switch-client -T root ; select-pane -U }\n" +
 		"bind-key -T orcai-chord Down  { switch-client -T root ; select-pane -D }\n" +
 		// Kill pane / window
-		"bind-key -T orcai-chord x     { switch-client -T root ; kill-pane }\n" +
-		"bind-key -T orcai-chord X     { switch-client -T root ; kill-window }\n" +
+		"bind-key -T orcai-chord x     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-pane } }\n" +
+		"bind-key -T orcai-chord X     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-window } }\n" +
 		"bind-key -T orcai-chord Escape switch-client -T root\n" +
 		// Pressing ctrl+space again while in chord table shows help immediately.
 		"bind-key -T orcai-chord C-Space { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help\" }\n"

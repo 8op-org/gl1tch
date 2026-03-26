@@ -2,6 +2,7 @@ package switchboard_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -361,46 +362,23 @@ func TestCreateJobWindow_SkipsIfNoTmux(t *testing.T) {
 
 // ── Debug popup (task 5.8) ──────────────────────────────────────────────────────
 
-func TestDebugPopup_ClosesOnEsc(t *testing.T) {
+// Enter on signal board now navigates directly to the tmux window (no popup).
+// In tests there is no real tmux, so we just verify the model state is unchanged
+// (no popup opened, signal board still focused).
+func TestSignalBoard_EnterDoesNotOpenPopup(t *testing.T) {
 	m := switchboard.New()
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m3 := m2.(switchboard.Model)
 	m3 = m3.AddFeedEntry("job1", "test job", switchboard.FeedDone, nil)
 	m3 = m3.SetSignalBoardFocused(true)
 
-	// Open popup by sending enter on signal board.
+	// Enter should navigate directly (tmux select-window) without opening any popup.
+	// In tests there is no real tmux session, so we just verify the model
+	// remains valid (signal board still focused, no crash).
 	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m5 := m4.(switchboard.Model)
-	if !m5.DebugPopupOpen() {
-		t.Fatal("expected popup to open on enter from signal board")
-	}
-
-	// Close popup with esc.
-	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m7 := m6.(switchboard.Model)
-	if m7.DebugPopupOpen() {
-		t.Error("expected popup to close on esc")
-	}
-}
-
-func TestDebugPopup_ViewContainsPopupBorder(t *testing.T) {
-	m := switchboard.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(switchboard.Model)
-	m3 = m3.AddFeedEntry("job1", "test job", switchboard.FeedDone, nil)
-	m3 = m3.SetSignalBoardFocused(true)
-
-	// Open popup.
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m5 := m4.(switchboard.Model)
-
-	view := m5.View()
-	// Popup should contain box-drawing characters.
-	if !strings.Contains(view, "┌") {
-		t.Errorf("popup view missing top border '┌': %s", view)
-	}
-	if !strings.Contains(view, "DEBUG") {
-		t.Errorf("popup view missing 'DEBUG' title: %s", view)
+	if !m5.SignalBoardFocused() {
+		t.Error("signal board should remain focused after enter with no tmux window")
 	}
 }
 
@@ -412,3 +390,69 @@ func TestSignalBoard_ViewContainsSignalBoard(t *testing.T) {
 		t.Errorf("View() missing SIGNAL BOARD section:\n%s", view)
 	}
 }
+
+// ── Parallel Jobs (tasks 2.1–2.7 / 7.1–7.2) ──────────────────────────────────
+
+func TestParallelJobs(t *testing.T) {
+	m := switchboard.New()
+	// Inject two FeedRunning entries.
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedRunning, nil)
+	m = m.AddFeedEntry("job2", "pipeline: beta", switchboard.FeedRunning, nil)
+	// Inject two fake active job handles.
+	m = m.AddActiveJob("job1")
+	m = m.AddActiveJob("job2")
+
+	if got := m.ActiveJobsCount(); got != 2 {
+		t.Errorf("expected 2 active jobs, got %d", got)
+	}
+
+	// Verify both feed entries are FeedRunning via signal board.
+	sb := m.BuildSignalBoard(8, 60)
+	rendered := strings.Join(sb, "\n")
+	if !strings.Contains(rendered, "running") {
+		t.Errorf("signal board missing 'running' status: %s", rendered)
+	}
+
+	// View should show [2 running] badge.
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	view := m2.(switchboard.Model).View()
+	if !strings.Contains(view, "2 running") {
+		t.Errorf("expected view to show '2 running', got:\n%s", view)
+	}
+}
+
+func TestParallelJobCap(t *testing.T) {
+	m := switchboard.New()
+	cap := switchboard.MaxParallelJobs()
+
+	// Fill activeJobs to the cap.
+	for i := 0; i < cap; i++ {
+		m = m.AddActiveJob(fmt.Sprintf("job%d", i))
+	}
+	if got := m.ActiveJobsCount(); got != cap {
+		t.Fatalf("expected %d active jobs before cap check, got %d", cap, got)
+	}
+
+	// Give the model some pipelines so we can try to launch.
+	m = switchboard.NewWithPipelines([]string{"test-pipeline"})
+	// Re-inject active jobs after creating new model.
+	for i := 0; i < cap; i++ {
+		m = m.AddActiveJob(fmt.Sprintf("job%d", i))
+	}
+
+	// Try to launch another job via Enter key.
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m3 := m2.(switchboard.Model)
+
+	// activeJobs count should still be cap (no new job added).
+	if got := m3.ActiveJobsCount(); got != cap {
+		t.Errorf("expected activeJobs count to stay at cap %d, got %d", cap, got)
+	}
+
+	// A warning feed entry should have been added.
+	view := m3.View()
+	if !strings.Contains(view, "max parallel") {
+		t.Errorf("expected warning 'max parallel' in view after cap exceeded:\n%s", view)
+	}
+}
+
