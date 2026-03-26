@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -456,5 +457,99 @@ func TestBuiltinAssertFails(t *testing.T) {
 	// The failure may be swallowed by the DAG (no dependents, no on_failure),
 	// so we just run and ensure no panic.
 	_ = err
+}
+
+// TestStepStatusLogLines verifies that the DAG runner emits structured
+// [step:<id>] status:<state> lines to stdout for each non-input/output step.
+func TestStepStatusLogLines(t *testing.T) {
+	p := &pipeline.Pipeline{
+		Name:        "status-log-test",
+		MaxParallel: 4,
+		Steps: []pipeline.Step{
+			{
+				ID:     "step1",
+				Plugin: "noop1",
+			},
+			{
+				ID:     "step2",
+				Plugin: "noop2",
+				Needs:  []string{"step1"},
+			},
+		},
+	}
+
+	mgr := plugin.NewManager()
+	_ = mgr.Register(&plugin.StubPlugin{
+		PluginName: "noop1",
+		ExecuteFn: func(_ context.Context, _ string, _ map[string]string, w io.Writer) error {
+			_, err := w.Write([]byte("out1"))
+			return err
+		},
+	})
+	_ = mgr.Register(&plugin.StubPlugin{
+		PluginName: "noop2",
+		ExecuteFn: func(_ context.Context, _ string, _ map[string]string, w io.Writer) error {
+			_, err := w.Write([]byte("out2"))
+			return err
+		},
+	})
+
+	// Redirect stdout so we can capture fmt.Printf output from the runner.
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	var captured string
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b, _ := io.ReadAll(r)
+		captured = string(b)
+	}()
+
+	_, runErr := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+
+	// Restore stdout and close the write-end so the drain goroutine terminates.
+	w.Close()
+	os.Stdout = origStdout
+	<-done
+	r.Close()
+
+	if runErr != nil {
+		t.Fatalf("Run: %v", runErr)
+	}
+
+	// All four status lines must be present.
+	wantLines := []string{
+		"[step:step1] status:running",
+		"[step:step1] status:done",
+		"[step:step2] status:running",
+		"[step:step2] status:done",
+	}
+	for _, want := range wantLines {
+		if !strings.Contains(captured, want) {
+			t.Errorf("stdout missing %q\nfull output:\n%s", want, captured)
+		}
+	}
+
+	// step1 must appear as running before step2 starts (sequential due to Needs).
+	idx1Running := strings.Index(captured, "[step:step1] status:running")
+	idx1Done := strings.Index(captured, "[step:step1] status:done")
+	idx2Running := strings.Index(captured, "[step:step2] status:running")
+	idx2Done := strings.Index(captured, "[step:step2] status:done")
+
+	if idx1Running > idx1Done {
+		t.Error("step1: running must appear before done")
+	}
+	if idx2Running > idx2Done {
+		t.Error("step2: running must appear before done")
+	}
+	// step1 must finish before step2 starts (Needs dependency).
+	if idx1Done > idx2Running {
+		t.Error("step1 done must appear before step2 running (sequential dependency)")
+	}
 }
 

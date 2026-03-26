@@ -13,6 +13,10 @@ import (
 	"github.com/adam-stokes/orcai/internal/plugin"
 )
 
+// StepStatusLineFormat is the format string for structured step-status log lines.
+// The switchboard log-watcher parses lines matching this pattern.
+const StepStatusLineFormat = "[step:%s] status:%s"
+
 // stepStatus represents the lifecycle state of a step.
 type stepStatus int
 
@@ -603,6 +607,8 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 		}
 	}
 
+	fmt.Printf(StepStatusLineFormat+"\n", step.ID, "running")
+
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		out, execErr = executor.Execute(ctx, args)
 		if execErr == nil {
@@ -624,11 +630,14 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 done:
 	cleanupErr := executor.Cleanup(ctx)
 	if execErr != nil {
+		fmt.Printf(StepStatusLineFormat+"\n", step.ID, "failed")
 		return nil, execErr
 	}
 	if cleanupErr != nil {
+		fmt.Printf(StepStatusLineFormat+"\n", step.ID, "failed")
 		return nil, cleanupErr
 	}
+	fmt.Printf(StepStatusLineFormat+"\n", step.ID, "done")
 	return out, nil
 }
 
