@@ -980,6 +980,14 @@ func drainChan(ch chan tea.Msg) tea.Cmd {
 // ── Feed helpers ──────────────────────────────────────────────────────────────
 
 func (m Model) appendFeedLine(id, line string) Model {
+	// Strip carriage returns — progress bars use \r for in-place updates.
+	// Keep only the last "frame" so the displayed text is clean.
+	if idx := strings.LastIndexByte(line, '\r'); idx >= 0 {
+		line = line[idx+1:]
+	}
+	if line == "" {
+		return m
+	}
 	for i := range m.feed {
 		if m.feed[i].id == id {
 			m.feed[i].lines = append(m.feed[i].lines, line)
@@ -1376,10 +1384,15 @@ func (m Model) buildAgentSection(w int) []string {
 				crumbVis += 3 // " > "
 			}
 			bodyRows = append(bodyRows, boxRow(crumb, crumbVis, w))
-			bodyRows = append(bodyRows, boxRow(aBrC+"  Prompt: (ctrl+s to submit)"+aRst, 27, w))
-			for _, pLine := range strings.Split(m.agent.prompt.View(), "\n") {
-				padded := "  " + pLine
-				bodyRows = append(bodyRows, boxRow(padded, visLen(padded), w))
+			if m.activeJob != nil {
+				warn := aPnk + "  ⚠ job running — ctrl+c to cancel" + aRst
+				bodyRows = append(bodyRows, boxRow(warn, visLen(warn), w))
+			} else {
+				bodyRows = append(bodyRows, boxRow(aBrC+"  Prompt: (ctrl+s to submit)"+aRst, 27, w))
+				for _, pLine := range strings.Split(m.agent.prompt.View(), "\n") {
+					padded := "  " + pLine
+					bodyRows = append(bodyRows, boxRow(padded, visLen(padded), w))
+				}
 			}
 		}
 	}
