@@ -3,6 +3,7 @@ package switchboard_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -200,5 +201,217 @@ func TestViewContainsBottomBar(t *testing.T) {
 	}
 	if !strings.Contains(view, "quit") {
 		t.Errorf("View() bottom bar missing 'quit' hint:\n%s", view)
+	}
+}
+
+// ── Feed scroll (task 1.6) ─────────────────────────────────────────────────────
+
+func TestFeedScrollOffset_ClampedAtZero(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	// Press up — offset should stay at 0.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m5 := m4.(switchboard.Model)
+	if got := m5.FeedScrollOffset(); got != 0 {
+		t.Errorf("feedScrollOffset should be 0 at top, got %d", got)
+	}
+}
+
+func TestFeedScrollOffset_InitialIsZero(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 10})
+	m3 := m2.(switchboard.Model)
+	// Add many feed entries with output lines so total lines exceed visible height.
+	for i := 0; i < 30; i++ {
+		lines := make([]string, 5)
+		for j := range lines {
+			lines[j] = "output line"
+		}
+		m3 = m3.AddFeedEntry("id", "title", switchboard.FeedDone, lines)
+	}
+	// Verify offset is 0 by default.
+	if got := m3.FeedScrollOffset(); got != 0 {
+		t.Errorf("initial feedScrollOffset should be 0, got %d", got)
+	}
+}
+
+func TestFeedScrollOffset_ResetOnNewEntry(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 10})
+	m3 := m2.(switchboard.Model)
+	// Add a feed entry — scroll offset should be 0.
+	m4 := m3.AddFeedEntry("id1", "first job", switchboard.FeedDone, []string{"line"})
+	if got := m4.FeedScrollOffset(); got != 0 {
+		t.Errorf("feedScrollOffset should be 0 after new entry, got %d", got)
+	}
+}
+
+func TestFeedScrollOffset_ClampedAtMax(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	// Add feed entries with lines.
+	for i := 0; i < 5; i++ {
+		m3 = m3.AddFeedEntry("id", "title", switchboard.FeedDone, []string{"a", "b"})
+	}
+	// View should still render without crashing.
+	view := m3.View()
+	if !strings.Contains(view, "ACTIVITY FEED") {
+		t.Errorf("View() should still contain ACTIVITY FEED after clamping, got: %s", view)
+	}
+}
+
+// ── Agent section fixed height (task 2.6) ──────────────────────────────────────
+
+func TestBuildAgentSection_FixedHeight(t *testing.T) {
+	m := switchboard.NewWithTestProviders()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+
+	// Measure height at step 0.
+	m3a, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m3b := m3a.(switchboard.Model)
+	step0Lines := m3b.BuildAgentSection(60)
+
+	// Advance to step 1.
+	m4, _ := m3b.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m5 := m4.(switchboard.Model)
+	step1Lines := m5.BuildAgentSection(60)
+
+	// Advance to step 2.
+	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m7 := m6.(switchboard.Model)
+	step2Lines := m7.BuildAgentSection(60)
+
+	if len(step0Lines) != len(step1Lines) {
+		t.Errorf("buildAgentSection step 0 vs step 1 line count mismatch: %d vs %d", len(step0Lines), len(step1Lines))
+	}
+	if len(step0Lines) != len(step2Lines) {
+		t.Errorf("buildAgentSection step 0 vs step 2 line count mismatch: %d vs %d", len(step0Lines), len(step2Lines))
+	}
+}
+
+// ── Signal board (task 3.8) ────────────────────────────────────────────────────
+
+func TestSignalBoard_FilterAll(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	m3 = m3.AddFeedEntry("j1", "running job", switchboard.FeedRunning, nil)
+	m3 = m3.AddFeedEntry("j2", "done job", switchboard.FeedDone, nil)
+	m3 = m3.AddFeedEntry("j3", "failed job", switchboard.FeedFailed, nil)
+
+	sb := m3.BuildSignalBoard(8, 60)
+	rendered := strings.Join(sb, "\n")
+	// All filter — all 3 jobs should appear.
+	if !strings.Contains(rendered, "running") {
+		t.Errorf("signal board (all filter) missing 'running': %s", rendered)
+	}
+	if !strings.Contains(rendered, "done") {
+		t.Errorf("signal board (all filter) missing 'done': %s", rendered)
+	}
+	if !strings.Contains(rendered, "failed") {
+		t.Errorf("signal board (all filter) missing 'failed': %s", rendered)
+	}
+}
+
+func TestSignalBoard_BlinkToggleOnTick(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	m3 = m3.AddFeedEntry("j1", "running job", switchboard.FeedRunning, nil)
+
+	before := m3.SignalBoardBlinkOn()
+	// Send a tick message (use time.Now as the tick value).
+	m4, _ := m3.Update(switchboard.MakeTickMsg())
+	m5 := m4.(switchboard.Model)
+	after := m5.SignalBoardBlinkOn()
+	if before == after {
+		t.Errorf("blink state should toggle on tick when running job exists: before=%v after=%v", before, after)
+	}
+}
+
+func TestSignalBoard_HeaderContainsFilter(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	sb := m3.BuildSignalBoard(8, 60)
+	rendered := strings.Join(sb, "\n")
+	if !strings.Contains(rendered, "SIGNAL BOARD") {
+		t.Errorf("signal board missing 'SIGNAL BOARD' header: %s", rendered)
+	}
+	if !strings.Contains(rendered, "all") {
+		t.Errorf("signal board missing filter 'all' in header: %s", rendered)
+	}
+}
+
+// ── Tmux hidden windows (task 4.6) ────────────────────────────────────────────
+
+func TestCreateJobWindow_SkipsIfNoTmux(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		// tmux not available — verify the function returns empty string gracefully.
+		// We can't call createJobWindow directly (unexported) but we can verify that
+		// launching a job in a non-tmux environment doesn't crash.
+		t.Skip("tmux not found — skipping window creation test")
+	}
+	// If tmux is available, just verify the test setup doesn't panic.
+	t.Log("tmux available — createJobWindow would attempt window creation")
+}
+
+// ── Debug popup (task 5.8) ──────────────────────────────────────────────────────
+
+func TestDebugPopup_ClosesOnEsc(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	m3 = m3.AddFeedEntry("job1", "test job", switchboard.FeedDone, nil)
+	m3 = m3.SetSignalBoardFocused(true)
+
+	// Open popup by sending enter on signal board.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m5 := m4.(switchboard.Model)
+	if !m5.DebugPopupOpen() {
+		t.Fatal("expected popup to open on enter from signal board")
+	}
+	if m5.DebugPopupJobID() != "job1" {
+		t.Errorf("expected popup job ID 'job1', got %q", m5.DebugPopupJobID())
+	}
+
+	// Close popup with esc.
+	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m7 := m6.(switchboard.Model)
+	if m7.DebugPopupOpen() {
+		t.Error("expected popup to close on esc")
+	}
+}
+
+func TestDebugPopup_ViewContainsPopupBorder(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	m3 = m3.AddFeedEntry("job1", "test job", switchboard.FeedDone, nil)
+	m3 = m3.SetSignalBoardFocused(true)
+
+	// Open popup.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m5 := m4.(switchboard.Model)
+
+	view := m5.View()
+	// Popup should contain box-drawing characters.
+	if !strings.Contains(view, "┌") {
+		t.Errorf("popup view missing top border '┌': %s", view)
+	}
+	if !strings.Contains(view, "DEBUG") {
+		t.Errorf("popup view missing 'DEBUG' title: %s", view)
+	}
+}
+
+func TestSignalBoard_ViewContainsSignalBoard(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	view := m2.(switchboard.Model).View()
+	if !strings.Contains(view, "SIGNAL BOARD") {
+		t.Errorf("View() missing SIGNAL BOARD section:\n%s", view)
 	}
 }

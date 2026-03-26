@@ -58,6 +58,9 @@ const (
 	FeedFailed
 )
 
+// agentInnerHeight is the fixed number of body rows inside the AGENT RUNNER box.
+const agentInnerHeight = 8
+
 type feedEntry struct {
 	id     string
 	title  string
@@ -81,12 +84,14 @@ type agentSection struct {
 	selectedModel    int
 	prompt           textarea.Model
 	focused          bool
+	agentScrollOffset int
 }
 
 type jobHandle struct {
-	id     string
-	cancel context.CancelFunc
-	ch     chan tea.Msg
+	id         string
+	cancel     context.CancelFunc
+	ch         chan tea.Msg
+	tmuxWindow string
 }
 
 // ── Tea messages ──────────────────────────────────────────────────────────────
@@ -161,14 +166,20 @@ type TelemetryMsg struct {
 
 // Model is the BubbleTea model for the Switchboard.
 type Model struct {
-	width        int
-	height       int
-	feed         []feedEntry // ring buffer, cap 200
-	launcher     launcherSection
-	agent        agentSection
-	activeJob    *jobHandle
-	feedSelected int // index into feed for expanded view
-	confirmQuit  bool
+	width              int
+	height             int
+	feed               []feedEntry // ring buffer, cap 200
+	launcher           launcherSection
+	agent              agentSection
+	activeJob          *jobHandle
+	feedSelected       int // index into feed for expanded view
+	confirmQuit        bool
+	feedScrollOffset   int
+	feedFocused        bool
+	signalBoard        SignalBoard
+	signalBoardFocused bool
+	debugPopupOpen     bool
+	debugPopupJobID    string
 }
 
 // New creates a new Switchboard Model, discovering pipelines and providers.
@@ -189,6 +200,7 @@ func New() Model {
 			providers: picker.BuildProviders(),
 			prompt:    ta,
 		},
+		signalBoard: SignalBoard{activeFilter: "all"},
 	}
 }
 
@@ -226,6 +238,49 @@ func (m Model) Cursor() int { return m.launcher.selected }
 
 // AgentFormStep returns the current agent form step — used in tests.
 func (m Model) AgentFormStep() int { return m.agent.formStep }
+
+// FeedScrollOffset returns the current feed scroll offset — used in tests.
+func (m Model) FeedScrollOffset() int { return m.feedScrollOffset }
+
+// BuildAgentSection is an exported wrapper for tests.
+func (m Model) BuildAgentSection(w int) []string { return m.buildAgentSection(w) }
+
+// BuildSignalBoard is an exported wrapper for tests.
+func (m Model) BuildSignalBoard(height, width int) []string { return m.buildSignalBoard(height, width) }
+
+// SignalBoardBlinkOn returns the current blink state — used in tests.
+func (m Model) SignalBoardBlinkOn() bool { return m.signalBoard.blinkOn }
+
+// DebugPopupOpen returns whether the debug popup is open — used in tests.
+func (m Model) DebugPopupOpen() bool { return m.debugPopupOpen }
+
+// DebugPopupJobID returns the current popup job ID — used in tests.
+func (m Model) DebugPopupJobID() string { return m.debugPopupJobID }
+
+// MakeTickMsg returns a tickMsg for use in tests.
+func MakeTickMsg() tea.Msg { return tickMsg(time.Now()) }
+
+// SetSignalBoardFocused sets the signal board focus state — used in tests.
+func (m Model) SetSignalBoardFocused(v bool) Model {
+	m.signalBoardFocused = v
+	m.launcher.focused = false
+	m.agent.focused = false
+	m.feedFocused = false
+	return m
+}
+
+// AddFeedEntry adds a feed entry — used in tests.
+func (m Model) AddFeedEntry(id, title string, status FeedStatus, lines []string) Model {
+	entry := feedEntry{
+		id:     id,
+		title:  title,
+		status: status,
+		ts:     time.Now(),
+		lines:  lines,
+	}
+	m.feed = append([]feedEntry{entry}, m.feed...)
+	return m
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -344,9 +399,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		leftW := m.leftColWidth()
 		m.agent.prompt.SetWidth(max(leftW-4, 10))
+		m.clampFeedScroll()
 		return m, nil
 
 	case tickMsg:
+		// Toggle blink if any job is running.
+		for _, e := range m.feed {
+			if e.status == FeedRunning {
+				m.signalBoard.blinkOn = !m.signalBoard.blinkOn
+				break
+			}
+		}
 		return m, tickCmd()
 
 	case TelemetryMsg:
@@ -362,10 +425,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.feed) > 200 {
 			m.feed = m.feed[:200]
 		}
+		m.feedScrollOffset = 0
 		return m, nil
 
 	case FeedLineMsg:
 		m = m.appendFeedLine(msg.ID, msg.Line)
+		// Echo line to the job's tmux window if set.
+		if m.activeJob != nil && m.activeJob.tmuxWindow != "" && m.activeJob.id == msg.ID {
+			escaped := strings.ReplaceAll(msg.Line, "'", "'\\''")
+			exec.Command("tmux", "send-keys", "-t", m.activeJob.tmuxWindow, escaped, "").Run() //nolint:errcheck
+		}
 		if m.activeJob != nil {
 			return m, drainChan(m.activeJob.ch)
 		}
@@ -426,6 +495,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	key := msg.String()
+
+	// Debug popup intercepts all keys when open.
+	if m.debugPopupOpen {
+		switch key {
+		case "esc", "q":
+			m.debugPopupOpen = false
+		case "enter":
+			exec.Command("tmux", "select-window", "-t", "orcai-"+m.debugPopupJobID).Run() //nolint:errcheck
+			m.debugPopupOpen = false
+		}
+		return m, nil
+	}
 
 	// Confirm quit when a job is running.
 	if m.confirmQuit {
@@ -498,19 +579,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "tab":
-		if m.agent.focused {
+		if m.feedFocused {
+			// feed → launcher
+			m.feedFocused = false
+			m.launcher.focused = true
+		} else if m.signalBoardFocused {
+			// signalBoard → launcher
+			m.signalBoardFocused = false
+			m.launcher.focused = true
+		} else if m.agent.focused {
 			if m.agent.formStep < 2 {
 				m = m.agentAdvanceStep()
 			} else {
-				// Wrap back to launcher.
+				// agent (step 2) → signalBoard
 				m.agent.focused = false
-				m.launcher.focused = true
 				m.agent.formStep = 0
 				m.agent.prompt.Blur()
+				m.signalBoardFocused = true
 			}
 		} else if m.launcher.focused {
 			m.launcher.focused = false
 			m.agent.focused = true
+		}
+		return m, nil
+
+	case "f":
+		if m.signalBoardFocused {
+			m.signalBoard.cycleFilter()
 		}
 		return m, nil
 
@@ -549,9 +644,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		if m.agent.focused {
+		if m.feedFocused {
+			m.feedFocused = false
+			m.launcher.focused = true
+		} else if m.signalBoardFocused {
+			m.signalBoardFocused = false
+			m.launcher.focused = true
+		} else if m.agent.focused {
 			if m.agent.formStep > 0 {
 				m.agent.formStep--
+				m.agent.agentScrollOffset = 0
 			} else {
 				m.agent.focused = false
 				m.launcher.focused = true
@@ -573,6 +675,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleDown() Model {
+	if m.feedFocused {
+		m.feedScrollOffset++
+		m.clampFeedScroll()
+		return m
+	}
+	if m.signalBoardFocused {
+		filtered := m.filteredFeed()
+		if m.signalBoard.selectedIdx < len(filtered)-1 {
+			m.signalBoard.selectedIdx++
+		}
+		return m
+	}
 	if m.launcher.focused {
 		if m.launcher.selected < len(m.launcher.pipelines)-1 {
 			m.launcher.selected++
@@ -599,6 +713,19 @@ func (m Model) handleDown() Model {
 }
 
 func (m Model) handleUp() Model {
+	if m.feedFocused {
+		if m.feedScrollOffset > 0 {
+			m.feedScrollOffset--
+		}
+		m.clampFeedScroll()
+		return m
+	}
+	if m.signalBoardFocused {
+		if m.signalBoard.selectedIdx > 0 {
+			m.signalBoard.selectedIdx--
+		}
+		return m
+	}
 	if m.launcher.focused {
 		if m.launcher.selected > 0 {
 			m.launcher.selected--
@@ -629,14 +756,26 @@ func (m Model) agentAdvanceStep() Model {
 		} else {
 			m.agent.formStep = 1
 		}
+		m.agent.agentScrollOffset = 0
 	} else if m.agent.formStep == 1 {
 		m.agent.formStep = 2
 		m.agent.prompt.Focus()
+		m.agent.agentScrollOffset = 0
 	}
 	return m
 }
 
 func (m Model) handleEnter() (Model, tea.Cmd) {
+	// Signal board: open debug popup for selected row.
+	if m.signalBoardFocused {
+		filtered := m.filteredFeed()
+		if len(filtered) > 0 && m.signalBoard.selectedIdx < len(filtered) {
+			m.debugPopupOpen = true
+			m.debugPopupJobID = filtered[m.signalBoard.selectedIdx].id
+		}
+		return m, nil
+	}
+
 	// Launcher: launch selected pipeline.
 	if m.launcher.focused && m.activeJob == nil {
 		if len(m.launcher.pipelines) == 0 {
@@ -657,10 +796,13 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 			m.feed = m.feed[:200]
 		}
 		m.feedSelected = 0
+		m.feedScrollOffset = 0
+
+		windowName := createJobWindow(feedID)
 
 		ch := make(chan tea.Msg, 256)
 		_, cancel := context.WithCancel(context.Background())
-		m.activeJob = &jobHandle{id: feedID, cancel: cancel, ch: ch}
+		m.activeJob = &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName}
 
 		cmd := launchPipelineCmdCh(yamlPath, feedID, ch, cancel)
 		drain := drainChan(ch)
@@ -709,6 +851,9 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 			m.feed = m.feed[:200]
 		}
 		m.feedSelected = 0
+		m.feedScrollOffset = 0
+
+		windowName := createJobWindow(feedID)
 
 		provArgs := picker.PipelineLaunchArgs(prov.ID)
 		binary := prov.Command
@@ -723,7 +868,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 
 		ch := make(chan tea.Msg, 256)
 		_, cancel := context.WithCancel(context.Background())
-		m.activeJob = &jobHandle{id: feedID, cancel: cancel, ch: ch}
+		m.activeJob = &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName}
 
 		cmd := runAgentCmdCh(adapter, input, vars, feedID, ch, cancel)
 		drain := drainChan(ch)
@@ -834,6 +979,58 @@ func (m Model) setFeedStatus(id string, status FeedStatus) Model {
 	return m
 }
 
+// clampFeedScroll clamps feedScrollOffset to valid range.
+func (m *Model) clampFeedScroll() {
+	h := m.height
+	if h <= 0 {
+		h = 40
+	}
+	contentH := max(h-1, 5)
+	sbHeight := min(len(m.feed)+2, 8)
+	if sbHeight < 2 {
+		sbHeight = 2
+	}
+	feedH := max(contentH-sbHeight, 3)
+	visibleH := feedH - 2
+	if visibleH <= 0 {
+		visibleH = 1
+	}
+	total := totalFeedLines(m.feed)
+	maxOffset := max(0, total-visibleH)
+	if m.feedScrollOffset > maxOffset {
+		m.feedScrollOffset = maxOffset
+	}
+	if m.feedScrollOffset < 0 {
+		m.feedScrollOffset = 0
+	}
+}
+
+// filteredFeed returns feed entries matching the current signal board filter.
+func (m Model) filteredFeed() []feedEntry {
+	filter := m.signalBoard.activeFilter
+	if filter == "all" || filter == "" {
+		return m.feed
+	}
+	var out []feedEntry
+	for _, e := range m.feed {
+		switch filter {
+		case "running":
+			if e.status == FeedRunning {
+				out = append(out, e)
+			}
+		case "done":
+			if e.status == FeedDone {
+				out = append(out, e)
+			}
+		case "failed":
+			if e.status == FeedFailed {
+				out = append(out, e)
+			}
+		}
+	}
+	return out
+}
+
 func (m Model) currentProvider() *picker.ProviderDef {
 	if len(m.agent.providers) == 0 {
 		return nil
@@ -868,16 +1065,32 @@ func (m Model) View() string {
 		h = 40
 	}
 
+	// Debug popup takes over the full screen.
+	if m.debugPopupOpen {
+		return buildDebugPopup(h, w, m.debugPopupJobID) + "\n" +
+			aDim + "  esc: close  enter: attach to tmux window" + aRst
+	}
+
 	leftW := m.leftColWidth()
 	feedW := max(w-leftW-1, 20)
 	contentH := max(h-1, 5) // reserve one line for bottom bar
 
+	// Signal board: fixed height above the feed.
+	sbHeight := min(len(m.feed)+2, 8)
+	if sbHeight < 2 {
+		sbHeight = 2
+	}
+	feedH := max(contentH-sbHeight, 3)
+
 	left := m.viewLeftColumn(contentH, leftW)
-	feed := m.viewActivityFeed(contentH, feedW)
+	sb := m.buildSignalBoard(sbHeight, feedW)
+	feed := m.viewActivityFeed(feedH, feedW)
+
+	// Right column: signal board lines followed by feed lines.
+	rightLines := append(sb, strings.Split(feed, "\n")...)
 
 	leftLines := strings.Split(left, "\n")
-	feedLines := strings.Split(feed, "\n")
-	totalRows := max(len(leftLines), len(feedLines))
+	totalRows := max(len(leftLines), len(rightLines))
 
 	var rows []string
 	for i := range totalRows {
@@ -886,8 +1099,8 @@ func (m Model) View() string {
 			l = leftLines[i]
 		}
 		f := ""
-		if i < len(feedLines) {
-			f = feedLines[i]
+		if i < len(rightLines) {
+			f = rightLines[i]
 		}
 		rows = append(rows, padToVis(l, leftW)+" "+f)
 	}
@@ -995,7 +1208,8 @@ func (m Model) buildLauncherSection(w int) []string {
 	return rows
 }
 
-// buildAgentSection renders the Agent Runner inline form.
+// buildAgentSection renders the Agent Runner inline form with fixed height.
+// Always returns agentInnerHeight + 2 lines (top border + body + bottom border).
 func (m Model) buildAgentSection(w int) []string {
 	borderColor := aBC
 	if m.agent.focused {
@@ -1004,139 +1218,185 @@ func (m Model) buildAgentSection(w int) []string {
 
 	rows := []string{boxTop(w, "AGENT RUNNER", borderColor)}
 
+	var bodyRows []string
+
 	if len(m.agent.providers) == 0 {
-		rows = append(rows, boxRow(aDim+"  no providers available"+aRst, 23, w))
-		rows = append(rows, boxBot(w))
-		return rows
-	}
-
-	switch m.agent.formStep {
-	case 0:
-		for i, prov := range m.agent.providers {
-			label := prov.Label
-			if label == "" {
-				label = prov.ID
+		bodyRows = append(bodyRows, boxRow(aDim+"  no providers available"+aRst, 23, w))
+	} else {
+		switch m.agent.formStep {
+		case 0:
+			// Window size for provider list (full agentInnerHeight rows).
+			windowSize := agentInnerHeight
+			offset := m.agent.agentScrollOffset
+			// Ensure selected item scrolls into view.
+			if m.agent.selectedProvider < offset {
+				offset = m.agent.selectedProvider
+			} else if m.agent.selectedProvider >= offset+windowSize {
+				offset = m.agent.selectedProvider - windowSize + 1
 			}
-			maxLen := max(w-5, 1)
-			if len(label) > maxLen {
-				label = label[:maxLen-1] + "…"
+			end := offset + windowSize
+			if end > len(m.agent.providers) {
+				end = len(m.agent.providers)
 			}
-			contentVis := 4 + len(label)
-			if i == m.agent.selectedProvider {
-				sel := ""
-				if m.agent.focused {
-					sel = aSelBg + aWht
-				} else {
-					sel = aBrC
-				}
-				content := sel + "  > " + label + aRst
-				rows = append(rows, aBC+"│"+content+strings.Repeat(" ", max(w-2-contentVis, 0))+aBC+"│"+aRst)
-			} else {
-				content := aDim + "    " + aBC + label + aRst
-				rows = append(rows, boxRow(content, contentVis, w))
-			}
-		}
-
-	case 1:
-		prov := m.currentProvider()
-		var models []picker.ModelOption
-		if prov != nil {
-			models = nonSepModels(prov.Models)
-		}
-		// Breadcrumb: show which provider was selected.
-		provLabel := ""
-		if prov != nil {
-			provLabel = prov.Label
-			if provLabel == "" {
-				provLabel = prov.ID
-			}
-		}
-		crumb := "  " + aDim + provLabel + aRst + aBrC + " > model" + aRst
-		rows = append(rows, boxRow(crumb, 2+len(provLabel)+9, w))
-		if len(models) == 0 {
-			rows = append(rows, boxRow(aDim+"  no models"+aRst, 11, w))
-		} else {
-			for i, mo := range models {
-				label := mo.Label
+			for i := offset; i < end; i++ {
+				prov := m.agent.providers[i]
+				label := prov.Label
 				if label == "" {
-					label = mo.ID
+					label = prov.ID
 				}
 				maxLen := max(w-5, 1)
 				if len(label) > maxLen {
 					label = label[:maxLen-1] + "…"
 				}
 				contentVis := 4 + len(label)
-				if i == m.agent.selectedModel && m.agent.focused {
-					content := aSelBg + aWht + "  > " + label + aRst
-					rows = append(rows, aBC+"│"+content+strings.Repeat(" ", max(w-2-contentVis, 0))+aBC+"│"+aRst)
+				if i == m.agent.selectedProvider {
+					sel := ""
+					if m.agent.focused {
+						sel = aSelBg + aWht
+					} else {
+						sel = aBrC
+					}
+					content := sel + "  > " + label + aRst
+					bodyRows = append(bodyRows, aBC+"│"+content+strings.Repeat(" ", max(w-2-contentVis, 0))+aBC+"│"+aRst)
 				} else {
 					content := aDim + "    " + aBC + label + aRst
-					rows = append(rows, boxRow(content, contentVis, w))
+					bodyRows = append(bodyRows, boxRow(content, contentVis, w))
 				}
 			}
-		}
 
-	case 2:
-		// Breadcrumb: show provider and model selection.
-		prov := m.currentProvider()
-		provLabel := ""
-		if prov != nil {
-			provLabel = prov.Label
-			if provLabel == "" {
-				provLabel = prov.ID
+		case 1:
+			prov := m.currentProvider()
+			var models []picker.ModelOption
+			if prov != nil {
+				models = nonSepModels(prov.Models)
 			}
-		}
-		models := []picker.ModelOption{}
-		if prov != nil {
-			models = nonSepModels(prov.Models)
-		}
-		modelLabel := ""
-		if len(models) > 0 && m.agent.selectedModel < len(models) {
-			modelLabel = models[m.agent.selectedModel].Label
-			if modelLabel == "" {
-				modelLabel = models[m.agent.selectedModel].ID
+			// Breadcrumb: show which provider was selected.
+			provLabel := ""
+			if prov != nil {
+				provLabel = prov.Label
+				if provLabel == "" {
+					provLabel = prov.ID
+				}
 			}
-		}
-		crumb := "  " + aDim + provLabel
-		if modelLabel != "" {
-			crumb += " > " + modelLabel
-		}
-		crumb += aRst + aBrC + " > prompt" + aRst
-		crumbVis := 2 + len(provLabel) + len(modelLabel) + 9
-		if modelLabel != "" {
-			crumbVis += 3 // " > "
-		}
-		rows = append(rows, boxRow(crumb, crumbVis, w))
-		rows = append(rows, boxRow(aBrC+"  Prompt: (ctrl+s to submit)"+aRst, 27, w))
-		for _, pLine := range strings.Split(m.agent.prompt.View(), "\n") {
-			padded := "  " + pLine
-			rows = append(rows, boxRow(padded, visLen(padded), w))
+			crumb := "  " + aDim + provLabel + aRst + aBrC + " > model" + aRst
+			bodyRows = append(bodyRows, boxRow(crumb, 2+len(provLabel)+9, w))
+
+			// Window size for model list (agentInnerHeight - 1 row for breadcrumb).
+			windowSize := agentInnerHeight - 1
+			if len(models) == 0 {
+				bodyRows = append(bodyRows, boxRow(aDim+"  no models"+aRst, 11, w))
+			} else {
+				offset := m.agent.agentScrollOffset
+				if m.agent.selectedModel < offset {
+					offset = m.agent.selectedModel
+				} else if m.agent.selectedModel >= offset+windowSize {
+					offset = m.agent.selectedModel - windowSize + 1
+				}
+				end := offset + windowSize
+				if end > len(models) {
+					end = len(models)
+				}
+				for i := offset; i < end; i++ {
+					mo := models[i]
+					label := mo.Label
+					if label == "" {
+						label = mo.ID
+					}
+					maxLen := max(w-5, 1)
+					if len(label) > maxLen {
+						label = label[:maxLen-1] + "…"
+					}
+					contentVis := 4 + len(label)
+					if i == m.agent.selectedModel && m.agent.focused {
+						content := aSelBg + aWht + "  > " + label + aRst
+						bodyRows = append(bodyRows, aBC+"│"+content+strings.Repeat(" ", max(w-2-contentVis, 0))+aBC+"│"+aRst)
+					} else {
+						content := aDim + "    " + aBC + label + aRst
+						bodyRows = append(bodyRows, boxRow(content, contentVis, w))
+					}
+				}
+			}
+
+		case 2:
+			// Breadcrumb: show provider and model selection.
+			prov := m.currentProvider()
+			provLabel := ""
+			if prov != nil {
+				provLabel = prov.Label
+				if provLabel == "" {
+					provLabel = prov.ID
+				}
+			}
+			models := []picker.ModelOption{}
+			if prov != nil {
+				models = nonSepModels(prov.Models)
+			}
+			modelLabel := ""
+			if len(models) > 0 && m.agent.selectedModel < len(models) {
+				modelLabel = models[m.agent.selectedModel].Label
+				if modelLabel == "" {
+					modelLabel = models[m.agent.selectedModel].ID
+				}
+			}
+			crumb := "  " + aDim + provLabel
+			if modelLabel != "" {
+				crumb += " > " + modelLabel
+			}
+			crumb += aRst + aBrC + " > prompt" + aRst
+			crumbVis := 2 + len(provLabel) + len(modelLabel) + 9
+			if modelLabel != "" {
+				crumbVis += 3 // " > "
+			}
+			bodyRows = append(bodyRows, boxRow(crumb, crumbVis, w))
+			bodyRows = append(bodyRows, boxRow(aBrC+"  Prompt: (ctrl+s to submit)"+aRst, 27, w))
+			for _, pLine := range strings.Split(m.agent.prompt.View(), "\n") {
+				padded := "  " + pLine
+				bodyRows = append(bodyRows, boxRow(padded, visLen(padded), w))
+			}
 		}
 	}
 
+	// Pad or clip body rows to exactly agentInnerHeight.
+	for len(bodyRows) < agentInnerHeight {
+		bodyRows = append(bodyRows, boxRow("", 0, w))
+	}
+	if len(bodyRows) > agentInnerHeight {
+		bodyRows = bodyRows[:agentInnerHeight]
+	}
+
+	rows = append(rows, bodyRows...)
 	rows = append(rows, boxBot(w))
 	return rows
 }
 
-// viewActivityFeed renders the center activity feed.
+// totalFeedLines computes the total number of content lines for a feed (not counting borders).
+func totalFeedLines(feed []feedEntry) int {
+	n := 0
+	for _, entry := range feed {
+		n++ // title line
+		n += len(entry.lines)
+	}
+	return n
+}
+
+// viewActivityFeed renders the center activity feed with scroll support.
 func (m Model) viewActivityFeed(height, width int) string {
-	var lines []string
+	visibleH := height - 2 // minus top and bottom border
 
-	lines = append(lines, boxTop(width, "ACTIVITY FEED", aBrC))
-
+	// Flatten all feed entries into content lines.
+	var allLines []string
 	if len(m.feed) == 0 {
-		lines = append(lines, boxRow(aDim+"  no activity yet"+aRst, 17, width))
+		allLines = append(allLines, boxRow(aDim+"  no activity yet"+aRst, 17, width))
 	} else {
 		for _, entry := range m.feed {
 			badge, badgeColor := statusBadge(entry.status)
 			ts := entry.ts.Format("15:04:05")
-			// title line
 			titleLine := fmt.Sprintf("  %s%s%s %s%s%s  %s",
 				badgeColor, badge, aRst,
 				aDim, ts, aRst,
 				aBrC+entry.title+aRst)
 			titleVis := 2 + len(badge) + 1 + len(ts) + 2 + len(entry.title)
-			lines = append(lines, boxRow(titleLine, titleVis, width))
+			allLines = append(allLines, boxRow(titleLine, titleVis, width))
 
 			for _, outLine := range entry.lines {
 				maxLen := max(width-4, 1)
@@ -1144,16 +1404,45 @@ func (m Model) viewActivityFeed(height, width int) string {
 					outLine = outLine[:maxLen-1] + "…"
 				}
 				content := aDim + "    " + outLine + aRst
-				lines = append(lines, boxRow(content, 4+len(outLine), width))
+				allLines = append(allLines, boxRow(content, 4+len(outLine), width))
 			}
 		}
 	}
 
+	// Clamp offset and slice visible window.
+	offset := m.feedScrollOffset
+	total := len(allLines)
+	if visibleH <= 0 {
+		visibleH = 1
+	}
+	maxOffset := max(0, total-visibleH)
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	end := offset + visibleH
+	if end > total {
+		end = total
+	}
+	visible := allLines[offset:end]
+
+	var lines []string
+	borderColor := aBC
+	if m.feedFocused {
+		borderColor = aBrC
+	}
+	lines = append(lines, boxTop(width, "ACTIVITY FEED", borderColor))
+	lines = append(lines, visible...)
+
+	// Pad to fill the box body.
+	for len(lines) < height-1 {
+		lines = append(lines, boxRow("", 0, width))
+	}
 	lines = append(lines, boxBot(width))
 
-	for len(lines) < height {
-		lines = append(lines, "")
-	}
+	// Trim to exact height.
 	if len(lines) > height {
 		lines = lines[:height]
 	}
@@ -1167,15 +1456,35 @@ func (m Model) viewBottomBar(width int) string {
 		return aBrC + key + aDim + " " + desc + aRst
 	}
 	sep := aDim + " · " + aRst
-	parts := []string{
-		hint("enter", "launch"),
-		hint("ctrl+s", "submit"),
-		hint("tab", "focus"),
-		hint("a", "agent"),
-		hint("r", "refresh"),
-		hint("↑↓", "nav"),
-		hint("q", "quit"),
+
+	var parts []string
+	switch {
+	case m.signalBoardFocused:
+		parts = []string{
+			hint("↑↓", "nav"),
+			hint("f", "filter"),
+			hint("enter", "debug popup"),
+			hint("tab", "focus"),
+			hint("q", "quit"),
+		}
+	case m.feedFocused:
+		parts = []string{
+			hint("↑↓", "scroll"),
+			hint("tab", "focus"),
+			hint("q", "quit"),
+		}
+	default:
+		parts = []string{
+			hint("enter", "launch"),
+			hint("ctrl+s", "submit"),
+			hint("tab", "focus"),
+			hint("a", "agent"),
+			hint("r", "refresh"),
+			hint("↑↓", "nav"),
+			hint("q", "quit"),
+		}
 	}
+
 	bar := "  " + strings.Join(parts, sep)
 	if visLen(bar) < width {
 		bar += strings.Repeat(" ", width-visLen(bar))
