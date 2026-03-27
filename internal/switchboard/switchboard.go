@@ -767,6 +767,49 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleAgentModal(msg)
 	}
 
+	// Signal board search input — intercept chars when searching.
+	if m.signalBoardFocused && m.signalBoard.searching {
+		switch key {
+		case "esc", "ctrl+c":
+			m.signalBoard.searching = false
+			if m.signalBoard.query != "" {
+				m.signalBoard.query = ""
+				m.signalBoard.selectedIdx = 0
+				m.signalBoard.scrollOffset = 0
+			}
+			return m, nil
+		case "backspace", "ctrl+h":
+			runes := []rune(m.signalBoard.query)
+			if len(runes) > 0 {
+				m.signalBoard.query = string(runes[:len(runes)-1])
+				m.signalBoard.selectedIdx = 0
+				m.signalBoard.scrollOffset = 0
+			}
+			return m, nil
+		case "enter":
+			m.signalBoard.searching = false
+			return m, nil
+		case "j", "down":
+			return m.handleDown(), nil
+		case "k", "up":
+			return m.handleUp(), nil
+		default:
+			if len(msg.Runes) == 1 {
+				m.signalBoard.query += string(msg.Runes[0])
+				m.signalBoard.selectedIdx = 0
+				m.signalBoard.scrollOffset = 0
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
+	// / enters signal board search mode.
+	if m.signalBoardFocused && key == "/" {
+		m.signalBoard.searching = true
+		return m, nil
+	}
+
 	// Global focus shortcuts — p focuses pipelines.
 	switch key {
 	case "p":
@@ -800,6 +843,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		} else if m.signalBoardFocused {
 			// signalBoard → feed
 			m.signalBoardFocused = false
+			m.signalBoard.clearSearch()
 			m.feedFocused = true
 			m.feedCursor = 0
 		} else if m.agent.focused {
@@ -903,6 +947,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, nil
 		} else if m.signalBoardFocused {
 			m.signalBoardFocused = false
+			m.signalBoard.clearSearch()
 			m.launcher.focused = true
 		} else if m.agent.focused {
 			m.agent.focused = false
@@ -957,9 +1002,10 @@ func (m Model) handleDown() Model {
 		return m
 	}
 	if m.signalBoardFocused {
-		filtered := m.filteredFeed()
+		filtered := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
 		if m.signalBoard.selectedIdx < len(filtered)-1 {
 			m.signalBoard.selectedIdx++
+			m.signalBoard.clampScroll(m.signalBoardVisibleRows())
 		}
 		return m
 	}
@@ -987,6 +1033,7 @@ func (m Model) handleUp() Model {
 	if m.signalBoardFocused {
 		if m.signalBoard.selectedIdx > 0 {
 			m.signalBoard.selectedIdx--
+			m.signalBoard.clampScroll(m.signalBoardVisibleRows())
 		}
 		return m
 	}
@@ -1151,7 +1198,7 @@ func openEditorInWindow(path string) {
 func (m Model) handleEnter() (Model, tea.Cmd) {
 	// Signal board: navigate directly into the job's tmux window.
 	if m.signalBoardFocused {
-		filtered := m.filteredFeed()
+		filtered := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
 		if len(filtered) > 0 && m.signalBoard.selectedIdx < len(filtered) {
 			tw := filtered[m.signalBoard.selectedIdx].tmuxWindow
 			if tw != "" {
