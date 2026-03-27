@@ -1,6 +1,8 @@
 package crontui
 
 import (
+	"os/exec"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
 
@@ -51,12 +53,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "q":
-		if !m.filtering {
-			return m, tea.Quit
+	case "ctrl+c", "q":
+		if msg.String() == "q" && m.filtering {
+			break
 		}
+		// Switch back to the switchboard — leave the cron TUI running in its session.
+		exec.Command("tmux", "switch-client", "-t", "orcai").Run() //nolint:errcheck
+		return m, nil
 	case "tab":
 		m.activePane = 1 - m.activePane
 		return m, nil
@@ -81,7 +84,8 @@ func (m Model) handleJobPaneKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		return m, tea.Quit
+		exec.Command("tmux", "switch-client", "-t", "orcai").Run() //nolint:errcheck
+		return m, nil
 
 	case "j", "down":
 		if m.selectedIdx < len(m.filtered)-1 {

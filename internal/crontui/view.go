@@ -9,48 +9,57 @@ import (
 	"github.com/adam-stokes/orcai/internal/cron"
 )
 
-// Lipgloss styles (built lazily since terminal detection is best-effort).
-var (
-	styleBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(draculaComment))
+// viewPal caches resolved lipgloss colors for the current render pass.
+type viewPal struct {
+	accent  lipgloss.Color
+	fg      lipgloss.Color
+	dim     lipgloss.Color
+	selBG   lipgloss.Color
+	errCol  lipgloss.Color
+	success lipgloss.Color
+	border  lipgloss.Color
+	pink    lipgloss.Color
+}
 
-	styleHeader = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaPurple)).
-			Bold(true)
+// pal resolves the active palette from the bundle, falling back to Dracula.
+func (m Model) pal() viewPal {
+	b := m.bundle
+	if b != nil {
+		return viewPal{
+			accent:  lipgloss.Color(b.Palette.Accent),
+			fg:      lipgloss.Color(b.Palette.FG),
+			dim:     lipgloss.Color(b.Palette.Dim),
+			selBG:   lipgloss.Color(b.Palette.Border),
+			errCol:  lipgloss.Color(b.Palette.Error),
+			success: lipgloss.Color(b.Palette.Success),
+			border:  lipgloss.Color(b.Palette.Dim),
+			pink:    lipgloss.Color(b.Palette.Accent), // fallback — themes don't have pink
+		}
+	}
+	return viewPal{
+		accent:  lipgloss.Color(draculaPurple),
+		fg:      lipgloss.Color(draculaFg),
+		dim:     lipgloss.Color(draculaComment),
+		selBG:   lipgloss.Color(draculaCurrent),
+		errCol:  lipgloss.Color(draculaRed),
+		success: lipgloss.Color(draculaGreen),
+		border:  lipgloss.Color(draculaComment),
+		pink:    lipgloss.Color(draculaPink),
+	}
+}
 
-	styleSelected = lipgloss.NewStyle().
-			Background(lipgloss.Color(draculaCurrent)).
-			Foreground(lipgloss.Color(draculaPurple)).
-			Bold(true)
-
-	styleNormal = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaFg))
-
-	styleDim = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaComment))
-
-	styleGreen = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaGreen))
-
-	styleRed = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaRed))
-
-	styleCyan = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaCyan))
-
-	styleOrange = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaOrange))
-
-	styleOverlay = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(draculaPink)).
-			Background(lipgloss.Color(draculaBg)).
-			Padding(1, 2)
-
-	styleError = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(draculaRed))
-)
+// panelBand renders a full-width accent-background title band, used as the
+// header inside each pane. Falls back to a plain bold title if no bundle.
+func (m Model) panelBand(title string, innerWidth int) string {
+	p := m.pal()
+	return lipgloss.NewStyle().
+		Background(p.accent).
+		Foreground(p.fg).
+		Bold(true).
+		Width(innerWidth).
+		Align(lipgloss.Center).
+		Render(title)
+}
 
 // View renders the full TUI screen.
 func (m Model) View() string {
@@ -58,8 +67,12 @@ func (m Model) View() string {
 		return "loading..."
 	}
 
-	// Split height: 60% jobs, 40% logs, minus 1 row for the hint bar.
-	topH, botH := splitHeight(m.height-1, 0.6, 6)
+	// Split height: 35% jobs (capped at 12 rows), 65% logs, minus 1 for hint bar.
+	topH, botH := splitHeight(m.height-1, 0.35, 6)
+	if topH > 14 {
+		topH = 14
+		botH = m.height - 1 - topH
+	}
 
 	top := m.viewJobList(m.width, topH)
 	bot := m.viewLogPane(m.width, botH)
@@ -79,31 +92,29 @@ func (m Model) View() string {
 
 // viewJobList renders the top pane showing the list of cron entries.
 func (m Model) viewJobList(width, height int) string {
+	p := m.pal()
 	// Inner width accounts for border (2) and padding.
 	inner := width - 4
 	if inner < 10 {
 		inner = 10
 	}
 
-	// Build header line.
+	// Panel band header spanning full inner width.
 	var headerRight string
 	if m.filtering {
 		headerRight = " " + m.filterInput.View()
 	}
-	title := styleHeader.Render("CRON JOBS")
-	header := title + headerRight
-	header = padRight(header, inner)
+	header := m.panelBand("CRON JOBS"+headerRight, inner)
 
 	// Build rows.
 	var rows []string
 	if len(m.filtered) == 0 {
 		if m.filterInput.Value() != "" {
-			rows = append(rows, styleDim.Render("  no matches"))
+			rows = append(rows, lipgloss.NewStyle().Foreground(p.dim).Render("  no matches"))
 		} else {
-			rows = append(rows, styleDim.Render("  no scheduled jobs"))
+			rows = append(rows, lipgloss.NewStyle().Foreground(p.dim).Render("  no scheduled jobs"))
 		}
 	} else {
-		// Determine visible window.
 		visibleRows := height - 4 // header + border top + border bot + header row
 		if visibleRows < 1 {
 			visibleRows = 1
@@ -118,13 +129,16 @@ func (m Model) viewJobList(width, height int) string {
 
 		for i := start; i < end; i++ {
 			e := m.filtered[i]
-			row := m.formatEntryRow(e, inner)
 			if i == m.selectedIdx {
-				row = styleSelected.Width(inner).Render(row)
+				// `>` indicator + accent highlight
+				indicator := lipgloss.NewStyle().Foreground(p.accent).Bold(true).Render(">")
+				rowText := m.formatEntryRow(e, inner-2, p)
+				row := lipgloss.NewStyle().Foreground(p.accent).Render(rowText)
+				rows = append(rows, indicator+" "+row)
 			} else {
-				row = styleNormal.Render(row)
+				rowText := m.formatEntryRow(e, inner-2, p)
+				rows = append(rows, "  "+lipgloss.NewStyle().Foreground(p.fg).Render(rowText))
 			}
-			rows = append(rows, row)
 		}
 	}
 
@@ -139,25 +153,32 @@ func (m Model) viewJobList(width, height int) string {
 	}
 
 	body := strings.Join(lines, "\n")
-	paneStyle := styleBorder.Width(width - 2).Height(height - 2)
+
+	borderColor := p.border
 	if m.activePane == 0 {
-		paneStyle = paneStyle.BorderForeground(lipgloss.Color(draculaPurple))
+		borderColor = p.accent
 	}
+	paneStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Width(width - 2).
+		Height(height - 2)
 	return paneStyle.Render(body)
 }
 
 // formatEntryRow formats a single entry as a fixed-width row string.
-func (m Model) formatEntryRow(e cron.Entry, width int) string {
+func (m Model) formatEntryRow(e cron.Entry, width int, p viewPal) string {
 	nextStr := ""
 	if t, err := cron.NextRun(e); err == nil {
 		nextStr = cron.FormatRelative(t)
 	} else {
-		nextStr = styleRed.Render("invalid")
+		nextStr = lipgloss.NewStyle().Foreground(p.errCol).Render("invalid")
 	}
 
-	kindStyle := styleCyan
+	// Kind badge color: accent for agent, dim for pipeline.
+	kindStyle := lipgloss.NewStyle().Foreground(p.dim)
 	if e.Kind == "agent" {
-		kindStyle = styleOrange
+		kindStyle = lipgloss.NewStyle().Foreground(p.accent)
 	}
 
 	// Columns: name (30%), schedule (25%), kind (10%), next (rest)
@@ -168,7 +189,7 @@ func (m Model) formatEntryRow(e cron.Entry, width int) string {
 	name := truncate(e.Name, nameW)
 	sched := truncate(e.Schedule, schedW)
 	kind := kindStyle.Render(truncate(e.Kind, kindW))
-	next := styleDim.Render(nextStr)
+	next := lipgloss.NewStyle().Foreground(p.dim).Render(nextStr)
 
 	return fmt.Sprintf("%-*s %-*s %-*s %s",
 		nameW, name,
@@ -180,13 +201,13 @@ func (m Model) formatEntryRow(e cron.Entry, width int) string {
 
 // viewLogPane renders the bottom pane showing recent log output.
 func (m Model) viewLogPane(width, height int) string {
+	p := m.pal()
 	inner := width - 4
 	if inner < 10 {
 		inner = 10
 	}
 
-	title := styleHeader.Render("LOG OUTPUT")
-	header := padRight(title, inner)
+	header := m.panelBand("LOG OUTPUT", inner)
 
 	// Available lines for log content.
 	contentLines := height - 4 // header + 2 borders + header row
@@ -212,14 +233,15 @@ func (m Model) viewLogPane(width, height int) string {
 	}
 
 	var logLines []string
+	dimStyle := lipgloss.NewStyle().Foreground(p.dim)
 	if totalLogs == 0 {
-		logLines = append(logLines, styleDim.Render("  waiting for log output..."))
+		logLines = append(logLines, dimStyle.Render("  waiting for log output..."))
 	} else {
 		slice := m.logBuf[offset:end]
 		for _, l := range slice {
 			l = strings.TrimRight(l, "\n\r")
 			l = truncate(l, inner)
-			logLines = append(logLines, styleDim.Render(l))
+			logLines = append(logLines, dimStyle.Render(l))
 		}
 	}
 
@@ -233,64 +255,89 @@ func (m Model) viewLogPane(width, height int) string {
 	}
 
 	body := strings.Join(lines, "\n")
-	paneStyle := styleBorder.Width(width - 2).Height(height - 2)
+
+	borderColor := p.border
 	if m.activePane == 1 {
-		paneStyle = paneStyle.BorderForeground(lipgloss.Color(draculaPurple))
+		borderColor = p.accent
 	}
+	paneStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Width(width - 2).
+		Height(height - 2)
 	return paneStyle.Render(body)
 }
 
 // viewHintBar renders the single-line hint strip at the bottom.
 func (m Model) viewHintBar(_ int) string {
+	p := m.pal()
+	dimStyle := lipgloss.NewStyle().Foreground(p.dim)
 	var hints string
 	if m.activePane == 0 {
 		if m.filtering {
-			hints = styleDim.Render("[esc] clear filter  [enter] confirm  [tab] logs pane")
+			hints = dimStyle.Render("[esc] clear filter  [enter] confirm  [tab] logs pane")
 		} else {
-			hints = styleDim.Render("[j/k] navigate  [e] edit  [d] delete  [enter/r] run now  [/] filter  [tab] logs  [q] quit")
+			hints = dimStyle.Render("[j/k] navigate  [e] edit  [d] delete  [enter/r] run now  [/] filter  [tab] logs  [q] quit")
 		}
 	} else {
-		hints = styleDim.Render("[j/k] scroll  [tab] jobs pane  [q] quit")
+		hints = dimStyle.Render("[j/k] scroll  [tab] jobs pane  [q] quit")
 	}
 	return hints
 }
 
 // viewEditOverlay renders the edit form overlay.
 func (m Model) viewEditOverlay() string {
+	p := m.pal()
 	ov := m.editOverlay
 	labels := [5]string{"Name", "Schedule", "Kind", "Target", "Timeout"}
 
+	overlayStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(p.pink).
+		Background(lipgloss.Color(draculaBg)).
+		Padding(1, 2)
+
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("EDIT CRON JOB") + "\n\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(p.accent).Bold(true).Render("EDIT CRON JOB") + "\n\n")
 
 	for i, f := range ov.fields {
 		label := labels[i]
 		if i == ov.focusIdx {
-			label = styleGreen.Render("> " + label)
+			label = lipgloss.NewStyle().Foreground(p.success).Render("> " + label)
 		} else {
-			label = styleDim.Render("  " + label)
+			label = lipgloss.NewStyle().Foreground(p.dim).Render("  " + label)
 		}
 		sb.WriteString(fmt.Sprintf("%-20s %s\n", label, f.View()))
 	}
 
 	if ov.errMsg != "" {
-		sb.WriteString("\n" + styleError.Render("Error: "+ov.errMsg))
+		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(p.errCol).Render("Error: "+ov.errMsg))
 	}
 
-	sb.WriteString("\n" + styleDim.Render("[tab] next field  [enter] save  [esc] cancel"))
+	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(p.dim).Render("[tab] next field  [enter] save  [esc] cancel"))
 
-	return styleOverlay.Render(sb.String())
+	return overlayStyle.Render(sb.String())
 }
 
 // viewDeleteConfirm renders the delete confirmation overlay.
 func (m Model) viewDeleteConfirm() string {
+	p := m.pal()
 	name := m.deleteConfirm.entry.Name
+
+	overlayStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(p.pink).
+		Background(lipgloss.Color(draculaBg)).
+		Padding(1, 2)
+
 	prompt := fmt.Sprintf("Delete %q?\n\n%s  %s",
 		name,
-		styleRed.Render("[y] yes"),
-		styleDim.Render("[n/esc] cancel"),
+		lipgloss.NewStyle().Foreground(p.errCol).Render("[y] yes"),
+		lipgloss.NewStyle().Foreground(p.dim).Render("[n/esc] cancel"),
 	)
-	return styleOverlay.Render(styleHeader.Render("DELETE CRON JOB") + "\n\n" + prompt)
+	return overlayStyle.Render(
+		lipgloss.NewStyle().Foreground(p.accent).Bold(true).Render("DELETE CRON JOB")+"\n\n"+prompt,
+	)
 }
 
 // splitHeight divides total rows into top and bottom, applying a ratio and
@@ -318,15 +365,6 @@ func renderOverlay(background, overlayContent string, width, height int) string 
 	)
 }
 
-// padRight pads s to at least n runes wide using spaces.
-func padRight(s string, n int) string {
-	vis := lipgloss.Width(s)
-	if vis >= n {
-		return s
-	}
-	return s + strings.Repeat(" ", n-vis)
-}
-
 // truncate shortens s to at most n runes, appending "…" if truncated.
 func truncate(s string, n int) string {
 	if n <= 0 {
@@ -341,3 +379,4 @@ func truncate(s string, n int) string {
 	}
 	return string(runes[:n-1]) + "…"
 }
+

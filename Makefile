@@ -1,6 +1,6 @@
 BINARY := orcai
 
-.PHONY: build run test clean debug-build debug debug-connect debug-tmux
+.PHONY: build run test clean install debug-build debug debug-connect debug-tmux
 
 all: build run
 
@@ -11,6 +11,13 @@ run: build
 
 build:
 	go build -o bin/$(BINARY) .
+
+install: build
+	go install .
+	@if [ ! -L ~/.local/bin/$(BINARY) ]; then \
+		rm -f ~/.local/bin/$(BINARY); \
+		ln -sf $$(go env GOPATH)/bin/$(BINARY) ~/.local/bin/$(BINARY); \
+	fi
 
 test:
 	go test ./...

@@ -126,7 +126,7 @@ func buildTmuxConf(self string) string {
 	leaderBinding := "bind-key -n C-Space switch-client -T orcai-chord\n"
 
 	// Chord bindings inside the orcai-chord key table.
-	chords := "bind-key -T orcai-chord q     { switch-client -T root ; select-window -t orcai:0 ; send-keys -t orcai:0 C-q }\n" +
+	chords := "bind-key -T orcai-chord q     { switch-client -T root ; switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 C-q }\n" +
 		"bind-key -T orcai-chord d     { switch-client -T root ; detach-client }\n" +
 		"bind-key -T orcai-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
 		"bind-key -T orcai-chord o     { switch-client -T root ; display-popup -E -w 68 -h 24 \"" + self + " ollama\" }\n" +
@@ -151,7 +151,7 @@ func buildTmuxConf(self string) string {
 		"bind-key -T orcai-chord X     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-window } }\n" +
 		"bind-key -T orcai-chord Escape switch-client -T root\n" +
 		// h opens the getting-started help overlay in the switchboard.
-		"bind-key -T orcai-chord h     { switch-client -T root ; select-window -t orcai:0 ; send-keys -t orcai:0 C-h }\n" +
+		"bind-key -T orcai-chord h     { switch-client -T root ; switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 C-h }\n" +
 		// Pressing ctrl+space again exits the chord table without action.
 		"bind-key -T orcai-chord C-Space switch-client -T root\n" +
 		// Explicitly unbind removed chords so stale sessions don't keep them.

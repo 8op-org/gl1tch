@@ -9,11 +9,13 @@ import (
 	"github.com/charmbracelet/log"
 
 	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/themes"
 )
 
 // New creates the cron TUI model, wiring up the scheduler with a LogSink so
 // that all scheduler log output is captured to the in-app log pane.
-func New() (Model, error) {
+// bundle may be nil; in that case the Dracula palette is used as fallback.
+func New(bundle *themes.Bundle) (Model, error) {
 	logCh := make(chan tea.Msg, 256)
 	sink := NewLogSink(logCh)
 	logger := log.NewWithOptions(sink, log.Options{
@@ -30,6 +32,8 @@ func New() (Model, error) {
 
 	m := Model{
 		scheduler:   sched,
+		logger:      logger,
+		bundle:      bundle,
 		entries:     entries,
 		filtered:    entries,
 		logCh:       logCh,
@@ -44,9 +48,11 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg {
 			if err := m.scheduler.Start(context.Background()); err != nil {
-				return logLineMsg{line: "ERROR: failed to start scheduler: " + err.Error()}
+				m.logger.Error("failed to start scheduler", "err", err)
+				return nil
 			}
-			return logLineMsg{line: "INFO: scheduler started"}
+			m.logger.Info("scheduler started")
+			return nil
 		},
 		tick(),
 		listenLogs(m.logCh),

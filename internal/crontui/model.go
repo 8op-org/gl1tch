@@ -5,8 +5,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/log"
 
 	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/themes"
 )
 
 // Dracula palette
@@ -72,6 +74,8 @@ const logBufMax = 500
 // Model is the BubbleTea model for the orcai-cron TUI.
 type Model struct {
 	scheduler *cron.Scheduler
+	logger    *log.Logger    // structured logger wired to the log pane
+	bundle    *themes.Bundle // active theme; nil = Dracula fallback
 	entries   []cron.Entry
 	filtered  []cron.Entry // after fuzzy filter
 	logBuf    []string     // ring buffer, max logBufMax lines

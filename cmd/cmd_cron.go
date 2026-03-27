@@ -14,6 +14,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/cron"
 	crontui "github.com/adam-stokes/orcai/internal/crontui"
 	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/adam-stokes/orcai/internal/themes"
 	robfigcron "github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
 )
@@ -156,7 +157,21 @@ var cronTuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive cron job manager TUI",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, err := crontui.New()
+		// Capture panics so the error is visible in the terminal.
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "cron tui: panic: %v\n", r)
+				os.Exit(2)
+			}
+		}()
+
+		// Load theme registry to pick up the user's active theme.
+		var bundle *themes.Bundle
+		if reg, err := themes.NewRegistry(""); err == nil {
+			bundle = reg.Active()
+		}
+
+		m, err := crontui.New(bundle)
 		if err != nil {
 			return fmt.Errorf("cron tui: %w", err)
 		}
