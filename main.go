@@ -10,7 +10,6 @@ import (
 
 	"github.com/adam-stokes/orcai/cmd"
 	"github.com/adam-stokes/orcai/internal/bootstrap"
-	"github.com/adam-stokes/orcai/internal/chordhelp"
 	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/promptbuilder"
 )
@@ -41,9 +40,6 @@ func main() {
 		case "_reload":
 			bootstrap.WriteReloadMarker() //nolint:errcheck
 			exec.Command("tmux", "detach-client").Run() //nolint:errcheck
-			return
-		case "_help":
-			chordhelp.Run()
 			return
 		case "_jump":
 			jumpwindow.Run()

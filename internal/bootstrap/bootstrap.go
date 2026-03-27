@@ -89,7 +89,7 @@ func buildTmuxConf(self string) string {
 		"set -g window-status-current-format \"\"\n" +
 		fmt.Sprintf("set -g status-left \"#[fg=%s,bold] ORCAI #[default]\"\n", pal.accent) +
 		"set -g status-left-length 20\n" +
-		fmt.Sprintf("set -g status-right \"#[fg=%s] ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc d detach  ^spc r reload  ^spc q   %%H:%%M \"\n", pal.dim) +
+		fmt.Sprintf("set -g status-right \"#[fg=%s] ^spc h help  ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc d detach  ^spc r reload  ^spc q   %%H:%%M \"\n", pal.dim) +
 		"set -g status-right-length 100\n" +
 		"set -g mouse on\n" +
 		"set -g default-terminal \"screen-256color\"\n" +
@@ -126,8 +126,10 @@ func buildTmuxConf(self string) string {
 		"bind-key -T orcai-chord x     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-pane } }\n" +
 		"bind-key -T orcai-chord X     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-window } }\n" +
 		"bind-key -T orcai-chord Escape switch-client -T root\n" +
-		// Pressing ctrl+space again while in chord table shows help immediately.
-		"bind-key -T orcai-chord C-Space { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help\" }\n"
+		// h opens the getting-started help overlay in the switchboard.
+		"bind-key -T orcai-chord h     { switch-client -T root ; select-window -t orcai:0 ; send-keys -t orcai:0 C-h }\n" +
+		// Pressing ctrl+space again exits the chord table without action.
+		"bind-key -T orcai-chord C-Space switch-client -T root\n"
 
 	return base + leaderBinding + chords
 }

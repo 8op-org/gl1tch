@@ -235,6 +235,8 @@ type Model struct {
 	pendingDeletePipeline string
 	agentModalOpen        bool
 	agentModalFocus       int // 0=provider, 1=model, 2=prompt (within modal)
+	helpOpen              bool
+	helpScrollOffset      int
 	registry              *themes.Registry
 	themePickerOpen       bool
 	themePickerCursor     int
@@ -736,6 +738,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleThemePicker(msg)
 	}
 
+	// Help modal.
+	if m.helpOpen {
+		switch key {
+		case "esc", "ctrl+c", "ctrl+h", "q":
+			m.helpOpen = false
+		case "j", "down":
+			m.helpScrollOffset++
+		case "k", "up":
+			if m.helpScrollOffset > 0 {
+				m.helpScrollOffset--
+			}
+		case "pgdown":
+			m.helpScrollOffset += 10
+		case "pgup":
+			if m.helpScrollOffset > 10 {
+				m.helpScrollOffset -= 10
+			} else {
+				m.helpScrollOffset = 0
+			}
+		}
+		return m, nil
+	}
+
 	// Confirm quit when a job is running.
 	if m.confirmQuit {
 		switch key {
@@ -822,6 +847,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	switch key {
+	case "ctrl+h":
+		m.helpOpen = true
+		m.helpScrollOffset = 0
+		return m, nil
+
 	case "ctrl+c", "ctrl+q":
 		m.confirmQuit = true
 		return m, nil
@@ -1569,6 +1599,11 @@ func (m Model) View() string {
 	}
 
 	body := strings.Join(rows, "\n")
+
+	if m.helpOpen {
+		base := body + "\n" + m.viewBottomBar(w)
+		return overlayCenter(base, m.viewHelpModal(w, h), w, h)
+	}
 
 	if m.confirmQuit {
 		base := body + "\n" + m.viewBottomBar(w)
