@@ -274,6 +274,8 @@ type Model struct {
 	inboxDetailOpen         bool
 	inboxDetailIdx    int
 	inboxDetailScroll int
+	// Cron panel
+	cronPanel CronPanel
 }
 
 // New creates a new Switchboard Model, discovering pipelines and providers.
@@ -415,6 +417,12 @@ func (m Model) BuildAgentSection(w int) []string { return m.buildAgentSection(w)
 
 // BuildSignalBoard is an exported wrapper for tests.
 func (m Model) BuildSignalBoard(height, width int) []string { return m.buildSignalBoard(height, width) }
+
+// BuildCronSection is an exported wrapper for tests.
+func (m Model) BuildCronSection(w int) []string { return m.buildCronSection(w) }
+
+// CronPanelFocused returns whether the cron panel is focused — used in tests.
+func (m Model) CronPanelFocused() bool { return m.cronPanel.focused }
 
 // SignalBoardBlinkOn returns the current blink state — used in tests.
 func (m Model) SignalBoardBlinkOn() bool { return m.signalBoard.blinkOn }
@@ -1079,6 +1087,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Cron panel focused — handle cron-specific keys.
+	if m.cronPanel.focused {
+		entries, _ := orcaicron.LoadConfig()
+		switch key {
+		case "m":
+			go ensureCronDaemon()
+			exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
+			return m, nil
+		case "esc":
+			m.cronPanel.focused = false
+			m.launcher.focused = true
+			return m, nil
+		case "j", "down":
+			if m.cronPanel.selectedIdx < len(entries)-1 {
+				m.cronPanel.selectedIdx++
+			}
+			return m, nil
+		case "k", "up":
+			if m.cronPanel.selectedIdx > 0 {
+				m.cronPanel.selectedIdx--
+			}
+			return m, nil
+		}
+	}
+
 	// Global focus shortcuts — p focuses pipelines.
 	switch key {
 	case "p":
@@ -1086,6 +1119,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.agent.focused = false
 		m.feedFocused = false
 		m.signalBoardFocused = false
+		m.cronPanel.focused = false
+		return m, nil
+	case "c":
+		m.launcher.focused = false
+		m.agent.focused = false
+		m.feedFocused = false
+		m.signalBoardFocused = false
+		m.inboxFocused = false
+		m.inboxModel.SetFocused(false)
+		m.cronPanel.focused = true
 		return m, nil
 	}
 
@@ -1100,7 +1143,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "tab":
-		if m.feedFocused {
+		if m.cronPanel.focused {
+			// cron → launcher
+			m.cronPanel.focused = false
+			m.launcher.focused = true
+		} else if m.feedFocused {
 			// feed → launcher
 			m.feedFocused = false
 			m.launcher.focused = true
@@ -2552,7 +2599,17 @@ func (m Model) viewLeftColumn(height, width int) string {
 		lines = append(lines, "")
 		remaining--
 		if remaining >= 3 {
-			lines = append(lines, m.buildInboxSection(width, remaining)...)
+			// Reserve some rows for the cron section if there's enough room.
+			cronRows := 4 // header + 1 row + footer + spacing
+			inboxRows := remaining
+			if remaining >= cronRows+4 {
+				inboxRows = remaining - cronRows - 1 // 1 for blank separator
+			}
+			lines = append(lines, m.buildInboxSection(width, inboxRows)...)
+			if remaining > inboxRows+1 {
+				lines = append(lines, "")
+				lines = append(lines, m.buildCronSection(width)...)
+			}
 		}
 	}
 
@@ -2996,6 +3053,13 @@ func (m Model) viewBottomBar(width int) string {
 			hint("tab", "focus"),
 			hint("i", "inbox"),
 		}
+	case m.cronPanel.focused:
+		parts = []string{
+			hint("m", "manage"),
+			hint("↑↓", "nav"),
+			hint("tab", "focus"),
+			hint("esc", "unfocus"),
+		}
 	default:
 		parts = []string{
 			hint("enter", "launch"),
@@ -3005,6 +3069,7 @@ func (m Model) viewBottomBar(width int) string {
 			hint("a", "agent"),
 			hint("s", "signals"),
 			hint("f", "feed"),
+			hint("c", "cron"),
 			}
 	}
 

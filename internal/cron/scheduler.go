@@ -76,6 +76,12 @@ func (s *Scheduler) Entries() []Entry {
 	return cp
 }
 
+// RunNow executes entry immediately in a goroutine, outside its schedule.
+// Output is written to the same logger as scheduled runs.
+func (s *Scheduler) RunNow(entry Entry) {
+	go s.runEntry(entry)
+}
+
 // loadAndRegister reads the config file and registers all entries with the
 // underlying cron instance. It replaces any previously registered entries.
 func (s *Scheduler) loadAndRegister() error {

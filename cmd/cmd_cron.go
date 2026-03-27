@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/adam-stokes/orcai/internal/cron"
+	crontui "github.com/adam-stokes/orcai/internal/crontui"
 	"github.com/adam-stokes/orcai/internal/store"
 	robfigcron "github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
@@ -23,6 +25,7 @@ func init() {
 	cronCmd.AddCommand(cronListCmd)
 	cronCmd.AddCommand(cronLogsCmd)
 	cronCmd.AddCommand(cronRunCmd)
+	cronCmd.AddCommand(cronTuiCmd)
 
 	cronStartCmd.Flags().Bool("force", false, "kill an existing cron session before starting")
 }
@@ -64,11 +67,12 @@ var cronStartCmd = &cobra.Command{
 		}
 		self = filepath.Clean(self)
 
-		// Create the new session running the internal daemon command.
+		// Create the new session running the TUI (falls back to bare daemon
+		// if invoked in a non-interactive/CI context via "cron run").
 		newArgs := []string{
 			"new-session", "-d", "-s", "orcai-cron",
 			"-x", "220", "-y", "50",
-			self + " cron run",
+			self + " cron tui",
 		}
 		if err := exec.Command("tmux", newArgs...).Run(); err != nil {
 			return fmt.Errorf("cron: start session: %w", err)
@@ -144,6 +148,21 @@ var cronLogsCmd = &cobra.Command{
 			return fmt.Errorf("cron: tail logs: %w", err)
 		}
 		return nil
+	},
+}
+
+// cronTuiCmd runs the interactive BubbleTea TUI for orcai-cron.
+var cronTuiCmd = &cobra.Command{
+	Use:   "tui",
+	Short: "Launch the interactive cron job manager TUI",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		m, err := crontui.New()
+		if err != nil {
+			return fmt.Errorf("cron tui: %w", err)
+		}
+		p := tea.NewProgram(m, tea.WithAltScreen())
+		_, err = p.Run()
+		return err
 	},
 }
 
