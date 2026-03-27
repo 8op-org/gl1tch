@@ -143,8 +143,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					exec.Command("tmux", "detach-client").Run()            //nolint:errcheck
 				}
 				return m, tea.Quit
-			case "n", "esc":
-				m.state = stateHelp
+			case "n", "esc", "ctrl+c":
+				return m, tea.Quit
 			}
 		}
 	}
