@@ -567,7 +567,7 @@ func TestFeedScrollIndicator_DownWhenContentBelow(t *testing.T) {
 // ── Feed navigation (tasks 6.1–6.4) ──────────────────────────────────────────
 
 // TestTabCycle_FullCycle verifies the full Tab focus cycle:
-// launcher → agent → signalBoard → feed → launcher
+// launcher → agent → signalBoard → inbox → feed → launcher
 func TestTabCycle_FullCycle(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"alpha", "beta"})
 	// Start: launcher focused (default).
@@ -586,26 +586,33 @@ func TestTabCycle_FullCycle(t *testing.T) {
 		t.Error("after 2 Tabs: expected signalBoard focused")
 	}
 
-	// Tab 3: signalBoard → feed
+	// Tab 3: signalBoard → inbox (new step in cycle)
 	m4, _ := m3m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m4m := m4.(switchboard.Model)
-	if !m4m.FeedFocused() {
-		t.Error("after 3 Tabs: expected feed focused")
+	if m4m.FeedFocused() || m4m.SignalBoardFocused() {
+		t.Error("after 3 Tabs: expected inbox focused, got feed or signalBoard")
 	}
 
-	// Tab 4: feed → launcher — add entries first so feedCursor could move if broken
-	m4m = m4m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
+	// Tab 4: inbox → feed
 	m5, _ := m4m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m5m := m5.(switchboard.Model)
-	if m5m.FeedFocused() || m5m.SignalBoardFocused() {
-		t.Error("after 4 Tabs: expected launcher focused")
+	if !m5m.FeedFocused() {
+		t.Error("after 4 Tabs: expected feed focused")
+	}
+
+	// Tab 5: feed → launcher — add entries first so feedCursor could move if broken
+	m5m = m5m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
+	m6, _ := m5m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m6m := m6.(switchboard.Model)
+	if m6m.FeedFocused() || m6m.SignalBoardFocused() {
+		t.Error("after 5 Tabs: expected launcher focused")
 	}
 	// j should move launcher cursor now, not feedCursor
-	cursorBefore := m5m.FeedCursor()
-	m6, _ := m5m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m6m := m6.(switchboard.Model)
-	if m6m.FeedCursor() != cursorBefore {
-		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d", cursorBefore, m6m.FeedCursor())
+	cursorBefore := m6m.FeedCursor()
+	m7, _ := m6m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m7m := m7.(switchboard.Model)
+	if m7m.FeedCursor() != cursorBefore {
+		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d", cursorBefore, m7m.FeedCursor())
 	}
 }
 

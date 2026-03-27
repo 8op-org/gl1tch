@@ -13,6 +13,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/promptbuilder"
+	"github.com/adam-stokes/orcai/internal/store"
 )
 
 func init() {
@@ -112,7 +113,17 @@ var pipelineRunCmd = &cobra.Command{
 			}
 		}
 
-		result, err := pipeline.Run(cmd.Context(), p, mgr, "", pipeline.NoopPublisher{})
+		// Open the result store so this run is recorded in the inbox.
+		// A failure to open the store is non-fatal — the pipeline still runs.
+		var storeOpts []pipeline.RunOption
+		if s, serr := store.Open(); serr == nil {
+			defer s.Close()
+			storeOpts = append(storeOpts, pipeline.WithRunStore(s))
+		} else {
+			fmt.Fprintf(os.Stderr, "pipeline: store unavailable: %v\n", serr)
+		}
+
+		result, err := pipeline.Run(cmd.Context(), p, mgr, "", pipeline.NoopPublisher{}, storeOpts...)
 		if err != nil {
 			return err
 		}

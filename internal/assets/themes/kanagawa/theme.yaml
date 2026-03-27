@@ -28,6 +28,9 @@ header_style:
     activity_feed:
       accent: "#7e9cd8"
       text:   "#1f1f28"
+    inbox:
+      accent: "#7e9cd8"
+      text:   "#1f1f28"
     modal:
       accent: "#7e9cd8"
       text:   "#1f1f28"

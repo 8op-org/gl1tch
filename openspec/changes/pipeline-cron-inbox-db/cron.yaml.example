@@ -1,0 +1,47 @@
+# ~/.config/orcai/cron.yaml — ORCAI Cron Schedule Configuration
+#
+# Each entry schedules a pipeline or agent to run on a recurring basis.
+# Start the daemon with: orcai cron start
+# View all entries:      orcai cron list
+# Stop the daemon:       orcai cron stop
+# Tail daemon logs:      orcai cron logs
+#
+# Schedule syntax: standard 5-field cron (minute hour dom month dow)
+#   Examples:
+#     "0 * * * *"   — every hour at :00
+#     "*/15 * * * *" — every 15 minutes
+#     "0 9 * * 1-5" — 09:00 Mon–Fri
+#
+# store.retention (optional) — result pruning policy:
+#   max_age_days: 30    # delete rows older than 30 days
+#   max_rows: 1000      # keep at most 1000 rows
+
+# ── Example entries ───────────────────────────────────────────────────────────
+
+- name: daily-code-review
+  schedule: "0 9 * * 1-5"        # 09:00 Mon–Fri
+  kind: pipeline
+  target: ~/.config/orcai/pipelines/code-review.yaml
+  args:
+    model: claude-sonnet-4-6
+
+- name: hourly-digest
+  schedule: "0 * * * *"           # top of every hour
+  kind: pipeline
+  target: ~/.config/orcai/pipelines/github-digest.yaml
+  timeout: 10m                    # cancel if it runs longer than 10 minutes
+
+- name: nightly-agent
+  schedule: "0 2 * * *"           # 02:00 every night
+  kind: agent
+  target: my-research-agent
+  args:
+    topic: "recent Go releases"
+
+# ── Store retention ───────────────────────────────────────────────────────────
+# Uncomment to override defaults (30 days / 1000 rows):
+#
+# store:
+#   retention:
+#     max_age_days: 60
+#     max_rows: 2000

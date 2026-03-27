@@ -23,9 +23,11 @@ import (
 	"github.com/muesli/ansi"
 	"github.com/muesli/reflow/truncate"
 
+	"github.com/adam-stokes/orcai/internal/inbox"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/styles"
 	"github.com/adam-stokes/orcai/internal/themes"
 )
@@ -249,10 +251,23 @@ type Model struct {
 	dirPickerCtx        string         // "agent" or "pipeline"
 	pendingPipelineName string         // pipeline waiting for CWD selection
 	pendingPipelineYAML string         // YAML path for pendingPipelineName
+	// Inbox panel
+	inboxModel              inbox.Model
+	inboxFocused            bool
+	store                   *store.Store
+	inboxDetailOpen         bool
+	inboxDetailIdx          int
+	inboxDetailScroll       int
+	inboxDetailConfirmDelete bool
 }
 
 // New creates a new Switchboard Model, discovering pipelines and providers.
-func New() Model {
+func New() Model { return NewWithStore(nil) }
+
+// NewWithStore creates a Switchboard Model with an attached result store.
+// The store is passed to the Inbox panel for polling run results.
+// Passing nil is valid; the Inbox will render an empty state.
+func NewWithStore(s *store.Store) Model {
 	ta := textarea.New()
 	ta.Placeholder = "Enter prompt… (ctrl+s to submit)"
 	ta.CharLimit = 4096
@@ -275,12 +290,15 @@ func New() Model {
 		activeJobs:  make(map[string]*jobHandle),
 		launchCWD:   cwd,
 		agentCWD:    cwd,
+		inboxModel:  inbox.New(s, nil), // bundle set after registry loads
+		store:       s,
 	}
 
 	// Initialize theme registry from user themes dir.
 	userThemesDir := filepath.Join(os.Getenv("HOME"), ".config", "orcai", "themes")
 	if reg, err := themes.NewRegistry(userThemesDir); err == nil {
 		m.registry = reg
+		m.inboxModel.SetTheme(reg.Active())
 	}
 
 	return m
@@ -515,8 +533,8 @@ func (m Model) resolveModalColors() modalColors {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-// Init starts the tick command.
-func (m Model) Init() tea.Cmd { return tickCmd() }
+// Init starts the tick command and the inbox poll.
+func (m Model) Init() tea.Cmd { return tea.Batch(tickCmd(), m.inboxModel.Init()) }
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -663,6 +681,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		leftW := m.leftColWidth()
 		m.agent.prompt.SetWidth(max(leftW-4, 10))
+		m.inboxModel.SetSize(leftW, msg.Height)
 		m.clampFeedScroll()
 		return m, nil
 
@@ -793,10 +812,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// These keys always go through handleKey regardless of which panel is focused.
+		switch msg.String() {
+		case "tab", "ctrl+c", "ctrl+q":
+			return m.handleKey(msg)
+		}
+		// When any global overlay is active, all keys must go through handleKey
+		// so ESC / y / n can dismiss it regardless of which panel is focused.
+		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePickerOpen || m.dirPickerOpen || m.confirmDelete {
+			return m.handleKey(msg)
+		}
+		// Inbox captures all other keys when focused, but the detail overlay
+		// takes priority and routes through handleKey so it can intercept keys.
+		if m.inboxFocused {
+			if m.inboxDetailOpen {
+				return m.handleKey(msg)
+			}
+			// Check for enter to open the detail overlay.
+			if msg.String() == "enter" {
+				idx := m.inboxModel.SelectedIndex()
+				runs := m.inboxModel.Runs()
+				if len(runs) > 0 && idx >= 0 && idx < len(runs) {
+					m.inboxDetailOpen = true
+					m.inboxDetailIdx = idx
+					m.inboxDetailScroll = 0
+					m.inboxDetailConfirmDelete = false
+				}
+				return m, nil
+			}
+			var inboxCmd tea.Cmd
+			m.inboxModel, inboxCmd = m.inboxModel.Update(msg)
+			return m, inboxCmd
+		}
 		return m.handleKey(msg)
+
+	case inbox.RunCompletedMsg:
+		// Immediate inbox refresh when a run completes in-process.
+		var inboxCmd tea.Cmd
+		m.inboxModel, inboxCmd = m.inboxModel.Update(msg)
+		return m, inboxCmd
 	}
 
-	return m, nil
+	// Forward all other messages to the inbox model (poll ticks, etc.).
+	var inboxCmd tea.Cmd
+	m.inboxModel, inboxCmd = m.inboxModel.Update(msg)
+
+	return m, inboxCmd
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
@@ -833,6 +894,68 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			} else {
 				m.helpScrollOffset = 0
 			}
+		}
+		return m, nil
+	}
+
+	// Inbox detail overlay — capture all keys when open.
+	if m.inboxDetailOpen {
+		runs := m.inboxModel.Runs()
+		switch key {
+		case "q", "esc":
+			m.inboxDetailOpen = false
+			m.inboxDetailConfirmDelete = false
+		case "n":
+			m.inboxDetailConfirmDelete = false
+			if len(runs) > 0 {
+				m.inboxDetailIdx = (m.inboxDetailIdx + 1) % len(runs)
+				m.inboxDetailScroll = 0
+			}
+		case "p":
+			m.inboxDetailConfirmDelete = false
+			if len(runs) > 0 {
+				m.inboxDetailIdx = (m.inboxDetailIdx - 1 + len(runs)) % len(runs)
+				m.inboxDetailScroll = 0
+			}
+		case "j", "down":
+			m.inboxDetailScroll++
+		case "k", "up":
+			if m.inboxDetailScroll > 0 {
+				m.inboxDetailScroll--
+			}
+		case "pgup", "[":
+			if m.inboxDetailScroll > 10 {
+				m.inboxDetailScroll -= 10
+			} else {
+				m.inboxDetailScroll = 0
+			}
+		case "pgdown", "]":
+			m.inboxDetailScroll += 10
+		case "r":
+			m.inboxDetailConfirmDelete = false
+			if len(runs) > 0 {
+				run := runs[m.inboxDetailIdx]
+				return m, func() tea.Msg {
+					return inbox.RerunMsg{Kind: run.Kind, Target: run.Name}
+				}
+			}
+		case "d":
+			if !m.inboxDetailConfirmDelete {
+				m.inboxDetailConfirmDelete = true
+			} else {
+				// Second d — confirmed delete.
+				m.inboxDetailConfirmDelete = false
+				if len(runs) > 0 && m.store != nil {
+					runID := runs[m.inboxDetailIdx].ID
+					_ = m.store.DeleteRun(runID)
+				}
+				m.inboxDetailOpen = false
+				var inboxCmd tea.Cmd
+				m.inboxModel, inboxCmd = m.inboxModel.Update(inbox.RunCompletedMsg{})
+				return m, inboxCmd
+			}
+		default:
+			m.inboxDetailConfirmDelete = false
 		}
 		return m, nil
 	}
@@ -937,12 +1060,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			// feed → launcher
 			m.feedFocused = false
 			m.launcher.focused = true
-		} else if m.signalBoardFocused {
-			// signalBoard → feed
-			m.signalBoardFocused = false
-			m.signalBoard.clearSearch()
+		} else if m.inboxFocused {
+			// inbox → feed
+			m.inboxFocused = false
+			m.inboxModel.SetFocused(false)
 			m.feedFocused = true
 			m.feedCursor = 0
+		} else if m.signalBoardFocused {
+			// signalBoard → inbox
+			m.signalBoardFocused = false
+			m.signalBoard.clearSearch()
+			m.inboxFocused = true
+			m.inboxModel.SetFocused(true)
 		} else if m.agent.focused {
 			// agent → signalBoard
 			m.agent.focused = false
@@ -977,6 +1106,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.agent.focused = false
 		m.feedFocused = false
 		m.signalBoardFocused = true
+		m.inboxFocused = false
+		m.inboxModel.SetFocused(false)
+		return m, nil
+
+	case "i":
+		m.launcher.focused = false
+		m.agent.focused = false
+		m.feedFocused = false
+		m.signalBoardFocused = false
+		m.inboxFocused = true
+		m.inboxModel.SetFocused(true)
 		return m, nil
 
 	case "r":
@@ -1769,6 +1909,12 @@ func (m Model) View() string {
 		return overlayCenter(base, content, w, h)
 	}
 
+	// Inbox detail overlay — full-screen detail view for a run result.
+	if m.inboxDetailOpen && len(m.inboxModel.Runs()) > 0 {
+		base := body + "\n" + m.viewBottomBar(w)
+		return overlayCenter(base, m.viewInboxDetail(w, h), w, h)
+	}
+
 	return body + "\n" + m.viewBottomBar(w)
 }
 
@@ -2074,7 +2220,7 @@ func (m Model) leftColWidth() int {
 	return lw
 }
 
-// viewLeftColumn renders the left column: banner + launcher + agent sections.
+// viewLeftColumn renders the left column: banner + launcher + agent + inbox sections.
 func (m Model) viewLeftColumn(height, width int) string {
 	var lines []string
 
@@ -2086,6 +2232,16 @@ func (m Model) viewLeftColumn(height, width int) string {
 	lines = append(lines, "")
 
 	lines = append(lines, m.buildAgentSection(width)...)
+
+	// Inbox panel takes any remaining space (min 4 rows to be useful).
+	remaining := height - len(lines)
+	if remaining >= 4 {
+		lines = append(lines, "")
+		remaining--
+		if remaining >= 3 {
+			lines = append(lines, m.buildInboxSection(width, remaining)...)
+		}
+	}
 
 	for len(lines) < height {
 		lines = append(lines, "")
@@ -2209,6 +2365,79 @@ func (m Model) buildAgentSection(w int) []string {
 				content := "  " + pal.Dim + label + aRst
 				rows = append(rows, boxRow(content, w, borderColor))
 			}
+		}
+	}
+
+	rows = append(rows, boxBot(w, borderColor))
+	return rows
+}
+
+// buildInboxSection renders the Inbox panel using the same ANSI box style as
+// the Pipelines and Agent Runner panels. height is the maximum number of rows
+// the section may occupy (including header and bottom border).
+func (m Model) buildInboxSection(w, height int) []string {
+	pal := m.ansiPalette()
+	borderColor := pal.Border
+	if m.inboxFocused {
+		borderColor = pal.Accent
+	}
+
+	var rows []string
+	if sprite := PanelHeader(m.activeBundle(), "inbox", w); sprite != nil {
+		rows = append(rows, sprite...)
+	} else {
+		rows = append(rows, boxTop(w, RenderHeader("inbox"), borderColor, pal.Accent))
+	}
+
+	runs := m.inboxModel.Runs()
+	maxRows := height - 2 // reserve top + bottom border
+	if maxRows < 1 {
+		maxRows = 1
+	}
+
+	if len(runs) == 0 {
+		rows = append(rows, boxRow(pal.Dim+"  (empty)"+aRst, w, borderColor))
+	} else {
+		sel := m.inboxModel.SelectedIndex()
+		shown := 0
+		for i, run := range runs {
+			if shown >= maxRows {
+				break
+			}
+			var dot string
+			switch {
+			case run.ExitStatus == nil:
+				dot = pal.Accent + "◉" + aRst
+			case *run.ExitStatus == 0:
+				dot = aGrn + "●" + aRst
+			default:
+				dot = aRed + "●" + aRst
+			}
+			ts := time.UnixMilli(run.StartedAt).Format("1/2 3:04 PM")
+			tsVis := len(ts) + 1 // +1 for space separator
+			maxNameLen := max(w-7-tsVis, 1)
+			name := run.Name
+			if len(name) > maxNameLen {
+				name = name[:maxNameLen-1] + "…"
+			}
+			// Pad name so timestamp is right-aligned inside the box.
+			inner := w - 2
+			var prefixVis int
+			if i == sel && m.inboxFocused {
+				prefixVis = 2 + 1 + 1 + len(name) // "> ● name"
+			} else {
+				prefixVis = 2 + 1 + 1 + len(name) // "  ● name"
+			}
+			pad := max(inner-prefixVis-tsVis, 0)
+			dimTS := pal.Dim + strings.Repeat(" ", pad) + ts + aRst
+			var content string
+			if i == sel && m.inboxFocused {
+				content = pal.Accent + "> " + aRst + dot + " " + pal.FG + name + aRst + dimTS
+			} else {
+				content = "  " + dot + " " + pal.Dim + name + aRst + dimTS
+			}
+			rows = append(rows, boxRow(content, w, borderColor))
+			shown++
 		}
 	}
 
@@ -2446,7 +2675,16 @@ func (m Model) viewBottomBar(width int) string {
 			hint("d", "delete"),
 			hint("↑↓", "nav"),
 			hint("tab", "focus"),
-			}
+		}
+	case m.inboxFocused:
+		parts = []string{
+			hint("enter", "open"),
+			hint("d", "delete"),
+			hint("r", "re-run"),
+			hint("↑↓", "nav"),
+			hint("tab", "focus"),
+			hint("i", "inbox"),
+		}
 	default:
 		parts = []string{
 			hint("enter", "launch"),
@@ -2650,10 +2888,17 @@ func hexToRGBFromStyles(hex string) (uint8, uint8, uint8) {
 // ── Run ───────────────────────────────────────────────────────────────────────
 
 // Run starts the Switchboard as a full-screen BubbleTea program.
+// It opens the result store and passes it to the model so the Inbox panel
+// can display recorded pipeline and agent run history.
 func Run() {
-	p := tea.NewProgram(New(), tea.WithAltScreen())
+	s, _ := store.Open() // nil-safe — inbox renders empty state on failure
+	m := NewWithStore(s)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("switchboard error: %v\n", err)
+	}
+	if s != nil {
+		_ = s.Close()
 	}
 }
 

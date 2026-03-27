@@ -12,7 +12,22 @@ import (
 	"time"
 
 	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/adam-stokes/orcai/internal/store"
 )
+
+// RunOption configures a pipeline Run call.
+type RunOption func(*runConfig)
+
+type runConfig struct {
+	store *store.Store
+}
+
+// WithRunStore attaches a result store to the run so results are persisted.
+// The store receives a RecordRunStart call before execution and
+// RecordRunComplete after, regardless of success or failure.
+func WithRunStore(s *store.Store) RunOption {
+	return func(c *runConfig) { c.store = s }
+}
 
 // StepStatusLineFormat is the format string for structured step-status log lines.
 // The switchboard log-watcher parses lines matching this pattern.
@@ -48,20 +63,51 @@ type stepResult struct {
 // Run executes a pipeline against the given plugin manager.
 // userInput is the initial value injected for the first input step.
 // publisher receives lifecycle events; pass NoopPublisher{} when not needed.
+// Optional RunOption values (e.g. WithRunStore) configure additional behaviour.
 // Returns the final output string (last plugin step output).
-func Run(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher) (string, error) {
+func Run(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher, opts ...RunOption) (string, error) {
 	if publisher == nil {
 		publisher = NoopPublisher{}
 	}
+
+	cfg := &runConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
+
+	// Record run start in the store (nil-safe).
+	var runID int64
+	if cfg.store != nil {
+		id, err := cfg.store.RecordRunStart("pipeline", p.Name)
+		if err == nil {
+			runID = id
+		}
+	}
+
+	var result string
+	var runErr error
 
 	// Handle legacy sequential pipeline (no Needs used) plus input/output step types.
 	// If none of the steps has Needs, Retry, ForEach, or builtin types, fall through
 	// to the legacy runner for full backwards compatibility.
 	if isLegacyPipeline(p) {
-		return runLegacy(ctx, p, mgr, userInput, publisher)
+		result, runErr = runLegacy(ctx, p, mgr, userInput, publisher, cfg.store)
+	} else {
+		result, runErr = runDAG(ctx, p, mgr, userInput, publisher, cfg.store)
 	}
 
-	return runDAG(ctx, p, mgr, userInput, publisher)
+	// Record completion in the store (nil-safe).
+	if cfg.store != nil && runID > 0 {
+		exitStatus := 0
+		stderr := ""
+		if runErr != nil {
+			exitStatus = 1
+			stderr = runErr.Error()
+		}
+		_ = cfg.store.RecordRunComplete(runID, exitStatus, result, stderr)
+	}
+
+	return result, runErr
 }
 
 // isLegacyPipeline returns true if none of the steps use DAG-only features,
@@ -84,8 +130,8 @@ func isLegacyPipeline(p *Pipeline) bool {
 
 // runLegacy is the original sequential runner kept for backwards compatibility.
 // It handles "input"/"output" step types and condition branches.
-func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher) (string, error) {
-	ec := NewExecutionContext()
+func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher, s *store.Store) (string, error) {
+	ec := NewExecutionContext(WithStore(s))
 
 	// Expose the process working directory so pipeline steps can use {{cwd}}.
 	if cwd, err := os.Getwd(); err == nil {
@@ -169,7 +215,7 @@ func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput 
 
 // runDAG executes a pipeline using the DAG execution engine with full parallelism,
 // retry, on_failure routing, and for_each expansion.
-func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher) (string, error) {
+func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher, s *store.Store) (string, error) {
 	_ = publisher
 
 	maxParallel := p.MaxParallel
@@ -190,7 +236,7 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput str
 	}
 
 	// Set up shared execution context.
-	ec := NewExecutionContext()
+	ec := NewExecutionContext(WithStore(s))
 	// Expose the process working directory so pipeline steps can use {{cwd}}.
 	if cwd, err := os.Getwd(); err == nil {
 		ec.Set("cwd", cwd)
@@ -660,6 +706,11 @@ func resolveExecutor(step *Step, args map[string]any, snap map[string]any, ec *E
 	}
 	if typeName == "" {
 		typeName = step.Plugin
+	}
+
+	// db is a built-in step type for querying/writing the result store.
+	if typeName == "db" {
+		return &dbExecutor{ec: ec}, nil
 	}
 
 	// Check builtin registry first.

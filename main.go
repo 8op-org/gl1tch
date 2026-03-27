@@ -45,7 +45,7 @@ func main() {
 			jumpwindow.Run()
 			return
 		case "bridge", "git", "weather", "code", "new", "kill", "help", "pipeline", "ollama", "_opsx", "completion",
-			"sysop", "picker", "welcome", "config":
+			"sysop", "picker", "welcome", "config", "cron":
 			cmd.Execute()
 			return
 		default:

@@ -15,6 +15,7 @@ var panelTitles = map[string]string{
 	"agent_runner":  "AGENT RUNNER",
 	"signal_board":  "SIGNAL BOARD",
 	"activity_feed": "ACTIVITY FEED",
+	"inbox":         "INBOX",
 }
 
 // spriteWidth returns the visual width of the widest line in ans bytes,

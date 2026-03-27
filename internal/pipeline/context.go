@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/adam-stokes/orcai/internal/store"
 )
 
 // ExecutionContext is the shared state passed between pipeline steps.
@@ -12,12 +14,29 @@ import (
 type ExecutionContext struct {
 	mu   sync.RWMutex
 	data map[string]any
+	db   *store.Store
 }
 
-// NewExecutionContext returns an empty ExecutionContext.
-func NewExecutionContext() *ExecutionContext {
-	return &ExecutionContext{data: make(map[string]any)}
+// ExecutionContextOption configures an ExecutionContext at construction time.
+type ExecutionContextOption func(*ExecutionContext)
+
+// WithStore attaches a result store to the ExecutionContext, making it
+// available to db steps via ec.DB().
+func WithStore(s *store.Store) ExecutionContextOption {
+	return func(ec *ExecutionContext) { ec.db = s }
 }
+
+// NewExecutionContext returns an empty ExecutionContext with optional configuration.
+func NewExecutionContext(opts ...ExecutionContextOption) *ExecutionContext {
+	ec := &ExecutionContext{data: make(map[string]any)}
+	for _, opt := range opts {
+		opt(ec)
+	}
+	return ec
+}
+
+// DB returns the attached result store, or nil if none was configured.
+func (c *ExecutionContext) DB() *store.Store { return c.db }
 
 // Get retrieves the value at the dot-separated path. Returns (nil, false) if
 // any segment of the path is missing or not a map.
