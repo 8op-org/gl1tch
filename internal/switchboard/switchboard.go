@@ -84,6 +84,7 @@ type feedEntry struct {
 	ts         time.Time
 	lines      []string
 	steps      []StepInfo
+	cwd        string // working directory the job runs in, shown in feed and signal board
 	tmuxWindow string // fully-qualified target "session:orcai-<feedID>", empty if no window
 	logFile    string // /tmp/orcai-<feedID>.log
 	doneFile   string // non-empty for window-mode jobs; written by the shell when the command exits
@@ -1348,6 +1349,7 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 		title:  "pipeline: " + name,
 		status: FeedRunning,
 		ts:     time.Now(),
+		cwd:    cwd,
 	}
 	// Load pipeline YAML to populate the initial step list.
 	if f, err := os.Open(yamlPath); err == nil {
@@ -1423,11 +1425,25 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	}
 
 	feedID := fmt.Sprintf("agent-%d", time.Now().UnixNano())
+
+	// Resolve CWD before creating the entry so it can be displayed immediately.
+	cwd := m.agentCWD
+	if cwd == "" {
+		cwd = m.launchCWD
+	}
+	// If the selected CWD is inside a git repo, create (or reuse) a worktree
+	// so the agent session has an isolated branch to work on.
+	if worktreePath, _ := picker.GetOrCreateWorktreeFrom(cwd, feedID); worktreePath != "" {
+		picker.CopyDotEnv(cwd, worktreePath)
+		cwd = worktreePath
+	}
+
 	entry := feedEntry{
 		id:     feedID,
 		title:  title,
 		status: FeedRunning,
 		ts:     time.Now(),
+		cwd:    cwd,
 	}
 	m.feed = append([]feedEntry{entry}, m.feed...)
 	if len(m.feed) > 200 {
@@ -1435,21 +1451,6 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	}
 	m.feedSelected = 0
 	m.feedScrollOffset = 0
-
-	// Agent runs in-process; window shows live output via tail.
-	// Pass agentCWD as the tmux window start directory so the tail window
-	// opens in the selected project directory.
-	cwd := m.agentCWD
-	if cwd == "" {
-		cwd = m.launchCWD
-	}
-
-	// If the selected CWD is inside a git repo, create (or reuse) a worktree
-	// so the agent session has an isolated branch to work on.
-	if worktreePath, _ := picker.GetOrCreateWorktreeFrom(cwd, feedID); worktreePath != "" {
-		picker.CopyDotEnv(cwd, worktreePath)
-		cwd = worktreePath
-	}
 
 	windowName, logFile, _ := createJobWindow(feedID, "", title, cwd)
 	entry.tmuxWindow = windowName
@@ -2221,6 +2222,16 @@ func (m Model) viewActivityFeed(height, width int) string {
 				pal.Dim, ts, aRst,
 				pal.Accent+entry.title+aRst)
 			appendRow(&allLines, titleLine)
+
+			// Show the working directory below the title if set.
+			if entry.cwd != "" {
+				home, _ := os.UserHomeDir()
+				cwdDisplay := entry.cwd
+				if home != "" && strings.HasPrefix(cwdDisplay, home) {
+					cwdDisplay = "~" + cwdDisplay[len(home):]
+				}
+				appendRow(&allLines, fmt.Sprintf("  %s  %s%s", pal.Dim, cwdDisplay, aRst))
+			}
 
 			// Render per-step status badges if this entry has steps.
 			if len(entry.steps) > 0 {
