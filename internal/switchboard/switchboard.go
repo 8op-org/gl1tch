@@ -2774,10 +2774,6 @@ func (m Model) leftColWidth() int {
 func (m Model) viewLeftColumn(height, width int) string {
 	var lines []string
 
-	banner := m.buildBanner(width)
-	lines = append(lines, strings.Split(banner, "\n")...)
-	lines = append(lines, "")
-
 	launcherLines := m.buildLauncherSection(width)
 	lines = append(lines, launcherLines...)
 	lines = append(lines, "")
@@ -2833,34 +2829,28 @@ func (m Model) buildBanner(w int) string {
 }
 
 // viewTopBar renders a full-terminal-width header bar with the ORCAI title
-// centered. Colors are drawn from the active bundle's StatusBar field when
-// available; palette bg/fg are used as fallback.
+// centered. Uses theme accent as background (matching panel headers) and the
+// theme BG color for text. Respects the translations.KeySwitchboardHeader key.
 func (m Model) viewTopBar(w int) string {
 	if w <= 0 {
 		w = 120
 	}
 
-	title := "✦ ORCAI — ABBS ✦"
+	title := "░▒▓ ORCAI — ABBS Switchboard ▓▒░"
+	if p := translations.GlobalProvider(); p != nil {
+		title = p.T(translations.KeySwitchboardHeader, title)
+	}
 
-	// Dracula-theme hardcoded fallbacks.
-	bgColor := "#282a36"
-	fgColor := "#f8f8f2"
+	// Accent as background, BG color as text — same as panel header title rows.
+	bgColor := "#bd93f9" // Dracula purple fallback
+	fgColor := "#282a36" // Dracula bg fallback
 
 	if b := m.activeBundle(); b != nil {
-		// Prefer StatusBar-specific colors; fall back to palette colors.
-		if resolved := b.ResolveRef(b.StatusBar.BG); resolved != "" {
-			bgColor = resolved
-		} else if b.Palette.BG != "" {
-			bgColor = b.Palette.BG
+		if b.Palette.Accent != "" {
+			bgColor = b.Palette.Accent
 		}
-		if resolved := b.ResolveRef(b.StatusBar.FG); resolved != "" {
-			fgColor = resolved
-		} else if b.Palette.FG != "" {
-			fgColor = b.Palette.FG
-		}
-		// Use StatusBar.Format as title text if set and non-empty.
-		if b.StatusBar.Format != "" {
-			title = b.StatusBar.Format
+		if b.Palette.BG != "" {
+			fgColor = b.Palette.BG
 		}
 	}
 

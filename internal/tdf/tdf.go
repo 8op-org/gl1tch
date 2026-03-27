@@ -1,7 +1,8 @@
 // Package tdf provides a parser and renderer for TDF (TheDraw Font) files.
 // TDF is a binary font format from the BBS era used to create ANSI block-letter
-// art. Each font file contains a fixed 18-byte magic header followed by one or
-// more font records, each defining ANSI art for ASCII characters 32–126.
+// art. Each font file contains a 20-byte magic header, a 4-byte ID marker, and
+// one font record with a 209-byte definition block (name, type, spacing,
+// blocksize, 94-entry char offset table) followed by variable-length char data.
 package tdf
 
 import (
@@ -11,117 +12,233 @@ import (
 	"strings"
 )
 
-// Magic is the TDF file header prefix (18 bytes, without the trailing 0x1a).
-const Magic = "\x13TheDraw FONTS FILE"
+// Magic is the TDF file signature (20 bytes: 0x13 + 18 ASCII chars + 0x1A).
+const Magic = "\x13TheDraw FONTS file\x1a"
 
 // ErrNotTDF is returned when a file is not a valid TDF font.
 var ErrNotTDF = errors.New("not a valid TDF font file")
 
+// cell is a single rendered cell in a TDF character row.
+type cell struct {
+	char byte // CP437 glyph byte
+	attr byte // color attribute (bg<<4 | fg) for Color fonts; 0x07 for others
+}
+
 // Font represents a parsed TDF font.
 type Font struct {
 	Name      string
-	Type      byte   // 0=Color, 1=Block, 2=Outline
+	Type      byte   // 0=Outline, 1=Block, 2=Color
 	Spacing   byte
 	BlockSize uint16
-	// chars maps ASCII code (32-126) → raw block bytes (blocksize*2 bytes)
-	chars map[byte][]byte
+	// chars maps ASCII byte (33–126) → rows of cells.
+	chars map[byte][][]cell
 }
 
-// Parse parses a TDF font file from raw bytes.
-// Returns ErrNotTDF if the magic bytes don't match.
+// Parse parses a TDF font file from raw bytes, returning the first (and
+// typically only) font in the file. Returns ErrNotTDF if the magic or
+// identification marker are absent.
 func Parse(data []byte) (*Font, error) {
-	if len(data) < len(Magic)+1 {
+	if len(data) < 20 || string(data[:20]) != Magic {
 		return nil, ErrNotTDF
 	}
-	if string(data[:len(Magic)]) != Magic {
-		return nil, ErrNotTDF
+	pos := 20 // skip magic
+
+	// File identification marker: 55 AA 00 FF
+	if pos+4 > len(data) ||
+		data[pos] != 0x55 || data[pos+1] != 0xAA ||
+		data[pos+2] != 0x00 || data[pos+3] != 0xFF {
+		return nil, fmt.Errorf("tdf: missing identification marker")
 	}
-	// Skip magic + 0x1a byte
-	pos := len(Magic) + 1
-	if pos >= len(data) {
-		return nil, fmt.Errorf("tdf: truncated after magic")
-	}
-	// Read first font record
-	f := &Font{chars: make(map[byte][]byte)}
-	// Font name: 13 bytes null-terminated
+	pos += 4 // pos = 24
+
+	// Name: 1-byte length prefix + 12-byte null-padded buffer = 13 bytes.
 	if pos+13 > len(data) {
 		return nil, fmt.Errorf("tdf: truncated at name")
 	}
-	nameBytes := make([]byte, 13)
-	copy(nameBytes, data[pos:pos+13])
+	nameLen := int(data[pos])
+	if nameLen > 12 {
+		nameLen = 12
+	}
+	pos++ // pos = 25
+	nameBytes := data[pos : pos+nameLen]
+	// Trim at first null in case nameLen overshoots actual content.
 	for i, b := range nameBytes {
 		if b == 0 {
 			nameBytes = nameBytes[:i]
 			break
 		}
 	}
-	f.Name = string(nameBytes)
-	pos += 13
-	// Font type, spacing, block size
+	name := string(nameBytes)
+	pos += 12 // skip full 12-byte name buffer → pos = 37
+
+	// Reserved: 4 bytes (always zero in observed files).
+	if pos+4 > len(data) {
+		return nil, fmt.Errorf("tdf: truncated at reserved bytes")
+	}
+	pos += 4 // pos = 41
+
+	// Font type, letter spacing, block size (total char data bytes).
 	if pos+4 > len(data) {
 		return nil, fmt.Errorf("tdf: truncated at metadata")
 	}
-	f.Type = data[pos]
+	fontType := data[pos]
 	pos++
-	f.Spacing = data[pos]
+	spacing := data[pos]
 	pos++
-	f.BlockSize = uint16(data[pos]) | uint16(data[pos+1])<<8
-	pos += 2
-	// Read 95 character blocks (ASCII 32–126)
-	chunkSize := int(f.BlockSize) * 2
-	if chunkSize <= 0 {
-		// BlockSize of 0 means no character data — return font with empty char map.
-		return f, nil
+	blockSize := uint16(data[pos]) | uint16(data[pos+1])<<8
+	pos += 2 // pos = 45
+
+	// Character offset table: 94 entries × 2 bytes LE for ASCII 33–126.
+	// A value of 0xFFFF means the character is undefined in this font.
+	if pos+188 > len(data) {
+		return nil, fmt.Errorf("tdf: truncated at offset table")
 	}
-	for ascii := byte(32); ascii <= 126; ascii++ {
-		end := pos + chunkSize
-		if end > len(data) {
-			break
+	offsets := make([]uint16, 94)
+	for i := range offsets {
+		offsets[i] = uint16(data[pos]) | uint16(data[pos+1])<<8
+		pos += 2
+	}
+	// pos = 233 — character data section starts here.
+	charDataBase := pos
+	_ = blockSize // used for documentation only; actual end is determined by 0x00 terminators
+
+	f := &Font{
+		Name:      name,
+		Type:      fontType,
+		Spacing:   spacing,
+		BlockSize: blockSize,
+		chars:     make(map[byte][][]cell),
+	}
+
+	// Color fonts use 2 bytes per cell (char, attr); others use 1 byte.
+	bytesPerCell := 1
+	if fontType == 2 {
+		bytesPerCell = 2
+	}
+
+	for i, off := range offsets {
+		if off == 0xFFFF {
+			continue // undefined character
 		}
-		block := make([]byte, chunkSize)
-		copy(block, data[pos:end])
-		f.chars[ascii] = block
-		pos += chunkSize
+		ascii := byte(33 + i)
+		startOff := charDataBase + int(off)
+		if startOff >= len(data) {
+			continue
+		}
+		rows := parseCharRows(data[startOff:], bytesPerCell)
+		if len(rows) > 0 {
+			f.chars[ascii] = rows
+		}
 	}
+
 	return f, nil
 }
 
-// MeasureWidth returns the total visible width of text when rendered with this font.
-func (f *Font) MeasureWidth(text string) int {
-	height := 8
-	charWidth := int(f.BlockSize) / height
-	if charWidth <= 0 {
-		charWidth = 1
+// parseCharRows parses variable-length TDF character data into rows of cells.
+//   - Each row ends with 0x0D (CR).
+//   - The character (and final row) ends with 0x00 (NUL).
+//   - bytesPerCell is 2 for Color fonts, 1 for Block/Outline.
+func parseCharRows(data []byte, bytesPerCell int) [][]cell {
+	var rows [][]cell
+	var cur []cell
+	pos := 0
+	for pos < len(data) {
+		b := data[pos]
+		if b == 0x00 {
+			// End of character — append last row if non-empty.
+			if len(cur) > 0 {
+				rows = append(rows, cur)
+			}
+			break
+		}
+		if b == 0x0D {
+			// End of row.
+			rows = append(rows, cur)
+			cur = nil
+			pos++
+			continue
+		}
+		if bytesPerCell == 2 {
+			if pos+1 >= len(data) {
+				break
+			}
+			cur = append(cur, cell{char: data[pos], attr: data[pos+1]})
+			pos += 2
+		} else {
+			cur = append(cur, cell{char: data[pos], attr: 0x07})
+			pos++
+		}
 	}
-	return len([]rune(text)) * (charWidth + int(f.Spacing))
+	return rows
 }
 
-// Render renders text as ANSI block-letter art using this font.
-// Returns plain text as a fallback if the font width exceeds maxWidth or
-// if the font has no character data.
-// The rendered string may contain ANSI escape sequences.
+// Height returns the maximum row count across all defined characters.
+func (f *Font) Height() int {
+	max := 0
+	for _, rows := range f.chars {
+		if len(rows) > max {
+			max = len(rows)
+		}
+	}
+	if max == 0 {
+		return 1
+	}
+	return max
+}
+
+// charWidth returns the visible column width of the widest row for ascii.
+func (f *Font) charWidth(ascii byte) int {
+	rows := f.chars[ascii]
+	w := 0
+	for _, row := range rows {
+		if len(row) > w {
+			w = len(row)
+		}
+	}
+	return w
+}
+
+// MeasureWidth returns the total rendered column width of text using this font.
+func (f *Font) MeasureWidth(text string) int {
+	runes := []rune(text)
+	total := 0
+	sp := int(f.Spacing)
+	for i, ch := range runes {
+		w := f.charWidth(byte(ch))
+		if w == 0 {
+			w = 1 // minimum 1-column placeholder for undefined chars
+		}
+		total += w
+		if i < len(runes)-1 {
+			total += sp
+		}
+	}
+	return total
+}
+
+// Render renders text as multi-line ANSI block-letter art.
+// Returns the original text as a fallback when:
+//   - the font has no character data (e.g. parse returned empty charset), or
+//   - the rendered width would exceed maxWidth.
+//
+// The returned string may contain ANSI escape sequences and embedded newlines.
 func (f *Font) Render(text string, maxWidth int) (string, error) {
 	if len(text) == 0 {
 		return "", nil
 	}
-	// For a TDF color font, each character renders as a column of cells.
-	// BlockSize = total cells per character (width_cells * height_rows).
-	// Height is typically 8-16 rows for most BBS fonts.
-	// We assume height = 8 (most common BBS font height).
-	height := 8
-	charWidth := int(f.BlockSize) / height
-	if charWidth <= 0 {
-		charWidth = 1
-	}
-	// Estimate rendered width — fall back to plain text if too wide.
-	if f.MeasureWidth(text) > maxWidth {
-		return text, nil
-	}
-	// If no character data is available (e.g. placeholder font), fall back.
 	if len(f.chars) == 0 {
 		return text, nil
 	}
-	// DOS color to ANSI RGB mapping (16 DOS colors).
+	if maxWidth > 0 && f.MeasureWidth(text) > maxWidth {
+		return text, nil
+	}
+
+	height := f.Height()
+	if height == 0 {
+		return text, nil
+	}
+
+	// DOS 16-color palette mapped to hex RGB.
 	dosColors := []string{
 		"#000000", "#0000aa", "#00aa00", "#00aaaa",
 		"#aa0000", "#aa00aa", "#aa5500", "#aaaaaa",
@@ -129,28 +246,29 @@ func (f *Font) Render(text string, maxWidth int) (string, error) {
 		"#ff5555", "#ff55ff", "#ffff55", "#ffffff",
 	}
 	rst := "\x1b[0m"
-	// Build one strings.Builder per row.
+	sp := int(f.Spacing)
+	runes := []rune(text)
+
 	rows := make([]strings.Builder, height)
-	for _, ch := range text {
+
+	for charIdx, ch := range runes {
 		ascii := byte(ch)
-		block, ok := f.chars[ascii]
-		if !ok || len(block) < height*charWidth*2 {
-			// Render as spaces for unknown or short-data chars.
-			for row := 0; row < height; row++ {
-				rows[row].WriteString(strings.Repeat(" ", charWidth))
-			}
-			continue
+		charRows := f.chars[ascii]
+		cw := f.charWidth(ascii)
+		if cw == 0 {
+			cw = 1
 		}
-		for row := 0; row < height; row++ {
-			for col := 0; col < charWidth; col++ {
-				idx := (col*height + row) * 2
-				if idx+1 >= len(block) {
-					break
-				}
-				charByte := block[idx]
-				attrByte := block[idx+1]
-				fg := attrByte & 0x0f
-				bg := (attrByte >> 4) & 0x07
+
+		for rowIdx := 0; rowIdx < height; rowIdx++ {
+			var rowCells []cell
+			if rowIdx < len(charRows) {
+				rowCells = charRows[rowIdx]
+			}
+
+			written := 0
+			for _, c := range rowCells {
+				fg := c.attr & 0x0f
+				bg := (c.attr >> 4) & 0x07
 				var fgEsc, bgEsc string
 				if int(fg) < len(dosColors) {
 					r2, g2, b2 := parseHexRGB(dosColors[fg])
@@ -160,28 +278,38 @@ func (f *Font) Render(text string, maxWidth int) (string, error) {
 					r2, g2, b2 := parseHexRGB(dosColors[bg])
 					bgEsc = fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r2, g2, b2)
 				}
-				var cell string
-				if charByte == 0 {
-					cell = " "
+				var glyph string
+				if c.char == 0 {
+					glyph = " "
 				} else {
-					cell = cp437ToUTF8(charByte)
+					glyph = cp437ToUTF8(c.char)
 				}
-				rows[row].WriteString(fgEsc + bgEsc + cell + rst)
+				rows[rowIdx].WriteString(fgEsc + bgEsc + glyph + rst)
+				written++
+			}
+			// Pad to character column width so columns align.
+			for written < cw {
+				rows[rowIdx].WriteByte(' ')
+				written++
+			}
+			// Inter-character spacing (not after the last char).
+			if charIdx < len(runes)-1 && sp > 0 {
+				rows[rowIdx].WriteString(strings.Repeat(" ", sp))
 			}
 		}
 	}
+
 	var sb strings.Builder
 	for i, row := range rows {
 		sb.WriteString(row.String())
 		if i < height-1 {
-			sb.WriteString("\n")
+			sb.WriteByte('\n')
 		}
 	}
 	return sb.String(), nil
 }
 
-// cp437ToUTF8 converts a CP437 byte to its UTF-8 Unicode equivalent.
-// This is a partial table covering common BBS block/line-drawing characters.
+// cp437ToUTF8 converts a CP437 byte to its UTF-8 equivalent.
 func cp437ToUTF8(b byte) string {
 	table := map[byte]string{
 		0xB0: "░", 0xB1: "▒", 0xB2: "▓", 0xDB: "█",
@@ -190,7 +318,13 @@ func cp437ToUTF8(b byte) string {
 		0xDA: "┌", 0xBF: "┐", 0xC0: "└", 0xD9: "┘",
 		0xC9: "╔", 0xBB: "╗", 0xC8: "╚", 0xBC: "╝",
 		0x04: "♦", 0x05: "♣", 0x06: "♠",
-		0x01: "☺", 0x02: "☻",
+		0x01: "☺", 0x02: "☻", 0x03: "♥",
+		0x07: "•", 0x08: "◘", 0x09: "○", 0x0A: "◙",
+		0x0B: "♂", 0x0C: "♀", 0x0E: "♫", 0x0F: "☼",
+		0x10: "►", 0x11: "◄", 0x12: "↕", 0x13: "‼",
+		0x14: "¶", 0x15: "§", 0x16: "▬", 0x17: "↨",
+		0x18: "↑", 0x19: "↓", 0x1A: "→", 0x1B: "←",
+		0x1C: "∟", 0x1D: "↔", 0x1E: "▲", 0x1F: "▼",
 	}
 	if s, ok := table[b]; ok {
 		return s
@@ -198,10 +332,10 @@ func cp437ToUTF8(b byte) string {
 	if b >= 32 && b < 127 {
 		return string(rune(b))
 	}
-	return "·" // fallback for unmapped bytes
+	return "·"
 }
 
-// parseHexRGB parses a "#rrggbb" hex color string into R, G, B components.
+// parseHexRGB parses "#rrggbb" into R, G, B components.
 func parseHexRGB(hex string) (uint8, uint8, uint8) {
 	hex = strings.TrimPrefix(hex, "#")
 	if len(hex) != 6 {

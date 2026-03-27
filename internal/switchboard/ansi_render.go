@@ -233,22 +233,30 @@ func DynamicHeader(bundle *themes.Bundle, panel string, width int) []string {
 		botLine = accentSeq + bold + botRow + rst
 	}
 
-	// Title line: accent-colored background spanning the full width so the
-	// panel title (in ps.Text color) is always legible regardless of terminal bg.
+	// Title: attempt TDF block-letter rendering when configured.
 	title := RenderHeader(panel)
-	// If a TDF block-letter font is configured, attempt to render with it.
-	// Only use the TDF output when it's single-line (non-TDF fallback) or when
-	// the result differs from the plain title — multi-line TDF art is skipped
-	// here since DynamicHeader returns a flat []string and merging multi-line
-	// art is a future enhancement.
 	if bundle.HeaderFont != "" {
 		rendered := tdf.Global.Render(bundle.HeaderFont, title, width)
-		// Accept rendered output only when it is a single-line substitution
-		// (i.e. it doesn't contain newlines, meaning either TDF rendered a
-		// single row or fell back to plain text).
-		if !strings.Contains(rendered, "\n") {
-			title = rendered
+		if strings.Contains(rendered, "\n") {
+			// Multi-line TDF art — build an expanded header.
+			tdfLines := strings.Split(rendered, "\n")
+			result := []string{topLine}
+			for _, tdfLine := range tdfLines {
+				visW := visibleWidth(tdfLine)
+				pad := width - visW
+				if pad < 0 {
+					pad = 0
+				}
+				lp := pad / 2
+				rp := pad - lp
+				result = append(result,
+					accentBGSeq+textSeq+strings.Repeat(" ", lp)+tdfLine+strings.Repeat(" ", rp)+rst)
+			}
+			result = append(result, botLine)
+			return result
 		}
+		// Single-line fallback (plain text or narrow font).
+		title = rendered
 	}
 	titleRunes := []rune(title)
 	pad := width - len(titleRunes)
