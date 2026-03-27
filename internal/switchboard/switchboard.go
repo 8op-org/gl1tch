@@ -795,9 +795,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			if m.helpScrollOffset > 0 {
 				m.helpScrollOffset--
 			}
-		case "pgdown":
+		case "pgdown", "]":
 			m.helpScrollOffset += 10
-		case "pgup":
+		case "pgup", "[":
 			if m.helpScrollOffset > 10 {
 				m.helpScrollOffset -= 10
 			} else {
@@ -966,7 +966,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "pgdown":
+	case "pgdown", "]":
 		if m.feedFocused {
 			total := totalFeedLines(m.feed)
 			step := m.feedVisibleHeight()
@@ -975,13 +975,26 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.clampFeedScroll()
 			return m, nil
 		}
+		if m.signalBoardFocused {
+			filtered := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
+			step := m.signalBoardVisibleRows()
+			m.signalBoard.selectedIdx = min(m.signalBoard.selectedIdx+step, max(0, len(filtered)-1))
+			m.signalBoard.clampScroll(step)
+			return m, nil
+		}
 
-	case "pgup":
+	case "pgup", "[":
 		if m.feedFocused {
 			step := m.feedVisibleHeight()
 			m.feedCursor = max(m.feedCursor-step, 0)
 			m.feedScrollOffset = m.feedCursor
 			m.clampFeedScroll()
+			return m, nil
+		}
+		if m.signalBoardFocused {
+			step := m.signalBoardVisibleRows()
+			m.signalBoard.selectedIdx = max(m.signalBoard.selectedIdx-step, 0)
+			m.signalBoard.clampScroll(step)
 			return m, nil
 		}
 
@@ -2363,7 +2376,7 @@ func (m Model) viewBottomBar(width int) string {
 	case m.feedFocused:
 		parts = []string{
 			hint("↑↓", "nav"),
-			hint("PgUp/PgDn", "page"),
+			hint("[/]", "page"),
 			hint("g/G", "top/bottom"),
 			hint("enter", "open"),
 			hint("tab", "focus"),

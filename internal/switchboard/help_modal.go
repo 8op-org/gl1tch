@@ -72,7 +72,7 @@ func (m Model) viewHelpModal(w, h int) string {
 	if total > visibleH {
 		scrollInfo = lipgloss.NewStyle().Foreground(mc.dim).
 			Render(strings.Repeat(" ", innerW-12) +
-				lipgloss.NewStyle().Foreground(mc.accent).Render("j/k") +
+				lipgloss.NewStyle().Foreground(mc.accent).Render("j/k  [/]") +
 				lipgloss.NewStyle().Foreground(mc.dim).Render(" scroll  esc close"))
 	} else {
 		scrollInfo = lipgloss.NewStyle().Foreground(mc.dim).
