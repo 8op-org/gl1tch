@@ -25,6 +25,24 @@ const (
 	configSubdir = ".config/orcai"
 )
 
+// buildStatusRight returns the tmux status-right string with keys in accent
+// color and descriptions in dim color.
+func buildStatusRight(accent, dim string) string {
+	key := func(k string) string { return fmt.Sprintf("#[fg=%s]%s", accent, k) }
+	desc := func(d string) string { return fmt.Sprintf("#[fg=%s]%s", dim, d) }
+	sep := fmt.Sprintf("#[fg=%s]  ", dim)
+	return " " +
+		key("^spc h") + desc(" help") + sep +
+		key("^spc t") + desc(" switchboard") + sep +
+		key("^spc m") + desc(" themes") + sep +
+		key("^spc j") + desc(" jump") + sep +
+		key("^spc c") + desc(" win") + sep +
+		key("^spc d") + desc(" detach") + sep +
+		key("^spc r") + desc(" reload") + sep +
+		key("^spc q") + desc(" quit") + sep +
+		fmt.Sprintf("#[fg=%s]%%H:%%M ", dim)
+}
+
 // resolveCompanion returns the invocation string for a companion widget.
 // Checks PATH for an override binary (e.g. orcai-picker) first; falls back
 // to the built-in subcommand (e.g. "orcai picker").
@@ -89,7 +107,7 @@ func buildTmuxConf(self string) string {
 		"set -g window-status-current-format \"\"\n" +
 		fmt.Sprintf("set -g status-left \"#[fg=%s,bold] ORCAI #[default]\"\n", pal.accent) +
 		"set -g status-left-length 20\n" +
-		fmt.Sprintf("set -g status-right \"#[fg=%s] ^spc h help  ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc d detach  ^spc r reload  ^spc q quit  %%H:%%M \"\n", pal.dim) +
+		"set -g status-right \"" + buildStatusRight(pal.accent, pal.dim) + "\"\n" +
 		"set -g status-right-length 200\n" +
 		"set -g mouse on\n" +
 		"set -g default-terminal \"screen-256color\"\n" +
