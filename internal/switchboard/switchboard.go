@@ -2186,7 +2186,7 @@ func (m Model) viewBottomBar(width int) string {
 			hint("f", "filter"),
 			hint("enter", "go to window"),
 			hint("tab", "focus"),
-			hint("^spc q", "quit"),
+			hint("^spc", "chords"),
 		}
 	case m.feedFocused:
 		parts = []string{
@@ -2195,7 +2195,7 @@ func (m Model) viewBottomBar(width int) string {
 			hint("g/G", "top/bottom"),
 			hint("enter", "open"),
 			hint("tab", "focus"),
-			hint("^spc q", "quit"),
+			hint("^spc", "chords"),
 		}
 	case m.launcher.focused:
 		parts = []string{
@@ -2205,7 +2205,7 @@ func (m Model) viewBottomBar(width int) string {
 			hint("d", "delete"),
 			hint("↑↓", "nav"),
 			hint("tab", "focus"),
-			hint("^spc q", "quit"),
+			hint("^spc", "chords"),
 		}
 	default:
 		parts = []string{
@@ -2216,7 +2216,7 @@ func (m Model) viewBottomBar(width int) string {
 			hint("a", "agent"),
 			hint("s", "signals"),
 			hint("f", "feed"),
-			hint("^spc q", "quit"),
+			hint("^spc", "chords"),
 		}
 	}
 
