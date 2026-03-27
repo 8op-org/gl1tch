@@ -238,21 +238,29 @@ func DynamicHeader(bundle *themes.Bundle, panel string, width int) []string {
 	if bundle.HeaderFont != "" {
 		rendered := tdf.Global.Render(bundle.HeaderFont, title, width)
 		if strings.Contains(rendered, "\n") {
-			// Multi-line TDF art — build an expanded header.
+			// Multi-line TDF art — single-line top/bottom borders, TDF art
+			// left-aligned, horizontal rule extending right at the middle row.
 			tdfLines := strings.Split(rendered, "\n")
-			result := []string{topLine}
-			for _, tdfLine := range tdfLines {
+			midRow := len(tdfLines) / 2
+			singleLine := accentSeq + bold + strings.Repeat("─", width) + rst
+			result := []string{singleLine}
+			for i, tdfLine := range tdfLines {
 				visW := visibleWidth(tdfLine)
-				pad := width - visW
-				if pad < 0 {
-					pad = 0
+				rightPad := width - visW
+				if rightPad < 0 {
+					rightPad = 0
 				}
-				lp := pad / 2
-				rp := pad - lp
-				result = append(result,
-					accentBGSeq+textSeq+strings.Repeat(" ", lp)+tdfLine+strings.Repeat(" ", rp)+rst)
+				var right string
+				if i == midRow && rightPad > 0 {
+					// Horizontal rule connecting TDF title to right panel edge.
+					right = accentSeq + bold + strings.Repeat("─", rightPad) + rst
+				} else {
+					right = strings.Repeat(" ", rightPad)
+				}
+				// No left padding, no accent-BG wrapper — TDF art carries its own colors.
+				result = append(result, tdfLine+right)
 			}
-			result = append(result, botLine)
+			result = append(result, singleLine)
 			return result
 		}
 		// Single-line fallback (plain text or narrow font).

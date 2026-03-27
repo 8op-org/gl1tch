@@ -310,17 +310,24 @@ func (f *Font) Render(text string, maxWidth int) (string, error) {
 }
 
 // cp437ToUTF8 converts a CP437 byte to its UTF-8 equivalent.
+// Bytes 0x01–0x06 (smiley faces, card suits) are mapped to safe single-width
+// Unicode block/bullet chars to avoid double-width emoji rendering in modern
+// terminals. All other bytes use their standard CP437 Unicode equivalents.
 func cp437ToUTF8(b byte) string {
 	table := map[byte]string{
+		// Block / shade characters — primary TDF art building blocks.
 		0xB0: "░", 0xB1: "▒", 0xB2: "▓", 0xDB: "█",
 		0xDC: "▄", 0xDD: "▌", 0xDE: "▐", 0xDF: "▀",
+		// Box-drawing.
 		0xC4: "─", 0xCD: "═", 0xB3: "│", 0xBA: "║",
 		0xDA: "┌", 0xBF: "┐", 0xC0: "└", 0xD9: "┘",
 		0xC9: "╔", 0xBB: "╗", 0xC8: "╚", 0xBC: "╝",
+		// Low-byte decoratives — use safe single-width substitutes because
+		// U+263A/263B (smiley faces) may render as double-width emoji.
+		0x01: "▪", 0x02: "▪", 0x03: "♥",
 		0x04: "♦", 0x05: "♣", 0x06: "♠",
-		0x01: "☺", 0x02: "☻", 0x03: "♥",
-		0x07: "•", 0x08: "◘", 0x09: "○", 0x0A: "◙",
-		0x0B: "♂", 0x0C: "♀", 0x0E: "♫", 0x0F: "☼",
+		0x07: "·", 0x08: "◘", 0x09: "○", 0x0A: "◙",
+		0x0B: "♂", 0x0C: "♀", 0x0E: "♪", 0x0F: "✦",
 		0x10: "►", 0x11: "◄", 0x12: "↕", 0x13: "‼",
 		0x14: "¶", 0x15: "§", 0x16: "▬", 0x17: "↨",
 		0x18: "↑", 0x19: "↓", 0x1A: "→", 0x1B: "←",
