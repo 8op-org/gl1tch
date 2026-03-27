@@ -26,6 +26,7 @@ import (
 
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
 	"github.com/adam-stokes/orcai/internal/inbox"
+	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
@@ -563,6 +564,7 @@ func (m Model) ansiPalette() styles.ANSIPalette {
 }
 
 // modalColors holds resolved lipgloss colors for modal overlays.
+// It mirrors modal.Colors but uses lipgloss.Color types for local convenience.
 type modalColors struct {
 	border  lipgloss.Color
 	titleBG lipgloss.Color
@@ -573,44 +575,19 @@ type modalColors struct {
 	error   lipgloss.Color
 }
 
-// resolveModalColors derives modal colors from the active bundle with Dracula fallbacks.
+// resolveModalColors is a thin wrapper around modal.ResolveColors that returns
+// the switchboard-local modalColors type.
 func (m Model) resolveModalColors() modalColors {
-	c := modalColors{
-		border:  lipgloss.Color("#bd93f9"),
-		titleBG: lipgloss.Color("#bd93f9"),
-		titleFG: lipgloss.Color("#282a36"),
-		fg:      lipgloss.Color("#f8f8f2"),
-		accent:  lipgloss.Color("#8be9fd"),
-		dim:     lipgloss.Color("#6272a4"),
-		error:   lipgloss.Color("#ff5555"),
+	c := modal.ResolveColors(modal.Config{Bundle: m.activeBundle()})
+	return modalColors{
+		border:  lipgloss.Color(c.Border),
+		titleBG: lipgloss.Color(c.TitleBG),
+		titleFG: lipgloss.Color(c.TitleFG),
+		fg:      lipgloss.Color(c.FG),
+		accent:  lipgloss.Color(c.Accent),
+		dim:     lipgloss.Color(c.Dim),
+		error:   lipgloss.Color(c.Error),
 	}
-	b := m.activeBundle()
-	if b == nil {
-		return c
-	}
-	if v := b.ResolveRef(b.Modal.Border); v != "" {
-		c.border = lipgloss.Color(v)
-		c.titleBG = lipgloss.Color(v)
-	}
-	if v := b.ResolveRef(b.Modal.TitleBG); v != "" {
-		c.titleBG = lipgloss.Color(v)
-	}
-	if v := b.ResolveRef(b.Modal.TitleFG); v != "" {
-		c.titleFG = lipgloss.Color(v)
-	}
-	if v := b.Palette.FG; v != "" {
-		c.fg = lipgloss.Color(v)
-	}
-	if v := b.Palette.Accent; v != "" {
-		c.accent = lipgloss.Color(v)
-	}
-	if v := b.Palette.Dim; v != "" {
-		c.dim = lipgloss.Color(v)
-	}
-	if v := b.Palette.Error; v != "" {
-		c.error = lipgloss.Color(v)
-	}
-	return c
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -2415,44 +2392,23 @@ func (m Model) viewQuitModalBox(w int) string {
 		jobWord = "jobs"
 	}
 
-	innerW := 44
-	if innerW+4 > w {
-		innerW = max(w-4, 10)
-	}
-	outerW := innerW + 2
-
 	mc := m.resolveModalColors()
 
-	headerStyle := lipgloss.NewStyle().
-		Background(mc.titleBG).
-		Foreground(mc.titleFG).
-		Bold(true).
-		Width(innerW).
-		Padding(0, 1)
-
-	rowStyle := func(fg lipgloss.Color) lipgloss.Style {
-		return lipgloss.NewStyle().Foreground(fg).Width(innerW).Padding(0, 1)
-	}
-
-	rows := []string{headerStyle.Render("ORCAI  Quit?")}
+	message := "Quit ORCAI?"
 	if jobs > 0 {
-		rows = append(rows, rowStyle(mc.error).Render(fmt.Sprintf("%d %s still running.", jobs, jobWord)))
-	} else {
-		rows = append(rows, rowStyle(mc.fg).Render("Quit ORCAI?"))
+		// Wrap in error color for the running-jobs warning.
+		message = lipgloss.NewStyle().Foreground(mc.error).
+			Render(fmt.Sprintf("%d %s still running.", jobs, jobWord))
 	}
-	rows = append(rows,
-		"",
-		rowStyle(mc.fg).Render(
-			lipgloss.NewStyle().Foreground(mc.accent).Bold(true).Render("[y]")+"es   "+
-				lipgloss.NewStyle().Foreground(mc.dim).Render("[n]")+"o / esc",
-		),
-	)
 
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(mc.border).
-		Width(outerW).
-		Render(strings.Join(rows, "\n"))
+	cfg := modal.Config{
+		Bundle:       m.activeBundle(),
+		Title:        "ORCAI  Quit?",
+		Message:      message,
+		ConfirmLabel: lipgloss.NewStyle().Foreground(mc.accent).Bold(true).Render("[y]") + "es",
+		DismissLabel: lipgloss.NewStyle().Foreground(mc.dim).Render("[n]") + "o / esc",
+	}
+	return modal.RenderConfirm(cfg, w, 0)
 }
 
 // viewDeleteModalBox renders just the delete confirmation popup box (no

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/modal"
 )
 
 // viewPal caches resolved lipgloss colors for the current render pass.
@@ -321,23 +322,13 @@ func (m Model) viewEditOverlay() string {
 
 // viewDeleteConfirm renders the delete confirmation overlay.
 func (m Model) viewDeleteConfirm() string {
-	p := m.pal()
 	name := m.deleteConfirm.entry.Name
-
-	overlayStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(p.pink).
-		Background(lipgloss.Color(draculaBg)).
-		Padding(1, 2)
-
-	prompt := fmt.Sprintf("Delete %q?\n\n%s  %s",
-		name,
-		lipgloss.NewStyle().Foreground(p.errCol).Render("[y] yes"),
-		lipgloss.NewStyle().Foreground(p.dim).Render("[n/esc] cancel"),
-	)
-	return overlayStyle.Render(
-		lipgloss.NewStyle().Foreground(p.accent).Bold(true).Render("DELETE CRON JOB")+"\n\n"+prompt,
-	)
+	cfg := modal.Config{
+		Bundle:  m.bundle,
+		Title:   "DELETE CRON JOB",
+		Message: fmt.Sprintf("Delete %q?", name),
+	}
+	return modal.RenderConfirm(cfg, m.width, m.height)
 }
 
 // splitHeight divides total rows into top and bottom, applying a ratio and

@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
+
+	"github.com/adam-stokes/orcai/internal/modal"
 )
 
 // readmeContent returns the README.md content, falling back to inline text.
@@ -29,73 +30,20 @@ func readmeContent() string {
 
 // viewHelpModal renders the getting-started guide as a centered overlay.
 func (m Model) viewHelpModal(w, h int) string {
-	mc := m.resolveModalColors()
-
-	innerW := w - 4 // full-width minus border (2) and margin (2)
+	innerW := w - 4
 	if innerW < 40 {
 		innerW = 40
 	}
-	outerW := innerW + 2
-
-	headerStyle := lipgloss.NewStyle().
-		Background(mc.titleBG).
-		Foreground(mc.titleFG).
-		Bold(true).
-		Width(innerW).
-		Padding(0, 1)
 
 	// Render markdown with glamour.
 	rendered := renderMarkdown(readmeContent(), innerW)
-
-	// Split into lines and apply scroll.
 	lines := strings.Split(strings.TrimRight(rendered, "\n"), "\n")
-	visibleH := h - 6 // header + border + some padding
-	if visibleH < 4 {
-		visibleH = 4
-	}
-	offset := m.helpScrollOffset
-	if offset > len(lines)-visibleH {
-		offset = max(len(lines)-visibleH, 0)
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	end := offset + visibleH
-	if end > len(lines) {
-		end = len(lines)
-	}
-	visible := lines[offset:end]
 
-	// Scroll indicator.
-	total := len(lines)
-	scrollInfo := ""
-	if total > visibleH {
-		scrollInfo = lipgloss.NewStyle().Foreground(mc.dim).
-			Render(strings.Repeat(" ", innerW-12) +
-				lipgloss.NewStyle().Foreground(mc.accent).Render("j/k  [/]") +
-				lipgloss.NewStyle().Foreground(mc.dim).Render(" scroll  esc close"))
-	} else {
-		scrollInfo = lipgloss.NewStyle().Foreground(mc.dim).
-			Width(innerW).Align(lipgloss.Right).Padding(0, 1).
-			Render("esc close")
+	cfg := modal.Config{
+		Bundle: m.activeBundle(),
+		Title:  "ORCAI  getting started",
 	}
-
-	body := lipgloss.NewStyle().
-		Width(innerW).
-		Padding(0, 1).
-		Render(strings.Join(visible, "\n"))
-
-	content := strings.Join([]string{
-		headerStyle.Render("ORCAI  getting started"),
-		body,
-		scrollInfo,
-	}, "\n")
-
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(mc.border).
-		Width(outerW).
-		Render(content)
+	return modal.RenderScroll(cfg, lines, m.helpScrollOffset, w, h)
 }
 
 // renderMarkdown renders md using glamour, falling back to plain text on error.
