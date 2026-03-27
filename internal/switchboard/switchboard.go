@@ -22,7 +22,9 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/muesli/ansi"
 	"github.com/muesli/reflow/truncate"
+	robfigcron "github.com/robfig/cron/v3"
 
+	orcaicron "github.com/adam-stokes/orcai/internal/cron"
 	"github.com/adam-stokes/orcai/internal/inbox"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/pipeline"
@@ -69,6 +71,13 @@ const (
 
 // agentInnerHeight is the fixed number of body rows inside the AGENT RUNNER box.
 const agentInnerHeight = 8
+
+// Pipeline launch mode constants.
+const (
+	plModeNone      = 0
+	plModeSelect    = 1
+	plScheduleInput = 2
+)
 
 // maxParallelJobs is the maximum number of jobs that can run concurrently.
 const maxParallelJobs = 8
@@ -237,7 +246,9 @@ type Model struct {
 	confirmDelete         bool
 	pendingDeletePipeline string
 	agentModalOpen        bool
-	agentModalFocus       int // 0=provider, 1=model, 2=prompt, 3=cwd (within modal)
+	agentModalFocus       int // 0=provider, 1=model, 2=prompt, 3=schedule (within modal)
+	agentSchedule         textarea.Model
+	agentScheduleErr      string
 	helpOpen              bool
 	helpScrollOffset      int
 	registry              *themes.Registry
@@ -251,6 +262,11 @@ type Model struct {
 	dirPickerCtx        string         // "agent" or "pipeline"
 	pendingPipelineName string         // pipeline waiting for CWD selection
 	pendingPipelineYAML string         // YAML path for pendingPipelineName
+	// Pipeline mode-select overlay
+	pipelineLaunchMode   int          // plModeNone / plModeSelect / plScheduleInput
+	pipelineModeSelected int          // 0=Run now, 1=Schedule recurring
+	pipelineScheduleInput textarea.Model
+	pipelineScheduleErr  string
 	// Inbox panel
 	inboxModel              inbox.Model
 	inboxFocused            bool
@@ -274,6 +290,20 @@ func NewWithStore(s *store.Store) Model {
 	ta.SetWidth(80)
 	ta.SetHeight(4)
 
+	schedTA := textarea.New()
+	schedTA.Placeholder = "cron expr, blank = run now"
+	schedTA.CharLimit = 128
+	schedTA.ShowLineNumbers = false
+	schedTA.SetWidth(80)
+	schedTA.SetHeight(1)
+
+	pipeSchedTA := textarea.New()
+	pipeSchedTA.Placeholder = "cron expr (e.g. 0 * * * *)"
+	pipeSchedTA.CharLimit = 128
+	pipeSchedTA.ShowLineNumbers = false
+	pipeSchedTA.SetWidth(60)
+	pipeSchedTA.SetHeight(1)
+
 	cwd, _ := os.Getwd()
 
 	m := Model{
@@ -285,12 +315,14 @@ func NewWithStore(s *store.Store) Model {
 			providers: picker.BuildProviders(),
 			prompt:    ta,
 		},
-		signalBoard: SignalBoard{activeFilter: "all"},
-		activeJobs:  make(map[string]*jobHandle),
-		launchCWD:   cwd,
-		agentCWD:    cwd,
-		inboxModel:  inbox.New(s, nil), // bundle set after registry loads
-		store:       s,
+		agentSchedule:         schedTA,
+		pipelineScheduleInput: pipeSchedTA,
+		signalBoard:           SignalBoard{activeFilter: "all"},
+		activeJobs:            make(map[string]*jobHandle),
+		launchCWD:             cwd,
+		agentCWD:              cwd,
+		inboxModel:            inbox.New(s, nil), // bundle set after registry loads
+		store:                 s,
 	}
 
 	// Initialize theme registry from user themes dir.
@@ -344,6 +376,30 @@ func (m Model) AgentModalOpen() bool { return m.agentModalOpen }
 
 // ThemePickerOpen returns whether the theme picker overlay is open — used in tests.
 func (m Model) ThemePickerOpen() bool { return m.themePickerOpen }
+
+// AgentModalFocus returns the current agent modal focus slot — used in tests.
+func (m Model) AgentModalFocus() int { return m.agentModalFocus }
+
+// AgentScheduleErr returns the agent schedule error string — used in tests.
+func (m Model) AgentScheduleErr() string { return m.agentScheduleErr }
+
+// PipelineLaunchMode returns the pipeline launch mode — used in tests.
+func (m Model) PipelineLaunchMode() int { return m.pipelineLaunchMode }
+
+// PipelineModeSelected returns the selected mode item in mode-select overlay — used in tests.
+func (m Model) PipelineModeSelected() int { return m.pipelineModeSelected }
+
+// PipelineScheduleErr returns the pipeline schedule error string — used in tests.
+func (m Model) PipelineScheduleErr() string { return m.pipelineScheduleErr }
+
+// PlModeNone returns the plModeNone constant — used in tests.
+func PlModeNone() int { return plModeNone }
+
+// PlModeSelect returns the plModeSelect constant — used in tests.
+func PlModeSelect() int { return plModeSelect }
+
+// PlScheduleInput returns the plScheduleInput constant — used in tests.
+func PlScheduleInput() int { return plScheduleInput }
 
 // FeedScrollOffset returns the current feed scroll offset — used in tests.
 func (m Model) FeedScrollOffset() int { return m.feedScrollOffset }
@@ -818,7 +874,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePickerOpen || m.dirPickerOpen || m.confirmDelete {
+		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePickerOpen || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -961,6 +1017,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.pendingDeletePipeline = ""
 			return m, nil
 		}
+	}
+
+	// Pipeline mode-select / schedule-input overlay — captured before panel handlers.
+	if m.pipelineLaunchMode != plModeNone {
+		return m.handlePipelineLaunchOverlay(msg)
 	}
 
 	// Agent modal — all keys captured before panel handlers.
@@ -1284,6 +1345,8 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "esc", "ctrl+c":
 		m.agentModalOpen = false
 		m.agent.prompt.Blur()
+		m.agentSchedule.Blur()
+		m.agentScheduleErr = ""
 		return m, nil
 
 	case "ctrl+s":
@@ -1291,32 +1354,39 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "tab":
 		m.agentModalFocus = (m.agentModalFocus + 1) % 4
-		if m.agentModalFocus == 2 {
+		switch m.agentModalFocus {
+		case 2:
 			m.agent.prompt.Focus()
-		} else {
+			m.agentSchedule.Blur()
+		case 3:
 			m.agent.prompt.Blur()
+			m.agentSchedule.Focus()
+		default:
+			m.agent.prompt.Blur()
+			m.agentSchedule.Blur()
 		}
 		return m, nil
 
 	case "shift+tab":
 		m.agentModalFocus = (m.agentModalFocus + 3) % 4
-		if m.agentModalFocus == 2 {
+		switch m.agentModalFocus {
+		case 2:
 			m.agent.prompt.Focus()
-		} else {
+			m.agentSchedule.Blur()
+		case 3:
 			m.agent.prompt.Blur()
+			m.agentSchedule.Focus()
+		default:
+			m.agent.prompt.Blur()
+			m.agentSchedule.Blur()
 		}
 		return m, nil
 
-	case "enter":
-		if m.agentModalFocus == 3 {
-			// Open dir picker to select CWD.
-			m.dirPicker = NewDirPickerModel()
-			m.dirPickerOpen = true
-			m.dirPickerCtx = "agent"
-			return m, DirPickerInit()
-		}
-
 	case "up", "k":
+		if m.agentModalFocus == 3 {
+			// Let textarea handle the key when schedule is focused.
+			break
+		}
 		switch m.agentModalFocus {
 		case 0:
 			if m.agent.selectedProvider > 0 {
@@ -1330,6 +1400,10 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j":
+		if m.agentModalFocus == 3 {
+			// Let textarea handle the key when schedule is focused.
+			break
+		}
 		switch m.agentModalFocus {
 		case 0:
 			if m.agent.selectedProvider < len(m.agent.providers)-1 {
@@ -1347,12 +1421,126 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		if m.agentModalFocus == 2 {
+	}
+
+	// Forward key events to the focused textarea.
+	if m.agentModalFocus == 2 {
+		var cmd tea.Cmd
+		m.agent.prompt, cmd = m.agent.prompt.Update(msg)
+		return m, cmd
+	}
+	if m.agentModalFocus == 3 {
+		var cmd tea.Cmd
+		m.agentSchedule, cmd = m.agentSchedule.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+// handlePipelineLaunchOverlay routes key events for the pipeline mode-select
+// and schedule-input overlays.
+func (m Model) handlePipelineLaunchOverlay(msg tea.KeyMsg) (Model, tea.Cmd) {
+	key := msg.String()
+
+	switch m.pipelineLaunchMode {
+	case plModeSelect:
+		switch key {
+		case "esc", "ctrl+c":
+			m.pipelineLaunchMode = plModeNone
+			m.pendingPipelineName = ""
+			m.pendingPipelineYAML = ""
+			return m, nil
+		case "up", "k":
+			if m.pipelineModeSelected > 0 {
+				m.pipelineModeSelected--
+			}
+			return m, nil
+		case "down", "j":
+			if m.pipelineModeSelected < 1 {
+				m.pipelineModeSelected++
+			}
+			return m, nil
+		case "enter":
+			if m.pipelineModeSelected == 0 {
+				// Run now — open dir picker (existing flow).
+				m.pipelineLaunchMode = plModeNone
+				m.dirPicker = NewDirPickerModel()
+				m.dirPickerOpen = true
+				m.dirPickerCtx = "pipeline"
+				return m, DirPickerInit()
+			}
+			// Schedule recurring — transition to schedule input.
+			m.pipelineLaunchMode = plScheduleInput
+			m.pipelineScheduleErr = ""
+			m.pipelineScheduleInput.SetValue("")
+			m.pipelineScheduleInput.Focus()
+			return m, nil
+		}
+
+	case plScheduleInput:
+		switch key {
+		case "esc", "ctrl+c":
+			m.pipelineLaunchMode = plModeNone
+			m.pendingPipelineName = ""
+			m.pendingPipelineYAML = ""
+			m.pipelineScheduleInput.Blur()
+			m.pipelineScheduleErr = ""
+			return m, nil
+		case "ctrl+s", "enter":
+			schedExpr := strings.TrimSpace(m.pipelineScheduleInput.Value())
+			if schedExpr == "" {
+				m.pipelineScheduleErr = "cron expression required"
+				return m, nil
+			}
+			parser := robfigcron.NewParser(robfigcron.Minute | robfigcron.Hour | robfigcron.Dom | robfigcron.Month | robfigcron.Dow)
+			if _, err := parser.Parse(schedExpr); err != nil {
+				m.pipelineScheduleErr = "invalid cron: " + err.Error()
+				return m, nil
+			}
+			m.pipelineScheduleErr = ""
+
+			name := m.pendingPipelineName
+			yamlPath := m.pendingPipelineYAML
+			entryName := fmt.Sprintf("pipeline-%s", name)
+			cronEntry := orcaicron.Entry{
+				Name:     entryName,
+				Schedule: schedExpr,
+				Kind:     "pipeline",
+				Target:   yamlPath,
+			}
+			if werr := orcaicron.WriteEntry(cronEntry); werr != nil {
+				m.pipelineScheduleErr = "write error: " + werr.Error()
+				return m, nil
+			}
+			// Auto-start cron daemon if not already running.
+			go ensureCronDaemon()
+
+			feedID := fmt.Sprintf("sched-%d", time.Now().UnixNano())
+			confirmEntry := feedEntry{
+				id:     feedID,
+				title:  "scheduled: " + name + " @ " + schedExpr,
+				status: FeedDone,
+				ts:     time.Now(),
+				lines:  []string{"cron entry written to cron.yaml"},
+			}
+			m.feed = append([]feedEntry{confirmEntry}, m.feed...)
+			if len(m.feed) > 200 {
+				m.feed = m.feed[:200]
+			}
+
+			m.pipelineLaunchMode = plModeNone
+			m.pendingPipelineName = ""
+			m.pendingPipelineYAML = ""
+			m.pipelineScheduleInput.Blur()
+			m.pipelineScheduleErr = ""
+			return m, nil
+		default:
 			var cmd tea.Cmd
-			m.agent.prompt, cmd = m.agent.prompt.Update(msg)
+			m.pipelineScheduleInput, cmd = m.pipelineScheduleInput.Update(msg)
 			return m, cmd
 		}
 	}
+
 	return m, nil
 }
 
@@ -1443,7 +1631,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Launcher: show dir picker before launching pipeline.
+	// Launcher: show mode-select overlay before launching pipeline.
 	if m.launcher.focused {
 		if len(m.launcher.pipelines) == 0 {
 			return m, nil
@@ -1468,14 +1656,11 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		name := m.launcher.pipelines[m.launcher.selected]
 		yamlPath := filepath.Join(pipelinesDir(), name+".pipeline.yaml")
 
-		// Open the dir picker so the user can choose the working directory
-		// before the pipeline runs.
 		m.pendingPipelineName = name
 		m.pendingPipelineYAML = yamlPath
-		m.dirPicker = NewDirPickerModel()
-		m.dirPickerOpen = true
-		m.dirPickerCtx = "pipeline"
-		return m, DirPickerInit()
+		m.pipelineLaunchMode = plModeSelect
+		m.pipelineModeSelected = 0
+		return m, nil
 	}
 	// Agent section: open modal overlay.
 	if m.agent.focused {
@@ -1545,6 +1730,7 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 }
 
 // submitAgentJob submits the agent job from the modal overlay.
+// If SCHEDULE is non-blank, it writes a cron entry instead of launching immediately.
 func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	input := strings.TrimSpace(m.agent.prompt.Value())
 	if input == "" {
@@ -1554,6 +1740,66 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	if prov == nil {
 		return m, nil
 	}
+
+	var modelID string
+	models := nonSepModels(prov.Models)
+	if len(models) > 0 && m.agent.selectedModel < len(models) {
+		modelID = models[m.agent.selectedModel].ID
+	}
+
+	agentName := prov.ID
+	if modelID != "" {
+		agentName += "/" + modelID
+	}
+
+	// ── Schedule path ─────────────────────────────────────────────────────────
+	schedExpr := strings.TrimSpace(m.agentSchedule.Value())
+	if schedExpr != "" {
+		parser := robfigcron.NewParser(robfigcron.Minute | robfigcron.Hour | robfigcron.Dom | robfigcron.Month | robfigcron.Dow)
+		if _, err := parser.Parse(schedExpr); err != nil {
+			m.agentScheduleErr = "invalid cron: " + err.Error()
+			return m, nil
+		}
+		m.agentScheduleErr = ""
+
+		entryName := fmt.Sprintf("agent-%s-%d", prov.ID, time.Now().UnixNano())
+		cronEntry := orcaicron.Entry{
+			Name:     entryName,
+			Schedule: schedExpr,
+			Kind:     "agent",
+			Target:   agentName,
+		}
+		if werr := orcaicron.WriteEntry(cronEntry); werr != nil {
+			m.agentScheduleErr = "write error: " + werr.Error()
+			return m, nil
+		}
+		// Auto-start cron daemon if not already running.
+		go ensureCronDaemon()
+
+		feedID := fmt.Sprintf("sched-%d", time.Now().UnixNano())
+		confirmEntry := feedEntry{
+			id:     feedID,
+			title:  "scheduled: " + agentName + " @ " + schedExpr,
+			status: FeedDone,
+			ts:     time.Now(),
+			lines:  []string{"cron entry written to cron.yaml"},
+		}
+		m.feed = append([]feedEntry{confirmEntry}, m.feed...)
+		if len(m.feed) > 200 {
+			m.feed = m.feed[:200]
+		}
+
+		// Close modal and reset.
+		m.agentModalOpen = false
+		m.agent.prompt.SetValue("")
+		m.agent.prompt.Blur()
+		m.agentSchedule.SetValue("")
+		m.agentSchedule.Blur()
+		m.agentScheduleErr = ""
+		return m, nil
+	}
+
+	// ── Run-now path ──────────────────────────────────────────────────────────
 
 	// Enforce parallel job cap.
 	if len(m.activeJobs) >= maxParallelJobs {
@@ -1572,16 +1818,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var modelID string
-	models := nonSepModels(prov.Models)
-	if len(models) > 0 && m.agent.selectedModel < len(models) {
-		modelID = models[m.agent.selectedModel].ID
-	}
-
-	title := "agent: " + prov.ID
-	if modelID != "" {
-		title += "/" + modelID
-	}
+	title := "agent: " + agentName
 
 	feedID := fmt.Sprintf("agent-%d", time.Now().UnixNano())
 
@@ -1641,6 +1878,9 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	m.agentModalOpen = false
 	m.agent.prompt.SetValue("")
 	m.agent.prompt.Blur()
+	m.agentSchedule.SetValue("")
+	m.agentSchedule.Blur()
+	m.agentScheduleErr = ""
 
 	return m, tea.Batch(cmd, drain)
 }
@@ -1865,6 +2105,16 @@ func (m Model) View() string {
 		return overlayCenter(base, m.viewQuitModalBox(w), w, h)
 	}
 
+	// Pipeline mode-select / schedule-input overlay.
+	if m.pipelineLaunchMode == plModeSelect {
+		base := body + "\n" + m.viewBottomBar(w)
+		return overlayCenter(base, m.viewPipelineModeSelect(w), w, h)
+	}
+	if m.pipelineLaunchMode == plScheduleInput {
+		base := body + "\n" + m.viewBottomBar(w)
+		return overlayCenter(base, m.viewPipelineScheduleInput(w), w, h)
+	}
+
 	// Agent modal — floating overlay on top of the switchboard.
 	if m.agentModalOpen {
 		base := body + "\n" + m.viewBottomBar(w)
@@ -1989,6 +2239,94 @@ func (m Model) viewDeleteModalBox(w int) string {
 				lipgloss.NewStyle().Foreground(mc.dim).Render("[n]") + "o / esc",
 		),
 	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(mc.border).
+		Width(outerW).
+		Render(strings.Join(rows, "\n"))
+}
+
+// viewPipelineModeSelect renders the mode-select overlay for pipeline launch.
+func (m Model) viewPipelineModeSelect(w int) string {
+	innerW := max(min(w-8, 52), 30)
+	outerW := innerW + 2
+
+	mc := m.resolveModalColors()
+	pal := m.ansiPalette()
+
+	headerStyle := lipgloss.NewStyle().
+		Background(mc.titleBG).
+		Foreground(mc.titleFG).
+		Bold(true).
+		Width(innerW).
+		Padding(0, 1)
+
+	rowStyle := lipgloss.NewStyle().Foreground(mc.fg).Width(innerW).Padding(0, 1)
+
+	options := []string{"Run now", "Schedule recurring"}
+	var rows []string
+	title := "PIPELINE  " + m.pendingPipelineName
+	if len(title) > innerW-1 {
+		title = title[:innerW-1] + "…"
+	}
+	rows = append(rows, headerStyle.Render(title))
+	rows = append(rows, "")
+	for i, opt := range options {
+		if i == m.pipelineModeSelected {
+			sel := pal.SelBG + aWht + "  > " + opt + aRst
+			rows = append(rows, rowStyle.Render(sel))
+		} else {
+			rows = append(rows, rowStyle.Render(pal.Dim+"    "+opt+aRst))
+		}
+	}
+	rows = append(rows, "")
+	rows = append(rows, rowStyle.Render(pal.Dim+"↑↓ select  enter confirm  esc cancel"+aRst))
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(mc.border).
+		Width(outerW).
+		Render(strings.Join(rows, "\n"))
+}
+
+// viewPipelineScheduleInput renders the schedule-input overlay for pipeline scheduling.
+func (m Model) viewPipelineScheduleInput(w int) string {
+	innerW := max(min(w-8, 60), 36)
+	outerW := innerW + 2
+
+	mc := m.resolveModalColors()
+	pal := m.ansiPalette()
+
+	headerStyle := lipgloss.NewStyle().
+		Background(mc.titleBG).
+		Foreground(mc.titleFG).
+		Bold(true).
+		Width(innerW).
+		Padding(0, 1)
+
+	rowStyle := lipgloss.NewStyle().Foreground(mc.fg).Width(innerW).Padding(0, 1)
+
+	var rows []string
+	title := "SCHEDULE PIPELINE  " + m.pendingPipelineName
+	if len(title) > innerW-1 {
+		title = title[:innerW-1] + "…"
+	}
+	rows = append(rows, headerStyle.Render(title))
+	rows = append(rows, "")
+	rows = append(rows, rowStyle.Render(pal.Dim+"  cron expression:"+aRst))
+
+	schedInnerW := max(innerW-4, 10)
+	m.pipelineScheduleInput.SetWidth(schedInnerW)
+	for _, sLine := range strings.Split(m.pipelineScheduleInput.View(), "\n") {
+		sLine = strings.TrimRight(sLine, "\r")
+		rows = append(rows, rowStyle.Render("  "+sLine))
+	}
+	if m.pipelineScheduleErr != "" {
+		rows = append(rows, rowStyle.Render(pal.Error+"  "+m.pipelineScheduleErr+aRst))
+	}
+	rows = append(rows, "")
+	rows = append(rows, rowStyle.Render(pal.Dim+"  enter/ctrl+s confirm  esc cancel"+aRst))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -2131,32 +2469,20 @@ func (m Model) viewAgentModalBox(w int) string {
 		rows = append(rows, boxRow(padded, modalW, modalBorderColor))
 	}
 
-	// ── WORKING DIRECTORY section ─────────────────────────────────────────────
+	// ── SCHEDULE section ──────────────────────────────────────────────────────
 	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	cwdHeader := "  " + sectionLabel("WORKING DIRECTORY", m.agentModalFocus == 3)
-	rows = append(rows, boxRow(cwdHeader, modalW, modalBorderColor))
-	cwdDisplay := m.agentCWD
-	if cwdDisplay == "" {
-		cwdDisplay = m.launchCWD
+	schedHeader := "  " + sectionLabel("SCHEDULE (cron expr, blank = run now)", m.agentModalFocus == 3)
+	rows = append(rows, boxRow(schedHeader, modalW, modalBorderColor))
+	schedInnerW := max(modalW-6, 10)
+	m.agentSchedule.SetWidth(schedInnerW)
+	for _, sLine := range strings.Split(m.agentSchedule.View(), "\n") {
+		sLine = strings.TrimRight(sLine, "\r")
+		padded := "  " + sLine
+		rows = append(rows, boxRow(padded, modalW, modalBorderColor))
 	}
-	// Trim to home-relative display for readability.
-	if home := os.Getenv("HOME"); home != "" && strings.HasPrefix(cwdDisplay, home) {
-		cwdDisplay = "~" + cwdDisplay[len(home):]
-	}
-	// Truncate long paths to fit the modal.
-	maxCWDLen := max(modalW-8, 10)
-	if len(cwdDisplay) > maxCWDLen {
-		cwdDisplay = "…" + cwdDisplay[len(cwdDisplay)-maxCWDLen+1:]
-	}
-	var cwdContent string
-	if m.agentModalFocus == 3 {
-		cwdContent = pal.SelBG + aWht + "  > " + cwdDisplay + aRst
-	} else {
-		cwdContent = pal.Dim + "    " + aRst + pal.Accent + cwdDisplay + aRst
-	}
-	rows = append(rows, boxRow(cwdContent, modalW, modalBorderColor))
-	if m.agentModalFocus == 3 {
-		rows = append(rows, boxRow(pal.Dim+"  enter to browse directories"+aRst, modalW, modalBorderColor))
+	if m.agentScheduleErr != "" {
+		errLine := "  " + pal.Error + m.agentScheduleErr + aRst
+		rows = append(rows, boxRow(errLine, modalW, modalBorderColor))
 	}
 
 	// ── Hint bar ──────────────────────────────────────────────────────────────
@@ -2165,9 +2491,6 @@ func (m Model) viewAgentModalBox(w int) string {
 		hint("tab", "focus"),
 		hint("ctrl+s", "submit"),
 		hint("esc", "close"),
-	}
-	if m.agentModalFocus == 3 {
-		hintParts = append([]string{hint("enter", "browse dirs")}, hintParts...)
 	}
 	hintStr := "  " + strings.Join(hintParts, sep)
 	rows = append(rows, boxRow(hintStr, modalW, modalBorderColor))
@@ -2891,4 +3214,20 @@ func resolveSwitchboardBin() string {
 		self = resolved
 	}
 	return filepath.Join(filepath.Dir(self), "orcai-sysop")
+}
+
+// ensureCronDaemon starts the orcai-cron tmux session if it does not already exist.
+func ensureCronDaemon() {
+	// Check if orcai-cron session exists.
+	err := exec.Command("tmux", "has-session", "-t", "orcai-cron").Run()
+	if err == nil {
+		return // already running
+	}
+	// Find the orcai binary next to the running binary.
+	self, _ := os.Executable()
+	bin := self
+	if altBin, err := exec.LookPath("orcai"); err == nil {
+		bin = altBin
+	}
+	exec.Command(bin, "cron", "start").Run() //nolint:errcheck
 }

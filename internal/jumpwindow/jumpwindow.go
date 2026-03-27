@@ -85,6 +85,7 @@ func loadPalette() jumpPalette {
 type model struct {
 	windows  []window
 	filtered []window
+	sysop    []window
 	selected int
 	input    textinput.Model
 	width    int
@@ -106,6 +107,7 @@ func newModel() model {
 	m := model{input: ti, pal: pal}
 	m.windows = listWindows()
 	m.filtered = m.windows
+	m.sysop = listSysopWindows()
 	return m
 }
 
@@ -143,6 +145,35 @@ func listWindows() []window {
 	return wins
 }
 
+// listSysopWindows queries the orcai-cron tmux session for its windows.
+// Returns nil if the session does not exist or tmux is unavailable.
+func listSysopWindows() []window {
+	out, err := exec.Command("tmux", "list-windows",
+		"-t", "orcai-cron",
+		"-F", "#{window_index}:#{window_id}:#{window_name}:#{@orcai-label}").Output()
+	if err != nil {
+		return nil // session doesn't exist or tmux unavailable
+	}
+	var wins []window
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 4)
+		if len(parts) != 4 {
+			continue
+		}
+		idx, id, rawName, label := parts[0], parts[1], parts[2], parts[3]
+		display := label
+		if display == "" {
+			display = rawName
+		}
+		display += "  #" + idx
+		wins = append(wins, window{index: idx, name: display, id: id})
+	}
+	return wins
+}
+
 func (m model) Init() tea.Cmd { return textinput.Blink }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -163,19 +194,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "down", "j":
-			if m.selected < len(m.filtered)-1 {
+			total := len(m.filtered) + len(m.sysop)
+			if m.selected < total-1 {
 				m.selected++
 			}
 			return m, nil
 
 		case "enter":
-			if len(m.filtered) > 0 && m.selected < len(m.filtered) {
-				w := m.filtered[m.selected]
-				target := w.id
-				if target == "" {
-					target = w.index
+			totalFiltered := len(m.filtered)
+			if m.selected < totalFiltered {
+				if totalFiltered > 0 {
+					w := m.filtered[m.selected]
+					target := w.id
+					if target == "" {
+						target = w.index
+					}
+					exec.Command("tmux", "select-window", "-t", target).Run() //nolint:errcheck
 				}
-				exec.Command("tmux", "select-window", "-t", target).Run() //nolint:errcheck
+			} else {
+				sysopIdx := m.selected - totalFiltered
+				if sysopIdx < len(m.sysop) {
+					w := m.sysop[sysopIdx]
+					target := w.id
+					if target == "" {
+						target = "orcai-cron:" + w.index
+					}
+					exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
+					exec.Command("tmux", "select-window", "-t", target).Run()       //nolint:errcheck
+				}
 			}
 			return m, tea.Quit
 
@@ -198,8 +244,11 @@ func (m *model) applyFilter() {
 	q := strings.ToLower(m.input.Value())
 	if q == "" {
 		m.filtered = m.windows
-		if m.selected >= len(m.filtered) {
-			m.selected = max(len(m.filtered)-1, 0)
+		total := len(m.filtered) + len(m.sysop)
+		if total == 0 {
+			m.selected = 0
+		} else if m.selected >= total {
+			m.selected = total - 1
 		}
 		return
 	}
@@ -210,8 +259,11 @@ func (m *model) applyFilter() {
 		}
 	}
 	m.filtered = out
-	if m.selected >= len(m.filtered) {
-		m.selected = max(len(m.filtered)-1, 0)
+	total := len(m.filtered) + len(m.sysop)
+	if total == 0 {
+		m.selected = 0
+	} else if m.selected >= total {
+		m.selected = total - 1
 	}
 }
 
@@ -269,6 +321,23 @@ func (m model) View() string {
 		for i, win := range m.filtered {
 			label := win.name
 			if i == m.selected {
+				rows = append(rows, selectedStyle.Render("  "+label))
+			} else {
+				rows = append(rows, normalStyle.Render(label))
+			}
+		}
+	}
+
+	if len(m.sysop) > 0 {
+		sysopSectionStyle := lipgloss.NewStyle().
+			Foreground(m.pal.dim).
+			Width(w).
+			Padding(0, 1)
+		rows = append(rows, sysopSectionStyle.Render("— sysop —"))
+		for i, win := range m.sysop {
+			label := win.name
+			sysopIdx := len(m.filtered) + i
+			if m.selected == sysopIdx {
 				rows = append(rows, selectedStyle.Render("  "+label))
 			} else {
 				rows = append(rows, normalStyle.Render(label))

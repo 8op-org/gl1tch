@@ -852,3 +852,217 @@ func TestJobDoneMsg_NoSteps_ProducesFeedDone(t *testing.T) {
 	}
 }
 
+// ── Agent modal SCHEDULE field (cron-recurring-ui-wiring) ────────────────────
+
+// TestAgentModal_TabCyclesToScheduleSlot checks that Tab from slot 2 (PROMPT)
+// reaches slot 3 (SCHEDULE).
+func TestAgentModal_TabCyclesToScheduleSlot(t *testing.T) {
+	m := switchboard.NewWithTestProviders()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+
+	// Focus agent and open modal.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m6 := m5.(switchboard.Model)
+
+	if !m6.AgentModalOpen() {
+		t.Fatal("expected agent modal to be open")
+	}
+
+	// Tab three times: slot 0 → 1 → 2 → 3.
+	cur := m6
+	for i := 0; i < 3; i++ {
+		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
+		cur = nx.(switchboard.Model)
+	}
+
+	if got := cur.AgentModalFocus(); got != 3 {
+		t.Errorf("expected agentModalFocus == 3 (SCHEDULE), got %d", got)
+	}
+}
+
+// TestAgentModal_SubmitBlankSchedule checks that submit with a blank SCHEDULE
+// field does not add a cron entry (run-now path) — model simply processes the
+// submission without error.
+func TestAgentModal_SubmitBlankSchedule(t *testing.T) {
+	m := switchboard.NewWithTestProviders()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+
+	// Focus agent and open modal.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m6 := m5.(switchboard.Model)
+
+	// Tab to PROMPT (slot 2) and type a prompt.
+	m7, _ := m6.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m8, _ := m7.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
+	// Now at slot 2 — type some text.
+	for _, r := range "test prompt" {
+		nx, _ := m8.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m8 = nx
+	}
+
+	// SCHEDULE is blank — submit via ctrl+s. The run-now path will try to
+	// launch an agent (may fail without real provider). Just check modal closes
+	// or, if prompt is empty for some reason, at least no crash.
+	// We accept either modal-closed or modal-open-with-no-error.
+	m9, _ := m8.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	m10 := m9.(switchboard.Model)
+
+	if m10.AgentScheduleErr() != "" {
+		t.Errorf("expected no schedule error with blank schedule, got: %q", m10.AgentScheduleErr())
+	}
+}
+
+// TestAgentModal_InvalidScheduleShowsError checks that an invalid cron expression
+// sets the agentScheduleErr field.
+func TestAgentModal_InvalidScheduleShowsError(t *testing.T) {
+	m := switchboard.NewWithTestProviders()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+
+	// Focus agent, open modal.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m6 := m5.(switchboard.Model)
+
+	// Tab to PROMPT (slot 2) and enter a prompt.
+	m7, _ := m6.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m8, _ := m7.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
+	for _, r := range "hello" {
+		nx, _ := m8.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m8 = nx
+	}
+
+	// Tab to SCHEDULE (slot 3) and type an invalid cron expression.
+	m9, _ := m8.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
+	for _, r := range "not-a-valid-cron" {
+		nx, _ := m9.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m9 = nx
+	}
+
+	// Submit — should set schedule error.
+	m10, _ := m9.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	m11 := m10.(switchboard.Model)
+
+	if m11.AgentScheduleErr() == "" {
+		t.Error("expected agentScheduleErr to be set for invalid cron expression")
+	}
+	if !m11.AgentModalOpen() {
+		t.Error("modal should remain open when schedule has an error")
+	}
+}
+
+// ── Pipeline Launcher mode-select overlay ─────────────────────────────────────
+
+// TestPipelineLauncher_EnterShowsModeSelect verifies that pressing Enter in the
+// pipeline launcher (with pipelines available) opens the mode-select overlay.
+func TestPipelineLauncher_EnterShowsModeSelect(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "my-pipe.pipeline.yaml"),
+		[]byte("name: my-pipe\nsteps: []\n"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Press Enter in launcher — mode-select overlay should open.
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m4 := m3.(switchboard.Model)
+
+	if got := m4.PipelineLaunchMode(); got != switchboard.PlModeSelect() {
+		t.Errorf("expected PipelineLaunchMode == plModeSelect (%d), got %d", switchboard.PlModeSelect(), got)
+	}
+}
+
+// TestPipelineLauncher_EscResetsModeSelect verifies that Esc from the
+// mode-select overlay resets the launch mode to none.
+func TestPipelineLauncher_EscResetsModeSelect(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "my-pipe.pipeline.yaml"), //nolint:errcheck
+		[]byte("name: my-pipe\nsteps: []\n"), 0o600)
+	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEscape})
+	m5 := m4.(switchboard.Model)
+
+	if got := m5.PipelineLaunchMode(); got != switchboard.PlModeNone() {
+		t.Errorf("expected PipelineLaunchMode == plModeNone after Esc, got %d", got)
+	}
+}
+
+// TestPipelineLauncher_DownMovesSelection verifies Down/j moves the cursor in
+// the mode-select overlay.
+func TestPipelineLauncher_DownMovesSelection(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "pipe.pipeline.yaml"), //nolint:errcheck
+		[]byte("name: pipe\nsteps: []\n"), 0o600)
+	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m5 := m4.(switchboard.Model)
+
+	if got := m5.PipelineModeSelected(); got != 1 {
+		t.Errorf("expected pipelineModeSelected == 1 after j, got %d", got)
+	}
+}
+
+// TestPipelineLauncher_SelectScheduleTransitionsToInput verifies that selecting
+// "Schedule recurring" (item 1) in the mode-select overlay transitions to the
+// schedule-input state.
+func TestPipelineLauncher_SelectScheduleTransitionsToInput(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "pipe.pipeline.yaml"), //nolint:errcheck
+		[]byte("name: pipe\nsteps: []\n"), 0o600)
+	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Enter mode-select, move to Schedule, press Enter.
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m6 := m5.(switchboard.Model)
+
+	if got := m6.PipelineLaunchMode(); got != switchboard.PlScheduleInput() {
+		t.Errorf("expected PipelineLaunchMode == plScheduleInput (%d), got %d", switchboard.PlScheduleInput(), got)
+	}
+}
+
+// TestPipelineScheduleInput_InvalidCronShowsError verifies that submitting an
+// invalid cron expression in the schedule-input overlay sets PipelineScheduleErr.
+func TestPipelineScheduleInput_InvalidCronShowsError(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "pipe.pipeline.yaml"), //nolint:errcheck
+		[]byte("name: pipe\nsteps: []\n"), 0o600)
+	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Enter mode-select → schedule-input.
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Type an invalid cron expression.
+	cur := m5
+	for _, r := range "bad cron" {
+		nx, _ := cur.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		cur = nx
+	}
+	// Submit.
+	m6, _ := cur.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	m7 := m6.(switchboard.Model)
+
+	if m7.PipelineScheduleErr() == "" {
+		t.Error("expected PipelineScheduleErr to be set for invalid cron")
+	}
+	if m7.PipelineLaunchMode() != switchboard.PlScheduleInput() {
+		t.Errorf("expected to stay in schedule-input state on error, got mode %d", m7.PipelineLaunchMode())
+	}
+}
+

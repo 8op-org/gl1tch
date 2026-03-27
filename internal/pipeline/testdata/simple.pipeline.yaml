@@ -1,0 +1,8 @@
+name: simple
+version: "1"
+steps:
+  - id: output
+    executor: builtin.set_data
+    args:
+      data:
+        value: integration-ok
