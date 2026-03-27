@@ -89,7 +89,7 @@ func buildTmuxConf(self string) string {
 		"set -g window-status-current-format \"\"\n" +
 		fmt.Sprintf("set -g status-left \"#[fg=%s,bold] ORCAI #[default]\"\n", pal.accent) +
 		"set -g status-left-length 20\n" +
-		fmt.Sprintf("set -g status-right \"#[fg=%s] ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc q   %%H:%%M \"\n", pal.dim) +
+		fmt.Sprintf("set -g status-right \"#[fg=%s] ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc d detach  ^spc r reload  ^spc q   %%H:%%M \"\n", pal.dim) +
 		"set -g status-right-length 100\n" +
 		"set -g mouse on\n" +
 		"set -g default-terminal \"screen-256color\"\n" +
@@ -103,8 +103,8 @@ func buildTmuxConf(self string) string {
 
 	// Chord bindings inside the orcai-chord key table.
 	chords := "bind-key -T orcai-chord q     { switch-client -T root ; select-window -t orcai:0 ; send-keys -t orcai:0 C-q }\n" +
-		"bind-key -T orcai-chord d     { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help detach\" }\n" +
-		"bind-key -T orcai-chord r     { switch-client -T root ; display-popup -E -w 44 -h 18 \"" + self + " _help reload\" }\n" +
+		"bind-key -T orcai-chord d     { switch-client -T root ; detach-client }\n" +
+		"bind-key -T orcai-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
 		"bind-key -T orcai-chord o     { switch-client -T root ; display-popup -E -w 68 -h 24 \"" + self + " ollama\" }\n" +
 		"bind-key -T orcai-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
 		"bind-key -T orcai-chord t     select-window -t orcai:0\n" +

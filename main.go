@@ -38,12 +38,12 @@ func main() {
 		case "_promptbuilder", "pipeline-builder":
 			promptbuilder.Run()
 			return
+		case "_reload":
+			bootstrap.WriteReloadMarker() //nolint:errcheck
+			exec.Command("tmux", "detach-client").Run() //nolint:errcheck
+			return
 		case "_help":
-			if len(os.Args) > 2 {
-				chordhelp.RunAction(os.Args[2])
-			} else {
-				chordhelp.Run()
-			}
+			chordhelp.Run()
 			return
 		case "_jump":
 			jumpwindow.Run()

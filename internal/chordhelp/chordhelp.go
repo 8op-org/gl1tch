@@ -1,5 +1,5 @@
-// Package chordhelp runs the global ` chord-key popup.
-// Press ` from anywhere in the tmux session to open it.
+// Package chordhelp runs the global ^spc C-Space chord-key popup.
+// Shows a read-only shortcut reference; all actions are handled by the switchboard.
 package chordhelp
 
 import (
@@ -11,16 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/bootstrap"
 	"github.com/adam-stokes/orcai/internal/themes"
-)
-
-type helpState int
-
-const (
-	stateHelp helpState = iota
-	stateConfirmDetach
-	stateConfirmReload
 )
 
 // helpPalette holds resolved lipgloss colors for the chord-help popup.
@@ -30,7 +21,6 @@ type helpPalette struct {
 	fg      lipgloss.Color
 	accent  lipgloss.Color
 	dim     lipgloss.Color
-	error   lipgloss.Color
 }
 
 // loadHelpPalette reads the persisted active theme and derives popup colors.
@@ -42,7 +32,6 @@ func loadHelpPalette() helpPalette {
 		fg:      lipgloss.Color("#eceff4"),
 		accent:  lipgloss.Color("#88c0d0"),
 		dim:     lipgloss.Color("#4c566a"),
-		error:   lipgloss.Color("#bf616a"),
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -72,14 +61,10 @@ func loadHelpPalette() helpPalette {
 	if v := b.Palette.Dim; v != "" {
 		p.dim = lipgloss.Color(v)
 	}
-	if v := b.Palette.Error; v != "" {
-		p.error = lipgloss.Color(v)
-	}
 	return p
 }
 
 type model struct {
-	state  helpState
 	width  int
 	height int
 	self   string
@@ -100,47 +85,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		return m, nil
-
 	case tea.KeyMsg:
-		switch m.state {
-
-		case stateHelp:
-			switch msg.String() {
-			case "d":
-				m.state = stateConfirmDetach
-			case "r":
-				m.state = stateConfirmReload
-			case "n":
-				if m.self != "" {
-					exec.Command("tmux", "display-popup", "-E",
-						"-w", "42", "-h", "20", m.self, "_picker").Run() //nolint:errcheck
-				}
-				return m, tea.Quit
-			case "s":
-				if m.self != "" {
-					exec.Command("tmux", "display-popup", "-E",
-						"-w", "44", "-h", "6", m.self, "_opsx").Run() //nolint:errcheck
-				}
-				return m, tea.Quit
-			case "esc", "`", "ctrl+c":
-				return m, tea.Quit
+		switch msg.String() {
+		case "n":
+			if m.self != "" {
+				exec.Command("tmux", "display-popup", "-E",
+					"-w", "42", "-h", "20", m.self, "_picker").Run() //nolint:errcheck
 			}
-
-		case stateConfirmDetach, stateConfirmReload:
-			switch msg.String() {
-			case "y", "enter":
-				switch m.state {
-				case stateConfirmDetach:
-					exec.Command("tmux", "detach-client").Run() //nolint:errcheck
-				case stateConfirmReload:
-					bootstrap.WriteReloadMarker()                          //nolint:errcheck
-					exec.Command("tmux", "detach-client").Run()            //nolint:errcheck
-				}
-				return m, tea.Quit
-			case "n", "esc", "ctrl+c":
-				return m, tea.Quit
+			return m, tea.Quit
+		case "s":
+			if m.self != "" {
+				exec.Command("tmux", "display-popup", "-E",
+					"-w", "44", "-h", "6", m.self, "_opsx").Run() //nolint:errcheck
 			}
+			return m, tea.Quit
+		case "esc", "`", "ctrl+c":
+			return m, tea.Quit
 		}
 	}
 	return m, nil
@@ -149,7 +109,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	w := m.width
 	if w <= 0 {
-		w = 44
+		w = 50
 	}
 
 	headerStyle := lipgloss.NewStyle().
@@ -159,53 +119,10 @@ func (m model) View() string {
 		Width(w).
 		Padding(0, 1)
 
-	// ── Confirmation view ────────────────────────────────────────────────────
-	if m.state == stateConfirmDetach || m.state == stateConfirmReload {
-		var title string
-		switch m.state {
-		case stateConfirmDetach:
-			title = "Detach session?"
-		case stateConfirmReload:
-			title = "Reload ORCAI? (sessions preserved)"
-		}
-
-		bodyStyle := lipgloss.NewStyle().
-			Width(w).
-			Padding(1, 2)
-
-		yesStyle := lipgloss.NewStyle().
-			Background(m.pal.titleBG).
-			Foreground(m.pal.titleFG).
-			Bold(true).
-			Padding(0, 1)
-
-		noStyle := lipgloss.NewStyle().
-			Foreground(m.pal.dim).
-			Padding(0, 1)
-
-		keys := lipgloss.JoinHorizontal(lipgloss.Left,
-			yesStyle.Render("y yes"),
-			lipgloss.NewStyle().Foreground(m.pal.dim).Render("  "),
-			noStyle.Render("n no"),
-		)
-
-		body := lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Foreground(m.pal.accent).Bold(true).Render(title),
-			"",
-			keys,
-		)
-
-		return lipgloss.JoinVertical(lipgloss.Left,
-			headerStyle.Render("ORCAI  confirm"),
-			bodyStyle.Render(body),
-		)
-	}
-
-	// ── Help view ────────────────────────────────────────────────────────────
 	keyStyle := lipgloss.NewStyle().
 		Foreground(m.pal.accent).
 		Bold(true).
-		Width(6)
+		Width(10)
 
 	descStyle := lipgloss.NewStyle().
 		Foreground(m.pal.fg)
@@ -213,8 +130,8 @@ func (m model) View() string {
 	sectionStyle := lipgloss.NewStyle().
 		Foreground(m.pal.dim).
 		Width(w).
-		PaddingTop(1).
-		Padding(0, 1)
+		Padding(0, 1).
+		PaddingTop(1)
 
 	rowStyle := lipgloss.NewStyle().
 		Width(w).
@@ -235,15 +152,16 @@ func (m model) View() string {
 		headerStyle.Render("ORCAI  shortcuts"),
 		sectionStyle.Render("session"),
 		row("^spc q", "quit workspace"),
-		row("d", "detach  (reconnect with: orcai)"),
-		row("r", "reload  (updated binary, sessions preserved)"),
+		row("^spc d", "detach  (reconnect with: orcai)"),
+		row("^spc r", "reload  (updated binary, sessions preserved)"),
 		row("n", "new session"),
 		row("s", "OpenSpec — propose a feature"),
 		sectionStyle.Render("navigation"),
-		row("↑ k", "navigate up"),
-		row("↓ j", "navigate down"),
-		row("↩", "switch to window"),
-		row("x", "kill window"),
+		row("^spc t", "switchboard"),
+		row("^spc m", "themes"),
+		row("^spc j", "jump to window"),
+		row("^spc c", "new window"),
+		row("^spc x", "kill pane"),
 		rowStyle.Render(""),
 		rowStyle.Render(dimStyle.Render("esc  dismiss")),
 	}
@@ -254,22 +172,6 @@ func (m model) View() string {
 // Run starts the chord-help popup as a bubbletea program.
 func Run() {
 	p := tea.NewProgram(newModel(), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("chordhelp error: %v\n", err)
-	}
-}
-
-// RunAction starts the popup directly in a specific state: "quit" or "detach".
-// Used when a chord like `q or `d is pressed without going through the help screen.
-func RunAction(action string) {
-	m := newModel()
-	switch action {
-	case "detach":
-		m.state = stateConfirmDetach
-	case "reload":
-		m.state = stateConfirmReload
-	}
-	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("chordhelp error: %v\n", err)
 	}
