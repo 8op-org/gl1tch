@@ -1692,7 +1692,7 @@ func (m Model) View() string {
 	// Dir picker overlay — highest priority, shown on top of everything.
 	if m.dirPickerOpen {
 		base := body + "\n" + m.viewBottomBar(w)
-		return overlayCenter(base, m.dirPicker.viewDirPickerBox(w), w, h)
+		return overlayCenter(base, m.dirPicker.viewDirPickerBox(w, m.ansiPalette()), w, h)
 	}
 
 	if m.helpOpen {

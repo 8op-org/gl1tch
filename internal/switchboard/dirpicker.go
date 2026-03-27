@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/adam-stokes/orcai/internal/styles"
 )
 
 // DirSelectedMsg is emitted when the user confirms a directory selection.
@@ -192,15 +194,20 @@ func (m DirPickerModel) Update(msg tea.Msg) (DirPickerModel, tea.Cmd) {
 
 // viewDirPickerBox renders the dir picker as a box string suitable for
 // use with overlayCenter. w is the total available terminal width.
-func (m DirPickerModel) viewDirPickerBox(w int) string {
+// pal is the active theme palette so the box honors theme colors.
+func (m DirPickerModel) viewDirPickerBox(w int, pal styles.ANSIPalette) string {
 	modalW := min(max(w-4, 60), 80)
 	if w < 62 {
 		modalW = w
 	}
 
-	borderColor := aPur
+	borderColor := pal.Border
+	accent := pal.Accent
+	dim := pal.Dim
+	fg := pal.FG
+
 	var rows []string
-	rows = append(rows, boxTop(modalW, "DIRECTORY", borderColor, borderColor))
+	rows = append(rows, boxTop(modalW, "DIRECTORY", borderColor, accent))
 
 	// Query input row.
 	inputView := "  " + m.input.View()
@@ -208,9 +215,9 @@ func (m DirPickerModel) viewDirPickerBox(w int) string {
 	rows = append(rows, boxRow("", modalW, borderColor))
 
 	if m.walking && len(m.allDirs) == 0 {
-		rows = append(rows, boxRow(aDim+"  scanning directories…"+aRst, modalW, borderColor))
+		rows = append(rows, boxRow(dim+"  scanning directories…"+aRst, modalW, borderColor))
 	} else if len(m.shown) == 0 {
-		rows = append(rows, boxRow(aDim+"  no matches"+aRst, modalW, borderColor))
+		rows = append(rows, boxRow(dim+"  no matches"+aRst, modalW, borderColor))
 	} else {
 		// Show up to 12 results in the visible window.
 		const visWindow = 12
@@ -238,18 +245,18 @@ func (m DirPickerModel) viewDirPickerBox(w int) string {
 			}
 
 			if i == m.cursor {
-				content := aPur + aBld + "  > " + aRst + aWht + display + aRst
+				content := accent + aBld + "  > " + aRst + fg + display + aRst
 				visLen := 4 + len(display)
 				rows = append(rows, borderColor+"│"+content+strings.Repeat(" ", max(modalW-2-visLen, 0))+borderColor+"│"+aRst)
 			} else {
-				content := aDim + "    " + aRst + display
+				content := dim + "    " + aRst + display
 				rows = append(rows, boxRow(content, modalW, borderColor))
 			}
 		}
 	}
 
 	rows = append(rows, boxRow("", modalW, borderColor))
-	hint := "  " + aPur + "↑↓" + aDim + " nav · " + aRst + aPur + "enter" + aDim + " select · " + aRst + aPur + "esc" + aDim + " cancel" + aRst
+	hint := "  " + accent + "↑↓" + dim + " nav · " + aRst + accent + "enter" + dim + " select · " + aRst + accent + "esc" + dim + " cancel" + aRst
 	rows = append(rows, boxRow(hint, modalW, borderColor))
 	rows = append(rows, boxBot(modalW, borderColor))
 
