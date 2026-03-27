@@ -31,7 +31,7 @@ func readmeContent() string {
 func (m Model) viewHelpModal(w, h int) string {
 	mc := m.resolveModalColors()
 
-	innerW := min(w-8, 80)
+	innerW := w - 4 // full-width minus border (2) and margin (2)
 	if innerW < 40 {
 		innerW = 40
 	}
