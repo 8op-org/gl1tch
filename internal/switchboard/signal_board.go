@@ -2,9 +2,6 @@ package switchboard
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 // SignalBoard tracks state for the SIGNAL BOARD panel.
@@ -35,11 +32,11 @@ func (m Model) buildSignalBoard(height, width int) []string {
 		filter = "all"
 	}
 
-	borderColor := aBC
-	if m.signalBoardFocused {
-		borderColor = aBrC
-	}
 	pal := m.ansiPalette()
+	borderColor := pal.Border
+	if m.signalBoardFocused {
+		borderColor = pal.Accent
+	}
 
 	var lines []string
 	if sprite := PanelHeader(m.activeBundle(), "signal_board", width); sprite != nil {
@@ -101,19 +98,13 @@ func (m Model) buildSignalBoard(height, width int) []string {
 				title = title[:maxTitleLen-1] + "…"
 			}
 
-			rowContent := fmt.Sprintf("  [%s] %s  %-*s  %s",
-				led, ts, maxTitleLen, title, statusLabel)
-			rowVis := lipgloss.Width(rowContent)
-
+			cursor := "  "
 			if i == m.signalBoard.selectedIdx && m.signalBoardFocused {
-				// Highlight selected row.
-				inner := width - 2
-				pad := max(inner-rowVis, 0)
-				selRow := borderColor + "│" + aSelBg + aWht + rowContent + strings.Repeat(" ", pad) + aRst + borderColor + "│" + aRst
-				lines = append(lines, selRow)
-			} else {
-				lines = append(lines, boxRow(rowContent, width, borderColor))
+				cursor = pal.Accent + "> " + aRst
 			}
+			rowContent := fmt.Sprintf("%s[%s] %s  %-*s  %s",
+				cursor, led, ts, maxTitleLen, title, statusLabel)
+			lines = append(lines, boxRow(rowContent, width, borderColor))
 		}
 	}
 

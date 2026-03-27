@@ -44,8 +44,7 @@ const (
 	aDim   = "\x1b[2m"   // dim
 	aBld   = "\x1b[1m"   // bold
 	aWht   = "\x1b[97m"  // white
-	aSelBg = "\x1b[44m"  // blue bg (selection)
-	aRst   = "\x1b[0m"   // reset
+aRst   = "\x1b[0m"   // reset
 	aBC    = "\x1b[36m"  // cyan borders (alias)
 	aBlu2  = "\x1b[34m"  // blue alias (unused var prevention)
 )
