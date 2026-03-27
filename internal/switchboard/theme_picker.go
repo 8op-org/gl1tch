@@ -139,6 +139,7 @@ func (m Model) handleThemePicker(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.registry != nil && m.themePickerCursor < len(bundles) {
 			chosen := bundles[m.themePickerCursor]
 			_ = m.registry.SetActive(chosen.Name)
+			applyTmuxTheme(&chosen)
 			m.themePickerOpen = false
 			return m, tea.ClearScreen
 		}

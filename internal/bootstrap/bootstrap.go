@@ -12,6 +12,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/busd"
 	"github.com/adam-stokes/orcai/internal/keybindings"
 	"github.com/adam-stokes/orcai/internal/layout"
+	"github.com/adam-stokes/orcai/internal/themes"
 	"github.com/adam-stokes/orcai/internal/widgetdispatch"
 )
 
@@ -34,22 +35,68 @@ func resolveCompanion(self, name, subcmd string) string {
 	return self + " " + subcmd
 }
 
+// tmuxPalette holds the hex color strings used for tmux status bar styling.
+type tmuxPalette struct {
+	accent string
+	bg     string
+	dim    string
+	border string
+}
+
+// loadTmuxPalette reads the persisted active theme and extracts the colors
+// needed for the tmux status bar. Falls back to Nord defaults.
+func loadTmuxPalette() tmuxPalette {
+	p := tmuxPalette{
+		accent: "#88c0d0",
+		bg:     "#2e3440",
+		dim:    "#4c566a",
+		border: "#3b4252",
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	userThemesDir := filepath.Join(home, configSubdir, "themes")
+	reg, err := themes.NewRegistry(userThemesDir)
+	if err != nil {
+		return p
+	}
+	b := reg.Active()
+	if b == nil {
+		return p
+	}
+	if v := b.Palette.Accent; v != "" {
+		p.accent = v
+	}
+	if v := b.Palette.BG; v != "" {
+		p.bg = v
+	}
+	if v := b.Palette.Dim; v != "" {
+		p.dim = v
+	}
+	if v := b.Palette.Border; v != "" {
+		p.border = v
+	}
+	return p
+}
+
 func buildTmuxConf(self string) string {
+	pal := loadTmuxPalette()
 	// Base tmux settings.
-	base := `set -g status-position bottom
-set -g status-style "fg=#bd93f9,bg=#282a36"
-set -g window-status-format ""
-set -g window-status-current-format ""
-set -g status-left "#[fg=#bd93f9,bold] ORCAI #[default]"
-set -g status-left-length 20
-set -g status-right "#[fg=#6272a4] ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc q   %H:%M "
-set -g status-right-length 100
-set -g mouse on
-set -g default-terminal "screen-256color"
-set -g base-index 0
-set -g pane-border-style "fg=#44475a"
-set -g pane-active-border-style "fg=#bd93f9"
-`
+	base := "set -g status-position bottom\n" +
+		fmt.Sprintf("set -g status-style \"fg=%s,bg=%s\"\n", pal.accent, pal.bg) +
+		"set -g window-status-format \"\"\n" +
+		"set -g window-status-current-format \"\"\n" +
+		fmt.Sprintf("set -g status-left \"#[fg=%s,bold] ORCAI #[default]\"\n", pal.accent) +
+		"set -g status-left-length 20\n" +
+		fmt.Sprintf("set -g status-right \"#[fg=%s] ^spc t switchboard  ^spc m themes  ^spc j jump  ^spc c win  ^spc q   %%H:%%M \"\n", pal.dim) +
+		"set -g status-right-length 100\n" +
+		"set -g mouse on\n" +
+		"set -g default-terminal \"screen-256color\"\n" +
+		"set -g base-index 0\n" +
+		fmt.Sprintf("set -g pane-border-style \"fg=%s\"\n", pal.border) +
+		fmt.Sprintf("set -g pane-active-border-style \"fg=%s\"\n", pal.accent)
+
 	// ctrl+space enters the orcai-chord key table.
 	// Press ctrl+space again to open the help popup; press a chord key to act directly.
 	leaderBinding := "bind-key -n C-Space switch-client -T orcai-chord\n"
