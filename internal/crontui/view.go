@@ -178,7 +178,6 @@ func (m Model) viewJobList(width, height int) string {
 			jobHints = []panelrender.Hint{
 				{Key: "esc", Desc: "clear filter"},
 				{Key: "enter", Desc: "confirm"},
-				{Key: "tab", Desc: "logs pane"},
 			}
 		} else {
 			jobHints = []panelrender.Hint{
@@ -187,7 +186,6 @@ func (m Model) viewJobList(width, height int) string {
 				{Key: "d", Desc: "delete"},
 				{Key: "enter/r", Desc: "run now"},
 				{Key: "/", Desc: "search"},
-				{Key: "tab", Desc: "logs"},
 			}
 		}
 	}
@@ -286,7 +284,6 @@ func (m Model) viewLogPane(width, height int) string {
 	if m.activePane == 1 {
 		logHints = []panelrender.Hint{
 			{Key: "j/k", Desc: "scroll"},
-			{Key: "tab", Desc: "jobs pane"},
 		}
 	}
 	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(logHints, width-2, m.ansiPal()), width, borderColor))
