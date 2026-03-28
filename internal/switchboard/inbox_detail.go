@@ -1,7 +1,9 @@
 package switchboard
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -9,6 +11,31 @@ import (
 
 	"github.com/adam-stokes/orcai/internal/store"
 )
+
+type runMeta struct {
+	PipelineFile string `json:"pipeline_file"`
+	CWD          string `json:"cwd"`
+}
+
+func parseRunMetadata(raw string) runMeta {
+	if raw == "" {
+		return runMeta{}
+	}
+	var m runMeta
+	_ = json.Unmarshal([]byte(raw), &m)
+	return m
+}
+
+func collapseTilde(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+	if strings.HasPrefix(path, home) {
+		return "~" + path[len(home):]
+	}
+	return path
+}
 
 // buildRunContent formats the full detail text for a run, mirroring the
 // content builder that was previously in internal/inbox/modal.go.
@@ -47,6 +74,15 @@ func buildRunContent(run store.Run, mc modalColors) string {
 		sb.WriteString(dim.Render("exit: ") + fg.Render("(running)"))
 	}
 	sb.WriteString("\n")
+
+	// Metadata: pipeline file and cwd
+	meta := parseRunMetadata(run.Metadata)
+	if meta.PipelineFile != "" {
+		sb.WriteString(dim.Render("pipeline: ") + fg.Render(collapseTilde(meta.PipelineFile)) + "\n")
+	}
+	if meta.CWD != "" {
+		sb.WriteString(dim.Render("cwd:      ") + fg.Render(collapseTilde(meta.CWD)) + "\n")
+	}
 
 	// Separator
 	sb.WriteString(dim.Render(strings.Repeat("─", 40)) + "\n")
