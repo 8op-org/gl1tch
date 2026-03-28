@@ -2330,18 +2330,18 @@ func (m Model) View() string {
 
 	leftW := m.leftColWidth()
 	feedW := max(w-leftW-1, 20)
-	contentH := max(h-2, 5) // reserve one line for top bar and one for bottom bar
+	contentH := max(h-1, 5) // reserve one line for top bar; hint bars live inside each panel
 
 	// Signal board: grows with entries up to 40% of screen height.
 	// Minimum 5 rows so the box is always visible (header+border).
-	maxSB := max(contentH*40/100, 8)
-	sbHeight := min(len(m.feed)+6, maxSB)
-	if sbHeight < 5 {
-		sbHeight = 5
+	maxSB := max(contentH*40/100, 10)
+	sbHeight := min(len(m.feed)+9, maxSB)
+	if sbHeight < 8 {
+		sbHeight = 8
 	}
 	// Clamp sbHeight so feedH is at least 3.
 	if sbHeight > contentH-3 {
-		sbHeight = max(contentH-3, 5)
+		sbHeight = max(contentH-3, 8)
 	}
 	feedH := max(contentH-sbHeight, 3)
 
@@ -2376,45 +2376,45 @@ func (m Model) View() string {
 
 	// Dir picker overlay — highest priority, shown on top of everything.
 	if m.dirPickerOpen {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.dirPicker.viewDirPickerBox(w, m.ansiPalette()), w, h)
 	}
 
 	if m.helpOpen {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewHelpModal(w, h), w, h)
 	}
 
 	if m.confirmQuit {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewQuitModalBox(w), w, h)
 	}
 
 	// Pipeline mode-select / schedule-input overlay.
 	if m.pipelineLaunchMode == plModeSelect {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewPipelineModeSelect(w), w, h)
 	}
 	if m.pipelineLaunchMode == plScheduleInput {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewPipelineScheduleInput(w), w, h)
 	}
 
 	// Agent modal — floating overlay on top of the switchboard.
 	if m.agentModalOpen {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewAgentModalBox(w), w, h)
 	}
 
 	// Delete confirmation — floating overlay on top of the switchboard.
 	if m.confirmDelete {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewDeleteModalBox(w), w, h)
 	}
 
 	// Theme picker overlay.
 	if m.themePickerOpen && m.registry != nil {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		bundles := m.registry.All()
 		content := viewThemePicker(bundles, m.themePickerCursor, m.registry.Active(), w)
 		return overlayCenter(base, content, w, h)
@@ -2422,11 +2422,11 @@ func (m Model) View() string {
 
 	// Inbox detail overlay — full-screen detail view for a run result.
 	if m.inboxDetailOpen && len(m.inboxModel.Runs()) > 0 {
-		base := topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewInboxDetail(w, h, m.inboxMarkdownMode), w, h)
 	}
 
-	return topBar + "\n" + body + "\n" + m.viewBottomBar(w)
+	return topBar + "\n" + body
 }
 
 // viewQuitModalBox renders the quit confirmation popup box.
@@ -2941,6 +2941,19 @@ func (m Model) buildLauncherSection(w int) []string {
 		}
 	}
 
+	// Hint footer row — always present; shows hints when focused, blank when not.
+	var launcherHints []panelrender.Hint
+	if m.launcher.focused {
+		launcherHints = []panelrender.Hint{
+			{Key: "enter", Desc: "launch"},
+			{Key: "n", Desc: "new"},
+			{Key: "e", Desc: "edit"},
+			{Key: "d", Desc: "delete"},
+			{Key: "↑↓", Desc: "nav"},
+			{Key: "tab", Desc: "focus"},
+		}
+	}
+	rows = append(rows, boxRow(panelrender.HintBar(launcherHints, w-2, pal), w, borderColor))
 	rows = append(rows, boxBot(w, borderColor))
 	return rows
 }
@@ -2997,6 +3010,16 @@ func (m Model) buildAgentSection(w int) []string {
 		}
 	}
 
+	// Hint footer row — always present; shows hints when focused, blank when not.
+	var agentHints []panelrender.Hint
+	if m.agent.focused {
+		agentHints = []panelrender.Hint{
+			{Key: "enter", Desc: "launch"},
+			{Key: "↑↓", Desc: "nav"},
+			{Key: "tab", Desc: "focus"},
+		}
+	}
+	rows = append(rows, boxRow(panelrender.HintBar(agentHints, w-2, pal), w, borderColor))
 	rows = append(rows, boxBot(w, borderColor))
 	return rows
 }
@@ -3036,8 +3059,9 @@ func (m Model) buildInboxSection(w, height int) []string {
 	}
 
 	runs := m.filteredInboxRuns()
-	// maxRows is remaining content rows: total height minus header lines minus 1 for boxBot.
-	maxRows := height - len(rows) - 1
+	// maxRows is remaining content rows: total height minus header lines minus 1 for boxBot
+	// minus 1 for the always-present hint footer row.
+	maxRows := height - len(rows) - 2
 	if maxRows < 0 {
 		maxRows = 0
 	}
@@ -3098,10 +3122,30 @@ func (m Model) buildInboxSection(w, height int) []string {
 		}
 	}
 
-	// Pad to fill allocated height so cron panel stays at a fixed position.
-	for len(rows) < height-1 {
+	// Pad to fill allocated height, leaving room for the always-present hint footer row.
+	for len(rows) < height-2 {
 		rows = append(rows, boxRow("", w, borderColor))
 	}
+	// Hint footer row — always present; shows hints when focused, blank when not.
+	var inboxHints []panelrender.Hint
+	if m.inboxPanel.focused {
+		if m.inboxPanel.filterActive {
+			inboxHints = []panelrender.Hint{
+				{Key: "esc", Desc: "cancel"},
+				{Key: "backspace", Desc: "delete"},
+				{Key: "tab", Desc: "focus"},
+			}
+		} else {
+			inboxHints = []panelrender.Hint{
+				{Key: "enter", Desc: "open"},
+				{Key: "x", Desc: "mark read"},
+				{Key: "/", Desc: "search"},
+				{Key: "↑↓", Desc: "nav"},
+				{Key: "tab", Desc: "focus"},
+			}
+		}
+	}
+	rows = append(rows, boxRow(panelrender.HintBar(inboxHints, w-2, pal), w, borderColor))
 	rows = append(rows, boxBot(w, borderColor))
 	if len(rows) > height {
 		rows = rows[:height]
@@ -3127,7 +3171,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 	if feedSprite != nil {
 		headerH = len(feedSprite)
 	}
-	visibleH := height - headerH - 1 // minus header and bottom border
+	visibleH := height - headerH - 2 // minus header, bottom border, and always-present hint footer
 
 	borderColor := pal.Border
 	if m.feedFocused {
@@ -3281,10 +3325,22 @@ func (m Model) viewActivityFeed(height, width int) string {
 	}
 	lines = append(lines, visible...)
 
-	// Pad to fill the box body.
-	for len(lines) < height-1 {
+	// Pad to fill the box body, leaving room for hint footer row (always present).
+	for len(lines) < height-2 {
 		lines = append(lines, boxRow("", width, borderColor))
 	}
+	// Hint footer row — always present; shows hints when focused, blank when not.
+	var feedHints []panelrender.Hint
+	if m.feedFocused {
+		feedHints = []panelrender.Hint{
+			{Key: "↑↓", Desc: "nav"},
+			{Key: "[/]", Desc: "page"},
+			{Key: "g/G", Desc: "top/bottom"},
+			{Key: "enter", Desc: "open"},
+			{Key: "tab", Desc: "focus"},
+		}
+	}
+	lines = append(lines, boxRow(panelrender.HintBar(feedHints, width-2, pal), width, borderColor))
 	lines = append(lines, boxBot(width, borderColor))
 
 	// Trim to exact height.
@@ -3293,103 +3349,6 @@ func (m Model) viewActivityFeed(height, width int) string {
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-// viewBottomBar renders the one-line keybinding hint strip.
-func (m Model) viewBottomBar(width int) string {
-	pal := m.ansiPalette()
-	keyColor := pal.Accent
-	descColor := pal.Dim
-	sepColor := pal.Dim
-	hint := func(key, desc string) string {
-		return keyColor + key + descColor + " " + desc + aRst
-	}
-	sep := sepColor + " · " + aRst
-
-	var parts []string
-	switch {
-	case m.signalBoardFocused && m.signalBoard.searching:
-		parts = []string{
-			hint("type", "search"),
-			hint("↑↓", "nav"),
-			hint("enter", "confirm"),
-			hint("esc", "clear"),
-		}
-	case m.signalBoardFocused:
-		parts = []string{
-			hint("↑↓", "nav"),
-			hint("/", "search"),
-			hint("f", "filter"),
-			hint("enter", "go to window"),
-			hint("tab", "focus"),
-			}
-	case m.feedFocused:
-		parts = []string{
-			hint("↑↓", "nav"),
-			hint("[/]", "page"),
-			hint("g/G", "top/bottom"),
-			hint("enter", "open"),
-			hint("tab", "focus"),
-			}
-	case m.launcher.focused:
-		parts = []string{
-			hint("enter", "launch"),
-			hint("n", "new"),
-			hint("e", "edit"),
-			hint("d", "delete"),
-			hint("↑↓", "nav"),
-			hint("tab", "focus"),
-		}
-	case m.inboxPanel.focused:
-		if m.inboxPanel.filterActive {
-			parts = []string{
-				hint("esc", "cancel"),
-				hint("backspace", "delete"),
-				hint("tab", "focus"),
-			}
-		} else {
-			parts = []string{
-				hint("enter", "open"),
-				hint("x", "mark read"),
-				hint("/", "search"),
-				hint("↑↓", "nav"),
-				hint("tab", "focus"),
-			}
-		}
-	case m.cronPanel.focused:
-		if m.cronPanel.filterActive {
-			parts = []string{
-				hint("esc", "cancel"),
-				hint("backspace", "delete"),
-				hint("tab", "focus"),
-			}
-		} else {
-			parts = []string{
-				hint("m", "manage"),
-				hint("/", "search"),
-				hint("↑↓", "nav"),
-				hint("tab", "focus"),
-				hint("esc", "unfocus"),
-			}
-		}
-	default:
-		parts = []string{
-			hint("enter", "launch"),
-			hint("ctrl+s", "submit"),
-			hint("tab", "focus"),
-			hint("p", "pipelines"),
-			hint("a", "agent"),
-			hint("s", "signals"),
-			hint("f", "feed"),
-			hint("c", "cron"),
-			}
-	}
-
-	bar := "  " + strings.Join(parts, sep)
-	if lipgloss.Width(bar) < width {
-		bar += strings.Repeat(" ", width-lipgloss.Width(bar))
-	}
-	return bar + aRst
 }
 
 // ── Box drawing helpers ────────────────────────────────────────────────────────

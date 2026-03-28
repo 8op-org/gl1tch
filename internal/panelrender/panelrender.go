@@ -306,6 +306,38 @@ func pmax(a, b int) int {
 	return b
 }
 
+// ── Hint bar ──────────────────────────────────────────────────────────────────
+
+// Hint is a key/description pair for a panel action-hint footer.
+type Hint struct {
+	Key  string
+	Desc string
+}
+
+// HintBar formats a row of key/description hint pairs for display inside a
+// panel's border box. Returns "" when hints is nil or empty — callers should
+// skip the footer row entirely in that case.
+//
+// width is the maximum visible width (typically panelWidth-2 for the inner box
+// area); content wider than width is truncated.
+//
+// Typical usage: BoxRow(HintBar(hints, w-2, pal), w, borderColor)
+func HintBar(hints []Hint, width int, pal styles.ANSIPalette) string {
+	if len(hints) == 0 {
+		return ""
+	}
+	sep := pal.Dim + " · " + RST
+	parts := make([]string, len(hints))
+	for i, h := range hints {
+		parts[i] = pal.Accent + h.Key + pal.Dim + " " + h.Desc + RST
+	}
+	bar := "  " + strings.Join(parts, sep)
+	if width > 0 && lipgloss.Width(bar) > width {
+		bar = truncate.String(bar, uint(width)) + RST
+	}
+	return bar
+}
+
 // QuitConfirmBox renders a reusable ANSI box-style quit confirmation modal.
 // title is the box header, message is the body line (e.g. "Quit ORCAI?" or
 // a running-jobs warning). An empty message defaults to "Are you sure?".

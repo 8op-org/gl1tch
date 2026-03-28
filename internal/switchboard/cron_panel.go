@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/panelrender"
 )
 
 // CronPanel holds display state for the CRON JOBS panel.
@@ -74,8 +75,9 @@ func (m Model) buildCronSection(w, height int) []string {
 		rows = append(rows, boxTop(w, RenderHeader("cron"), borderColor, pal.Accent))
 	}
 
-	// maxRows: remaining content rows after header, leaving 1 for boxBot.
-	maxRows := height - len(rows) - 1
+	// maxRows: remaining content rows after header, leaving 1 for boxBot
+	// and 1 for the always-present hint footer row.
+	maxRows := height - len(rows) - 2
 	if maxRows < 0 {
 		maxRows = 0
 	}
@@ -94,10 +96,19 @@ func (m Model) buildCronSection(w, height int) []string {
 	sorted := m.filteredCronEntries()
 	if len(sorted) == 0 {
 		rows = append(rows, boxRow(pal.Dim+"  no scheduled jobs"+aRst, w, borderColor))
-		// Pad and close.
-		for len(rows) < height-1 {
+		// Pad and close with always-present hint footer.
+		for len(rows) < height-2 {
 			rows = append(rows, boxRow("", w, borderColor))
 		}
+		var emptyHints []panelrender.Hint
+		if m.cronPanel.focused {
+			emptyHints = []panelrender.Hint{
+				{Key: "m", Desc: "manage"},
+				{Key: "tab", Desc: "focus"},
+				{Key: "esc", Desc: "unfocus"},
+			}
+		}
+		rows = append(rows, boxRow(panelrender.HintBar(emptyHints, w-2, pal), w, borderColor))
 		rows = append(rows, boxBot(w, borderColor))
 		return rows[:min(len(rows), height)]
 	}
@@ -132,10 +143,30 @@ func (m Model) buildCronSection(w, height int) []string {
 		shown++
 	}
 
-	// Pad to fill allocated height so panels below stay at a fixed position.
-	for len(rows) < height-1 {
+	// Pad to fill allocated height, leaving room for the always-present hint footer row.
+	for len(rows) < height-2 {
 		rows = append(rows, boxRow("", w, borderColor))
 	}
+	// Hint footer row — always present; shows hints when focused, blank when not.
+	var cronHints []panelrender.Hint
+	if m.cronPanel.focused {
+		if m.cronPanel.filterActive {
+			cronHints = []panelrender.Hint{
+				{Key: "esc", Desc: "cancel"},
+				{Key: "backspace", Desc: "delete"},
+				{Key: "tab", Desc: "focus"},
+			}
+		} else {
+			cronHints = []panelrender.Hint{
+				{Key: "m", Desc: "manage"},
+				{Key: "/", Desc: "search"},
+				{Key: "↑↓", Desc: "nav"},
+				{Key: "tab", Desc: "focus"},
+				{Key: "esc", Desc: "unfocus"},
+			}
+		}
+	}
+	rows = append(rows, boxRow(panelrender.HintBar(cronHints, w-2, pal), w, borderColor))
 	rows = append(rows, boxBot(w, borderColor))
 	if len(rows) > height {
 		rows = rows[:height]

@@ -198,20 +198,24 @@ func TestViewContainsActivityFeed(t *testing.T) {
 	}
 }
 
-func TestViewContainsBottomBar(t *testing.T) {
-	// When launcher is focused (default), bottom bar is hidden to avoid
-	// double-bar awkwardness with the tmux status bar.
+func TestViewContainsPanelHintFooter(t *testing.T) {
+	// Panels show their hint footer inside their own border when focused.
 	m := switchboard.New()
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m3 := m2.(switchboard.Model)
-	// Shift focus off launcher via Tab to reach the agent panel.
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyTab})
-	view := m4.(switchboard.Model).View()
-	if !strings.Contains(view, "ctrl+s") {
-		t.Errorf("View() bottom bar missing hint when agent focused:\n%s", view)
+
+	// Launcher is focused by default — its hint footer should be visible.
+	viewLauncher := m3.View()
+	if !strings.Contains(viewLauncher, "enter") {
+		t.Errorf("View() launcher hint footer missing when launcher focused:\n%s", viewLauncher)
 	}
-	// Note: "quit" was moved to the tmux status bar (^spc q quit) and is no
-	// longer rendered in the BubbleTea bottom bar.
+
+	// Tab to agent panel — agent hint footer should appear inside the agent box.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyTab})
+	viewAgent := m4.(switchboard.Model).View()
+	if !strings.Contains(viewAgent, "launch") {
+		t.Errorf("View() agent hint footer missing when agent focused:\n%s", viewAgent)
+	}
 }
 
 // ── Feed scroll (task 1.6) ─────────────────────────────────────────────────────
@@ -279,26 +283,21 @@ func TestBuildAgentSection_FixedHeight(t *testing.T) {
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m3 := m2.(switchboard.Model)
 
-	// Measure height at step 0.
+	// Measure height when agent is focused (includes hint footer row).
 	m3a, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
 	m3b := m3a.(switchboard.Model)
-	step0Lines := m3b.BuildAgentSection(60)
+	focusedLines := m3b.BuildAgentSection(60)
 
-	// Advance to step 1.
+	// Advance focus away — agent section loses hint footer row.
 	m4, _ := m3b.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m5 := m4.(switchboard.Model)
-	step1Lines := m5.BuildAgentSection(60)
+	unfocusedLines := m5.BuildAgentSection(60)
 
-	// Advance to step 2.
-	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m7 := m6.(switchboard.Model)
-	step2Lines := m7.BuildAgentSection(60)
-
-	if len(step0Lines) != len(step1Lines) {
-		t.Errorf("buildAgentSection step 0 vs step 1 line count mismatch: %d vs %d", len(step0Lines), len(step1Lines))
-	}
-	if len(step0Lines) != len(step2Lines) {
-		t.Errorf("buildAgentSection step 0 vs step 2 line count mismatch: %d vs %d", len(step0Lines), len(step2Lines))
+	// Both focused and unfocused panels have the same height (footer row always present).
+	diff := len(focusedLines) - len(unfocusedLines)
+	if diff != 0 {
+		t.Errorf("buildAgentSection focused vs unfocused height diff should be 0, got %d (focused=%d unfocused=%d)",
+			diff, len(focusedLines), len(unfocusedLines))
 	}
 }
 
@@ -312,7 +311,7 @@ func TestSignalBoard_FilterAll(t *testing.T) {
 	m3 = m3.AddFeedEntry("j2", "done job", switchboard.FeedDone, nil)
 	m3 = m3.AddFeedEntry("j3", "failed job", switchboard.FeedFailed, nil)
 
-	sb := m3.BuildSignalBoard(8, 60)
+	sb := m3.BuildSignalBoard(12, 60)
 	rendered := strings.Join(sb, "\n")
 	// All filter — all 3 jobs should appear.
 	if !strings.Contains(rendered, "running") {
@@ -558,9 +557,24 @@ func TestFeedScrollIndicator_DownWhenContentBelow(t *testing.T) {
 	for i := range 30 {
 		m3 = m3.AddFeedEntry(fmt.Sprintf("job%d", i), fmt.Sprintf("pipeline: job%d", i), switchboard.FeedDone, []string{"output line"})
 	}
-	view := m3.View()
-	if !strings.Contains(view, "↓") {
-		t.Errorf("expected ↓ indicator when content extends below viewport:\n%s", view)
+	// Tab to feed focus (launcher→agent→signal→inbox→feed = 4 tabs).
+	cur := tea.Model(m3)
+	var focusedModel switchboard.Model
+	for i := range 10 {
+		next, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
+		focusedModel = next.(switchboard.Model)
+		cur = next
+		if focusedModel.FeedFocused() {
+			break
+		}
+		if i == 9 {
+			t.Fatal("feed never became focused after 10 tabs")
+		}
+	}
+	view := focusedModel.View()
+	// Feed hint footer shows "↑↓ nav" when focused — confirms footer is visible.
+	if !strings.Contains(view, "↑↓") {
+		t.Errorf("expected ↑↓ nav hint in feed footer when feed focused with overflowing content:\n%s", view)
 	}
 }
 

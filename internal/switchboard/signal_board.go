@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/sahilm/fuzzy"
+
+	"github.com/adam-stokes/orcai/internal/panelrender"
 )
 
 // SignalBoard tracks state for the SIGNAL BOARD panel.
@@ -79,13 +81,13 @@ func (m Model) signalBoardVisibleRows() int {
 		h = 40
 	}
 	contentH := max(h-1, 5)
-	maxSB := max(contentH*40/100, 8)
-	sbHeight := min(len(m.feed)+6, maxSB)
-	if sbHeight < 5 {
-		sbHeight = 5
+	maxSB := max(contentH*40/100, 10)
+	sbHeight := min(len(m.feed)+9, maxSB)
+	if sbHeight < 8 {
+		sbHeight = 8
 	}
 	if sbHeight > contentH-3 {
-		sbHeight = max(contentH-3, 5)
+		sbHeight = max(contentH-3, 8)
 	}
 
 	// Mirror header line count from buildSignalBoard:
@@ -95,7 +97,7 @@ func (m Model) signalBoardVisibleRows() int {
 	if PanelHeader(m.activeBundle(), "signal_board", 80, "") != nil {
 		headerRows = 4 // sprite(3) + filter(1)
 	}
-	if m.signalBoardFocused || m.signalBoard.query != "" {
+	if m.signalBoard.searching || m.signalBoard.query != "" {
 		headerRows++ // search input line
 	}
 	headerRows++ // boxBot
@@ -143,8 +145,8 @@ func (m Model) buildSignalBoard(height, width int) []string {
 		lines = append(lines, boxTop(width, header, borderColor, pal.Accent))
 	}
 
-	// Search input line (always visible when signal board focused, or when query non-empty).
-	if m.signalBoardFocused || m.signalBoard.query != "" {
+	// Search input line (only visible when / search mode is active, or query is non-empty).
+	if m.signalBoard.searching || m.signalBoard.query != "" {
 		cursor := ""
 		if m.signalBoard.searching {
 			cursor = pal.Accent + "█" + aRst
@@ -155,8 +157,8 @@ func (m Model) buildSignalBoard(height, width int) []string {
 
 	filtered := preFiltered
 
-	// Cap to available body rows.
-	bodyH := height - len(lines) - 1 // -1 for boxBot
+	// Cap to available body rows (-1 for boxBot, -1 for always-present hint footer).
+	bodyH := height - len(lines) - 2 // -1 for boxBot, -1 for hint footer
 	if bodyH <= 0 {
 		bodyH = 1
 	}
@@ -230,10 +232,31 @@ func (m Model) buildSignalBoard(height, width int) []string {
 		}
 	}
 
-	// Pad to fill height.
-	for len(lines) < height-1 {
+	// Pad to fill height, leaving room for the always-present hint footer row.
+	for len(lines) < height-2 {
 		lines = append(lines, boxRow("", width, borderColor))
 	}
+	// Hint footer row — always present; shows hints when focused, blank when not.
+	var sbHints []panelrender.Hint
+	if m.signalBoardFocused {
+		if m.signalBoard.searching {
+			sbHints = []panelrender.Hint{
+				{Key: "type", Desc: "search"},
+				{Key: "↑↓", Desc: "nav"},
+				{Key: "enter", Desc: "confirm"},
+				{Key: "esc", Desc: "clear"},
+			}
+		} else {
+			sbHints = []panelrender.Hint{
+				{Key: "↑↓", Desc: "nav"},
+				{Key: "/", Desc: "search"},
+				{Key: "f", Desc: "filter"},
+				{Key: "enter", Desc: "go to window"},
+				{Key: "tab", Desc: "focus"},
+			}
+		}
+	}
+	lines = append(lines, boxRow(panelrender.HintBar(sbHints, width-2, pal), width, borderColor))
 	lines = append(lines, boxBot(width, borderColor))
 
 	// Clip to exact height.

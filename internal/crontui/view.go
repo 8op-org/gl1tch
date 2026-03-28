@@ -77,18 +77,18 @@ func (m Model) View() string {
 		return "loading..."
 	}
 
-	// Split height: 35% jobs (capped at 14 rows), 65% logs, minus 1 for hint bar.
-	topH, botH := splitHeight(m.height-1, 0.35, 6)
+	// Split height: 35% jobs (capped at 14 rows), 65% logs.
+	// Hint bars are rendered inside each pane.
+	topH, botH := splitHeight(m.height, 0.35, 6)
 	if topH > 14 {
 		topH = 14
-		botH = m.height - 1 - topH
+		botH = m.height - topH
 	}
 
 	top := m.viewJobList(m.width, topH)
 	bot := m.viewLogPane(m.width, botH)
-	bar := m.viewHintBar(m.width)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, top, bot, bar)
+	content := lipgloss.JoinVertical(lipgloss.Left, top, bot)
 
 	// Render overlays on top if open.
 	bgColor := string(m.pal().bg)
@@ -133,8 +133,8 @@ func (m Model) viewJobList(width, height int) string {
 		rows = append(rows, panelrender.BoxTop(width, title, borderColor, pal.Accent))
 	}
 
-	// Available content rows (leave 1 for BoxBot).
-	maxRows := height - len(rows) - 1
+	// Available content rows (leave 1 for BoxBot, 1 for always-present hint footer).
+	maxRows := height - len(rows) - 2
 	if maxRows < 0 {
 		maxRows = 0
 	}
@@ -164,10 +164,31 @@ func (m Model) viewJobList(width, height int) string {
 		}
 	}
 
-	// Pad remaining space.
-	for len(rows) < height-1 {
+	// Pad remaining space, leaving room for always-present hint footer.
+	for len(rows) < height-2 {
 		rows = append(rows, panelrender.BoxRow("", width, borderColor))
 	}
+	// Hint footer row — always present; shows hints when active, blank when not.
+	var jobHints []panelrender.Hint
+	if m.activePane == 0 {
+		if m.filtering {
+			jobHints = []panelrender.Hint{
+				{Key: "esc", Desc: "clear filter"},
+				{Key: "enter", Desc: "confirm"},
+				{Key: "tab", Desc: "logs pane"},
+			}
+		} else {
+			jobHints = []panelrender.Hint{
+				{Key: "j/k", Desc: "navigate"},
+				{Key: "e", Desc: "edit"},
+				{Key: "d", Desc: "delete"},
+				{Key: "enter/r", Desc: "run now"},
+				{Key: "/", Desc: "filter"},
+				{Key: "tab", Desc: "logs"},
+			}
+		}
+	}
+	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(jobHints, width-2, m.ansiPal()), width, borderColor))
 	rows = append(rows, panelrender.BoxBot(width, borderColor))
 	if len(rows) > height {
 		rows = rows[:height]
@@ -223,7 +244,8 @@ func (m Model) viewLogPane(width, height int) string {
 		rows = append(rows, panelrender.BoxTop(width, "LOG OUTPUT", borderColor, pal.Accent))
 	}
 
-	maxLines := height - len(rows) - 1 // -1 for BoxBot
+	// -1 for BoxBot, -1 for always-present hint footer.
+	maxLines := height - len(rows) - 2
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -252,55 +274,24 @@ func (m Model) viewLogPane(width, height int) string {
 		}
 	}
 
-	for len(rows) < height-1 {
+	// Pad remaining space, leaving room for always-present hint footer.
+	for len(rows) < height-2 {
 		rows = append(rows, panelrender.BoxRow("", width, borderColor))
 	}
+	// Hint footer row — always present; shows hints when active, blank when not.
+	var logHints []panelrender.Hint
+	if m.activePane == 1 {
+		logHints = []panelrender.Hint{
+			{Key: "j/k", Desc: "scroll"},
+			{Key: "tab", Desc: "jobs pane"},
+		}
+	}
+	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(logHints, width-2, m.ansiPal()), width, borderColor))
 	rows = append(rows, panelrender.BoxBot(width, borderColor))
 	if len(rows) > height {
 		rows = rows[:height]
 	}
 	return strings.Join(rows, "\n")
-}
-
-// viewHintBar renders the single-line keybinding hint strip at the bottom.
-// Keys are colored with the theme's accent; descriptions with dim.
-func (m Model) viewHintBar(width int) string {
-	pal := m.ansiPal()
-	hint := func(key, desc string) string {
-		return pal.Accent + key + pal.Dim + " " + desc + panelrender.RST
-	}
-	sep := pal.Dim + " · " + panelrender.RST
-
-	var parts []string
-	if m.activePane == 0 {
-		if m.filtering {
-			parts = []string{
-				hint("esc", "clear filter"),
-				hint("enter", "confirm"),
-				hint("tab", "logs pane"),
-			}
-		} else {
-			parts = []string{
-				hint("j/k", "navigate"),
-				hint("e", "edit"),
-				hint("d", "delete"),
-				hint("enter/r", "run now"),
-				hint("/", "filter"),
-				hint("tab", "logs"),
-			}
-		}
-	} else {
-		parts = []string{
-			hint("j/k", "scroll"),
-			hint("tab", "jobs pane"),
-		}
-	}
-
-	bar := strings.Join(parts, sep)
-	if lipgloss.Width(bar) < width {
-		bar += strings.Repeat(" ", width-lipgloss.Width(bar))
-	}
-	return bar + panelrender.RST
 }
 
 // viewEditOverlay renders the edit form overlay.
