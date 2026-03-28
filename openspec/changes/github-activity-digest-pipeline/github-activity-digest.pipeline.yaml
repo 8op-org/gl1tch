@@ -1,0 +1,178 @@
+name: github-activity-digest
+version: "1"
+
+# Pulls live GitHub issues and PRs from elastic/ensemble and elastic/observability-robots,
+# enriches the data with a local qwen2.5 analysis via opencode, then asks Claude Haiku
+# to produce a structured JSON digest with summary totals and action items.
+#
+# Prerequisites:
+#   - gh CLI authenticated:         gh auth status
+#   - jq sidecar installed:         ~/.config/orcai/wrappers/jq.yaml
+#   - gh sidecar installed:         ~/.config/orcai/wrappers/gh.yaml
+#   - Ollama running + qwen2.5:     ollama run qwen2.5
+#   - orcai-opencode on PATH:       which orcai-opencode
+#   - ANTHROPIC_API_KEY set:        for the Claude Haiku step
+
+steps:
+
+  # ── 1. Fetch Issues ─────────────────────────────────────────────────────
+  - id: fetch-issues-ensemble
+    plugin: gh
+    vars:
+      args: "issue list --repo elastic/ensemble --json number,title,state,updatedAt,labels,assignees,url --limit 30"
+
+  - id: fetch-issues-robots
+    plugin: gh
+    vars:
+      args: "issue list --repo elastic/observability-robots --json number,title,state,updatedAt,labels,assignees,url --limit 30"
+
+  # ── 2. Fetch PRs ─────────────────────────────────────────────────────────
+  - id: fetch-prs-ensemble
+    plugin: gh
+    vars:
+      args: "pr list --repo elastic/ensemble --json number,title,state,updatedAt,labels,reviewDecision,isDraft,url --limit 30"
+
+  - id: fetch-prs-robots
+    plugin: gh
+    vars:
+      args: "pr list --repo elastic/observability-robots --json number,title,state,updatedAt,labels,reviewDecision,isDraft,url --limit 30"
+
+  # ── 3. Tag with repo + filter issues to last 3 days (259200s) ────────────
+  - id: issues-ensemble
+    plugin: jq
+    needs: [fetch-issues-ensemble]
+    input: "{{step.fetch-issues-ensemble.data.value}}"
+    vars:
+      filter: 'map(. + {"repo":"elastic/ensemble"}) | map(select(.updatedAt >= ((now - 259200) | todate)))'
+
+  - id: issues-robots
+    plugin: jq
+    needs: [fetch-issues-robots]
+    input: "{{step.fetch-issues-robots.data.value}}"
+    vars:
+      filter: 'map(. + {"repo":"elastic/observability-robots"}) | map(select(.updatedAt >= ((now - 259200) | todate)))'
+
+  # ── 4. Tag PRs with repo ─────────────────────────────────────────────────
+  - id: prs-ensemble
+    plugin: jq
+    needs: [fetch-prs-ensemble]
+    input: "{{step.fetch-prs-ensemble.data.value}}"
+    vars:
+      filter: 'map(. + {"repo":"elastic/ensemble"})'
+
+  - id: prs-robots
+    plugin: jq
+    needs: [fetch-prs-robots]
+    input: "{{step.fetch-prs-robots.data.value}}"
+    vars:
+      filter: 'map(. + {"repo":"elastic/observability-robots"})'
+
+  # ── 5. opencode / qwen2.5 enrichment pass ────────────────────────────────
+  - id: enrich
+    executor: opencode
+    model: ollama/qwen2.5:latest
+    needs: [issues-ensemble, issues-robots, prs-ensemble, prs-robots]
+    prompt: |
+      You are analyzing GitHub activity for elastic/ensemble and elastic/observability-robots.
+
+      Analyze the issues and open PRs below. Identify:
+      1. Issues that are stale, blocked, or need urgent attention (consider labels and age)
+      2. PRs awaiting review (reviewDecision = REVIEW_REQUIRED) or with changes requested
+      3. Draft PRs that may be ready to open for review
+      4. Any cross-repo patterns or recurring themes
+
+      Output plain text with two sections: "Issues Analysis" and "PRs Analysis".
+      3-5 bullet points per section. Do NOT output JSON.
+
+      === elastic/ensemble issues (last 3 days) ===
+      {{step.issues-ensemble.data.value}}
+
+      === elastic/observability-robots issues (last 3 days) ===
+      {{step.issues-robots.data.value}}
+
+      === elastic/ensemble open PRs ===
+      {{step.prs-ensemble.data.value}}
+
+      === elastic/observability-robots open PRs ===
+      {{step.prs-robots.data.value}}
+
+  - id: assert-enriched
+    executor: builtin.assert
+    needs: [enrich]
+    args:
+      condition: "not_empty"
+      value: "{{step.enrich.data.value}}"
+      message: "opencode enrichment returned empty — is Ollama running with qwen2.5 loaded?"
+
+  # ── 6. Claude Haiku: structured JSON digest ───────────────────────────────
+  - id: digest
+    executor: claude
+    model: claude-haiku-4-5-20251001
+    needs: [assert-enriched, issues-ensemble, issues-robots, prs-ensemble, prs-robots]
+    prompt: |
+      You are a GitHub activity digest generator. Output ONLY valid JSON — no explanation,
+      no markdown code blocks, no preamble, no trailing text. Raw JSON only.
+
+      Count items precisely from the data arrays provided. Populate every field:
+
+      {
+        "generated_at": "<current ISO8601 datetime>",
+        "repos": ["elastic/ensemble", "elastic/observability-robots"],
+        "issues": {
+          "total_open": <integer: total count across BOTH repos arrays below>,
+          "updated_last_3d": <integer: same as total_open — data is already filtered to 3 days>,
+          "needs_attention": [
+            {"repo": "string", "number": integer, "title": "string", "reason": "string", "url": "string"}
+          ]
+        },
+        "prs": {
+          "total_open": <integer: total count across BOTH repos PR arrays below>,
+          "draft": <integer: count where isDraft is true across both repos>,
+          "awaiting_review": <integer: count where reviewDecision is "REVIEW_REQUIRED" across both repos>,
+          "needs_attention": [
+            {"repo": "string", "number": integer, "title": "string", "reason": "string", "url": "string"}
+          ]
+        },
+        "summary": "<one concise paragraph describing overall health across both repos>",
+        "action_items": ["<imperative action string>"]
+      }
+
+      elastic/ensemble issues (last 3 days):
+      {{step.issues-ensemble.data.value}}
+
+      elastic/observability-robots issues (last 3 days):
+      {{step.issues-robots.data.value}}
+
+      elastic/ensemble open PRs:
+      {{step.prs-ensemble.data.value}}
+
+      elastic/observability-robots open PRs:
+      {{step.prs-robots.data.value}}
+
+      Enrichment analysis from qwen2.5:
+      {{step.enrich.data.value}}
+
+  # ── 7. Validate JSON and pretty-print ────────────────────────────────────
+  - id: validate-json
+    plugin: jq
+    needs: [digest]
+    input: "{{step.digest.data.value}}"
+    vars:
+      filter: "."
+
+  - id: assert-valid-json
+    executor: builtin.assert
+    needs: [validate-json]
+    args:
+      condition: "not_empty"
+      value: "{{step.validate-json.data.value}}"
+      message: "Claude Haiku returned invalid JSON — raw output in step.digest.data.value"
+
+  - id: done
+    executor: builtin.log
+    needs: [assert-valid-json]
+    args:
+      message: |
+        ── GitHub Activity Digest ──────────────────────────────────────
+        {{step.validate-json.data.value}}
+        ────────────────────────────────────────────────────────────────
