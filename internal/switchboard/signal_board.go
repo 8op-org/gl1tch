@@ -248,13 +248,13 @@ func (m Model) buildSignalBoard(height, width int) []string {
 		if m.signalBoard.searching {
 			sbHints = []panelrender.Hint{
 				{Key: "type", Desc: "search"},
-				{Key: "↑↓", Desc: "nav"},
+				{Key: "j/k", Desc: "nav"},
 				{Key: "enter", Desc: "confirm"},
 				{Key: "esc", Desc: "clear"},
 			}
 		} else {
 			sbHints = []panelrender.Hint{
-				{Key: "↑↓", Desc: "nav"},
+				{Key: "j/k", Desc: "nav"},
 				{Key: "/", Desc: "search"},
 				{Key: "f", Desc: "filter"},
 				{Key: "enter", Desc: "go to window"},
