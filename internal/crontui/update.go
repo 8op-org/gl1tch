@@ -255,16 +255,24 @@ func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// buildUpdatedEntry constructs the updated Entry from the overlay form,
+// preserving fields not exposed as editable inputs (Args, WorkingDir).
+func buildUpdatedEntry(ov *EditOverlay) cron.Entry {
+	return cron.Entry{
+		Name:       ov.fields[0].Value(),
+		Schedule:   ov.fields[1].Value(),
+		Kind:       ov.fields[2].Value(),
+		Target:     ov.fields[3].Value(),
+		Timeout:    ov.fields[4].Value(),
+		Args:       ov.original.Args,
+		WorkingDir: ov.original.WorkingDir,
+	}
+}
+
 // confirmEdit validates and saves the edited entry.
 func (m Model) confirmEdit() (tea.Model, tea.Cmd) {
 	ov := m.editOverlay
-	updated := cron.Entry{
-		Name:     ov.fields[0].Value(),
-		Schedule: ov.fields[1].Value(),
-		Kind:     ov.fields[2].Value(),
-		Target:   ov.fields[3].Value(),
-		Timeout:  ov.fields[4].Value(),
-	}
+	updated := buildUpdatedEntry(ov)
 
 	if updated.Name == "" {
 		ov.errMsg = "name is required"

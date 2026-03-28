@@ -2349,9 +2349,8 @@ func (m Model) View() string {
 	sb := m.buildSignalBoard(sbHeight, feedW)
 	feed := m.viewActivityFeed(feedH, feedW)
 
-	// Right column: signal board, blank separator, feed lines, clipped to contentH.
-	rightLines := append(sb, "")
-	rightLines = append(rightLines, strings.Split(feed, "\n")...)
+	// Right column: signal board then feed lines, clipped to contentH.
+	rightLines := append(sb, strings.Split(feed, "\n")...)
 	if len(rightLines) > contentH {
 		rightLines = rightLines[:contentH]
 	}
