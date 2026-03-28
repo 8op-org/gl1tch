@@ -5,6 +5,26 @@ import (
 	"testing"
 )
 
+func TestLooksLikeMarkdown(t *testing.T) {
+	cases := []struct {
+		input string
+		want  bool
+	}{
+		{"# Heading", true},
+		{"**bold**", true},
+		{"```go\ncode\n```", true},
+		{"plain text output", false},
+		{"", false},
+		{"some output with # in the middle", true},
+	}
+	for _, tc := range cases {
+		got := looksLikeMarkdown(tc.input)
+		if got != tc.want {
+			t.Errorf("looksLikeMarkdown(%q) = %v, want %v", tc.input, got, tc.want)
+		}
+	}
+}
+
 func TestRunMetadataJSON(t *testing.T) {
 	cases := []struct {
 		pipelineFile string

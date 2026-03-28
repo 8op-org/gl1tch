@@ -40,7 +40,7 @@ func collapseTilde(path string) string {
 
 // buildRunContent formats the full detail text for a run, mirroring the
 // content builder that was previously in internal/inbox/modal.go.
-func buildRunContent(run store.Run, mc modalColors, markdownMode bool) string {
+func buildRunContent(run store.Run, mc modalColors, markdownMode bool, innerW int) string {
 	dim := lipgloss.NewStyle().Foreground(mc.dim)
 	fg := lipgloss.NewStyle().Foreground(mc.fg)
 	success := lipgloss.NewStyle().Foreground(lipgloss.Color("#50fa7b"))
@@ -94,7 +94,7 @@ func buildRunContent(run store.Run, mc modalColors, markdownMode bool) string {
 		if markdownMode {
 			if renderer, err := glamour.NewTermRenderer(
 				glamour.WithStandardStyle("dark"),
-				glamour.WithWordWrap(80),
+				glamour.WithWordWrap(innerW),
 			); err == nil {
 				if rendered, err := renderer.Render(run.Stdout); err == nil {
 					stdout = rendered
@@ -162,7 +162,7 @@ func (m Model) viewInboxDetail(w, h int, markdownMode bool) string {
 		lipgloss.NewStyle().Foreground(mc.fg).Render(run.Name)
 
 	// Build scrollable body content.
-	content := buildRunContent(run, mc, markdownMode)
+	content := buildRunContent(run, mc, markdownMode, innerW)
 	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
 	visibleH := h - 6 // header + border + footer + some padding
 	if visibleH < 4 {
