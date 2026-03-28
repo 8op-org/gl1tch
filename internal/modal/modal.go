@@ -4,8 +4,11 @@
 package modal
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/adam-stokes/orcai/internal/themes"
@@ -277,6 +280,69 @@ func (a *apiImpl) RenderConfirm(title, message string) string {
 func (a *apiImpl) RenderAlert(title, message string) string {
 	return RenderAlert(Config{Bundle: a.bundle, Title: title}, message, a.w, a.h)
 }
+
+// RenderHelp loads README content, renders it as markdown, and returns a
+// scrollable popup box sized at 80% of the terminal width (min 40 cols).
+func RenderHelp(cfg Config, offset, w, h int) string {
+	popupW := w * 4 / 5
+	if popupW < 44 {
+		popupW = 44
+	}
+	// RenderScroll uses w-4 as innerW, so pass popupW to get an ~80% wide box.
+	rendered := renderMarkdown(readmeContent(), popupW-4)
+	lines := strings.Split(strings.TrimRight(rendered, "\n"), "\n")
+	return RenderScroll(cfg, lines, offset, popupW, h)
+}
+
+// readmeContent returns the README.md content, falling back to inline text.
+func readmeContent() string {
+	self, _ := os.Executable()
+	if resolved, err := filepath.EvalSymlinks(self); err == nil {
+		self = resolved
+	}
+	for _, candidate := range []string{
+		filepath.Join(filepath.Dir(self), "README.md"),
+		"README.md",
+	} {
+		if data, err := os.ReadFile(candidate); err == nil {
+			return string(data)
+		}
+	}
+	return fallbackReadme
+}
+
+// renderMarkdown renders md using glamour, falling back to plain text on error.
+func renderMarkdown(md string, width int) string {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width-4),
+	)
+	if err != nil {
+		return md
+	}
+	out, err := r.Render(md)
+	if err != nil {
+		return md
+	}
+	return out
+}
+
+const fallbackReadme = `# ORCAI — Getting Started
+
+Press **^spc** (ctrl+space) to access chord shortcuts.
+
+**Navigation:** tab · j/k · enter
+
+**Panels:** Pipelines · Agent Runner · Signal Board · Activity Feed
+
+**Chord shortcuts:**
+- ^spc h  this help
+- ^spc q  quit
+- ^spc d  detach
+- ^spc r  reload
+- ^spc m  themes
+- ^spc j  jump to window
+`
 
 func max(a, b int) int {
 	if a > b {

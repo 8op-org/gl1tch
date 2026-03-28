@@ -53,6 +53,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey routes key events based on the current UI state.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Overlays take priority.
+	if m.helpOpen {
+		return m.handleHelpKey(msg)
+	}
 	if m.themePickerOpen {
 		return m.handleThemePickerKey(msg)
 	}
@@ -67,6 +70,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "?":
+		m.helpOpen = true
+		m.helpScrollOffset = 0
+		return m, nil
 	case "T":
 		if gr := themes.GlobalRegistry(); gr != nil {
 			bundles := gr.All()
@@ -126,6 +133,34 @@ func (m Model) handleQuitConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "n", "N", "esc":
 		m.quitConfirm = false
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleHelpKey handles key events when the help overlay is open.
+func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.helpOpen = false
+		return m, nil
+	case "j", "down":
+		m.helpScrollOffset++
+		return m, nil
+	case "k", "up":
+		if m.helpScrollOffset > 0 {
+			m.helpScrollOffset--
+		}
+		return m, nil
+	case "]":
+		m.helpScrollOffset += 10
+		return m, nil
+	case "[":
+		if m.helpScrollOffset > 10 {
+			m.helpScrollOffset -= 10
+		} else {
+			m.helpScrollOffset = 0
+		}
 		return m, nil
 	}
 	return m, nil

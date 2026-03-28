@@ -127,8 +127,8 @@ func buildTmuxConf(self string) string {
 		"bind-key -T orcai-chord x     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-pane } }\n" +
 		"bind-key -T orcai-chord X     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-window } }\n" +
 		"bind-key -T orcai-chord Escape switch-client -T root\n" +
-		// h opens the getting-started help overlay in the switchboard.
-		"bind-key -T orcai-chord h     { switch-client -T root ; switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 C-h }\n" +
+		// h opens the help overlay: locally in orcai-cron (sends ?), switchboard otherwise.
+		"bind-key -T orcai-chord h     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys ? } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 C-h } }\n" +
 		// Pressing ctrl+space again exits the chord table without action.
 		"bind-key -T orcai-chord C-Space switch-client -T root\n" +
 		// Explicitly unbind removed chords so stale sessions don't keep them.

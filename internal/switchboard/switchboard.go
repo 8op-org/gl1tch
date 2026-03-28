@@ -262,7 +262,6 @@ type Model struct {
 	agentSchedule         textarea.Model
 	agentScheduleErr      string
 	helpOpen              bool
-	helpScrollOffset      int
 	registry              *themes.Registry
 	themePickerOpen       bool
 	themePickerCursor     int
@@ -1009,20 +1008,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		switch key {
 		case "esc", "ctrl+c", "ctrl+h", "q":
 			m.helpOpen = false
-		case "j", "down":
-			m.helpScrollOffset++
-		case "k", "up":
-			if m.helpScrollOffset > 0 {
-				m.helpScrollOffset--
-			}
-		case "pgdown", "]":
-			m.helpScrollOffset += 10
-		case "pgup", "[":
-			if m.helpScrollOffset > 10 {
-				m.helpScrollOffset -= 10
-			} else {
-				m.helpScrollOffset = 0
-			}
 		}
 		return m, nil
 	}
@@ -1314,7 +1299,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch key {
 	case "ctrl+h":
 		m.helpOpen = true
-		m.helpScrollOffset = 0
 		return m, nil
 
 	case "ctrl+c", "ctrl+q":

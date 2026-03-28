@@ -96,6 +96,8 @@ type Model struct {
 	editOverlay   *EditOverlay
 	deleteConfirm *DeleteConfirm
 	quitConfirm   bool
+	helpOpen      bool
+	helpScrollOffset int
 
 	themePickerOpen   bool
 	themePickerCursor int

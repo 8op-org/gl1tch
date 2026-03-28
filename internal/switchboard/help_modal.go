@@ -1,81 +1,86 @@
 package switchboard
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/modal"
+	"github.com/adam-stokes/orcai/internal/panelrender"
 	"github.com/adam-stokes/orcai/internal/translations"
 )
 
-// readmeContent returns the README.md content, falling back to inline text.
-func readmeContent() string {
-	// Try reading from the binary's directory, then repo root.
-	self, _ := os.Executable()
-	if resolved, err := filepath.EvalSymlinks(self); err == nil {
-		self = resolved
+// viewHelpModal renders the switchboard keybinding reference as an 80%-wide ANSI box overlay.
+func (m Model) viewHelpModal(w, _ int) string {
+	pal := m.ansiPalette()
+	boxW := w * 4 / 5
+	if boxW < 48 {
+		boxW = 48
 	}
-	for _, candidate := range []string{
-		filepath.Join(filepath.Dir(self), "README.md"),
-		"README.md",
-	} {
-		if data, err := os.ReadFile(candidate); err == nil {
-			return string(data)
+
+	title := translations.Safe(translations.GlobalProvider(), translations.KeyHelpModalTitle, "ORCAI  getting started")
+
+	// Helpers
+	blank := func() string { return panelrender.BoxRow("", boxW, pal.Border) }
+	row := func(s string) string { return panelrender.BoxRow(s, boxW, pal.Border) }
+
+	// Section header: "  ── TITLE ──"
+	section := func(t string) string {
+		dash := pal.Dim + "──" + panelrender.RST
+		label := pal.Accent + panelrender.BLD + " " + t + " " + panelrender.RST
+		return row("  " + dash + label + dash)
+	}
+
+	// Key binding row: key left-padded to keyW visible chars, desc right
+	const keyW = 20
+	bind := func(k, desc string) string {
+		pad := keyW - lipgloss.Width(k)
+		if pad < 1 {
+			pad = 1
 		}
+		return row("    " + pal.Accent + k + panelrender.RST + strings.Repeat(" ", pad) + pal.FG + desc + panelrender.RST)
 	}
-	return fallbackReadme
+
+	// Note row (dimmed, no key column)
+	note := func(s string) string {
+		return row("    " + pal.Dim + s + panelrender.RST)
+	}
+
+	rows := []string{
+		panelrender.BoxTop(boxW, title, pal.Border, pal.Accent),
+		blank(),
+		note("Chord prefix: " + pal.Accent + panelrender.BLD + "^spc" + panelrender.RST + pal.Dim + "  (ctrl+space, then the key below)"),
+		blank(),
+		section("HELP & SYSTEM"),
+		bind("^spc h", "this help"),
+		bind("^spc q", "quit ORCAI"),
+		bind("^spc d", "detach  (session stays running)"),
+		bind("^spc r", "reload  (hot-swap binary)"),
+		blank(),
+		section("WORKSPACE"),
+		bind("^spc m", "theme picker"),
+		bind("^spc j", "jump to any window"),
+		bind("^spc t", "go to switchboard"),
+		blank(),
+		section("WINDOWS & PANES"),
+		bind("^spc c", "new window"),
+		bind("^spc [ / ]", "previous / next window"),
+		bind("^spc | / -", "split pane right / down"),
+		bind("^spc ←→↑↓", "navigate panes"),
+		bind("^spc x / X", "kill pane / window"),
+		blank(),
+		section("NAVIGATION"),
+		bind("tab / j / k", "navigate panels & list items"),
+		bind("enter", "open / confirm / run selected"),
+		bind("esc", "back / close overlay"),
+		blank(),
+		section("PANELS"),
+		bind("Pipelines", "run and monitor named pipelines"),
+		bind("Agent Runner", "launch and manage AI agents"),
+		bind("Signal Board", "inter-agent message bus"),
+		bind("Activity Feed", "live system events & run history"),
+		bind("Cron", "scheduled pipeline and agent jobs"),
+		blank(),
+		panelrender.BoxBot(boxW, pal.Border),
+	}
+	return strings.Join(rows, "\n")
 }
-
-// viewHelpModal renders the getting-started guide as a centered overlay.
-func (m Model) viewHelpModal(w, h int) string {
-	innerW := w - 4
-	if innerW < 40 {
-		innerW = 40
-	}
-
-	// Render markdown with glamour.
-	rendered := renderMarkdown(readmeContent(), innerW)
-	lines := strings.Split(strings.TrimRight(rendered, "\n"), "\n")
-
-	cfg := modal.Config{
-		Bundle: m.activeBundle(),
-		Title:  translations.Safe(translations.GlobalProvider(), translations.KeyHelpModalTitle, "ORCAI  getting started"),
-	}
-	return modal.RenderScroll(cfg, lines, m.helpScrollOffset, w, h)
-}
-
-// renderMarkdown renders md using glamour, falling back to plain text on error.
-func renderMarkdown(md string, width int) string {
-	r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width-4),
-	)
-	if err != nil {
-		return md
-	}
-	out, err := r.Render(md)
-	if err != nil {
-		return md
-	}
-	return out
-}
-
-const fallbackReadme = `# ORCAI — Getting Started
-
-Press **^spc** (ctrl+space) to access chord shortcuts.
-
-**Navigation:** tab · j/k · enter
-
-**Panels:** Pipelines · Agent Runner · Signal Board · Activity Feed
-
-**Chord shortcuts:**
-- ^spc h  this help
-- ^spc q  quit
-- ^spc d  detach
-- ^spc r  reload
-- ^spc m  themes
-- ^spc j  jump to window
-`

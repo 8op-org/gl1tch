@@ -92,6 +92,9 @@ func (m Model) View() string {
 
 	// Render overlays on top if open.
 	bgColor := string(m.pal().bg)
+	if m.helpOpen {
+		return renderOverlay(content, m.viewHelpModal(), m.width, m.height, bgColor)
+	}
 	if m.themePickerOpen {
 		return renderOverlay(content, m.viewThemePicker(), m.width, m.height, bgColor)
 	}
@@ -183,7 +186,7 @@ func (m Model) viewJobList(width, height int) string {
 				{Key: "e", Desc: "edit"},
 				{Key: "d", Desc: "delete"},
 				{Key: "enter/r", Desc: "run now"},
-				{Key: "/", Desc: "filter"},
+				{Key: "/", Desc: "search"},
 				{Key: "tab", Desc: "logs"},
 			}
 		}
@@ -353,6 +356,69 @@ func (m Model) viewDeleteConfirm() string {
 		Message: fmt.Sprintf("Delete %q?", name),
 	}
 	return modal.RenderConfirm(cfg, m.width, m.height)
+}
+
+// viewHelpModal renders the crontui keybinding reference as an 80%-wide ANSI box overlay.
+func (m Model) viewHelpModal() string {
+	pal := m.ansiPal()
+	boxW := m.width * 4 / 5
+	if boxW < 48 {
+		boxW = 48
+	}
+
+	blank := func() string { return panelrender.BoxRow("", boxW, pal.Border) }
+	row := func(s string) string { return panelrender.BoxRow(s, boxW, pal.Border) }
+
+	section := func(title string) string {
+		dash := pal.Dim + "──" + panelrender.RST
+		label := pal.Accent + panelrender.BLD + " " + title + " " + panelrender.RST
+		return row("  " + dash + label + dash)
+	}
+
+	const keyW = 18
+	bind := func(k, desc string) string {
+		pad := keyW - lipgloss.Width(k)
+		if pad < 1 {
+			pad = 1
+		}
+		return row("    " + pal.Accent + k + panelrender.RST + strings.Repeat(" ", pad) + pal.FG + desc + panelrender.RST)
+	}
+
+	note := func(s string) string {
+		return row("    " + pal.Dim + s + panelrender.RST)
+	}
+
+	rows := []string{
+		panelrender.BoxTop(boxW, "help", pal.Border, pal.Accent),
+		blank(),
+		section("NAVIGATION"),
+		bind("j / k  ↑ / ↓", "move up / down in active pane"),
+		bind("tab", "switch pane  jobs ↔ logs"),
+		bind("/", "search jobs"),
+		blank(),
+		section("JOB ACTIONS"),
+		bind("enter / r", "run selected job immediately"),
+		bind("e", "edit selected job"),
+		bind("d", "delete selected job  (confirm required)"),
+		blank(),
+		section("LOG PANE"),
+		bind("j / k", "scroll log up / down"),
+		blank(),
+		section("GLOBAL"),
+		bind("T", "theme picker"),
+		bind("?", "this help"),
+		bind("ctrl+q", "quit  (confirm required)"),
+		bind("esc", "close any overlay"),
+		blank(),
+		section("EDIT OVERLAY"),
+		bind("tab / shift+tab", "next / prev field"),
+		bind("enter", "save changes"),
+		bind("esc", "cancel without saving"),
+		note("fields: name · schedule (cron expr) · kind · target · timeout"),
+		blank(),
+		panelrender.BoxBot(boxW, pal.Border),
+	}
+	return strings.Join(rows, "\n")
 }
 
 // splitHeight divides total rows into top and bottom, applying a ratio and
