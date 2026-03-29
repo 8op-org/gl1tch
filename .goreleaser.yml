@@ -37,7 +37,8 @@ checksum:
   algorithm: sha256
 
 changelog:
-  use: conventional_commits
+  use: git
+  sort: asc
   groups:
     - title: "Features"
       regexp: "^feat"
