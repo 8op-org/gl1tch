@@ -59,9 +59,9 @@ tasks:
   run:clean:
     desc: "Wipe db/config, kill tmux sessions (orcai, orcai-cron), then start orcai (mirrors old 'make run')"
     cmds:
-      - -tmux detach-client -s orcai 2>/dev/null
-      - -tmux kill-session -t orcai 2>/dev/null
-      - -tmux kill-session -t orcai-cron 2>/dev/null
+      - tmux detach-client -s orcai 2>/dev/null || true
+      - tmux kill-session -t orcai 2>/dev/null || true
+      - tmux kill-session -t orcai-cron 2>/dev/null || true
       - rm -f ~/.config/orcai/layout.yaml ~/.config/orcai/keybindings.yaml
       - |
         if [ -f ~/.local/share/orcai/orcai.db ]; then
@@ -75,9 +75,9 @@ tasks:
   dev:
     desc: "New-user clean build: backup+wipe config/data/binaries, rebuild from source (run manually)"
     cmds:
-      - -tmux detach-client -s orcai 2>/dev/null
-      - -tmux kill-session -t orcai 2>/dev/null
-      - -tmux kill-session -t orcai-cron 2>/dev/null
+      - tmux detach-client -s orcai 2>/dev/null || true
+      - tmux kill-session -t orcai 2>/dev/null || true
+      - tmux kill-session -t orcai-cron 2>/dev/null || true
       - |
         if [ -d ~/.config/orcai ]; then
           cp -r ~/.config/orcai ~/.config/orcai.bak.$(date +%Y%m%d%H%M%S)
