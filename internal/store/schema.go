@@ -29,6 +29,16 @@ const createBrainNotesSchema = `CREATE TABLE IF NOT EXISTS brain_notes (
   body        TEXT NOT NULL
 );`
 
+// createPromptsSchema is the DDL for the prompts table.
+const createPromptsSchema = `CREATE TABLE IF NOT EXISTS prompts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  title       TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  model_slug  TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);`
+
 // applySchema runs the schema migration against db.
 func applySchema(db *sql.DB) error {
 	if _, err := db.Exec(createSchema); err != nil {
@@ -37,7 +47,18 @@ func applySchema(db *sql.DB) error {
 	if err := applyStepsColumnMigration(db); err != nil {
 		return err
 	}
-	return applyBrainNotesTableMigration(db)
+	if err := applyBrainNotesTableMigration(db); err != nil {
+		return err
+	}
+	return applyPromptsTableMigration(db)
+}
+
+// applyPromptsTableMigration creates the prompts table if it does not already
+// exist. CREATE TABLE IF NOT EXISTS is idempotent, so this is safe to run on
+// every startup.
+func applyPromptsTableMigration(db *sql.DB) error {
+	_, err := db.Exec(createPromptsSchema)
+	return err
 }
 
 // applyBrainNotesTableMigration creates the brain_notes table if it does not
