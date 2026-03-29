@@ -19,6 +19,7 @@ import (
 // Message types
 
 type promptsLoadedMsg struct{ prompts []store.Prompt }
+type promptSavedMsg struct{ id int64 }
 type runTokenMsg struct{ token string }
 type runDoneMsg struct{ full string }
 type runErrMsg struct{ err error }
@@ -85,19 +86,21 @@ func reloadPromptsCmd(st *store.Store) tea.Cmd {
 	return loadPromptsCmd(st)
 }
 
-// savePromptCmd inserts or updates a prompt then triggers a list reload.
+// savePromptCmd inserts or updates a prompt and returns a promptSavedMsg
+// carrying the (possibly new) ID so the model can update editingPrompt.ID.
 func savePromptCmd(st *store.Store, p store.Prompt) tea.Cmd {
 	return func() tea.Msg {
-		var err error
 		if p.ID == 0 {
-			_, err = st.InsertPrompt(context.Background(), p)
-		} else {
-			err = st.UpdatePrompt(context.Background(), p)
+			id, err := st.InsertPrompt(context.Background(), p)
+			if err != nil {
+				return runErrMsg{err: err}
+			}
+			return promptSavedMsg{id: id}
 		}
-		if err != nil {
+		if err := st.UpdatePrompt(context.Background(), p); err != nil {
 			return runErrMsg{err: err}
 		}
-		return promptsLoadedMsg{} // reload list
+		return promptSavedMsg{id: p.ID}
 	}
 }
 
@@ -187,7 +190,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Resize body textarea to fill available editor height.
+		// Resize body textarea to fill available editor height/width.
 		// Mirror the layout math from buildEditorRows:
 		// contentH=height-2, editorH=contentH/2
 		// reserved: boxTop+titleLabel+titleInput+blank+bodyLabel = 5
@@ -199,6 +202,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			bodyH = 2
 		}
 		m.bodyInput.SetHeight(bodyH)
+		rightW := m.width - m.width/3
+		bodyW := rightW - 4 // 2 border chars + 2 space indent
+		if bodyW < 10 {
+			bodyW = 10
+		}
+		m.bodyInput.SetWidth(bodyW)
 
 	case tea.KeyMsg:
 		// When agent picker overlay is active, route all keys through it.
@@ -237,6 +246,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 1: // editor panel
 			return m.updateEditorPanel(msg)
 		}
+
+	case promptSavedMsg:
+		m.editingPrompt.ID = msg.id
+		return m, reloadPromptsCmd(m.store)
 
 	case promptsLoadedMsg:
 		if msg.prompts != nil {
@@ -369,7 +382,8 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.Title = m.titleInput.Value()
 		p.Body = m.bodyInput.Value()
 		// ModelSlug and CWD are already stored in m.editingPrompt via picker handlers.
-		return m, tea.Batch(savePromptCmd(m.store, p), reloadPromptsCmd(m.store))
+		// savePromptCmd returns promptSavedMsg which updates editingPrompt.ID and reloads the list.
+		return m, savePromptCmd(m.store, p)
 
 	case "ctrl+r":
 		return m.startFreshRun()

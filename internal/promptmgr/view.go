@@ -300,8 +300,16 @@ func (m *Model) buildRunnerRows(w, h int) []string {
 	case m.runnerOutput == "" && !m.runnerStreaming:
 		rows = append(rows, panelrender.BoxRow(pal.Dim+"  ctrl+r to run"+panelrender.RST, w, borderColor))
 
+	case m.runnerOutput == "" && m.runnerStreaming:
+		dot := spinnerFrames[m.spinnerIdx%len(spinnerFrames)]
+		rows = append(rows, panelrender.BoxRow(pal.Dim+"  "+dot+" ..."+panelrender.RST, w, borderColor))
+
 	default:
-		lines := splitLines(m.runnerOutput)
+		contentW := w - 4 // 2 border chars + 2 space indent
+		var lines []string
+		for _, raw := range splitLines(m.runnerOutput) {
+			lines = append(lines, wordWrap(raw, contentW)...)
+		}
 		if m.runnerScrollOffset < len(lines) {
 			lines = lines[m.runnerScrollOffset:]
 		} else if len(lines) > 0 {
@@ -372,4 +380,27 @@ func splitLines(s string) []string {
 		lines = append(lines, s[start:])
 	}
 	return lines
+}
+
+// wordWrap breaks s into lines of at most width visible characters at word
+// boundaries. Existing whitespace is normalised (multiple spaces collapse).
+func wordWrap(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	var lines []string
+	cur := words[0]
+	for _, w := range words[1:] {
+		if len(cur)+1+len(w) <= width {
+			cur += " " + w
+		} else {
+			lines = append(lines, cur)
+			cur = w
+		}
+	}
+	return append(lines, cur)
 }
