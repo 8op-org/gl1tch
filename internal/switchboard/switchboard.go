@@ -3200,9 +3200,22 @@ func (m Model) viewAgentModalBox(w, h int) string {
 		rows = append(rows, boxRow(padded, modalW, modalBorderColor))
 	}
 
+	// ── USE BRAIN toggle ──────────────────────────────────────────────────────
+	rows = append(rows, boxRow("", modalW, modalBorderColor))
+	useBrainCheck := "[ ]"
+	if m.agentUseBrain {
+		useBrainCheck = "[x]"
+	}
+	useBrainColor := pal.Dim
+	if m.agentModalFocus == 3 {
+		useBrainColor = pal.Accent + aBld
+	}
+	useBrainRow := "  " + useBrainColor + useBrainCheck + " use brain context" + aRst
+	rows = append(rows, boxRow(useBrainRow, modalW, modalBorderColor))
+
 	// ── WORKING DIRECTORY section ─────────────────────────────────────────────
 	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	cwdHeader := "  " + sectionLabel("WORKING DIRECTORY", m.agentModalFocus == 3)
+	cwdHeader := "  " + sectionLabel("WORKING DIRECTORY", m.agentModalFocus == 4)
 	rows = append(rows, boxRow(cwdHeader, modalW, modalBorderColor))
 	cwdDisplay := m.agentCWD
 	if cwdDisplay == "" {
@@ -3212,17 +3225,17 @@ func (m Model) viewAgentModalBox(w, h int) string {
 		cwdDisplay = "(current directory)"
 	}
 	cwdColor := pal.Dim
-	if m.agentModalFocus == 3 {
+	if m.agentModalFocus == 4 {
 		cwdColor = pal.Accent
 	}
 	rows = append(rows, boxRow("  "+cwdColor+cwdDisplay+aRst, modalW, modalBorderColor))
-	if m.agentModalFocus == 3 {
+	if m.agentModalFocus == 4 {
 		rows = append(rows, boxRow(aDim+"  press enter to browse"+aRst, modalW, modalBorderColor))
 	}
 
 	// ── SCHEDULE section ──────────────────────────────────────────────────────
 	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	schedHeader := "  " + sectionLabel("SCHEDULE (cron expr, blank = run now)", m.agentModalFocus == 4)
+	schedHeader := "  " + sectionLabel("SCHEDULE (cron expr, blank = run now)", m.agentModalFocus == 5)
 	rows = append(rows, boxRow(schedHeader, modalW, modalBorderColor))
 	schedInnerW := max(modalW-6, 10)
 	m.agentSchedule.SetWidth(schedInnerW)
