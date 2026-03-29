@@ -712,11 +712,12 @@ func pipelinesDir() string {
 	return filepath.Join(home, ".config", "orcai", "pipelines")
 }
 
-// writeSingleStepPipeline generates a minimal single-step pipeline YAML for a
+// WriteSingleStepPipeline generates a minimal single-step pipeline YAML for a
 // scheduled agent run and writes it to the .agents/ subdirectory of the pipelines
 // directory so it does not appear in the PIPELINES launcher panel. Returns the
 // absolute path of the written file so the caller can reference it in a cron entry.
-func writeSingleStepPipeline(name, providerID, modelID, prompt string) (string, error) {
+// Exported so tests can call it directly.
+func WriteSingleStepPipeline(name, providerID, modelID, prompt string, useBrain bool) (string, error) {
 	dir := filepath.Join(pipelinesDir(), ".agents")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
@@ -736,8 +737,13 @@ func writeSingleStepPipeline(name, providerID, modelID, prompt string) (string, 
 		model = "\n    model: " + modelID
 	}
 
-	content := fmt.Sprintf("name: %s\nversion: \"1\"\nsteps:\n  - id: run\n    executor: %s%s\n    prompt: |\n%s",
-		name, providerID, model, promptLines.String())
+	useBrainYAML := ""
+	if useBrain {
+		useBrainYAML = "\n    use_brain: true"
+	}
+
+	content := fmt.Sprintf("name: %s\nversion: \"1\"\nsteps:\n  - id: run\n    executor: %s%s%s\n    prompt: |\n%s",
+		name, providerID, model, useBrainYAML, promptLines.String())
 
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return "", err
@@ -2515,7 +2521,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 
 		// Generate a minimal single-step pipeline YAML so the scheduled run
 		// has the prompt embedded and runs via the standard pipeline executor.
-		pipelineFile, pipelineErr := writeSingleStepPipeline(entryName, prov.ID, modelID, input)
+		pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, false)
 		if pipelineErr != nil {
 			m.agentScheduleErr = "pipeline write error: " + pipelineErr.Error()
 			return m, nil

@@ -1643,3 +1643,40 @@ func TestFeedJSON_EnterToggleExpandCollapse(t *testing.T) {
 		t.Errorf("expected collapsed JSON indicator ▸ after second enter")
 	}
 }
+
+// ── WriteSingleStepPipeline ───────────────────────────────────────────────────
+
+func TestWriteSingleStepPipeline_UseBrain(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+
+	path, err := switchboard.WriteSingleStepPipeline("test-brain", "opencode", "", "do a thing", true)
+	if err != nil {
+		t.Fatalf("WriteSingleStepPipeline: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read pipeline: %v", err)
+	}
+	yaml := string(data)
+	if !strings.Contains(yaml, "use_brain: true") {
+		t.Errorf("expected use_brain: true in YAML, got:\n%s", yaml)
+	}
+}
+
+func TestWriteSingleStepPipeline_NoBrain(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+
+	path, err := switchboard.WriteSingleStepPipeline("test-no-brain", "opencode", "", "do a thing", false)
+	if err != nil {
+		t.Fatalf("WriteSingleStepPipeline: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read pipeline: %v", err)
+	}
+	if strings.Contains(string(data), "use_brain") {
+		t.Errorf("expected no use_brain key in YAML when useBrain=false")
+	}
+}
