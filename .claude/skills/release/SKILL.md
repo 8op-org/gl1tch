@@ -103,34 +103,41 @@ Confirm the merge commit is present. If `main` has not advanced, stop and tell t
 
 ## Step 5 — Generate and curate changelog
 
-Generate a changelog using GoReleaser:
+**Important:** The `highlights` array in the changelog file becomes the GitHub Release body. Write it for an audience of hackers and AI enthusiasts — lead with capabilities, not implementation noise.
+
+Collect commits since last tag:
 
 ```bash
-goreleaser changelog --output /tmp/orcai-changelog.md 2>/dev/null || \
-  goreleaser release --snapshot --skip=publish,announce --clean 2>/dev/null && \
-  cp dist/CHANGELOG.md /tmp/orcai-changelog.md 2>/dev/null || \
-  git log $(git describe --tags --abbrev=0 2>/dev/null)..HEAD --oneline --no-merges > /tmp/orcai-changelog.md
+git log $(git describe --tags --abbrev=0 2>/dev/null)..HEAD --oneline --no-merges | grep -E '^[a-f0-9]+ (feat|fix|perf|refactor)'
 ```
 
-Create `site/src/content/changelog/v{VERSION}.md` with this frontmatter and a placeholder highlights list drawn from `/tmp/orcai-changelog.md`:
+Create `site/src/content/changelog/v{VERSION}.md`:
 
 ```markdown
 ---
 version: "{VERSION}"
 date: "{TODAY_DATE}"
 highlights:
-  - "feat: …"
-  - "fix: …"
+  - "feat: <capability> — <one-line description of what it enables>"
+  - "feat: <capability> — <one-line description>"
+  - "fix: <what was broken and how it manifests>"
 breaking: false
 ---
+
+## v{VERSION} — {TODAY_DATE}
+
+<Optional 1-2 sentence summary for the changelog page.>
 ```
 
-Populate `highlights` with the `feat:` and `fix:` lines from the generated changelog, formatted as bullet strings.
+Rules for highlights:
+- Each line is one user-visible capability or fix — no internal refactors, no CI/chore commits
+- `feat:` lines describe new power the user has; `fix:` lines describe something that was broken
+- Set `breaking: true` if any public interface, config format, or behaviour changed incompatibly
+- Aim for 5–10 highlights — enough to tell the story, not so many it becomes noise
 
 Tell the developer:
 
-> Review and edit `site/src/content/changelog/v{VERSION}.md` to curate the highlights for hackers and AI enthusiasts.
-> Press enter when ready to commit and tag.
+> Review `site/src/content/changelog/v{VERSION}.md`. These highlights will appear on the GitHub Release page and the ORCAI website changelog. Press enter when ready to commit and tag.
 
 Wait for the developer to confirm.
 
