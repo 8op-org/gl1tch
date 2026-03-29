@@ -1,0 +1,48 @@
+name: github-light
+display_name: "GitHub Light"
+mode: light
+palette:
+  bg:      "#ffffff"
+  fg:      "#24292f"
+  accent:  "#0969da"
+  dim:     "#6e7781"
+  border:  "#d0d7de"
+  error:   "#cf222e"
+  success: "#1a7f37"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#0969da"
+      text:   "#24292f"
+    agent_runner:
+      accent: "#0969da"
+      text:   "#24292f"
+    signal_board:
+      accent: "#0969da"
+      text:   "#24292f"
+    activity_feed:
+      accent: "#0969da"
+      text:   "#24292f"
+    inbox:
+      accent: "#0969da"
+      text:   "#24292f"
+    cron:
+      accent: "#0969da"
+      text:   "#24292f"
+    log_output:
+      accent: "#0969da"
+      text:   "#24292f"
+    modal:
+      accent: "#0969da"
+      text:   "#24292f"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

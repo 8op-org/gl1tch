@@ -56,7 +56,7 @@ func (m Model) View() string {
 	if m.helpOpen {
 		return renderOverlay(content, m.viewHelpModal(), m.width, m.height, "")
 	}
-	if m.themePickerOpen {
+	if m.themePicker.Open {
 		return renderOverlay(content, m.viewThemePicker(), m.width, m.height, "")
 	}
 	if m.quitConfirm {
@@ -319,13 +319,14 @@ func (m Model) viewEditOverlay() string {
 
 // viewThemePicker renders the theme picker overlay using the shared tuikit component.
 func (m Model) viewThemePicker() string {
-	var bundles []themes.Bundle
+	var dark, light []themes.Bundle
 	if gr := themes.GlobalRegistry(); gr != nil {
-		bundles = gr.All()
+		dark = gr.BundlesByMode("dark")
+		light = gr.BundlesByMode("light")
 	}
 	// Use m.bundle for color resolution so the picker always reflects the
 	// live theme tracked by BubbleTea, not a potentially-stale registry read.
-	return tuikit.ViewThemePicker(bundles, m.themePickerCursor, m.bundle, m.width)
+	return tuikit.ViewThemePicker(dark, light, m.themePicker, m.bundle, m.width)
 }
 
 // viewQuitConfirm renders the quit confirmation overlay.

@@ -1,0 +1,48 @@
+name: zenbones-dark
+display_name: "Zenbones Dark"
+mode: dark
+palette:
+  bg:      "#191919"
+  fg:      "#b4bdc3"
+  accent:  "#67afc1"
+  dim:     "#565e65"
+  border:  "#252525"
+  error:   "#de6e7c"
+  success: "#819b69"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#67afc1"
+      text:   "#191919"
+    agent_runner:
+      accent: "#67afc1"
+      text:   "#191919"
+    signal_board:
+      accent: "#67afc1"
+      text:   "#191919"
+    activity_feed:
+      accent: "#67afc1"
+      text:   "#191919"
+    inbox:
+      accent: "#67afc1"
+      text:   "#191919"
+    cron:
+      accent: "#67afc1"
+      text:   "#191919"
+    log_output:
+      accent: "#67afc1"
+      text:   "#191919"
+    modal:
+      accent: "#67afc1"
+      text:   "#191919"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

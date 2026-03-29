@@ -1,5 +1,6 @@
 name: kanagawa
 display_name: "Kanagawa"
+mode: dark
 palette:
   bg:      "#1f1f28"
   fg:      "#dcd7ba"

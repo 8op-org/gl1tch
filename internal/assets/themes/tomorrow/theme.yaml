@@ -1,0 +1,48 @@
+name: tomorrow
+display_name: "Tomorrow"
+mode: light
+palette:
+  bg:      "#ffffff"
+  fg:      "#4d4d4c"
+  accent:  "#4271ae"
+  dim:     "#8e908c"
+  border:  "#d6d6d6"
+  error:   "#c82829"
+  success: "#718c00"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    agent_runner:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    signal_board:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    activity_feed:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    inbox:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    cron:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    log_output:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+    modal:
+      accent: "#4271ae"
+      text:   "#4d4d4c"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

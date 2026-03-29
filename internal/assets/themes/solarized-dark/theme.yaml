@@ -1,5 +1,6 @@
 name: solarized-dark
 display_name: "Solarized Dark"
+mode: dark
 palette:
   bg:      "#002b36"
   fg:      "#839496"

@@ -4,22 +4,31 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
 	"github.com/adam-stokes/orcai/internal/tuikit"
 )
 
 // viewThemePicker renders the theme picker overlay.
-func viewThemePicker(bundles []themes.Bundle, cursor int, activeBundle *themes.Bundle, w int) string {
-	return tuikit.ViewThemePicker(bundles, cursor, activeBundle, w)
+func viewThemePicker(m Model) string {
+	if m.registry == nil {
+		return ""
+	}
+	dark := m.registry.BundlesByMode("dark")
+	light := m.registry.BundlesByMode("light")
+	return tuikit.ViewThemePicker(dark, light, m.themePicker, m.registry.Active(), m.width)
 }
 
 // handleThemePicker routes key events when the theme picker is open.
 func (m Model) handleThemePicker(msg tea.KeyMsg) (Model, tea.Cmd) {
-	bundles := m.registry.All()
-	newCursor, close, _, cmd := tuikit.HandleThemePicker(m.themePickerCursor, bundles, msg.String())
-	m.themePickerCursor = newCursor
+	if m.registry == nil {
+		m.themePicker.Open = false
+		return m, nil
+	}
+	dark := m.registry.BundlesByMode("dark")
+	light := m.registry.BundlesByMode("light")
+	newPicker, close, _, cmd := tuikit.HandleThemePicker(m.themePicker, dark, light, msg.String())
+	m.themePicker = newPicker
 	if close {
-		m.themePickerOpen = false
+		m.themePicker.Open = false
 	}
 	return m, cmd
 }
@@ -35,6 +44,7 @@ func ViewThemePickerForTest() string {
 	if m.registry == nil {
 		return ""
 	}
-	bundles := m.registry.All()
-	return tuikit.ViewThemePicker(bundles, 0, m.registry.Active(), 120)
+	dark := m.registry.BundlesByMode("dark")
+	light := m.registry.BundlesByMode("light")
+	return tuikit.ViewThemePicker(dark, light, m.themePicker, m.registry.Active(), 120)
 }

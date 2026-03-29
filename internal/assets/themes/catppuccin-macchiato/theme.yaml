@@ -1,0 +1,48 @@
+name: catppuccin-macchiato
+display_name: "Catppuccin Macchiato"
+mode: dark
+palette:
+  bg:      "#24273a"
+  fg:      "#cad3f5"
+  accent:  "#8aadf4"
+  dim:     "#6e738d"
+  border:  "#363a4f"
+  error:   "#ed8796"
+  success: "#a6da95"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    agent_runner:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    signal_board:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    activity_feed:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    inbox:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    cron:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    log_output:
+      accent: "#8aadf4"
+      text:   "#24273a"
+    modal:
+      accent: "#8aadf4"
+      text:   "#24273a"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

@@ -1,0 +1,48 @@
+name: apprentice
+display_name: "Apprentice"
+mode: dark
+palette:
+  bg:      "#262626"
+  fg:      "#bcbcbc"
+  accent:  "#87af87"
+  dim:     "#585858"
+  border:  "#444444"
+  error:   "#af5f5f"
+  success: "#5f875f"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#87af87"
+      text:   "#262626"
+    agent_runner:
+      accent: "#87af87"
+      text:   "#262626"
+    signal_board:
+      accent: "#87af87"
+      text:   "#262626"
+    activity_feed:
+      accent: "#87af87"
+      text:   "#262626"
+    inbox:
+      accent: "#87af87"
+      text:   "#262626"
+    cron:
+      accent: "#87af87"
+      text:   "#262626"
+    log_output:
+      accent: "#87af87"
+      text:   "#262626"
+    modal:
+      accent: "#87af87"
+      text:   "#262626"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

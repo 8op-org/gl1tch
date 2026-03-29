@@ -268,8 +268,7 @@ type Model struct {
 	helpOpen              bool
 	registry              *themes.Registry
 	themeState            tuikit.ThemeState
-	themePickerOpen       bool
-	themePickerCursor     int
+	themePicker tuikit.ThemePicker
 	// CWD / dir picker
 	launchCWD           string         // CWD at orcai startup (immutable after New())
 	agentCWD            string         // current agent session CWD (user-editable)
@@ -411,7 +410,7 @@ func (m Model) AgentFormStep() int { return 0 }
 func (m Model) AgentModalOpen() bool { return m.agentModalOpen }
 
 // ThemePickerOpen returns whether the theme picker overlay is open — used in tests.
-func (m Model) ThemePickerOpen() bool { return m.themePickerOpen }
+func (m Model) ThemePickerOpen() bool { return m.themePicker.Open }
 
 // AgentModalFocus returns the current agent modal focus slot — used in tests.
 func (m Model) AgentModalFocus() int { return m.agentModalFocus }
@@ -1041,7 +1040,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePickerOpen || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone {
+		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -1084,7 +1083,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	// Theme picker — capture all keys when open.
-	if m.themePickerOpen {
+	if m.themePicker.Open {
 		return m.handleThemePicker(msg)
 	}
 
@@ -1555,8 +1554,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "T":
 		if !m.agentModalOpen && !m.confirmDelete && !m.confirmQuit {
-			m.themePickerOpen = true
-			m.themePickerCursor = 0
+			m.themePicker.Open = true
+			m.themePicker.OriginalTheme = m.registry.Active()
+			// Set initial tab based on active theme's mode
+			if active := m.registry.Active(); active != nil && active.Mode == "light" {
+				m.themePicker.Tab = 1
+			} else {
+				m.themePicker.Tab = 0
+			}
 		}
 		return m, nil
 
@@ -2615,10 +2620,9 @@ func (m Model) View() string {
 	}
 
 	// Theme picker overlay.
-	if m.themePickerOpen && m.registry != nil {
+	if m.themePicker.Open && m.registry != nil {
 		base := topBar + "\n" + body
-		bundles := m.registry.All()
-		content := viewThemePicker(bundles, m.themePickerCursor, m.registry.Active(), w)
+		content := viewThemePicker(m)
 		return overlayCenter(base, content, w, h)
 	}
 

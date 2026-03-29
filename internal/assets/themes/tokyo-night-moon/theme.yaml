@@ -1,0 +1,48 @@
+name: tokyo-night-moon
+display_name: "Tokyo Night Moon"
+mode: dark
+palette:
+  bg:      "#222436"
+  fg:      "#c8d3f5"
+  accent:  "#82aaff"
+  dim:     "#636da6"
+  border:  "#2f334d"
+  error:   "#ff757f"
+  success: "#c3e88d"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#82aaff"
+      text:   "#222436"
+    agent_runner:
+      accent: "#82aaff"
+      text:   "#222436"
+    signal_board:
+      accent: "#82aaff"
+      text:   "#222436"
+    activity_feed:
+      accent: "#82aaff"
+      text:   "#222436"
+    inbox:
+      accent: "#82aaff"
+      text:   "#222436"
+    cron:
+      accent: "#82aaff"
+      text:   "#222436"
+    log_output:
+      accent: "#82aaff"
+      text:   "#222436"
+    modal:
+      accent: "#82aaff"
+      text:   "#222436"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

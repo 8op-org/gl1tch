@@ -1,0 +1,48 @@
+name: iceberg-light
+display_name: "Iceberg Light"
+mode: light
+palette:
+  bg:      "#e8e9ec"
+  fg:      "#33374c"
+  accent:  "#2d539e"
+  dim:     "#8389a3"
+  border:  "#c6c8d1"
+  error:   "#cc517a"
+  success: "#668e3d"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#2d539e"
+      text:   "#33374c"
+    agent_runner:
+      accent: "#2d539e"
+      text:   "#33374c"
+    signal_board:
+      accent: "#2d539e"
+      text:   "#33374c"
+    activity_feed:
+      accent: "#2d539e"
+      text:   "#33374c"
+    inbox:
+      accent: "#2d539e"
+      text:   "#33374c"
+    cron:
+      accent: "#2d539e"
+      text:   "#33374c"
+    log_output:
+      accent: "#2d539e"
+      text:   "#33374c"
+    modal:
+      accent: "#2d539e"
+      text:   "#33374c"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

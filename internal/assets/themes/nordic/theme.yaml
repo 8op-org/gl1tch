@@ -1,0 +1,48 @@
+name: nordic
+display_name: "Nordic"
+mode: dark
+palette:
+  bg:      "#2e3440"
+  fg:      "#d8dee9"
+  accent:  "#81a1c1"
+  dim:     "#4c566a"
+  border:  "#3b4252"
+  error:   "#bf616a"
+  success: "#a3be8c"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    agent_runner:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    signal_board:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    activity_feed:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    inbox:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    cron:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    log_output:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+    modal:
+      accent: "#81a1c1"
+      text:   "#2e3440"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

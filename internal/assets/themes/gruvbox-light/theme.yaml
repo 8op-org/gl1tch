@@ -1,0 +1,48 @@
+name: gruvbox-light
+display_name: "Gruvbox Light"
+mode: light
+palette:
+  bg:      "#fbf1c7"
+  fg:      "#3c3836"
+  accent:  "#076678"
+  dim:     "#928374"
+  border:  "#d5c4a1"
+  error:   "#9d0006"
+  success: "#79740e"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#076678"
+      text:   "#3c3836"
+    agent_runner:
+      accent: "#076678"
+      text:   "#3c3836"
+    signal_board:
+      accent: "#076678"
+      text:   "#3c3836"
+    activity_feed:
+      accent: "#076678"
+      text:   "#3c3836"
+    inbox:
+      accent: "#076678"
+      text:   "#3c3836"
+    cron:
+      accent: "#076678"
+      text:   "#3c3836"
+    log_output:
+      accent: "#076678"
+      text:   "#3c3836"
+    modal:
+      accent: "#076678"
+      text:   "#3c3836"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

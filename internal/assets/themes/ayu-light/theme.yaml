@@ -1,0 +1,48 @@
+name: ayu-light
+display_name: "Ayu Light"
+mode: light
+palette:
+  bg:      "#fafafa"
+  fg:      "#575f66"
+  accent:  "#399ee6"
+  dim:     "#abb0b6"
+  border:  "#e7eaed"
+  error:   "#f51818"
+  success: "#86b300"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#399ee6"
+      text:   "#575f66"
+    agent_runner:
+      accent: "#399ee6"
+      text:   "#575f66"
+    signal_board:
+      accent: "#399ee6"
+      text:   "#575f66"
+    activity_feed:
+      accent: "#399ee6"
+      text:   "#575f66"
+    inbox:
+      accent: "#399ee6"
+      text:   "#575f66"
+    cron:
+      accent: "#399ee6"
+      text:   "#575f66"
+    log_output:
+      accent: "#399ee6"
+      text:   "#575f66"
+    modal:
+      accent: "#399ee6"
+      text:   "#575f66"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

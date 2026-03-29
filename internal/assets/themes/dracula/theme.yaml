@@ -1,5 +1,6 @@
 name: dracula
 display_name: "Dracula"
+mode: dark
 palette:
   bg:      "#282a36"
   fg:      "#f8f8f2"

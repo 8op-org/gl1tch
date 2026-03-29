@@ -1,5 +1,6 @@
 name: catppuccin-mocha
 display_name: "Catppuccin Mocha"
+mode: dark
 palette:
   bg:      "#1e1e2e"
   fg:      "#cdd6f4"

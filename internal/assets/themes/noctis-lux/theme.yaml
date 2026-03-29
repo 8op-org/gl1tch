@@ -1,0 +1,48 @@
+name: noctis-lux
+display_name: "Noctis Lux"
+mode: light
+palette:
+  bg:      "#faeedd"
+  fg:      "#060606"
+  accent:  "#2d6b97"
+  dim:     "#939393"
+  border:  "#e5d8c4"
+  error:   "#c94f48"
+  success: "#49a84c"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#2d6b97"
+      text:   "#060606"
+    agent_runner:
+      accent: "#2d6b97"
+      text:   "#060606"
+    signal_board:
+      accent: "#2d6b97"
+      text:   "#060606"
+    activity_feed:
+      accent: "#2d6b97"
+      text:   "#060606"
+    inbox:
+      accent: "#2d6b97"
+      text:   "#060606"
+    cron:
+      accent: "#2d6b97"
+      text:   "#060606"
+    log_output:
+      accent: "#2d6b97"
+      text:   "#060606"
+    modal:
+      accent: "#2d6b97"
+      text:   "#060606"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

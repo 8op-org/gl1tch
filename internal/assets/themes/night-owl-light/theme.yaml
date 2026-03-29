@@ -1,0 +1,48 @@
+name: night-owl-light
+display_name: "Night Owl Light"
+mode: light
+palette:
+  bg:      "#fbfbfb"
+  fg:      "#403f53"
+  accent:  "#4876d6"
+  dim:     "#90a7b2"
+  border:  "#e0e0e0"
+  error:   "#f76e6e"
+  success: "#49d0c5"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#4876d6"
+      text:   "#403f53"
+    agent_runner:
+      accent: "#4876d6"
+      text:   "#403f53"
+    signal_board:
+      accent: "#4876d6"
+      text:   "#403f53"
+    activity_feed:
+      accent: "#4876d6"
+      text:   "#403f53"
+    inbox:
+      accent: "#4876d6"
+      text:   "#403f53"
+    cron:
+      accent: "#4876d6"
+      text:   "#403f53"
+    log_output:
+      accent: "#4876d6"
+      text:   "#403f53"
+    modal:
+      accent: "#4876d6"
+      text:   "#403f53"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

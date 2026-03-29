@@ -56,7 +56,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.helpOpen {
 		return m.handleHelpKey(msg)
 	}
-	if m.themePickerOpen {
+	if m.themePicker.Open {
 		return m.handleThemePickerKey(msg)
 	}
 	if m.quitConfirm {
@@ -76,18 +76,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "T":
 		if gr := themes.GlobalRegistry(); gr != nil {
-			bundles := gr.All()
-			// Set cursor to the currently active theme.
-			if active := gr.Active(); active != nil {
-				for i, b := range bundles {
-					if b.Name == active.Name {
-						m.themePickerCursor = i
-						break
-					}
-				}
+			m.themePicker.Open = true
+			m.themePicker.OriginalTheme = gr.Active()
+			// Set initial tab based on active theme's mode
+			if active := gr.Active(); active != nil && active.Mode == "light" {
+				m.themePicker.Tab = 1
+			} else {
+				m.themePicker.Tab = 0
 			}
 		}
-		m.themePickerOpen = true
 		return m, nil
 	case "ctrl+q":
 		m.quitConfirm = true
@@ -107,14 +104,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleThemePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	gr := themes.GlobalRegistry()
 	if gr == nil {
-		m.themePickerOpen = false
+		m.themePicker.Open = false
 		return m, nil
 	}
-	bundles := gr.All()
-	newCursor, close, selected, cmd := tuikit.HandleThemePicker(m.themePickerCursor, bundles, msg.String())
-	m.themePickerCursor = newCursor
+	dark := gr.BundlesByMode("dark")
+	light := gr.BundlesByMode("light")
+	newPicker, close, selected, cmd := tuikit.HandleThemePicker(m.themePicker, dark, light, msg.String())
+	m.themePicker = newPicker
 	if close {
-		m.themePickerOpen = false
+		m.themePicker.Open = false
 	}
 	// Update m.bundle immediately on selection so the view reflects the new
 	// theme without waiting for the busd ThemeChangedMsg round-trip.

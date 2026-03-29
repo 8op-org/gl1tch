@@ -1,0 +1,48 @@
+name: one-half-dark
+display_name: "One Half Dark"
+mode: dark
+palette:
+  bg:      "#282c34"
+  fg:      "#dcdfe4"
+  accent:  "#61afef"
+  dim:     "#636d83"
+  border:  "#3e4452"
+  error:   "#e06c75"
+  success: "#98c379"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#61afef"
+      text:   "#282c34"
+    agent_runner:
+      accent: "#61afef"
+      text:   "#282c34"
+    signal_board:
+      accent: "#61afef"
+      text:   "#282c34"
+    activity_feed:
+      accent: "#61afef"
+      text:   "#282c34"
+    inbox:
+      accent: "#61afef"
+      text:   "#282c34"
+    cron:
+      accent: "#61afef"
+      text:   "#282c34"
+    log_output:
+      accent: "#61afef"
+      text:   "#282c34"
+    modal:
+      accent: "#61afef"
+      text:   "#282c34"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

@@ -1,0 +1,48 @@
+name: srcery
+display_name: "Srcery"
+mode: dark
+palette:
+  bg:      "#1c1b19"
+  fg:      "#fce8c3"
+  accent:  "#68a8e4"
+  dim:     "#918175"
+  border:  "#2d2c29"
+  error:   "#ef2f27"
+  success: "#519f50"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    agent_runner:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    signal_board:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    activity_feed:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    inbox:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    cron:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    log_output:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+    modal:
+      accent: "#68a8e4"
+      text:   "#1c1b19"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

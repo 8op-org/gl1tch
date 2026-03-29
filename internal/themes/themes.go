@@ -55,6 +55,7 @@ type HeaderStyle struct {
 type Bundle struct {
 	Name        string      `yaml:"name"`
 	DisplayName string      `yaml:"display_name"`
+	Mode        string      `yaml:"mode"` // "dark" or "light"
 	Palette     Palette     `yaml:"palette"`
 	Borders     Borders     `yaml:"borders"`
 	StatusBar   StatusBar   `yaml:"statusbar"`

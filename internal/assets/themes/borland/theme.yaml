@@ -1,5 +1,6 @@
 name: borland
 display_name: "Borland Classic"
+mode: dark
 palette:
   bg:      "#0000aa"
   fg:      "#ffffff"

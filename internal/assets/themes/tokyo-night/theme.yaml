@@ -1,5 +1,6 @@
 name: tokyo-night
 display_name: "Tokyo Night"
+mode: dark
 palette:
   bg:      "#1a1b26"
   fg:      "#c0caf5"

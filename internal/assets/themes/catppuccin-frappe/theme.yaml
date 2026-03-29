@@ -1,0 +1,48 @@
+name: catppuccin-frappe
+display_name: "Catppuccin Frappé"
+mode: dark
+palette:
+  bg:      "#303446"
+  fg:      "#c6d0f5"
+  accent:  "#8caaee"
+  dim:     "#626880"
+  border:  "#414559"
+  error:   "#e78284"
+  success: "#a6d189"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#8caaee"
+      text:   "#303446"
+    agent_runner:
+      accent: "#8caaee"
+      text:   "#303446"
+    signal_board:
+      accent: "#8caaee"
+      text:   "#303446"
+    activity_feed:
+      accent: "#8caaee"
+      text:   "#303446"
+    inbox:
+      accent: "#8caaee"
+      text:   "#303446"
+    cron:
+      accent: "#8caaee"
+      text:   "#303446"
+    log_output:
+      accent: "#8caaee"
+      text:   "#303446"
+    modal:
+      accent: "#8caaee"
+      text:   "#303446"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

@@ -99,8 +99,7 @@ type Model struct {
 	helpOpen      bool
 	helpScrollOffset int
 
-	themePickerOpen   bool
-	themePickerCursor int
+	themePicker tuikit.ThemePicker
 
 	width  int
 	height int

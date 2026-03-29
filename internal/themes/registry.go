@@ -103,6 +103,17 @@ func (r *Registry) All() []Bundle {
 	return out
 }
 
+// BundlesByMode returns bundles matching the given mode ("dark" or "light").
+func (r *Registry) BundlesByMode(mode string) []Bundle {
+	var out []Bundle
+	for _, b := range r.bundles {
+		if b.Mode == mode {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // Get looks up a bundle by name. Returns (bundle, true) if found.
 func (r *Registry) Get(name string) (*Bundle, bool) {
 	b, ok := r.byName[name]

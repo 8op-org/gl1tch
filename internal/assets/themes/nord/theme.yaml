@@ -1,5 +1,6 @@
 name: nord
 display_name: "Nord"
+mode: dark
 palette:
   bg:      "#2e3440"
   fg:      "#eceff4"

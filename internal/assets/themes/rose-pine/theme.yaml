@@ -1,5 +1,6 @@
 name: rose-pine
 display_name: "Rose Pine"
+mode: dark
 palette:
   bg:      "#191724"
   fg:      "#e0def4"

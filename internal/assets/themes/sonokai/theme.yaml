@@ -1,0 +1,48 @@
+name: sonokai
+display_name: "Sonokai"
+mode: dark
+palette:
+  bg:      "#2c2e34"
+  fg:      "#e2e2e3"
+  accent:  "#76cce0"
+  dim:     "#7f8490"
+  border:  "#33353f"
+  error:   "#fc5d7c"
+  success: "#9ed072"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    agent_runner:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    signal_board:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    activity_feed:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    inbox:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    cron:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    log_output:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+    modal:
+      accent: "#76cce0"
+      text:   "#2c2e34"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

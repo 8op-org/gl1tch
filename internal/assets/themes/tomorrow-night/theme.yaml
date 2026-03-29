@@ -1,0 +1,48 @@
+name: tomorrow-night
+display_name: "Tomorrow Night"
+mode: dark
+palette:
+  bg:      "#1d1f21"
+  fg:      "#c5c8c6"
+  accent:  "#81a2be"
+  dim:     "#707880"
+  border:  "#282a2e"
+  error:   "#cc6666"
+  success: "#b5bd68"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    agent_runner:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    signal_board:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    activity_feed:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    inbox:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    cron:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    log_output:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+    modal:
+      accent: "#81a2be"
+      text:   "#1d1f21"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

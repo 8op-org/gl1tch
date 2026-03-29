@@ -1,0 +1,48 @@
+name: rose-pine-dawn
+display_name: "Rosé Pine Dawn"
+mode: light
+palette:
+  bg:      "#faf4ed"
+  fg:      "#575279"
+  accent:  "#286983"
+  dim:     "#9893a5"
+  border:  "#dfdad9"
+  error:   "#b4637a"
+  success: "#618774"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#286983"
+      text:   "#575279"
+    agent_runner:
+      accent: "#286983"
+      text:   "#575279"
+    signal_board:
+      accent: "#286983"
+      text:   "#575279"
+    activity_feed:
+      accent: "#286983"
+      text:   "#575279"
+    inbox:
+      accent: "#286983"
+      text:   "#575279"
+    cron:
+      accent: "#286983"
+      text:   "#575279"
+    log_output:
+      accent: "#286983"
+      text:   "#575279"
+    modal:
+      accent: "#286983"
+      text:   "#575279"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

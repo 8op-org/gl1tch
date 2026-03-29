@@ -1,0 +1,48 @@
+name: ayu-dark
+display_name: "Ayu Dark"
+mode: dark
+palette:
+  bg:      "#0d1017"
+  fg:      "#bfbdb6"
+  accent:  "#39bae6"
+  dim:     "#3d424d"
+  border:  "#131721"
+  error:   "#ff3333"
+  success: "#91b362"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    agent_runner:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    signal_board:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    activity_feed:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    inbox:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    cron:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    log_output:
+      accent: "#39bae6"
+      text:   "#0d1017"
+    modal:
+      accent: "#39bae6"
+      text:   "#0d1017"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

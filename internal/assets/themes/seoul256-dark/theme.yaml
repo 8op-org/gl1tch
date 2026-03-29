@@ -1,0 +1,48 @@
+name: seoul256-dark
+display_name: "Seoul256 Dark"
+mode: dark
+palette:
+  bg:      "#3a3a3a"
+  fg:      "#d0d0d0"
+  accent:  "#5f87af"
+  dim:     "#6c6c6c"
+  border:  "#4e4e4e"
+  error:   "#af5f5f"
+  success: "#5f875f"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    agent_runner:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    signal_board:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    activity_feed:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    inbox:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    cron:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    log_output:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+    modal:
+      accent: "#5f87af"
+      text:   "#3a3a3a"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

@@ -1,5 +1,6 @@
 name: gruvbox
 display_name: "Gruvbox Dark"
+mode: dark
 palette:
   bg:      "#282828"
   fg:      "#ebdbb2"

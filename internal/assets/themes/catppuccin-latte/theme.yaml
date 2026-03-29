@@ -1,0 +1,48 @@
+name: catppuccin-latte
+display_name: "Catppuccin Latte"
+mode: light
+palette:
+  bg:      "#eff1f5"
+  fg:      "#4c4f69"
+  accent:  "#1e66f5"
+  dim:     "#9ca0b0"
+  border:  "#ccd0da"
+  error:   "#d20f39"
+  success: "#40a02b"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    agent_runner:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    signal_board:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    activity_feed:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    inbox:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    cron:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    log_output:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+    modal:
+      accent: "#1e66f5"
+      text:   "#4c4f69"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

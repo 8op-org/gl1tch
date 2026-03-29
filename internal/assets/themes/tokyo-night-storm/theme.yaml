@@ -1,0 +1,48 @@
+name: tokyo-night-storm
+display_name: "Tokyo Night Storm"
+mode: dark
+palette:
+  bg:      "#24283b"
+  fg:      "#a9b1d6"
+  accent:  "#7aa2f7"
+  dim:     "#565f89"
+  border:  "#292e42"
+  error:   "#f7768e"
+  success: "#9ece6a"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    agent_runner:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    signal_board:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    activity_feed:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    inbox:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    cron:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    log_output:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+    modal:
+      accent: "#7aa2f7"
+      text:   "#24283b"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

@@ -1,0 +1,48 @@
+name: one-light
+display_name: "One Light"
+mode: light
+palette:
+  bg:      "#fafafa"
+  fg:      "#383a42"
+  accent:  "#4078f2"
+  dim:     "#a0a1a7"
+  border:  "#e5e5e6"
+  error:   "#e45649"
+  success: "#50a14f"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#4078f2"
+      text:   "#383a42"
+    agent_runner:
+      accent: "#4078f2"
+      text:   "#383a42"
+    signal_board:
+      accent: "#4078f2"
+      text:   "#383a42"
+    activity_feed:
+      accent: "#4078f2"
+      text:   "#383a42"
+    inbox:
+      accent: "#4078f2"
+      text:   "#383a42"
+    cron:
+      accent: "#4078f2"
+      text:   "#383a42"
+    log_output:
+      accent: "#4078f2"
+      text:   "#383a42"
+    modal:
+      accent: "#4078f2"
+      text:   "#383a42"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

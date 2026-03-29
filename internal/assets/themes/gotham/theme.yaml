@@ -1,0 +1,48 @@
+name: gotham
+display_name: "Gotham"
+mode: dark
+palette:
+  bg:      "#0c1014"
+  fg:      "#98d1ce"
+  accent:  "#195466"
+  dim:     "#3a4b5c"
+  border:  "#11151c"
+  error:   "#c33027"
+  success: "#26a98b"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#195466"
+      text:   "#0c1014"
+    agent_runner:
+      accent: "#195466"
+      text:   "#0c1014"
+    signal_board:
+      accent: "#195466"
+      text:   "#0c1014"
+    activity_feed:
+      accent: "#195466"
+      text:   "#0c1014"
+    inbox:
+      accent: "#195466"
+      text:   "#0c1014"
+    cron:
+      accent: "#195466"
+      text:   "#0c1014"
+    log_output:
+      accent: "#195466"
+      text:   "#0c1014"
+    modal:
+      accent: "#195466"
+      text:   "#0c1014"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

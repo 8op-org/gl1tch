@@ -1,0 +1,48 @@
+name: night-owl
+display_name: "Night Owl"
+mode: dark
+palette:
+  bg:      "#011627"
+  fg:      "#d6deeb"
+  accent:  "#82aaff"
+  dim:     "#4b6479"
+  border:  "#0b2942"
+  error:   "#ff5874"
+  success: "#addb67"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#82aaff"
+      text:   "#011627"
+    agent_runner:
+      accent: "#82aaff"
+      text:   "#011627"
+    signal_board:
+      accent: "#82aaff"
+      text:   "#011627"
+    activity_feed:
+      accent: "#82aaff"
+      text:   "#011627"
+    inbox:
+      accent: "#82aaff"
+      text:   "#011627"
+    cron:
+      accent: "#82aaff"
+      text:   "#011627"
+    log_output:
+      accent: "#82aaff"
+      text:   "#011627"
+    modal:
+      accent: "#82aaff"
+      text:   "#011627"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

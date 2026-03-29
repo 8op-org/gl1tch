@@ -1,0 +1,48 @@
+name: miasma
+display_name: "Miasma"
+mode: dark
+palette:
+  bg:      "#1c1c1c"
+  fg:      "#b2b2b2"
+  accent:  "#78824b"
+  dim:     "#525252"
+  border:  "#303030"
+  error:   "#9f5a5a"
+  success: "#6e7545"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    agent_runner:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    signal_board:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    activity_feed:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    inbox:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    cron:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    log_output:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+    modal:
+      accent: "#78824b"
+      text:   "#1c1c1c"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

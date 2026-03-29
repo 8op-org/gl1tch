@@ -1,0 +1,48 @@
+name: shades-of-purple
+display_name: "Shades of Purple"
+mode: dark
+palette:
+  bg:      "#1e1e3f"
+  fg:      "#a599e9"
+  accent:  "#fad000"
+  dim:     "#6b69a5"
+  border:  "#2d2b55"
+  error:   "#ff628c"
+  success: "#3ad900"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    agent_runner:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    signal_board:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    activity_feed:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    inbox:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    cron:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    log_output:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+    modal:
+      accent: "#fad000"
+      text:   "#1e1e3f"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

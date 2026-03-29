@@ -1,0 +1,48 @@
+name: deus
+display_name: "Deus"
+mode: dark
+palette:
+  bg:      "#1a1a2e"
+  fg:      "#e0e0e0"
+  accent:  "#7aa2f7"
+  dim:     "#565f89"
+  border:  "#2a2a3e"
+  error:   "#f7768e"
+  success: "#9ece6a"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    agent_runner:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    signal_board:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    activity_feed:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    inbox:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    cron:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    log_output:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+    modal:
+      accent: "#7aa2f7"
+      text:   "#1a1a2e"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

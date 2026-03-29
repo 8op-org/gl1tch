@@ -1,0 +1,48 @@
+name: panda
+display_name: "Panda"
+mode: dark
+palette:
+  bg:      "#292a2b"
+  fg:      "#e6e6e6"
+  accent:  "#ff75b5"
+  dim:     "#676b79"
+  border:  "#3a3c3e"
+  error:   "#ff2c6d"
+  success: "#19f9d8"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    agent_runner:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    signal_board:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    activity_feed:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    inbox:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    cron:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    log_output:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+    modal:
+      accent: "#ff75b5"
+      text:   "#292a2b"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

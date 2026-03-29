@@ -1,0 +1,48 @@
+name: everforest-light
+display_name: "Everforest Light"
+mode: light
+palette:
+  bg:      "#fdf6e3"
+  fg:      "#5c6a72"
+  accent:  "#8da101"
+  dim:     "#939f91"
+  border:  "#e0dcc7"
+  error:   "#f85552"
+  success: "#8da101"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    agent_runner:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    signal_board:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    activity_feed:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    inbox:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    cron:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    log_output:
+      accent: "#8da101"
+      text:   "#5c6a72"
+    modal:
+      accent: "#8da101"
+      text:   "#5c6a72"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

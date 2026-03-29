@@ -1,0 +1,48 @@
+name: everforest-dark
+display_name: "Everforest Dark"
+mode: dark
+palette:
+  bg:      "#2d353b"
+  fg:      "#d3c6aa"
+  accent:  "#83c092"
+  dim:     "#5c6a72"
+  border:  "#3d484d"
+  error:   "#e67e80"
+  success: "#a7c080"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#83c092"
+      text:   "#2d353b"
+    agent_runner:
+      accent: "#83c092"
+      text:   "#2d353b"
+    signal_board:
+      accent: "#83c092"
+      text:   "#2d353b"
+    activity_feed:
+      accent: "#83c092"
+      text:   "#2d353b"
+    inbox:
+      accent: "#83c092"
+      text:   "#2d353b"
+    cron:
+      accent: "#83c092"
+      text:   "#2d353b"
+    log_output:
+      accent: "#83c092"
+      text:   "#2d353b"
+    modal:
+      accent: "#83c092"
+      text:   "#2d353b"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg

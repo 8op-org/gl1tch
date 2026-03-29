@@ -1,0 +1,48 @@
+name: solarized-light
+display_name: "Solarized Light"
+mode: light
+palette:
+  bg:      "#fdf6e3"
+  fg:      "#657b83"
+  accent:  "#268bd2"
+  dim:     "#93a1a1"
+  border:  "#eee8d5"
+  error:   "#dc322f"
+  success: "#859900"
+borders:
+  style: light
+statusbar:
+  format: " {session} · {provider} · {model} "
+  bg: palette.bg
+  fg: palette.accent
+header_style:
+  panels:
+    pipelines:
+      accent: "#268bd2"
+      text:   "#657b83"
+    agent_runner:
+      accent: "#268bd2"
+      text:   "#657b83"
+    signal_board:
+      accent: "#268bd2"
+      text:   "#657b83"
+    activity_feed:
+      accent: "#268bd2"
+      text:   "#657b83"
+    inbox:
+      accent: "#268bd2"
+      text:   "#657b83"
+    cron:
+      accent: "#268bd2"
+      text:   "#657b83"
+    log_output:
+      accent: "#268bd2"
+      text:   "#657b83"
+    modal:
+      accent: "#268bd2"
+      text:   "#657b83"
+modal:
+  bg:       palette.bg
+  border:   palette.accent
+  title_bg: palette.accent
+  title_fg: palette.bg
