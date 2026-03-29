@@ -74,6 +74,27 @@ tasks:
       - rm -f ~/.config/orcai/inbox-read.json
       - "{{.BINARY}}"
 
+  dev:
+    desc: "New-user clean build: backup+wipe config/data/binaries, rebuild from source, run ./bin/orcai"
+    cmds:
+      - -tmux detach-client -s orcai 2>/dev/null
+      - -tmux kill-session -t orcai 2>/dev/null
+      - -tmux kill-session -t orcai-cron 2>/dev/null
+      - |
+        if [ -d ~/.config/orcai ]; then
+          cp -r ~/.config/orcai ~/.config/orcai.bak.$(date +%Y%m%d%H%M%S)
+          ls -dt ~/.config/orcai.bak.* 2>/dev/null | tail -n +6 | xargs rm -rf
+        fi
+      - |
+        if [ -d ~/.local/share/orcai ]; then
+          cp -r ~/.local/share/orcai ~/.local/share/orcai.bak.$(date +%Y%m%d%H%M%S)
+          ls -dt ~/.local/share/orcai.bak.* 2>/dev/null | tail -n +6 | xargs rm -rf
+        fi
+      - rm -rf ~/.config/orcai ~/.local/share/orcai
+      - rm -f bin/{{.BINARY}} bin/{{.BINARY}}-debug
+      - go build -o bin/{{.BINARY}} .
+      - ./bin/{{.BINARY}}
+
   # ---------------------------------------------------------------------------
   # Debug tasks
   # ---------------------------------------------------------------------------
