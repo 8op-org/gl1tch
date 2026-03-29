@@ -291,7 +291,7 @@ type Model struct {
 	confirmDelete         bool
 	pendingDeletePipeline string
 	agentModalOpen  bool
-	agentModalFocus int // 0=provider, 1=model, 2=prompt, 3=cwd, 4=schedule (within modal)
+	agentModalFocus int // 0=provider, 1=model, 2=prompt, 3=use_brain, 4=cwd, 5=schedule (within modal)
 	agentSchedule         textarea.Model
 	agentScheduleErr      string
 	agentUseBrain         bool
@@ -2084,12 +2084,12 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.submitAgentJob()
 
 	case "tab":
-		m.agentModalFocus = (m.agentModalFocus + 1) % 5
+		m.agentModalFocus = (m.agentModalFocus + 1) % 6
 		switch m.agentModalFocus {
 		case 2:
 			m.agent.prompt.Focus()
 			m.agentSchedule.Blur()
-		case 4:
+		case 5:
 			m.agent.prompt.Blur()
 			m.agentSchedule.Focus()
 		default:
@@ -2099,12 +2099,12 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "shift+tab":
-		m.agentModalFocus = (m.agentModalFocus + 4) % 5
+		m.agentModalFocus = (m.agentModalFocus + 5) % 6
 		switch m.agentModalFocus {
 		case 2:
 			m.agent.prompt.Focus()
 			m.agentSchedule.Blur()
-		case 4:
+		case 5:
 			m.agent.prompt.Blur()
 			m.agentSchedule.Focus()
 		default:
@@ -2114,7 +2114,7 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "up", "k":
-		if m.agentModalFocus == 2 || m.agentModalFocus == 4 {
+		if m.agentModalFocus == 2 || m.agentModalFocus == 5 {
 			// Let textarea handle the key when prompt or schedule is focused.
 			break
 		}
@@ -2131,7 +2131,7 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j":
-		if m.agentModalFocus == 2 || m.agentModalFocus == 4 {
+		if m.agentModalFocus == 2 || m.agentModalFocus == 5 {
 			// Let textarea handle the key when prompt or schedule is focused.
 			break
 		}
@@ -2154,8 +2154,16 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 	default:
 	}
 
-	// CWD focus: enter opens the dir picker.
+	// USE BRAIN toggle: space or enter toggles the flag.
 	if m.agentModalFocus == 3 {
+		if key == " " || key == "enter" {
+			m.agentUseBrain = !m.agentUseBrain
+		}
+		return m, nil
+	}
+
+	// CWD focus: enter opens the dir picker.
+	if m.agentModalFocus == 4 {
 		if msg.String() == "enter" {
 			m.dirPicker = NewDirPickerModel()
 			m.dirPickerOpen = true
@@ -2171,7 +2179,7 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.agent.prompt, cmd = m.agent.prompt.Update(msg)
 		return m, cmd
 	}
-	if m.agentModalFocus == 4 {
+	if m.agentModalFocus == 5 {
 		var cmd tea.Cmd
 		m.agentSchedule, cmd = m.agentSchedule.Update(msg)
 		return m, cmd

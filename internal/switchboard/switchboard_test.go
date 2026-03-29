@@ -888,7 +888,7 @@ func TestJobDoneMsg_NoSteps_ProducesFeedDone(t *testing.T) {
 // ── Agent modal SCHEDULE field (cron-recurring-ui-wiring) ────────────────────
 
 // TestAgentModal_TabCyclesToScheduleSlot checks that Tab from slot 2 (PROMPT)
-// reaches slot 3 (SCHEDULE).
+// reaches slot 5 (SCHEDULE).
 func TestAgentModal_TabCyclesToScheduleSlot(t *testing.T) {
 	m := switchboard.NewWithTestProviders()
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -903,15 +903,15 @@ func TestAgentModal_TabCyclesToScheduleSlot(t *testing.T) {
 		t.Fatal("expected agent modal to be open")
 	}
 
-	// Tab three times: slot 0 → 1 → 2 → 3.
+	// Tab five times: slot 0 → 1 → 2 → 3 → 4 → 5.
 	cur := m6
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
 		cur = nx.(switchboard.Model)
 	}
 
-	if got := cur.AgentModalFocus(); got != 3 {
-		t.Errorf("expected agentModalFocus == 3 (SCHEDULE), got %d", got)
+	if got := cur.AgentModalFocus(); got != 5 {
+		t.Errorf("expected agentModalFocus == 5 (SCHEDULE), got %d", got)
 	}
 }
 
@@ -969,8 +969,9 @@ func TestAgentModal_InvalidScheduleShowsError(t *testing.T) {
 		m8 = nx
 	}
 
-	// Tab to CWD (slot 3) then SCHEDULE (slot 4) and type an invalid cron expression.
-	m9tmp, _ := m8.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
+	// Tab to USE_BRAIN (slot 3), CWD (slot 4), then SCHEDULE (slot 5) and type an invalid cron expression.
+	m9tmp0, _ := m8.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
+	m9tmp, _ := m9tmp0.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
 	m9, _ := m9tmp.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyTab})
 	for _, r := range "not-a-valid-cron" {
 		nx, _ := m9.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
