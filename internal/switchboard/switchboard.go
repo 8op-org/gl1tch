@@ -329,6 +329,9 @@ type Model struct {
 	inboxEditorTempFile     string // path to temp file open in $EDITOR
 	inboxEditorClipSnapshot string // clipboard state before editor launch
 	inboxEditorOrigContent  string // original content written to temp file
+	// Re-run modal
+	rerunModal    modal.RerunModal
+	showRerun     bool
 	// Cron panel
 	cronPanel CronPanel
 	// Pipeline bus subscription (tasks 7.2–7.8)
@@ -1181,7 +1184,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone {
+		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -1204,6 +1207,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var inboxCmd tea.Cmd
 		m.inboxModel, inboxCmd = m.inboxModel.Update(msg)
 		return m, inboxCmd
+
+	case modal.RerunConfirmedMsg:
+		m.showRerun = false
+		return m.submitRerun(msg)
+
+	case modal.RerunCancelledMsg:
+		m.showRerun = false
+		return m, nil
 	}
 
 	// Forward all other messages to the inbox model (poll ticks, etc.).
@@ -1220,6 +1231,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.dirPickerOpen {
 		var cmd tea.Cmd
 		m.dirPicker, cmd = m.dirPicker.Update(msg)
+		return m, cmd
+	}
+
+	// Re-run modal — capture all keys when open.
+	if m.showRerun {
+		var cmd tea.Cmd
+		m.rerunModal, cmd = m.rerunModal.Update(msg)
 		return m, cmd
 	}
 
@@ -1614,6 +1632,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				if m.inboxPanel.scrollOffset > m.inboxPanel.selectedIdx {
 					m.inboxPanel.scrollOffset = m.inboxPanel.selectedIdx
 				}
+			}
+			return m, nil
+		case "r":
+			runs := m.filteredInboxRuns()
+			if len(runs) > 0 && m.inboxPanel.selectedIdx >= 0 && m.inboxPanel.selectedIdx < len(runs) {
+				run := runs[m.inboxPanel.selectedIdx]
+				m.rerunModal = modal.NewRerunModal(run, m.agent.providers)
+				m.showRerun = true
 			}
 			return m, nil
 		case "esc":
@@ -2770,6 +2796,70 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	m.agentPromptIdx = 0
 
 	return m.launchPendingPipeline(cwd)
+}
+
+// submitRerun handles a confirmed re-run from the RerunModal.
+// Agent runs are reconstructed as a new single-step pipeline with the (optionally
+// appended) original prompt. Pipeline runs re-launch the original YAML file.
+func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
+	run := msg.Run
+	additionalContext := msg.AdditionalContext
+
+	var meta struct {
+		PipelineFile string `json:"pipeline_file"`
+		CWD          string `json:"cwd"`
+	}
+	_ = json.Unmarshal([]byte(run.Metadata), &meta)
+	cwd := meta.CWD
+	if cwd == "" {
+		cwd = m.launchCWD
+	}
+
+	switch run.Kind {
+	case "agent":
+		// Reconstruct original prompt from the first step.
+		originalPrompt := ""
+		if len(run.Steps) > 0 {
+			originalPrompt = run.Steps[0].Prompt
+		}
+		fullPrompt := originalPrompt
+		if additionalContext != "" {
+			fullPrompt += "\n\n---\nAdditional context:\n" + additionalContext
+		}
+		if fullPrompt == "" {
+			return m, nil
+		}
+
+		entryName := fmt.Sprintf("agent-%s-%d", msg.ProviderID, time.Now().UnixNano())
+		pipelineFile, err := WriteSingleStepPipeline(entryName, msg.ProviderID, msg.ModelID, fullPrompt, false)
+		if err != nil {
+			return m, nil
+		}
+		m.pendingPipelineName = entryName
+		m.pendingPipelineYAML = pipelineFile
+		return m.launchPendingPipeline(cwd)
+
+	default: // "pipeline" and any future kinds
+		yamlPath := meta.PipelineFile
+		if yamlPath == "" {
+			return m, nil
+		}
+		feedID := fmt.Sprintf("pipe-%d", time.Now().UnixNano())
+		orcaiBin := orcaiBinaryPath()
+		shellCmd := orcaiBin + " pipeline run " + yamlPath
+		if additionalContext != "" {
+			// Pass additional context as an env var the pipeline can reference.
+			escaped := strings.ReplaceAll(additionalContext, "'", `'\''`)
+			shellCmd = "ORCAI_CONTEXT='" + escaped + "' " + shellCmd
+		}
+		windowName, logFile, doneFile := createJobWindow(feedID, shellCmd, run.Name, cwd)
+		ch := make(chan tea.Msg, 256)
+		_, cancel := context.WithCancel(context.Background())
+		jh := &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile, pipelineName: run.Name}
+		m.activeJobs[feedID] = jh
+		startLogWatcher(feedID, logFile, doneFile, ch)
+		return m, drainChan(ch)
+	}
 }
 
 // orcaiBinaryPath returns the path to the running orcai binary, falling back
