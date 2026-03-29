@@ -340,7 +340,7 @@ Press **^spc** (ctrl+space) to access chord shortcuts.
 - ^spc q  quit
 - ^spc d  detach
 - ^spc r  reload
-- ^spc m  themes
+- ^spc t  themes
 - ^spc j  jump to window
 `
 

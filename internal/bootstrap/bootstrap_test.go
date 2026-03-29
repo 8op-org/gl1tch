@@ -3,6 +3,7 @@ package bootstrap_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -42,6 +43,9 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 		t.Fatalf("read tmux.conf: %v", err)
 	}
 	conf := string(data)
+	// Strip tmux color directives (#[fg=...]) from the conf for plain-text assertions.
+	colorRe := regexp.MustCompile(`#\[[^\]]*\]`)
+	plain := colorRe.ReplaceAllString(conf, "")
 
 	// ctrl+space leader must be present.
 	if !strings.Contains(conf, "C-Space") {
@@ -56,21 +60,25 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 		t.Error("tmux.conf still contains global ESC intercept")
 	}
 	// Status bar must contain new hints; old ^spc n new hint must be gone.
-	if strings.Contains(conf, "^spc n new") {
+	if strings.Contains(plain, "^spc n new") {
 		t.Error("tmux.conf status-right still contains removed '^spc n new' hint")
 	}
-	if !strings.Contains(conf, "^spc c win") {
+	if !strings.Contains(plain, "^spc c win") {
 		t.Error("tmux.conf status-right missing '^spc c win' hint")
 	}
-	if !strings.Contains(conf, "^spc j jump") {
+	if !strings.Contains(plain, "^spc j jump") {
 		t.Error("tmux.conf status-right missing '^spc j jump' hint")
 	}
-	if !strings.Contains(conf, "^spc t switchboard") {
-		t.Error("tmux.conf status-right missing '^spc t switchboard' hint")
+	// ^spc t switchboard hint must be gone.
+	if strings.Contains(plain, "^spc t switchboard") {
+		t.Error("tmux.conf status-right still contains removed '^spc t switchboard' hint")
 	}
-	// ^spc t must use select-window, not display-popup.
-	if !strings.Contains(conf, "select-window -t orcai:0") {
-		t.Error("tmux.conf ^spc t binding must use select-window -t orcai:0")
+	if !strings.Contains(plain, "^spc t themes") {
+		t.Error("tmux.conf status-right missing '^spc t themes' hint")
+	}
+	// ^spc t must send T (theme picker), not navigate to switchboard window.
+	if strings.Contains(conf, "bind-key -T orcai-chord t     { switch-client -T root ; switch-client -t orcai") {
+		t.Error("tmux.conf ^spc t binding still navigates to switchboard")
 	}
 }
 

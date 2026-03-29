@@ -13,10 +13,9 @@ func TmuxStatusRight(accent, dim string) string {
 	sp := fmt.Sprintf("#[fg=%s]  ", dim)
 	grp := fmt.Sprintf("#[fg=%s]  │  ", dim)
 	return " " +
-		key("^spc t") + desc(" switchboard") + sp +
 		key("^spc j") + desc(" jump") + grp +
 		key("^spc c") + desc(" win") + grp +
-		key("^spc m") + desc(" themes") + grp +
+		key("^spc t") + desc(" themes") + grp +
 		key("^spc h") + desc(" help") + grp +
 		key("^spc d") + desc(" detach") + sp +
 		key("^spc r") + desc(" reload") + sp +

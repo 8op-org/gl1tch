@@ -108,8 +108,7 @@ func buildTmuxConf(self string) string {
 		"bind-key -T orcai-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
 		"bind-key -T orcai-chord o     { switch-client -T root ; display-popup -E -w 68 -h 24 \"" + self + " ollama\" }\n" +
 		"bind-key -T orcai-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
-		"bind-key -T orcai-chord t     { switch-client -T root ; switch-client -t orcai ; select-window -t orcai:0 }\n" +
-		"bind-key -T orcai-chord m     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys T } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 T } }\n" +
+		"bind-key -T orcai-chord t     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys T } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 T } }\n" +
 		"bind-key -T orcai-chord j     { switch-client -T root ; display-popup -E -B -w 70 -h 24 \"" + self + " _jump\" }\n" +
 		// Window management
 		"bind-key -T orcai-chord c     { switch-client -T root ; new-window }\n" +
@@ -132,7 +131,8 @@ func buildTmuxConf(self string) string {
 		// Pressing ctrl+space again exits the chord table without action.
 		"bind-key -T orcai-chord C-Space switch-client -T root\n" +
 		// Explicitly unbind removed chords so stale sessions don't keep them.
-		"unbind-key -T orcai-chord n\n"
+		"unbind-key -T orcai-chord n\n" +
+		"unbind-key -T orcai-chord m\n"
 
 	return base + leaderBinding + chords
 }
