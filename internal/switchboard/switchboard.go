@@ -1652,7 +1652,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			runs := m.filteredInboxRuns()
 			if len(runs) > 0 && m.inboxPanel.selectedIdx >= 0 && m.inboxPanel.selectedIdx < len(runs) {
 				run := runs[m.inboxPanel.selectedIdx]
-				m.rerunModal = modal.NewRerunModal(run, m.agent.providers, m.launchCWD)
+				rm := modal.NewRerunModal(run, m.agent.providers, m.launchCWD)
+				if run.Kind == "agent" {
+					if slug := agentRunModelSlug(run.Name); slug != "" {
+						rm = rm.WithModelSlug(slug)
+					}
+				}
+				m.rerunModal = rm
 				m.showRerun = true
 			}
 			return m, nil
@@ -2840,14 +2846,18 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 
 	switch run.Kind {
 	case "agent":
-		// Reconstruct original prompt from the first step.
+		// Build the prompt: original from the first step, with any additional context appended.
 		originalPrompt := ""
 		if len(run.Steps) > 0 {
 			originalPrompt = run.Steps[0].Prompt
 		}
 		fullPrompt := originalPrompt
 		if additionalContext != "" {
-			fullPrompt += "\n\n---\nAdditional context:\n" + additionalContext
+			if fullPrompt != "" {
+				fullPrompt += "\n\n---\nAdditional context:\n" + additionalContext
+			} else {
+				fullPrompt = additionalContext
+			}
 		}
 		if fullPrompt == "" {
 			return m, nil
@@ -2863,8 +2873,13 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 		return m.launchPendingPipeline(cwd)
 
 	default: // "pipeline" and any future kinds
+		// Prefer the stored path; fall back to the conventional location derived
+		// from the run name (pipeline runner only stores cwd, not the file path).
 		yamlPath := meta.PipelineFile
 		if yamlPath == "" {
+			yamlPath = filepath.Join(pipelinesDir(), run.Name+".pipeline.yaml")
+		}
+		if _, err := os.Stat(yamlPath); err != nil {
 			return m, nil
 		}
 		feedID := fmt.Sprintf("pipe-%d", time.Now().UnixNano())
@@ -2883,6 +2898,33 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 		startLogWatcher(feedID, logFile, doneFile, ch)
 		return m, drainChan(ch)
 	}
+}
+
+// agentRunModelSlug reads the YAML for an agent run and returns the
+// "providerID/modelID" slug used to pre-seed the RerunModal picker.
+// Returns "" when the file is missing or the executor field is absent.
+func agentRunModelSlug(runName string) string {
+	yamlPath := filepath.Join(pipelinesDir(), ".agents", runName+".pipeline.yaml")
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		return ""
+	}
+	var executor, model string
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(trimmed, "executor: "); ok {
+			executor = after
+		} else if after, ok := strings.CutPrefix(trimmed, "model: "); ok {
+			model = after
+		}
+	}
+	if executor == "" {
+		return ""
+	}
+	if model == "" {
+		return executor
+	}
+	return executor + "/" + model
 }
 
 // orcaiBinaryPath returns the path to the running orcai binary, falling back

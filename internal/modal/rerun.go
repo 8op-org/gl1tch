@@ -59,10 +59,8 @@ func NewRerunModal(run store.Run, providers []picker.ProviderDef, cwdFallback st
 	ta.SetHeight(4)
 	ta.Focus()
 
-	// For agent runs, pre-fill with the original prompt from the first step.
-	if run.Kind == "agent" && len(run.Steps) > 0 && run.Steps[0].Prompt != "" {
-		ta.SetValue(run.Steps[0].Prompt)
-	}
+	// Textarea is for additional context only; leave it blank so the user can
+	// type new instructions without the original prompt being re-submitted twice.
 
 	// CWD input — default from metadata, fall back to cwdFallback.
 	var meta struct {
@@ -100,6 +98,12 @@ func (m RerunModal) Run() store.Run { return m.run }
 // CWD returns the current working directory value from the input field.
 func (m RerunModal) CWD() string { return strings.TrimSpace(m.cwdInput.Value()) }
 
+// WithModelSlug pre-selects the provider/model from a "providerID/modelID" slug.
+func (m RerunModal) WithModelSlug(slug string) RerunModal {
+	m.picker = m.picker.SelectBySlug(slug)
+	return m
+}
+
 // Update handles key input. Cycles focus with tab/shift+tab across all four
 // zones (context → cwd → provider → model → context). ctrl+r confirms from
 // any zone. esc cancels.
@@ -126,6 +130,9 @@ func (m RerunModal) Update(msg tea.KeyMsg) (RerunModal, tea.Cmd) {
 		return m, cmd
 
 	case rerunFocusCWD:
+		if msg.Type == tea.KeyEnter {
+			return m, m.confirmedCmd()
+		}
 		var cmd tea.Cmd
 		m.cwdInput, cmd = m.cwdInput.Update(msg)
 		return m, cmd
