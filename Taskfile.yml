@@ -9,7 +9,7 @@
 #   task --list          show all available tasks
 #   task build           compile binary to bin/orcai
 #   task install         build and install to GOPATH/bin + ~/.local/bin symlink
-#   task dev             clean-slate build from source (wipes config/data, runs ./bin/orcai)
+#   task dev             clean-slate build from source (wipes config/data, run manually)
 #   task prod            install fresh build from source to GOPATH/bin (run manually)
 #   task run             start orcai (non-destructive, assumes already installed)
 #   task run:clean       wipe db/config, kill tmux sessions, then start orcai
@@ -73,7 +73,7 @@ tasks:
       - "{{.BINARY}}"
 
   dev:
-    desc: "New-user clean build: backup+wipe config/data/binaries, rebuild from source, run ./bin/orcai"
+    desc: "New-user clean build: backup+wipe config/data/binaries, rebuild from source (run manually)"
     cmds:
       - -tmux detach-client -s orcai 2>/dev/null
       - -tmux kill-session -t orcai 2>/dev/null
@@ -92,7 +92,6 @@ tasks:
       - rm -f bin/{{.BINARY}} bin/{{.BINARY}}-debug
       - mkdir -p bin
       - go build -o bin/{{.BINARY}} .
-      - ./bin/{{.BINARY}}
 
   prod:
     desc: "Daily driver: install fresh build from source to GOPATH/bin and ~/.local/bin (run manually)"
