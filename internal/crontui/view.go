@@ -58,6 +58,10 @@ func (m Model) View() string {
 	content := lipgloss.JoinVertical(lipgloss.Left, topBar, "", top, bot)
 
 	// Render overlays on top if open.
+	if m.jumpOpen {
+		m.jumpModal.SetSize(m.width, m.height-2)
+		return renderOverlay(content, m.jumpModal.View(), m.width, m.height, "")
+	}
 	if m.helpOpen {
 		return renderOverlay(content, m.viewHelpModal(), m.width, m.height, "")
 	}
@@ -154,6 +158,8 @@ func (m Model) viewJobList(width, height int) string {
 				{Key: "enter/r", Desc: "run now"},
 				{Key: "p", Desc: "pipeline"},
 				{Key: "/", Desc: "search"},
+				{Key: "J", Desc: "jump"},
+				{Key: "?", Desc: "help"},
 			}
 		}
 	}

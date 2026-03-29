@@ -96,6 +96,13 @@ func (m AgentPickerModel) SelectBySlug(slug string) AgentPickerModel {
 // Focus returns the current internal focus: 0 = provider list, 1 = model list.
 func (m AgentPickerModel) Focus() int { return m.focus }
 
+// WithFocus returns a copy of the picker with the internal focus set to f.
+// f=0 selects the provider list; f=1 selects the model list; any other value dims both.
+func (m AgentPickerModel) WithFocus(f int) AgentPickerModel {
+	m.focus = f
+	return m
+}
+
 // currentModels returns non-separator models for the selected provider.
 func (m AgentPickerModel) currentModels() []picker.ModelOption {
 	if m.selectedProvider >= len(m.providers) {

@@ -12,6 +12,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/busd"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/themes"
 	"github.com/adam-stokes/orcai/internal/tuikit"
 )
@@ -26,6 +27,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case jumpwindow.CloseMsg:
+		m.jumpOpen = false
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -59,6 +64,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey routes key events based on the current UI state.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Overlays take priority.
+	if m.jumpOpen {
+		var cmd tea.Cmd
+		m.jumpModal, cmd = m.jumpModal.Update(msg)
+		return m, cmd
+	}
 	if m.helpOpen {
 		return m.handleHelpKey(msg)
 	}
@@ -76,6 +86,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "J":
+		jm := jumpwindow.NewEmbedded(m.bundle)
+		jm.SetSize(m.width, m.height-2)
+		m.jumpModal = jm
+		m.jumpOpen = true
+		return m, nil
 	case "?":
 		m.helpOpen = true
 		m.helpScrollOffset = 0

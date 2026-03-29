@@ -16,9 +16,6 @@ import (
 
 // actionMap maps action names to tmux command args.
 var actionMap = map[string][]string{
-	"launch-session-picker": {"display-popup", "-E", "-w", "120", "-h", "40", "orcai-picker"},
-	"open-sysop":            {"display-popup", "-E", "-w", "100%", "-h", "100%", "orcai-sysop"},
-	"open-welcome":          {"new-window", "orcai-welcome"},
 	// Window management
 	"new-window":  {"new-window"},
 	"prev-window": {"previous-window"},

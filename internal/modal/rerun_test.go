@@ -38,23 +38,23 @@ func rerunTestProviders() []picker.ProviderDef {
 }
 
 func TestNewRerunModal_SeedsPickerFromMetadata(t *testing.T) {
-	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders())
+	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders(), "/tmp")
 	if got := m.Run().Name; got != "test-run" {
 		t.Fatalf("unexpected run name: %q", got)
 	}
 }
 
 func TestNewRerunModal_AgentPreFillsTextarea(t *testing.T) {
-	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders())
+	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders(), "/tmp")
 	pal := styles.ANSIPalette{Border: "\x1b[36m", Accent: "\x1b[35m", FG: "\x1b[97m", Dim: "\x1b[2m"}
-	view := m.ViewBox(60, pal)
+	view := m.ViewBox(60, 24, pal)
 	if view == "" {
 		t.Fatal("ViewBox returned empty string")
 	}
 }
 
 func TestRerunModal_EscEmitsCancelledMsg(t *testing.T) {
-	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders())
+	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders(), "/tmp")
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Fatal("expected a command on esc")
@@ -66,7 +66,7 @@ func TestRerunModal_EscEmitsCancelledMsg(t *testing.T) {
 }
 
 func TestRerunModal_CtrlREmitsConfirmedMsg(t *testing.T) {
-	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders())
+	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders(), "/tmp")
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
 	if cmd == nil {
 		t.Fatal("expected a command on ctrl+r")
@@ -82,9 +82,10 @@ func TestRerunModal_CtrlREmitsConfirmedMsg(t *testing.T) {
 }
 
 func TestRerunModal_TabCyclesFocus(t *testing.T) {
-	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders())
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	_, cmd := m2.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m := modal.NewRerunModal(testRun("agent"), rerunTestProviders(), "/tmp")
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})  // context → cwd
+	m3, _ := m2.Update(tea.KeyMsg{Type: tea.KeyTab}) // cwd → provider
+	_, cmd := m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("expected a command on enter in picker focus")
 	}

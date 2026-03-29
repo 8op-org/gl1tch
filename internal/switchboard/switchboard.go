@@ -27,6 +27,7 @@ import (
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
+	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/panelrender"
 	"github.com/adam-stokes/orcai/internal/picker"
@@ -296,6 +297,8 @@ type Model struct {
 	agentScheduleErr      string
 	agentUseBrain         bool
 	helpOpen              bool
+	jumpOpen              bool
+	jumpModal             jumpwindow.EmbeddedModel
 	registry              *themes.Registry
 	themeState            tuikit.ThemeState
 	themePicker           tuikit.ThemePicker
@@ -1184,7 +1187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun {
+		if m.confirmQuit || m.helpOpen || m.jumpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -1201,6 +1204,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleKey(msg)
 		}
 		return m.handleKey(msg)
+
+	case jumpwindow.CloseMsg:
+		m.jumpOpen = false
+		return m, nil
 
 	case inbox.RunCompletedMsg:
 		// Immediate inbox refresh when a run completes in-process.
@@ -1238,6 +1245,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.showRerun {
 		var cmd tea.Cmd
 		m.rerunModal, cmd = m.rerunModal.Update(msg)
+		return m, cmd
+	}
+
+	// Jump window modal — route all keys to the embedded model.
+	if m.jumpOpen {
+		var cmd tea.Cmd
+		m.jumpModal, cmd = m.jumpModal.Update(msg)
 		return m, cmd
 	}
 
@@ -1638,7 +1652,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			runs := m.filteredInboxRuns()
 			if len(runs) > 0 && m.inboxPanel.selectedIdx >= 0 && m.inboxPanel.selectedIdx < len(runs) {
 				run := runs[m.inboxPanel.selectedIdx]
-				m.rerunModal = modal.NewRerunModal(run, m.agent.providers)
+				m.rerunModal = modal.NewRerunModal(run, m.agent.providers, m.launchCWD)
 				m.showRerun = true
 			}
 			return m, nil
@@ -1801,6 +1815,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			} else {
 				m.themePicker.Tab = 0
 			}
+		}
+		return m, nil
+
+	case "J":
+		if !m.agentModalOpen && !m.confirmDelete && !m.confirmQuit && !m.jumpOpen {
+			jm := jumpwindow.NewEmbedded(m.themeState.Bundle())
+			jm.SetSize(m.width, m.height-2)
+			m.jumpModal = jm
+			m.jumpOpen = true
 		}
 		return m, nil
 
@@ -2810,7 +2833,7 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 		CWD          string `json:"cwd"`
 	}
 	_ = json.Unmarshal([]byte(run.Metadata), &meta)
-	cwd := meta.CWD
+	cwd := msg.CWD
 	if cwd == "" {
 		cwd = m.launchCWD
 	}
@@ -3036,6 +3059,12 @@ func (m Model) View() string {
 		return overlayCenter(base, m.dirPicker.ViewDirPickerBox(w, m.ansiPalette()), w, h)
 	}
 
+	if m.jumpOpen {
+		base := topBar + "\n" + body
+		m.jumpModal.SetSize(w, h-2)
+		return overlayCenter(base, m.jumpModal.View(), w, h)
+	}
+
 	if m.helpOpen {
 		base := topBar + "\n" + body
 		return overlayCenter(base, m.viewHelpModal(w, h), w, h)
@@ -3061,10 +3090,9 @@ func (m Model) View() string {
 		return topBar + "\n" + m.viewAgentModalBox(w, h)
 	}
 
-	// Re-run modal — floating overlay on top of the switchboard.
+	// Re-run modal — full-screen panel like inbox detail.
 	if m.showRerun {
-		base := topBar + "\n" + body
-		return overlayCenter(base, m.rerunModal.ViewBox(w, m.ansiPalette()), w, h)
+		return topBar + "\n" + m.rerunModal.ViewBox(w, h, m.ansiPalette())
 	}
 
 	// Delete confirmation — floating overlay on top of the switchboard.

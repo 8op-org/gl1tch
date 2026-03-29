@@ -30,6 +30,9 @@ type window struct {
 	promptsWindow bool   // synthetic entry that opens the prompt manager TUI
 }
 
+// CloseMsg is posted by an EmbeddedModel when it wants the parent to dismiss it.
+type CloseMsg struct{}
+
 type model struct {
 	windows       []window
 	filtered      []window
@@ -42,6 +45,7 @@ type model struct {
 	height        int
 	err           string
 	themeState    tuikit.ThemeState
+	embedded      bool // when true, send CloseMsg instead of tea.Quit on close/select
 }
 
 func newModel() model {
@@ -186,6 +190,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc", "ctrl+c":
+			if m.embedded {
+				return m, func() tea.Msg { return CloseMsg{} }
+			}
 			return m, tea.Quit
 
 		case "tab":
@@ -248,11 +255,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					exec.Command("tmux", "select-window", "-t", target).Run() //nolint:errcheck
 				}
 			}
+			if m.embedded {
+				return m, func() tea.Msg { return CloseMsg{} }
+			}
 			return m, tea.Quit
 
 		case "e":
 			if m.focusCol == 1 && m.selectedJob < len(m.filtered) {
 				openPipelineInEditor(m.filtered[m.selectedJob].name)
+			}
+			if m.embedded {
+				return m, func() tea.Msg { return CloseMsg{} }
 			}
 			return m, tea.Quit
 		}

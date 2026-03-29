@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/log"
 
 	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/themes"
 	"github.com/adam-stokes/orcai/internal/tuikit"
@@ -100,6 +101,9 @@ type Model struct {
 	helpScrollOffset int
 
 	themePicker tuikit.ThemePicker
+
+	jumpOpen  bool
+	jumpModal jumpwindow.EmbeddedModel
 
 	width  int
 	height int

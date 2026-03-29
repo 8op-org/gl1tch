@@ -10,8 +10,8 @@ import (
 
 	"github.com/adam-stokes/orcai/cmd"
 	"github.com/adam-stokes/orcai/internal/bootstrap"
-	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/promptbuilder"
+	"github.com/adam-stokes/orcai/internal/switchboard"
 )
 
 // Build-time variables injected by GoReleaser via -ldflags.
@@ -27,23 +27,6 @@ func main() {
 		case "--version", "-v":
 			fmt.Printf("orcai %s (commit %s, built %s)\n", version, commit, date)
 			return
-		case "_welcome":
-			// Launch the orcai-welcome widget binary. Look it up in PATH first;
-			// fall back to the same directory as the orcai binary.
-			bin := "orcai-welcome"
-			if _, err := exec.LookPath(bin); err != nil {
-				self, _ := os.Executable()
-				bin = filepath.Join(filepath.Dir(self), "orcai-welcome")
-			}
-			wCmd := exec.Command(bin)
-			wCmd.Stdin = os.Stdin
-			wCmd.Stdout = os.Stdout
-			wCmd.Stderr = os.Stderr
-			if err := wCmd.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "orcai-welcome: %v\n", err)
-				os.Exit(1)
-			}
-			return
 		case "_promptbuilder", "pipeline-builder":
 			promptbuilder.Run()
 			return
@@ -51,11 +34,8 @@ func main() {
 			bootstrap.WriteReloadMarker() //nolint:errcheck
 			exec.Command("tmux", "detach-client").Run() //nolint:errcheck
 			return
-		case "_jump":
-			jumpwindow.Run()
-			return
-		case "agent", "bridge", "git", "weather", "code", "new", "kill", "help", "pipeline", "ollama", "_opsx", "completion",
-			"sysop", "picker", "welcome", "config", "cron", "prompts":
+		case "agent", "bridge", "help", "pipeline", "_opsx", "completion",
+			"config", "cron", "prompts":
 			cmd.Execute()
 			return
 		default:
@@ -64,6 +44,13 @@ func main() {
 				return
 			}
 		}
+	}
+
+	// If already inside a tmux session, run the switchboard TUI directly —
+	// we were launched as the window command by bootstrap.
+	if os.Getenv("TMUX") != "" {
+		switchboard.Run()
+		return
 	}
 
 	err := bootstrap.Run()
