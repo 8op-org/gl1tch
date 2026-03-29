@@ -2877,7 +2877,7 @@ func (m Model) buildLauncherSection(w int) []string {
 			{Key: "n", Desc: "new"},
 			{Key: "e", Desc: "edit"},
 			{Key: "d", Desc: "delete"},
-			{Key: "↑↓", Desc: "nav"},
+			{Key: "j/k", Desc: "nav"},
 		}
 	}
 	rows = append(rows, boxRow(panelrender.HintBar(launcherHints, w-2, pal), w, borderColor))
@@ -2942,7 +2942,7 @@ func (m Model) buildAgentSection(w int) []string {
 	if m.agent.focused {
 		agentHints = []panelrender.Hint{
 			{Key: "enter", Desc: "launch"},
-			{Key: "↑↓", Desc: "nav"},
+			{Key: "j/k", Desc: "nav"},
 		}
 	}
 	rows = append(rows, boxRow(panelrender.HintBar(agentHints, w-2, pal), w, borderColor))

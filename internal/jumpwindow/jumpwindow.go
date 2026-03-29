@@ -26,6 +26,7 @@ type window struct {
 	name        string // window name
 	id          string // window ID (@N)
 	switchboard bool   // synthetic entry that navigates to orcai session window 0
+	cronSession bool   // synthetic entry that switches to the orcai-cron session
 }
 
 type model struct {
@@ -82,7 +83,13 @@ func newModel() model {
 	}
 	m.windows = listWindows()
 	m.filtered = m.windows
-	m.sysop = append([]window{{name: "switchboard", switchboard: true}}, listSysopWindows()...)
+	sysop := []window{{name: "switchboard", switchboard: true}}
+	cronWins := listSysopWindows()
+	if cronWins != nil {
+		sysop = append(sysop, window{name: "orcai-cron", cronSession: true})
+		sysop = append(sysop, cronWins...)
+	}
+	m.sysop = sysop
 	return m
 }
 
@@ -139,6 +146,9 @@ func listSysopWindows() []window {
 			continue
 		}
 		idx, id, rawName, label := parts[0], parts[1], parts[2], parts[3]
+		if idx == "0" {
+			continue // skip session bootstrap window
+		}
 		display := label
 		if display == "" {
 			display = rawName
@@ -183,38 +193,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			totalFiltered := len(m.filtered)
-			if m.selected < totalFiltered {
-				if totalFiltered > 0 {
-					w := m.filtered[m.selected]
+			totalSysop := len(m.sysop)
+			if m.selected < totalSysop {
+				w := m.sysop[m.selected]
+				if w.switchboard {
+					exec.Command("tmux", "switch-client", "-t", "orcai").Run()   //nolint:errcheck
+					exec.Command("tmux", "select-window", "-t", "orcai:0").Run() //nolint:errcheck
+				} else if w.cronSession {
+					exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
+				} else {
+					target := w.id
+					if target == "" {
+						target = "orcai-cron:" + w.index
+					}
+					exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
+					exec.Command("tmux", "select-window", "-t", target).Run()       //nolint:errcheck
+				}
+			} else {
+				filteredIdx := m.selected - totalSysop
+				if filteredIdx < len(m.filtered) {
+					w := m.filtered[filteredIdx]
 					target := w.id
 					if target == "" {
 						target = w.index
 					}
 					exec.Command("tmux", "select-window", "-t", target).Run() //nolint:errcheck
 				}
-			} else {
-				sysopIdx := m.selected - totalFiltered
-				if sysopIdx < len(m.sysop) {
-					w := m.sysop[sysopIdx]
-					if w.switchboard {
-						exec.Command("tmux", "switch-client", "-t", "orcai").Run()   //nolint:errcheck
-						exec.Command("tmux", "select-window", "-t", "orcai:0").Run() //nolint:errcheck
-					} else {
-						target := w.id
-						if target == "" {
-							target = "orcai-cron:" + w.index
-						}
-						exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
-						exec.Command("tmux", "select-window", "-t", target).Run()       //nolint:errcheck
-					}
-				}
 			}
 			return m, tea.Quit
 
 		case "e":
-			if len(m.filtered) > 0 && m.selected < len(m.filtered) {
-				openPipelineInEditor(m.filtered[m.selected].name)
+			totalSysop := len(m.sysop)
+			if m.selected >= totalSysop {
+				filteredIdx := m.selected - totalSysop
+				if filteredIdx < len(m.filtered) {
+					openPipelineInEditor(m.filtered[filteredIdx].name)
+				}
 			}
 			return m, tea.Quit
 		}
@@ -292,7 +306,22 @@ func (m model) View() string {
 	rows = append(rows, panelrender.BoxRow(inputContent, w, apal.Border))
 	rows = append(rows, panelrender.BoxRow("", w, apal.Border))
 
+	// Section: sysop (orcai-cron session windows) — shown first.
+	// Sysop items occupy indices 0..len(sysop)-1.
+	if len(m.sysop) > 0 {
+		rows = append(rows, panelrender.BoxRow("   "+apal.Dim+"— sysop —"+panelrender.RST, w, apal.Border))
+		for i, win := range m.sysop {
+			label := win.name
+			if m.selected == i {
+				rows = append(rows, panelrender.BoxRow(apal.Accent+"   > "+label+panelrender.RST, w, apal.Border))
+			} else {
+				rows = append(rows, panelrender.BoxRow(apal.Dim+"     "+label+panelrender.RST, w, apal.Border))
+			}
+		}
+	}
+
 	// Section: active jobs.
+	// Filtered items occupy indices len(sysop)..len(sysop)+len(filtered)-1.
 	rows = append(rows, panelrender.BoxRow("   "+apal.Accent+"— active jobs —"+panelrender.RST, w, apal.Border))
 
 	if len(m.filtered) == 0 {
@@ -300,24 +329,10 @@ func (m model) View() string {
 	} else {
 		for i, win := range m.filtered {
 			label := win.name
-			if i == m.selected {
+			if len(m.sysop)+i == m.selected {
 				rows = append(rows, panelrender.BoxRow(apal.Accent+"   > "+label+panelrender.RST, w, apal.Border))
 			} else {
 				rows = append(rows, panelrender.BoxRow(apal.FG+"     "+label+panelrender.RST, w, apal.Border))
-			}
-		}
-	}
-
-	// Section: sysop (orcai-cron session windows).
-	if len(m.sysop) > 0 {
-		rows = append(rows, panelrender.BoxRow("   "+apal.Dim+"— sysop —"+panelrender.RST, w, apal.Border))
-		for i, win := range m.sysop {
-			label := win.name
-			sysopIdx := len(m.filtered) + i
-			if m.selected == sysopIdx {
-				rows = append(rows, panelrender.BoxRow(apal.Accent+"   > "+label+panelrender.RST, w, apal.Border))
-			} else {
-				rows = append(rows, panelrender.BoxRow(apal.Dim+"     "+label+panelrender.RST, w, apal.Border))
 			}
 		}
 	}
