@@ -34,6 +34,9 @@ header_style:
     cron:
       accent: "#c4a7e7"
       text:   "#191724"
+    log_output:
+      accent: "#c4a7e7"
+      text:   "#191724"
     modal:
       accent: "#c4a7e7"
       text:   "#191724"

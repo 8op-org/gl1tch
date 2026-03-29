@@ -16,8 +16,6 @@ statusbar:
   fg:     "#0000aa"
 
 header_style:
-  top_char:    "▀"
-  bot_char:    "▄"
   panels:
     pipelines:
       accent: "#ffff55"
@@ -35,6 +33,9 @@ header_style:
       accent: "#ffff55"
       text:   "#0000aa"
     cron:
+      accent: "#ffff55"
+      text:   "#0000aa"
+    log_output:
       accent: "#ffff55"
       text:   "#0000aa"
     modal:

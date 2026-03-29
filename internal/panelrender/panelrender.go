@@ -119,11 +119,12 @@ func SpriteLines(bundle *themes.Bundle, panel string, panelWidth int) []string {
 	return nil
 }
 
-// DynamicHeader generates a 3-line panel header at exactly width visible
-// columns, using colors from bundle.HeaderStyle.
+// DynamicHeader generates a single-line panel header at exactly width visible
+// columns in the style:  ----| PANEL TITLE |----
+// Uses accent color for the dashes and brackets, text color for the title.
 //
 // Returns nil when bundle is nil or bundle.HeaderStyle has no entry for panel.
-func DynamicHeader(bundle *themes.Bundle, panel string, width int, borderColor string) []string {
+func DynamicHeader(bundle *themes.Bundle, panel string, width int, _ string) []string {
 	if bundle == nil || width < 4 {
 		return nil
 	}
@@ -132,65 +133,16 @@ func DynamicHeader(bundle *themes.Bundle, panel string, width int, borderColor s
 	if !ok {
 		return nil
 	}
-
-	topChar := "▄"
-	if hs.TopChar != "" {
-		topChar = hs.TopChar
-	}
-	botChar := "▀"
-	if hs.BotChar != "" {
-		botChar = hs.BotChar
-	}
 	accentSeq := hexToFGSeq(bundle.ResolveRef(ps.Accent))
-	accentBGSeq := hexToBGSeq(bundle.ResolveRef(ps.Accent))
 	textSeq := hexToFGSeq(bundle.ResolveRef(ps.Text))
 
-	var topRow, botRow string
-	if bundle.HeaderPattern != "" {
-		if def, ok := styles.Patterns[bundle.HeaderPattern]; ok {
-			topRow = styles.TilePattern(def.Top, width)
-			botRow = styles.TilePattern(def.Bottom, width)
-		}
-	}
-	if topRow == "" {
-		topRow = strings.Repeat(topChar, width)
-	}
-	if botRow == "" {
-		botRow = strings.Repeat(botChar, width)
-	}
-
-	gradStops := ps.GradientBorder
-	if len(gradStops) == 0 {
-		gradStops = bundle.GradientBorder
-	}
-
-	var topLine, botLine string
-	if len(gradStops) > 0 {
-		topLine = BLD + applyGradientToRow(topRow, gradStops) + RST
-		reversed := make([]string, len(gradStops))
-		for i, s := range gradStops {
-			reversed[len(gradStops)-1-i] = s
-		}
-		botLine = BLD + applyGradientToRow(botRow, reversed) + RST
-	} else {
-		topLine = accentSeq + BLD + topRow + RST
-		botLine = accentSeq + BLD + botRow + RST
-	}
-
 	title := RenderHeader(panel)
-	titleRunes := []rune(title)
-	pad := width - len(titleRunes)
-	if pad < 0 {
-		pad = 0
-		titleRunes = titleRunes[:width]
-	}
-	lp := pad / 2
-	rp := pad - lp
-	titleLine := accentBGSeq + textSeq + BLD +
-		strings.Repeat(" ", lp) + string(titleRunes) + strings.Repeat(" ", rp) +
-		RST
-
-	return []string{topLine, titleLine, botLine}
+	inner := "┌┤ " + title + " ├┐"
+	dashes := pmax(width-lipgloss.Width(inner), 0)
+	left := dashes / 2
+	right := dashes - left
+	line := accentSeq + "┌" + strings.Repeat("─", left) + "┤ " + textSeq + BLD + title + RST + accentSeq + " ├" + strings.Repeat("─", right) + "┐" + RST
+	return []string{line}
 }
 
 // PanelHeader returns the best available header for a panel at the given width.
@@ -219,18 +171,6 @@ func hexToFGSeq(hex string) string {
 	return fmt.Sprintf("\x1b[38;2;%d;%d;%dm", r, g, b)
 }
 
-func hexToBGSeq(hex string) string {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) != 6 {
-		return "\x1b[48;2;189;147;249m" // Dracula purple fallback
-	}
-	parse := func(s string) uint8 {
-		v, _ := strconv.ParseUint(s, 16, 8)
-		return uint8(v)
-	}
-	r, g, b := parse(hex[0:2]), parse(hex[2:4]), parse(hex[4:6])
-	return fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r, g, b)
-}
 
 func spriteWidth(ans []byte) int {
 	maxW := 0
@@ -283,21 +223,6 @@ func decodeRuneAt(s string, i int) (rune, int) {
 	return runes[0], len(string(runes[0]))
 }
 
-func applyGradientToRow(row string, stops []string) string {
-	runes := []rune(row)
-	if len(runes) == 0 {
-		return row
-	}
-	colors := styles.GradientStops(stops, len(runes))
-	var sb strings.Builder
-	for i, r := range runes {
-		if i < len(colors) {
-			sb.WriteString(styles.HexToFGEsc(colors[i]))
-		}
-		sb.WriteRune(r)
-	}
-	return sb.String()
-}
 
 func pmax(a, b int) int {
 	if a > b {

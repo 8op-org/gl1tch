@@ -1,9 +1,5 @@
 name: dracula
 display_name: "Dracula"
-header_pattern: texture
-gradient_border:
-  - "#ff79c6"
-  - "#bd93f9"
 palette:
   bg:      "#282a36"
   fg:      "#f8f8f2"
@@ -40,8 +36,8 @@ header_style:
       accent: "#ff79c6"
       text:   "#282a36"
     log_output:
-      accent: "#6272a4"
-      text:   "#f8f8f2"
+      accent: "#ff79c6"
+      text:   "#282a36"
     modal:
       accent: "#ff79c6"
       text:   "#282a36"

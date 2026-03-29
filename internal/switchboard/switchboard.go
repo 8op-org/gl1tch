@@ -34,6 +34,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/styles"
 	"github.com/adam-stokes/orcai/internal/themes"
 	"github.com/adam-stokes/orcai/internal/translations"
+	"github.com/adam-stokes/orcai/internal/tuikit"
 )
 
 // ── ANSI palette — Dracula BBS aesthetic ─────────────────────────────────────
@@ -178,8 +179,6 @@ type jobFailedMsg struct {
 
 type tickMsg time.Time
 
-// themeChangedMsg is sent when the active theme changes.
-type themeChangedMsg struct{}
 
 // ── Window / telemetry types (preserved from sidebar for backwards compat) ────
 
@@ -263,6 +262,7 @@ type Model struct {
 	agentScheduleErr      string
 	helpOpen              bool
 	registry              *themes.Registry
+	themeState            tuikit.ThemeState
 	themePickerOpen       bool
 	themePickerCursor     int
 	// CWD / dir picker
@@ -610,7 +610,7 @@ func (m Model) Init() tea.Cmd {
 	if entries, err := orcaicron.LoadConfig(); err == nil && len(entries) > 0 {
 		go ensureCronDaemon()
 	}
-	return tea.Batch(tickCmd(), m.inboxModel.Init())
+	return tea.Batch(tickCmd(), m.inboxModel.Init(), m.themeState.Init())
 }
 
 func tickCmd() tea.Cmd {
@@ -758,6 +758,15 @@ var _ io.Writer = (*lineWriter)(nil)
 
 // Update handles tea.Msg values.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// ── Theme change from another process (e.g. cron TUI) ────────────────────
+	if ts, cmd, ok := m.themeState.Handle(msg); ok {
+		m.themeState = ts
+		if m.registry != nil {
+			m.registry.RefreshActive()
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 
 	// ── Dir picker messages ───────────────────────────────────────────────────
@@ -2315,8 +2324,8 @@ func (m Model) View() string {
 		h = 40
 	}
 
-	leftW := m.leftColWidth()
-	feedW := max(w-leftW-1, 20)
+	leftW := m.leftColWidth() - 1
+	feedW := max(w-leftW-2, 20)
 	contentH := max(h-1, 5) // reserve one line for top bar; hint bars live inside each panel
 
 	// Signal board: grows with entries up to 40% of screen height.
@@ -2355,7 +2364,7 @@ func (m Model) View() string {
 		if i < len(rightLines) {
 			f = rightLines[i]
 		}
-		rows = append(rows, padToVis(l, leftW)+" "+f)
+		rows = append(rows, padToVis(l, leftW)+"  "+f)
 	}
 
 	body := strings.Join(rows, "\n")
