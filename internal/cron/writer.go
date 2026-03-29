@@ -3,7 +3,6 @@ package cron
 import (
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"gopkg.in/yaml.v3"
 )
@@ -41,10 +40,10 @@ func writeEntry(path string, entry Entry) error {
 	defer f.Close()
 
 	// Acquire exclusive lock.
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := lockFile(f); err != nil {
 		return err
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:errcheck
+	defer unlockFile(f) //nolint:errcheck
 
 	var cfg cronConfig
 	dec := yaml.NewDecoder(f)
@@ -87,10 +86,10 @@ func removeEntry(path string, name string) error {
 	}
 	defer f.Close()
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := lockFile(f); err != nil {
 		return err
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:errcheck
+	defer unlockFile(f) //nolint:errcheck
 
 	var cfg cronConfig
 	dec := yaml.NewDecoder(f)
