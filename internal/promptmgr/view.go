@@ -4,6 +4,9 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/adam-stokes/orcai/internal/panelrender"
+	"github.com/adam-stokes/orcai/internal/styles"
 )
 
 // Dracula palette constants used throughout the prompt manager views.
@@ -35,7 +38,16 @@ func (m *Model) View() string {
 
 	right := lipgloss.JoinVertical(lipgloss.Left, editor, runner)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	base := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+
+	// Overlay the dir picker when active.
+	if m.dirPickerActive {
+		pal := styles.BundleANSI(m.themeState.Bundle())
+		overlay := m.dirPicker.ViewDirPickerBox(m.width, pal)
+		return panelrender.OverlayCenter(base, overlay, m.width, m.height)
+	}
+
+	return base
 }
 
 // viewList renders the left panel: filter input + prompt list.
@@ -158,11 +170,20 @@ func (m *Model) viewEditor(width, height int) string {
 	}
 	modelLine := labelStyle.Render("Model: ") + fmt.Sprintf("◀ %s ▶", modelSlug)
 
-	// CWD field.
+	// CWD field — shows the currently selected directory (read-only label).
 	cwdLabel := labelStyle.Render("CWD:")
-	cwdField := m.cwdInput.View()
+	cwdValue := m.editingPrompt.CWD
+	if cwdValue == "" {
+		cwdValue = "(none)"
+	}
+	cwdHint := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(draculaComment)).
+		Render(" [tab to pick dir]")
+	cwdField := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(draculaFg)).
+		Render(cwdValue) + cwdHint
 
-	footer := footerStyle.Render("ctrl+s save  ctrl+r run  [ ] model  tab panel")
+	footer := footerStyle.Render("ctrl+s save  ctrl+r run  [ ] model  tab field/panel")
 
 	content := header + "\n" +
 		titleLabel + "\n" + titleField + "\n" +
@@ -186,14 +207,69 @@ func (m *Model) viewRunner(width, height int) string {
 		Foreground(lipgloss.Color(draculaCyan)).
 		Bold(true)
 
-	header := headerStyle.Render("── TEST RUNNER ──")
+	footerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(draculaComment))
 
-	output := m.runnerOutput
-	if output == "" {
-		output = "(ctrl+r to run)"
+	errStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#ff5555"))
+
+	// Header with optional streaming indicator.
+	headerText := "── TEST RUNNER ──"
+	if m.runnerStreaming {
+		headerText += " ⣾"
+	}
+	header := headerStyle.Render(headerText)
+
+	// Body: error, output, or placeholder.
+	var body string
+	if m.runnerErrMsg != "" {
+		body = errStyle.Render(m.runnerErrMsg)
+	} else if m.runnerOutput == "" && !m.runnerStreaming {
+		body = "ctrl+r to run"
+	} else {
+		// Apply scroll offset: split lines, skip first runnerScrollOffset lines.
+		lines := splitLines(m.runnerOutput)
+		if m.runnerScrollOffset < len(lines) {
+			lines = lines[m.runnerScrollOffset:]
+		} else if len(lines) > 0 {
+			lines = lines[len(lines)-1:]
+		}
+		// Limit visible lines to panel height minus header and footer rows.
+		maxLines := height - 3
+		if maxLines < 1 {
+			maxLines = 1
+		}
+		if len(lines) > maxLines {
+			lines = lines[:maxLines]
+		}
+		body = ""
+		for _, l := range lines {
+			body += l + "\n"
+		}
 	}
 
-	content := header + "\n" + output
+	footer := footerStyle.Render("ctrl+r run  ctrl+c cancel  ↑↓ scroll")
+
+	content := header + "\n" + body + "\n" + footer
 
 	return panelStyle.Render(content)
+}
+
+// splitLines splits s into lines without a trailing empty element.
+func splitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
 }

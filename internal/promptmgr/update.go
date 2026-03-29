@@ -2,10 +2,13 @@ package promptmgr
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sahilm/fuzzy"
 
+	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/tuikit"
@@ -140,12 +143,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// When the dir picker overlay is active, route all messages through it
+	// first so it can handle its own internal walk results and key events.
+	if m.dirPickerActive {
+		switch msg := msg.(type) {
+		case modal.DirSelectedMsg:
+			m.editingPrompt.CWD = msg.Path
+			m.dirPickerActive = false
+			return m, nil
+		case modal.DirCancelledMsg:
+			m.dirPickerActive = false
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.dirPicker, cmd = m.dirPicker.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
 	case tea.KeyMsg:
+		// When the runner panel is focused, route all keys through it first so
+		// ctrl+c can cancel an in-progress run instead of quitting.
+		if m.focusPanel == 2 {
+			return m.updateRunnerPanel(msg)
+		}
+
 		// Global quit keys.
 		switch msg.String() {
 		case "ctrl+c":
@@ -161,8 +188,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateListPanel(msg)
 		case 1: // editor panel
 			return m.updateEditorPanel(msg)
-		case 2: // runner panel
-			return m.updateRunnerPanel(msg)
 		}
 
 	case promptsLoadedMsg:
@@ -177,8 +202,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modelSlugsLoadedMsg:
 		m.modelSlugs = msg.slugs
 
+	case runDoneMsg:
+		m.runnerOutput = msg.full
+		m.runnerStreaming = false
+		m.runCancel = nil
+		m.focusPanel = 2
+		if m.editingPrompt.ID != 0 {
+			return m, tea.Batch(saveResponseCmd(m.store, m.editingPrompt.ID, msg.full))
+		}
+
 	case runErrMsg:
-		m.statusMsg = "error: " + msg.err.Error()
+		m.runnerErrMsg = msg.err.Error()
+		m.runnerStreaming = false
+		m.runCancel = nil
 
 	case tuikit.ThemeChangedMsg:
 		// Already handled above via themeState.Handle.
@@ -223,7 +259,8 @@ func (m *Model) updateListPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.editingPrompt = store.Prompt{}
 		m.titleInput.SetValue("")
 		m.bodyInput.SetValue("")
-		m.cwdInput.SetValue("")
+		m.dirPicker = modal.NewDirPickerModel()
+		m.dirPickerActive = false
 		m.editorSubFocus = 0
 		m.titleInput.Focus()
 		m.focusPanel = 1
@@ -239,7 +276,8 @@ func (m *Model) updateListPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.editingPrompt = p
 			m.titleInput.SetValue(p.Title)
 			m.bodyInput.SetValue(p.Body)
-			m.cwdInput.SetValue(p.CWD)
+			m.dirPicker = modal.NewDirPickerModel()
+			m.dirPickerActive = false
 			m.editorSubFocus = 0
 			m.titleInput.Focus()
 			m.focusPanel = 1
@@ -272,15 +310,39 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p := m.editingPrompt
 		p.Title = m.titleInput.Value()
 		p.Body = m.bodyInput.Value()
-		p.CWD = m.cwdInput.Value()
+		// CWD is already stored in m.editingPrompt.CWD via DirSelectedMsg handler.
 		if len(m.modelSlugs) > 0 && m.modelIdx < len(m.modelSlugs) {
 			p.ModelSlug = m.modelSlugs[m.modelIdx]
 		}
 		return m, tea.Batch(savePromptCmd(m.store, p), reloadPromptsCmd(m.store))
 
 	case "ctrl+r":
-		m.runnerOutput = "running..."
-		m.focusPanel = 2
+		// Cancel any existing run.
+		if m.runCancel != nil {
+			m.runCancel()
+			m.runCancel = nil
+		}
+		body := m.bodyInput.Value()
+		var slug string
+		if len(m.modelSlugs) > 0 && m.modelIdx < len(m.modelSlugs) {
+			slug = m.modelSlugs[m.modelIdx]
+		}
+		if slug == "" {
+			m.runnerErrMsg = "no model selected"
+			return m, nil
+		}
+		p, ok := m.pluginMgr.Get(slug)
+		if !ok {
+			m.runnerErrMsg = fmt.Sprintf("plugin %q not found", slug)
+			return m, nil
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		m.runCancel = cancel
+		m.runnerStreaming = true
+		m.runnerOutput = ""
+		m.runnerErrMsg = ""
+		m.runnerScrollOffset = 0
+		return m, runPluginCmd(ctx, p, body, m.editingPrompt.CWD)
 
 	case "[":
 		if len(m.modelSlugs) > 0 {
@@ -296,10 +358,11 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Cycle editor sub-focus: title→body→cwd→title
 		m.editorSubFocus = (m.editorSubFocus + 1) % 3
 		m.syncEditorFocus()
-		// Also cycle to next panel after cwd wraps back?
-		// Per spec: tab within editor cycles fields; panel cycle is separate.
-		// However the spec also says tab/shift+tab cycle focusPanel. We handle
-		// intra-editor tab here only.
+		// When sub-focus lands on cwd (2), open the dir picker immediately.
+		if m.editorSubFocus == 2 {
+			m.dirPickerActive = true
+			return m, modal.DirPickerInit()
+		}
 
 	case "shift+tab":
 		// Cycle panel: 0→2→1→0
@@ -317,7 +380,9 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 1:
 			m.bodyInput, cmd = m.bodyInput.Update(msg)
 		case 2:
-			m.cwdInput, cmd = m.cwdInput.Update(msg)
+			// CWD sub-focus: open dir picker on any key.
+			m.dirPickerActive = true
+			return m, modal.DirPickerInit()
 		}
 		return m, cmd
 	}
@@ -326,29 +391,68 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // syncEditorFocus calls Focus/Blur on editor inputs based on editorSubFocus.
+// Sub-focus 2 (CWD) is handled via the dir picker overlay, not a text input.
 func (m *Model) syncEditorFocus() {
 	m.titleInput.Blur()
 	m.bodyInput.Blur()
-	m.cwdInput.Blur()
 	switch m.editorSubFocus {
 	case 0:
 		m.titleInput.Focus()
 	case 1:
 		m.bodyInput.Focus()
-	case 2:
-		m.cwdInput.Focus()
+	// case 2: CWD is managed via dirPickerActive overlay — no text input to focus.
 	}
 }
 
 // updateRunnerPanel handles key events when focusPanel == 2.
 func (m *Model) updateRunnerPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "ctrl+c", "esc":
+		if m.runnerStreaming && m.runCancel != nil {
+			m.runCancel()
+			m.runnerStreaming = false
+			m.runCancel = nil
+		} else {
+			m.focusPanel = 1
+		}
+	case "j", "down":
+		m.runnerScrollOffset++
+	case "k", "up":
+		if m.runnerScrollOffset > 0 {
+			m.runnerScrollOffset--
+		}
 	case "tab":
 		m.focusPanel = (m.focusPanel + 1) % 3
 	case "shift+tab":
 		m.focusPanel = (m.focusPanel + 2) % 3
-	case "esc":
-		m.focusPanel = 0
 	}
 	return m, nil
+}
+
+// runPluginCmd executes the plugin with input and returns a runDoneMsg or runErrMsg.
+func runPluginCmd(ctx context.Context, p plugin.Plugin, input, cwd string) tea.Cmd {
+	return func() tea.Msg {
+		pr, pw := io.Pipe()
+		var vars map[string]string
+		if cwd != "" {
+			vars = map[string]string{"cwd": cwd}
+		}
+		go func() {
+			err := p.Execute(ctx, input, vars, pw)
+			pw.CloseWithError(err)
+		}()
+		data, err := io.ReadAll(pr)
+		if err != nil && ctx.Err() == nil {
+			return runErrMsg{err: fmt.Errorf("run: %w", err)}
+		}
+		return runDoneMsg{full: string(data)}
+	}
+}
+
+// saveResponseCmd persists the runner output to the store.
+func saveResponseCmd(st *store.Store, id int64, response string) tea.Cmd {
+	return func() tea.Msg {
+		_ = st.SavePromptResponse(context.Background(), id, response)
+		return nil
+	}
 }

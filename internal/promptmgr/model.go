@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 
+	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/themes"
@@ -37,7 +38,10 @@ type Model struct {
 	filterInput textinput.Model
 	titleInput  textinput.Model
 	bodyInput   textarea.Model
-	cwdInput    textinput.Model
+
+	// Dir picker (replaces cwdInput text field)
+	dirPicker       modal.DirPickerModel
+	dirPickerActive bool
 
 	// Model selector
 	modelSlugs []string // available model slugs
@@ -51,9 +55,11 @@ type Model struct {
 	focusPanel int
 
 	// Runner state
-	runnerOutput    string
-	runnerStreaming  bool
-	runCancel       context.CancelFunc // cancel func for active run; nil if not running
+	runnerOutput       string
+	runnerStreaming     bool
+	runnerScrollOffset int
+	runnerErrMsg       string
+	runCancel          context.CancelFunc // cancel func for active run; nil if not running
 
 	// Overlay / status
 	confirmDelete bool   // whether delete confirmation overlay is showing
@@ -74,10 +80,6 @@ func New(st *store.Store, pluginMgr *plugin.Manager, bundle *themes.Bundle) *Mod
 	bi := textarea.New()
 	bi.Placeholder = "Prompt body..."
 
-	ci := textinput.New()
-	ci.Placeholder = "Working directory (optional)..."
-	ci.CharLimit = 512
-
 	return &Model{
 		store:       st,
 		pluginMgr:   pluginMgr,
@@ -85,7 +87,7 @@ func New(st *store.Store, pluginMgr *plugin.Manager, bundle *themes.Bundle) *Mod
 		filterInput: fi,
 		titleInput:  ti,
 		bodyInput:   bi,
-		cwdInput:    ci,
+		dirPicker:   modal.NewDirPickerModel(),
 	}
 }
 
