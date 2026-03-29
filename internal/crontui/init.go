@@ -39,7 +39,7 @@ func New(bundle *themes.Bundle) (Model, error) {
 		logger.Warn("result store unavailable", "error", storeErr)
 	}
 
-	sched := cron.New(logger, s)
+	sched := cron.New(logger)
 
 	entries, _ := cron.LoadConfig()
 

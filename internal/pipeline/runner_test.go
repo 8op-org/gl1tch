@@ -2,6 +2,7 @@ package pipeline_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
 )
@@ -47,7 +49,7 @@ func TestRunner_LinearPipeline(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "hello world", pipeline.NoopPublisher{})
+	result, err := pipeline.Run(context.Background(), p, mgr, "hello world")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -87,7 +89,7 @@ func TestRunner_ConditionalBranch_Then(t *testing.T) {
 		}
 	}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "golang rocks", pipeline.NoopPublisher{})
+	result, err := pipeline.Run(context.Background(), p, mgr, "golang rocks")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -127,7 +129,7 @@ func TestRunner_ConditionalBranch_Else(t *testing.T) {
 		}
 	}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "golang rocks", pipeline.NoopPublisher{})
+	result, err := pipeline.Run(context.Background(), p, mgr, "golang rocks")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -159,7 +161,7 @@ func TestRunner_TemplateInterpolation(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	_, err := pipeline.Run(context.Background(), p, mgr, "hello", pipeline.NoopPublisher{})
+	_, err := pipeline.Run(context.Background(), p, mgr, "hello")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -178,7 +180,7 @@ func TestRunner_MissingPlugin(t *testing.T) {
 		},
 	}
 	mgr := plugin.NewManager() // empty — no plugins registered intentionally
-	_, err := pipeline.Run(context.Background(), p, mgr, "hello", pipeline.NoopPublisher{})
+	_, err := pipeline.Run(context.Background(), p, mgr, "hello")
 	if err == nil {
 		t.Error("expected error for missing plugin")
 	}
@@ -233,7 +235,7 @@ func TestParallelExecution(t *testing.T) {
 	})
 
 	start := time.Now()
-	_, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	_, err := pipeline.Run(context.Background(), p, mgr, "")
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -291,7 +293,7 @@ func TestRetryPolicy(t *testing.T) {
 		},
 	})
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	result, err := pipeline.Run(context.Background(), p, mgr, "")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -352,7 +354,7 @@ func TestOnFailure(t *testing.T) {
 		},
 	})
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	result, err := pipeline.Run(context.Background(), p, mgr, "")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -399,7 +401,7 @@ func TestForEach(t *testing.T) {
 		},
 	})
 
-	_, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	_, err := pipeline.Run(context.Background(), p, mgr, "")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -429,7 +431,7 @@ func TestBuiltinStep(t *testing.T) {
 	}
 
 	mgr := plugin.NewManager()
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	result, err := pipeline.Run(context.Background(), p, mgr, "")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -453,7 +455,7 @@ func TestBuiltinAssertFails(t *testing.T) {
 	}
 
 	mgr := plugin.NewManager()
-	_, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	_, err := pipeline.Run(context.Background(), p, mgr, "")
 	// The failure may be swallowed by the DAG (no dependents, no on_failure),
 	// so we just run and ensure no panic.
 	_ = err
@@ -510,7 +512,7 @@ func TestStepStatusLogLines(t *testing.T) {
 		captured = string(b)
 	}()
 
-	_, runErr := pipeline.Run(context.Background(), p, mgr, "", pipeline.NoopPublisher{})
+	_, runErr := pipeline.Run(context.Background(), p, mgr, "")
 
 	// Restore stdout and close the write-end so the drain goroutine terminates.
 	w.Close()
@@ -553,3 +555,202 @@ func TestStepStatusLogLines(t *testing.T) {
 	}
 }
 
+// ── capturingPublisher ────────────────────────────────────────────────────────
+
+type capturingPublisher struct {
+	mu     sync.Mutex
+	events []publishedEvent
+}
+
+type publishedEvent struct {
+	topic   string
+	payload []byte
+}
+
+func (c *capturingPublisher) Publish(_ context.Context, topic string, payload []byte) error {
+	c.mu.Lock()
+	c.events = append(c.events, publishedEvent{topic, payload})
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *capturingPublisher) topicsList() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]string, len(c.events))
+	for i, e := range c.events {
+		out[i] = e.topic
+	}
+	return out
+}
+
+// topicPayload returns the decoded JSON payload for the first event matching topic.
+func (c *capturingPublisher) topicPayload(topic string) map[string]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, e := range c.events {
+		if e.topic == topic {
+			var m map[string]any
+			_ = json.Unmarshal(e.payload, &m)
+			return m
+		}
+	}
+	return nil
+}
+
+// countTopic returns the number of events with the given topic.
+func (c *capturingPublisher) countTopic(topic string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, e := range c.events {
+		if e.topic == topic {
+			n++
+		}
+	}
+	return n
+}
+
+// ── Event emission tests ──────────────────────────────────────────────────────
+
+// TestEventEmission_Legacy verifies that a 2-step sequential (legacy) pipeline
+// emits events in the correct order: run.started, step.started×2, step.done×2, run.completed.
+func TestEventEmission_Legacy(t *testing.T) {
+	p := &pipeline.Pipeline{
+		Name: "event-legacy-test",
+		Steps: []pipeline.Step{
+			{ID: "in", Type: "input"},
+			{ID: "s1", Plugin: "echo1"},
+			{ID: "s2", Plugin: "echo2"},
+			{ID: "out", Type: "output"},
+		},
+	}
+
+	mgr := plugin.NewManager()
+	_ = mgr.Register(makeWritePlugin("echo1", "output1"))
+	_ = mgr.Register(makeWritePlugin("echo2", "output2"))
+
+	pub := &capturingPublisher{}
+	_, err := pipeline.Run(context.Background(), p, mgr, "input", pipeline.WithEventPublisher(pub))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	ts := pub.topicsList()
+
+	// Verify required topics are present in order.
+	wantTopics := []string{
+		topics.RunStarted,
+		topics.StepStarted,
+		topics.StepDone,
+		topics.StepStarted,
+		topics.StepDone,
+		topics.RunCompleted,
+	}
+	if len(ts) != len(wantTopics) {
+		t.Errorf("expected %d events, got %d: %v", len(wantTopics), len(ts), ts)
+	}
+	for i, want := range wantTopics {
+		if i >= len(ts) {
+			break
+		}
+		if ts[i] != want {
+			t.Errorf("event[%d]: want %q, got %q", i, want, ts[i])
+		}
+	}
+
+	// Verify counts.
+	if n := pub.countTopic(topics.RunStarted); n != 1 {
+		t.Errorf("want 1 run.started, got %d", n)
+	}
+	if n := pub.countTopic(topics.StepStarted); n != 2 {
+		t.Errorf("want 2 step.started, got %d", n)
+	}
+	if n := pub.countTopic(topics.StepDone); n != 2 {
+		t.Errorf("want 2 step.done, got %d", n)
+	}
+	if n := pub.countTopic(topics.RunCompleted); n != 1 {
+		t.Errorf("want 1 run.completed, got %d", n)
+	}
+
+	// Verify run.started payload contains pipeline name.
+	if m := pub.topicPayload(topics.RunStarted); m != nil {
+		if m["pipeline"] != "event-legacy-test" {
+			t.Errorf("run.started pipeline name: want %q, got %v", "event-legacy-test", m["pipeline"])
+		}
+	}
+}
+
+// TestEventEmission_DAG verifies that a 2-step DAG pipeline emits the expected events:
+// run.started, step.started×2, step.done×2, run.completed (run.started first, run.completed last).
+func TestEventEmission_DAG(t *testing.T) {
+	p := &pipeline.Pipeline{
+		Name:        "event-dag-test",
+		MaxParallel: 2,
+		Steps: []pipeline.Step{
+			{ID: "s1", Plugin: "dag-echo1"},
+			{ID: "s2", Plugin: "dag-echo2", Needs: []string{"s1"}},
+		},
+	}
+
+	mgr := plugin.NewManager()
+	_ = mgr.Register(makeWritePlugin("dag-echo1", "dag-output1"))
+	_ = mgr.Register(makeWritePlugin("dag-echo2", "dag-output2"))
+
+	pub := &capturingPublisher{}
+	_, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Verify counts.
+	if n := pub.countTopic(topics.RunStarted); n != 1 {
+		t.Errorf("want 1 run.started, got %d", n)
+	}
+	if n := pub.countTopic(topics.StepStarted); n != 2 {
+		t.Errorf("want 2 step.started, got %d", n)
+	}
+	if n := pub.countTopic(topics.StepDone); n != 2 {
+		t.Errorf("want 2 step.done, got %d", n)
+	}
+	if n := pub.countTopic(topics.RunCompleted); n != 1 {
+		t.Errorf("want 1 run.completed, got %d", n)
+	}
+
+	// run.started must be first, run.completed must be last.
+	ts := pub.topicsList()
+	if len(ts) < 2 {
+		t.Fatalf("too few events: %v", ts)
+	}
+	if ts[0] != topics.RunStarted {
+		t.Errorf("first event: want %q, got %q", topics.RunStarted, ts[0])
+	}
+	if ts[len(ts)-1] != topics.RunCompleted {
+		t.Errorf("last event: want %q, got %q", topics.RunCompleted, ts[len(ts)-1])
+	}
+}
+
+// TestPublishTo verifies that a step with publish_to set causes an extra event
+// to be published on the custom topic containing the step's output.
+func TestPublishTo(t *testing.T) {
+	p := &pipeline.Pipeline{
+		Name:        "publish-to-test",
+		MaxParallel: 2,
+		Steps: []pipeline.Step{
+			{ID: "produce", Plugin: "producer", PublishTo: "custom.topic"},
+		},
+	}
+
+	mgr := plugin.NewManager()
+	_ = mgr.Register(makeWritePlugin("producer", "hello"))
+
+	pub := &capturingPublisher{}
+	_, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if n := pub.countTopic("custom.topic"); n != 1 {
+		t.Errorf("want 1 custom.topic event, got %d", n)
+	}
+}

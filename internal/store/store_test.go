@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -281,5 +282,243 @@ func TestConcurrentWrites(t *testing.T) {
 	}
 	if len(runs) != goroutines {
 		t.Errorf("want %d runs, got %d", goroutines, len(runs))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RecordStepComplete tests
+// ---------------------------------------------------------------------------
+
+func TestRecordStepComplete_Append(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	runID, err := s.RecordRunStart("pipeline", "step-test", "")
+	if err != nil {
+		t.Fatalf("RecordRunStart: %v", err)
+	}
+
+	steps := []StepRecord{
+		{ID: "fetch", Status: "done", StartedAt: "2024-01-01T00:00:00Z", FinishedAt: "2024-01-01T00:00:01Z", DurationMs: 1000, Output: map[string]any{"value": "hello"}},
+		{ID: "process", Status: "done", StartedAt: "2024-01-01T00:00:01Z", FinishedAt: "2024-01-01T00:00:02Z", DurationMs: 500},
+	}
+
+	for _, step := range steps {
+		if err := s.RecordStepComplete(ctx, runID, step); err != nil {
+			t.Fatalf("RecordStepComplete(%s): %v", step.ID, err)
+		}
+	}
+
+	runs, err := s.QueryRuns(1)
+	if err != nil {
+		t.Fatalf("QueryRuns: %v", err)
+	}
+	if len(runs) == 0 {
+		t.Fatal("want 1 run, got 0")
+	}
+	r := runs[0]
+	if len(r.Steps) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(r.Steps))
+	}
+	if r.Steps[0].ID != "fetch" {
+		t.Errorf("want steps[0].ID = fetch, got %q", r.Steps[0].ID)
+	}
+	if r.Steps[1].ID != "process" {
+		t.Errorf("want steps[1].ID = process, got %q", r.Steps[1].ID)
+	}
+	if r.Steps[0].DurationMs != 1000 {
+		t.Errorf("want steps[0].DurationMs = 1000, got %d", r.Steps[0].DurationMs)
+	}
+}
+
+func TestRecordStepComplete_Upsert(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	runID, err := s.RecordRunStart("pipeline", "upsert-test", "")
+	if err != nil {
+		t.Fatalf("RecordRunStart: %v", err)
+	}
+
+	// Write initial step record.
+	initial := StepRecord{ID: "fetch", Status: "running", StartedAt: "2024-01-01T00:00:00Z"}
+	if err := s.RecordStepComplete(ctx, runID, initial); err != nil {
+		t.Fatalf("RecordStepComplete initial: %v", err)
+	}
+
+	// Upsert the same step ID with updated status.
+	updated := StepRecord{ID: "fetch", Status: "done", StartedAt: "2024-01-01T00:00:00Z", FinishedAt: "2024-01-01T00:00:01Z", DurationMs: 1000}
+	if err := s.RecordStepComplete(ctx, runID, updated); err != nil {
+		t.Fatalf("RecordStepComplete update: %v", err)
+	}
+
+	runs, err := s.QueryRuns(1)
+	if err != nil {
+		t.Fatalf("QueryRuns: %v", err)
+	}
+	if len(runs) == 0 {
+		t.Fatal("want 1 run, got 0")
+	}
+	r := runs[0]
+	// Should still be exactly 1 step (upserted, not duplicated).
+	if len(r.Steps) != 1 {
+		t.Fatalf("want 1 step after upsert, got %d", len(r.Steps))
+	}
+	if r.Steps[0].Status != "done" {
+		t.Errorf("want upserted step status = done, got %q", r.Steps[0].Status)
+	}
+	if r.Steps[0].FinishedAt != "2024-01-01T00:00:01Z" {
+		t.Errorf("want upserted step finished_at, got %q", r.Steps[0].FinishedAt)
+	}
+}
+
+func TestRecordStepComplete_TableDriven(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	runID, err := s.RecordRunStart("pipeline", "table-driven", "")
+	if err != nil {
+		t.Fatalf("RecordRunStart: %v", err)
+	}
+
+	cases := []struct {
+		name       string
+		step       StepRecord
+		wantSteps  int
+		wantStatus string
+	}{
+		{
+			name:       "first step",
+			step:       StepRecord{ID: "a", Status: "done", DurationMs: 100},
+			wantSteps:  1,
+			wantStatus: "done",
+		},
+		{
+			name:       "second step",
+			step:       StepRecord{ID: "b", Status: "done", DurationMs: 200},
+			wantSteps:  2,
+			wantStatus: "done",
+		},
+		{
+			name:       "upsert first step",
+			step:       StepRecord{ID: "a", Status: "failed", DurationMs: 150},
+			wantSteps:  2, // still 2, not 3
+			wantStatus: "failed",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := s.RecordStepComplete(ctx, runID, tc.step); err != nil {
+				t.Fatalf("RecordStepComplete: %v", err)
+			}
+			runs, err := s.QueryRuns(1)
+			if err != nil {
+				t.Fatalf("QueryRuns: %v", err)
+			}
+			if len(runs) == 0 {
+				t.Fatal("want 1 run, got 0")
+			}
+			r := runs[0]
+			if len(r.Steps) != tc.wantSteps {
+				t.Errorf("want %d steps, got %d", tc.wantSteps, len(r.Steps))
+			}
+			// Check the step that was just written/updated.
+			var found *StepRecord
+			for i := range r.Steps {
+				if r.Steps[i].ID == tc.step.ID {
+					found = &r.Steps[i]
+					break
+				}
+			}
+			if found == nil {
+				t.Fatalf("step %q not found in run steps", tc.step.ID)
+			}
+			if found.Status != tc.wantStatus {
+				t.Errorf("want step %q status = %q, got %q", tc.step.ID, tc.wantStatus, found.Status)
+			}
+		})
+	}
+}
+
+func TestRecordStepComplete_UnknownRunID(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	step := StepRecord{ID: "x", Status: "done"}
+	err := s.RecordStepComplete(ctx, 99999, step)
+	if err == nil {
+		t.Fatal("want error for unknown run ID, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// QueryRuns step population tests
+// ---------------------------------------------------------------------------
+
+func TestQueryRuns_StepsEmptyByDefault(t *testing.T) {
+	s := openTestStore(t)
+
+	_, err := s.RecordRunStart("pipeline", "no-steps", "")
+	if err != nil {
+		t.Fatalf("RecordRunStart: %v", err)
+	}
+
+	runs, err := s.QueryRuns(1)
+	if err != nil {
+		t.Fatalf("QueryRuns: %v", err)
+	}
+	if len(runs) == 0 {
+		t.Fatal("want 1 run, got 0")
+	}
+	if runs[0].Steps == nil {
+		t.Error("want Steps to be non-nil empty slice, got nil")
+	}
+	if len(runs[0].Steps) != 0 {
+		t.Errorf("want 0 steps, got %d", len(runs[0].Steps))
+	}
+}
+
+func TestQueryRuns_StepsPopulated(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	runID, err := s.RecordRunStart("pipeline", "with-steps", "")
+	if err != nil {
+		t.Fatalf("RecordRunStart: %v", err)
+	}
+
+	want := []StepRecord{
+		{ID: "s1", Status: "done", StartedAt: "2024-06-01T10:00:00Z", FinishedAt: "2024-06-01T10:00:05Z", DurationMs: 5000, Output: map[string]any{"value": "ok"}},
+		{ID: "s2", Status: "failed", StartedAt: "2024-06-01T10:00:05Z", FinishedAt: "2024-06-01T10:00:06Z", DurationMs: 1000},
+	}
+	for _, step := range want {
+		if err := s.RecordStepComplete(ctx, runID, step); err != nil {
+			t.Fatalf("RecordStepComplete(%s): %v", step.ID, err)
+		}
+	}
+
+	runs, err := s.QueryRuns(1)
+	if err != nil {
+		t.Fatalf("QueryRuns: %v", err)
+	}
+	if len(runs) == 0 {
+		t.Fatal("want 1 run, got 0")
+	}
+	r := runs[0]
+	if len(r.Steps) != len(want) {
+		t.Fatalf("want %d steps, got %d", len(want), len(r.Steps))
+	}
+	for i, w := range want {
+		got := r.Steps[i]
+		if got.ID != w.ID {
+			t.Errorf("[%d] ID: want %q, got %q", i, w.ID, got.ID)
+		}
+		if got.Status != w.Status {
+			t.Errorf("[%d] Status: want %q, got %q", i, w.Status, got.Status)
+		}
+		if got.DurationMs != w.DurationMs {
+			t.Errorf("[%d] DurationMs: want %d, got %d", i, w.DurationMs, got.DurationMs)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/store"
 )
@@ -19,7 +21,10 @@ import (
 type RunOption func(*runConfig)
 
 type runConfig struct {
-	store *store.Store
+	store     *store.Store
+	publisher EventPublisher
+	runID     int64
+	pipeName  string
 }
 
 // WithRunStore attaches a result store to the run so results are persisted.
@@ -27,6 +32,12 @@ type runConfig struct {
 // RecordRunComplete after, regardless of success or failure.
 func WithRunStore(s *store.Store) RunOption {
 	return func(c *runConfig) { c.store = s }
+}
+
+// WithEventPublisher attaches an EventPublisher that receives pipeline and step
+// lifecycle events during Run.  If not set, NoopPublisher{} is used.
+func WithEventPublisher(p EventPublisher) RunOption {
+	return func(c *runConfig) { c.publisher = p }
 }
 
 // StepStatusLineFormat is the format string for structured step-status log lines.
@@ -54,34 +65,45 @@ type stepState struct {
 
 // stepResult carries the outcome of a completed step goroutine.
 type stepResult struct {
-	id      string
-	output  map[string]any
-	err     error
-	skipped bool // true when the step was skipped due to a dependency failure
+	id         string
+	output     map[string]any
+	err        error
+	skipped    bool      // true when the step was skipped due to a dependency failure
+	startedAt  time.Time // when the step goroutine started executing
+	durationMs int64     // execution duration in milliseconds
 }
 
 // Run executes a pipeline against the given plugin manager.
 // userInput is the initial value injected for the first input step.
-// publisher receives lifecycle events; pass NoopPublisher{} when not needed.
-// Optional RunOption values (e.g. WithRunStore) configure additional behaviour.
+// Optional RunOption values (e.g. WithRunStore, WithEventPublisher) configure behaviour.
 // Returns the final output string (last plugin step output).
-func Run(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher, opts ...RunOption) (string, error) {
-	if publisher == nil {
-		publisher = NoopPublisher{}
-	}
-
+func Run(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, opts ...RunOption) (string, error) {
 	cfg := &runConfig{}
 	for _, o := range opts {
 		o(cfg)
 	}
+	if cfg.publisher == nil {
+		cfg.publisher = NoopPublisher{}
+	}
+
+	cfg.pipeName = p.Name
 
 	// Record run start in the store (nil-safe).
-	var runID int64
+	startedAt := time.Now()
 	if cfg.store != nil {
 		id, err := cfg.store.RecordRunStart("pipeline", p.Name, "")
 		if err == nil {
-			runID = id
+			cfg.runID = id
 		}
+	}
+
+	// Publish pipeline.run.started.
+	if payload, err := json.Marshal(map[string]any{
+		"run_id":     cfg.runID,
+		"pipeline":   p.Name,
+		"started_at": startedAt.Format(time.RFC3339),
+	}); err == nil {
+		_ = cfg.publisher.Publish(ctx, topics.RunStarted, payload)
 	}
 
 	var result string
@@ -91,20 +113,41 @@ func Run(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string
 	// If none of the steps has Needs, Retry, ForEach, or builtin types, fall through
 	// to the legacy runner for full backwards compatibility.
 	if isLegacyPipeline(p) {
-		result, runErr = runLegacy(ctx, p, mgr, userInput, publisher, cfg.store)
+		result, runErr = runLegacy(ctx, p, mgr, userInput, cfg)
 	} else {
-		result, runErr = runDAG(ctx, p, mgr, userInput, publisher, cfg.store)
+		result, runErr = runDAG(ctx, p, mgr, userInput, cfg)
 	}
 
+	finishedAt := time.Now()
+	durationMs := finishedAt.Sub(startedAt).Milliseconds()
+
 	// Record completion in the store (nil-safe).
-	if cfg.store != nil && runID > 0 {
+	if cfg.store != nil && cfg.runID > 0 {
 		exitStatus := 0
 		stderr := ""
 		if runErr != nil {
 			exitStatus = 1
 			stderr = runErr.Error()
 		}
-		_ = cfg.store.RecordRunComplete(runID, exitStatus, result, stderr)
+		_ = cfg.store.RecordRunComplete(cfg.runID, exitStatus, result, stderr)
+	}
+
+	// Publish pipeline.run.completed or pipeline.run.failed.
+	exitStatus := 0
+	topic := topics.RunCompleted
+	if runErr != nil {
+		exitStatus = 1
+		topic = topics.RunFailed
+	}
+	if payload, err := json.Marshal(map[string]any{
+		"run_id":      cfg.runID,
+		"pipeline":    p.Name,
+		"exit_status": exitStatus,
+		"duration_ms": durationMs,
+		"started_at":  startedAt.Format(time.RFC3339),
+		"finished_at": finishedAt.Format(time.RFC3339),
+	}); err == nil {
+		_ = cfg.publisher.Publish(ctx, topic, payload)
 	}
 
 	return result, runErr
@@ -130,8 +173,8 @@ func isLegacyPipeline(p *Pipeline) bool {
 
 // runLegacy is the original sequential runner kept for backwards compatibility.
 // It handles "input"/"output" step types and condition branches.
-func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher, s *store.Store) (string, error) {
-	ec := NewExecutionContext(WithStore(s))
+func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, cfg *runConfig) (string, error) {
+	ec := NewExecutionContext(WithStore(cfg.store))
 
 	// Expose the process working directory so pipeline steps can use {{cwd}}.
 	if cwd, err := os.Getwd(); err == nil {
@@ -180,15 +223,84 @@ func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput 
 			return lastPluginOutput, nil
 
 		default:
+			// Publish step.started.
+			if payload, err := json.Marshal(map[string]any{
+				"run_id":   cfg.runID,
+				"pipeline": p.Name,
+				"step":     step.ID,
+				"status":   "running",
+			}); err == nil {
+				_ = cfg.publisher.Publish(ctx, topics.StepStarted, payload)
+			}
+
+			stepStart := time.Now()
 			output, err := executePluginStep(ctx, step, ec, mgr, lastOutput)
+			stepDurationMs := time.Since(stepStart).Milliseconds()
+
 			if err != nil {
+				// Publish step.failed.
+				if payload, merr := json.Marshal(map[string]any{
+					"run_id":      cfg.runID,
+					"pipeline":    p.Name,
+					"step":        step.ID,
+					"status":      "failed",
+					"duration_ms": stepDurationMs,
+				}); merr == nil {
+					_ = cfg.publisher.Publish(ctx, topics.StepFailed, payload)
+				}
+				// Record step in store.
+				if cfg.store != nil {
+					rec := store.StepRecord{
+						ID:         step.ID,
+						Status:     "failed",
+						StartedAt:  stepStart.Format(time.RFC3339),
+						FinishedAt: time.Now().Format(time.RFC3339),
+						DurationMs: stepDurationMs,
+					}
+					_ = cfg.store.RecordStepComplete(ctx, cfg.runID, rec)
+				}
 				return "", fmt.Errorf("pipeline: step %q: %w", step.ID, err)
 			}
+
 			ec.Set(step.ID+".out", output)
 			ec.Set("step."+step.ID+".state", "done")
 			ec.Set("step."+step.ID+".data.value", output)
 			lastPluginOutput = output
 			lastOutput = output
+
+			outMap := map[string]any{"value": output}
+
+			// Publish step.done.
+			if payload, merr := json.Marshal(map[string]any{
+				"run_id":      cfg.runID,
+				"pipeline":    p.Name,
+				"step":        step.ID,
+				"status":      "done",
+				"duration_ms": stepDurationMs,
+				"output":      outMap,
+			}); merr == nil {
+				_ = cfg.publisher.Publish(ctx, topics.StepDone, payload)
+			}
+
+			// Record step in store.
+			if cfg.store != nil {
+				rec := store.StepRecord{
+					ID:         step.ID,
+					Status:     "done",
+					StartedAt:  stepStart.Format(time.RFC3339),
+					FinishedAt: time.Now().Format(time.RFC3339),
+					DurationMs: stepDurationMs,
+					Output:     outMap,
+				}
+				_ = cfg.store.RecordStepComplete(ctx, cfg.runID, rec)
+			}
+
+			// publish_to: if the step has a publish_to topic, publish its output.
+			if step.PublishTo != "" {
+				if payload, merr := json.Marshal(outMap); merr == nil {
+					_ = cfg.publisher.Publish(ctx, step.PublishTo, payload) //nolint:errcheck
+				}
+			}
 
 			// Evaluate branch condition if present.
 			if step.Condition.If != "" {
@@ -207,17 +319,12 @@ func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput 
 		}
 	}
 
-	// Publish via EventPublisher if there's a publish_to in any output step.
-	_ = publisher
-
 	return lastPluginOutput, nil
 }
 
 // runDAG executes a pipeline using the DAG execution engine with full parallelism,
 // retry, on_failure routing, and for_each expansion.
-func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, publisher EventPublisher, s *store.Store) (string, error) {
-	_ = publisher
-
+func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput string, cfg *runConfig) (string, error) {
 	maxParallel := p.MaxParallel
 	if maxParallel <= 0 {
 		maxParallel = 8
@@ -236,7 +343,7 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput str
 	}
 
 	// Set up shared execution context.
-	ec := NewExecutionContext(WithStore(s))
+	ec := NewExecutionContext(WithStore(cfg.store))
 	// Expose the process working directory so pipeline steps can use {{cwd}}.
 	if cwd, err := os.Getwd(); err == nil {
 		ec.Set("cwd", cwd)
@@ -355,7 +462,9 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput str
 				args["item"] = itemVal
 			}
 
-			out, execErr := dispatchStep(ctx, step, args, snap, ec, mgr)
+			stepStart := time.Now()
+			out, execErr := dispatchStep(ctx, step, args, snap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher)
+			stepDurationMs := time.Since(stepStart).Milliseconds()
 
 			if execErr == nil {
 				if out != nil {
@@ -367,7 +476,7 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput str
 				}
 			}
 
-			completedCh <- stepResult{id: id, output: out, err: execErr}
+			completedCh <- stepResult{id: id, output: out, err: execErr, startedAt: stepStart, durationMs: stepDurationMs}
 		}()
 	}
 
@@ -428,6 +537,18 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput str
 				st.mu.Unlock()
 				ec.Set("step."+res.id+".state", "failed")
 
+				// Record step failure in store.
+				if cfg.store != nil {
+					rec := store.StepRecord{
+						ID:         res.id,
+						Status:     "failed",
+						StartedAt:  res.startedAt.Format(time.RFC3339),
+						FinishedAt: time.Now().Format(time.RFC3339),
+						DurationMs: res.durationMs,
+					}
+					_ = cfg.store.RecordStepComplete(ctx, cfg.runID, rec)
+				}
+
 				// Skip transitive dependents. Send synthetic completions for each
 				// since they were counted in normalSteps/expected.
 				newlySkipped := skipTransitive(res.id, dependents, states, ec)
@@ -457,6 +578,19 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput str
 				st.status = statusDone
 				st.output = res.output
 				st.mu.Unlock()
+
+				// Record step completion in store.
+				if cfg.store != nil {
+					rec := store.StepRecord{
+						ID:         res.id,
+						Status:     "done",
+						StartedAt:  res.startedAt.Format(time.RFC3339),
+						FinishedAt: time.Now().Format(time.RFC3339),
+						DurationMs: res.durationMs,
+						Output:     res.output,
+					}
+					_ = cfg.store.RecordStepComplete(ctx, cfg.runID, rec)
+				}
 
 				if res.output != nil {
 					ec.Set("step."+res.id+".data", res.output)
@@ -637,7 +771,8 @@ func interpolateArgs(args map[string]any, vars map[string]any) map[string]any {
 }
 
 // dispatchStep determines the executor for a step and runs it (with retries).
-func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *plugin.Manager) (map[string]any, error) {
+// runID and pipeName are used to populate event payloads; pub receives the events.
+func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *plugin.Manager, runID int64, pipeName string, pub EventPublisher) (map[string]any, error) {
 	executor, err := resolveExecutor(step, args, snap, ec, mgr)
 	if err != nil {
 		return nil, err
@@ -663,8 +798,19 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 		}
 	}
 
+	// Publish step.started before the retry loop.
+	if payload, merr := json.Marshal(map[string]any{
+		"run_id":   runID,
+		"pipeline": pipeName,
+		"step":     step.ID,
+		"status":   "running",
+	}); merr == nil {
+		_ = pub.Publish(ctx, topics.StepStarted, payload)
+	}
+
 	fmt.Printf(StepStatusLineFormat+"\n", step.ID, "running")
 
+	stepStart := time.Now()
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		out, execErr = executor.Execute(ctx, args)
 		if execErr == nil {
@@ -684,16 +830,57 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 	}
 
 done:
+	stepDurationMs := time.Since(stepStart).Milliseconds()
 	cleanupErr := executor.Cleanup(ctx)
 	if execErr != nil {
 		fmt.Printf(StepStatusLineFormat+"\n", step.ID, "failed")
+		// Publish step.failed.
+		if payload, merr := json.Marshal(map[string]any{
+			"run_id":      runID,
+			"pipeline":    pipeName,
+			"step":        step.ID,
+			"status":      "failed",
+			"duration_ms": stepDurationMs,
+		}); merr == nil {
+			_ = pub.Publish(ctx, topics.StepFailed, payload)
+		}
 		return nil, execErr
 	}
 	if cleanupErr != nil {
 		fmt.Printf(StepStatusLineFormat+"\n", step.ID, "failed")
+		// Publish step.failed for cleanup error too.
+		if payload, merr := json.Marshal(map[string]any{
+			"run_id":      runID,
+			"pipeline":    pipeName,
+			"step":        step.ID,
+			"status":      "failed",
+			"duration_ms": stepDurationMs,
+		}); merr == nil {
+			_ = pub.Publish(ctx, topics.StepFailed, payload)
+		}
 		return nil, cleanupErr
 	}
 	fmt.Printf(StepStatusLineFormat+"\n", step.ID, "done")
+
+	// Publish step.done.
+	if payload, merr := json.Marshal(map[string]any{
+		"run_id":      runID,
+		"pipeline":    pipeName,
+		"step":        step.ID,
+		"status":      "done",
+		"duration_ms": stepDurationMs,
+		"output":      out,
+	}); merr == nil {
+		_ = pub.Publish(ctx, topics.StepDone, payload)
+	}
+
+	// publish_to: publish step output to a custom topic if configured.
+	if step.PublishTo != "" {
+		if payload, merr := json.Marshal(out); merr == nil {
+			_ = pub.Publish(ctx, step.PublishTo, payload) //nolint:errcheck
+		}
+	}
+
 	return out, nil
 }
 

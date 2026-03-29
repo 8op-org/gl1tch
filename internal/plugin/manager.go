@@ -36,6 +36,7 @@ type Manager struct {
 	mu            sync.RWMutex
 	plugins       map[string]Plugin
 	categoryIndex map[string]Plugin // keyed by category prefix (e.g. "providers.claude")
+	busClient     BusClient
 }
 
 // NewManager returns an empty plugin manager.
@@ -47,6 +48,8 @@ func NewManager() *Manager {
 }
 
 // Register adds a plugin. Returns an error if a plugin with the same name is already registered.
+// If a BusClient has already been set on the Manager, it is injected into any
+// BusAwarePlugin immediately on registration.
 func (m *Manager) Register(p Plugin) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -54,7 +57,26 @@ func (m *Manager) Register(p Plugin) error {
 		return fmt.Errorf("plugin %q already registered", p.Name())
 	}
 	m.plugins[p.Name()] = p
+	if m.busClient != nil {
+		if ba, ok := p.(BusAwarePlugin); ok {
+			ba.SetBusClient(m.busClient)
+		}
+	}
 	return nil
+}
+
+// SetBusClient sets the BusClient on the Manager and injects it into all
+// already-registered BusAwarePlugins. Plugins registered after this call also
+// receive the client automatically via Register.
+func (m *Manager) SetBusClient(c BusClient) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.busClient = c
+	for _, p := range m.plugins {
+		if ba, ok := p.(BusAwarePlugin); ok {
+			ba.SetBusClient(c)
+		}
+	}
 }
 
 // RegisterCategory registers a plugin under a category key and tracks the valid action.

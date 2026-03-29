@@ -1,7 +1,10 @@
 package store
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -87,5 +90,54 @@ func (s *Store) RecordRunComplete(id int64, exitStatus int, stdout, stderr strin
 			return err
 		}
 		return autoPruneDB(db, s.cfg.MaxAgeDays, s.cfg.MaxRows)
+	})
+}
+
+// RecordStepComplete upserts step into the steps JSON array of the run
+// identified by runID. If a step with the same ID already exists it is
+// replaced; otherwise the new record is appended. The operation is serialized
+// through the store writer to prevent concurrent write contention.
+func (s *Store) RecordStepComplete(_ context.Context, runID int64, step StepRecord) error {
+	return s.writer.send(func(db *sql.DB) error {
+		// Read current steps JSON.
+		var raw sql.NullString
+		if err := db.QueryRow(`SELECT steps FROM runs WHERE id = ?`, runID).Scan(&raw); err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("store: record step complete: run %d not found", runID)
+			}
+			return fmt.Errorf("store: record step complete: %w", err)
+		}
+
+		// Parse existing records.
+		var steps []StepRecord
+		if raw.Valid && raw.String != "" {
+			if err := json.Unmarshal([]byte(raw.String), &steps); err != nil {
+				// Corrupt data — start fresh.
+				steps = nil
+			}
+		}
+
+		// Upsert: replace existing entry with matching ID or append.
+		found := false
+		for i, existing := range steps {
+			if existing.ID == step.ID {
+				steps[i] = step
+				found = true
+				break
+			}
+		}
+		if !found {
+			steps = append(steps, step)
+		}
+
+		// Marshal back and persist.
+		b, err := json.Marshal(steps)
+		if err != nil {
+			return fmt.Errorf("store: record step complete: marshal: %w", err)
+		}
+		if _, err := db.Exec(`UPDATE runs SET steps = ? WHERE id = ?`, string(b), runID); err != nil {
+			return fmt.Errorf("store: record step complete: %w", err)
+		}
+		return nil
 	})
 }

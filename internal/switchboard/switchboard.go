@@ -288,6 +288,8 @@ type Model struct {
 	inboxDetailScroll    int
 	// Cron panel
 	cronPanel CronPanel
+	// Pipeline bus subscription (tasks 7.2–7.8)
+	pipelineBusCh chan pipelineBusEventMsg
 }
 
 // New creates a new Switchboard Model, discovering pipelines and providers.
@@ -582,7 +584,13 @@ func (m Model) Init() tea.Cmd {
 	if entries, err := orcaicron.LoadConfig(); err == nil && len(entries) > 0 {
 		go ensureCronDaemon()
 	}
-	return tea.Batch(tickCmd(), m.inboxModel.Init(), m.themeState.Init())
+	return tea.Batch(
+		tickCmd(),
+		m.inboxModel.Init(),
+		m.themeState.Init(),
+		tryPipelineBusSubscribeCmd(),
+		seedFeedFromStoreCmd(m.store),
+	)
 }
 
 func tickCmd() tea.Cmd {
@@ -825,7 +833,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				found := false
 				for j := range m.feed[i].steps {
 					if m.feed[i].steps[j].id == msg.StepID {
-						m.feed[i].steps[j].status = msg.Status
+						// 7.6: log-line parser is the fallback — skip if busd
+						// already delivered a terminal (authoritative) status.
+						if !isTerminalStepStatus(m.feed[i].steps[j].status) {
+							m.feed[i].steps[j].status = msg.Status
+						}
 						found = true
 						break
 					}
@@ -838,6 +850,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if jh, ok := m.activeJobs[msg.FeedID]; ok {
 			return m, drainChan(jh.ch)
+		}
+		return m, nil
+
+	// ── pipeline busd events (tasks 7.2–7.8) ─────────────────────────────
+
+	case feedSeedMsg:
+		m = m.handleFeedSeedMsg(msg)
+		return m, nil
+
+	case pipelineBusConnectMsg:
+		m.pipelineBusCh = msg.ch
+		return m, waitForPipelineBusEvent(m.pipelineBusCh)
+
+	case pipelineBusDisconnectedMsg:
+		m.pipelineBusCh = nil
+		return m, nil
+
+	case pipelineBusEventMsg:
+		m = m.handlePipelineBusEvent(msg)
+		if m.pipelineBusCh != nil {
+			return m, waitForPipelineBusEvent(m.pipelineBusCh)
 		}
 		return m, nil
 

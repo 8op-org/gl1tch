@@ -121,7 +121,12 @@ var pipelineRunCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "pipeline: store unavailable: %v\n", serr)
 		}
 
-		result, err := pipeline.Run(cmd.Context(), p, mgr, "", pipeline.NoopPublisher{}, storeOpts...)
+		// Wire busd publisher if the daemon is reachable.
+		if pub := newBusPublisher(); pub != nil {
+			storeOpts = append(storeOpts, pipeline.WithEventPublisher(pub))
+		}
+
+		result, err := pipeline.Run(cmd.Context(), p, mgr, "", storeOpts...)
 		if err != nil {
 			return err
 		}

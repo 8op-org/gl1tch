@@ -5,6 +5,22 @@ import (
 	"io"
 )
 
+// BusClient is the interface a BusAwarePlugin uses to interact with the event bus.
+// It is satisfied by *busd.ConnectedClient or NoopBusClient.
+// Defined here (not in busd) to avoid import cycles — the plugin package must
+// not import busd.
+type BusClient interface {
+	Publish(ctx context.Context, topic string, payload []byte) error
+}
+
+// BusAwarePlugin is an optional interface a Tier 1 plugin may implement to
+// receive a BusClient on startup. The base Plugin interface is unchanged —
+// existing plugins need no modification.
+type BusAwarePlugin interface {
+	Plugin
+	SetBusClient(c BusClient)
+}
+
 // Plugin is the universal interface all orcai plugins implement,
 // regardless of whether they are native go-plugins (Tier 1) or CLI wrappers (Tier 2).
 //

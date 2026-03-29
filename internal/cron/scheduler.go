@@ -10,39 +10,57 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"
 	robfigcron "github.com/robfig/cron/v3"
 )
 
-// StoreWriter is the subset of store.Store that Scheduler needs. Using an
-// interface avoids a direct import dependency on the store package.
-type StoreWriter interface {
-	RecordRunStart(kind, name, metadata string) (int64, error)
-	RecordRunComplete(id int64, exitStatus int, stdout, stderr string) error
+// EventPublisher publishes cron lifecycle events to the event bus.
+// Implementations must be safe to call concurrently.
+type EventPublisher interface {
+	Publish(ctx context.Context, topic string, payload []byte) error
+}
+
+// NoopPublisher discards all events.
+type NoopPublisher struct{}
+
+func (NoopPublisher) Publish(_ context.Context, _ string, _ []byte) error { return nil }
+
+// Option is a functional option for configuring a Scheduler.
+type Option func(*Scheduler)
+
+// WithPublisher sets the EventPublisher used to emit cron lifecycle events.
+func WithPublisher(p EventPublisher) Option {
+	return func(s *Scheduler) { s.publisher = p }
 }
 
 // Scheduler wraps robfig/cron and adds hot-reload via fsnotify and optional
-// store integration for recording run history.
+// event publishing for run lifecycle events.
 type Scheduler struct {
-	c       *robfigcron.Cron
-	logger  *log.Logger
-	store   StoreWriter
-	mu      sync.Mutex
-	entries []Entry
-	cronIDs []robfigcron.EntryID
-	done    chan struct{}
+	c         *robfigcron.Cron
+	logger    *log.Logger
+	publisher EventPublisher
+	mu        sync.Mutex
+	entries   []Entry
+	cronIDs   []robfigcron.EntryID
+	done      chan struct{}
 }
 
-// New creates a new Scheduler. Both logger and store may be nil; the scheduler
-// will operate without logging or persistence in that case.
-func New(logger *log.Logger, store StoreWriter) *Scheduler {
-	return &Scheduler{
-		c:      robfigcron.New(),
-		logger: logger,
-		store:  store,
-		done:   make(chan struct{}),
+// New creates a new Scheduler. The logger may be nil; the scheduler will
+// operate without logging in that case. Pass functional options to configure
+// additional behaviour such as event publishing.
+func New(logger *log.Logger, opts ...Option) *Scheduler {
+	sc := &Scheduler{
+		c:         robfigcron.New(),
+		logger:    logger,
+		publisher: NoopPublisher{},
+		done:      make(chan struct{}),
 	}
+	for _, o := range opts {
+		o(sc)
+	}
+	return sc
 }
 
 // Start begins the cron daemon. It loads the config, registers all entries,
@@ -129,8 +147,8 @@ func (s *Scheduler) reload() {
 	}
 }
 
-// runEntry executes a single scheduled entry as a subprocess, recording the
-// run start and completion in the store (if configured).
+// runEntry executes a single scheduled entry as a subprocess, publishing
+// cron.job.started before spawn and cron.job.completed after exit.
 func (s *Scheduler) runEntry(entry Entry) {
 	// Determine subprocess args.
 	var args []string
@@ -156,17 +174,15 @@ func (s *Scheduler) runEntry(entry Entry) {
 		}
 	}
 
-	// Record run start.
-	var runID int64
-	if s.store != nil {
-		meta := cronRunMetadata(entry.Target, entry.WorkingDir)
-		id, err := s.store.RecordRunStart(entry.Kind, entry.Name, meta)
-		if err != nil {
-			s.logError("cron: store.RecordRunStart failed", "name", entry.Name, "err", err)
-		} else {
-			runID = id
-		}
-	}
+	// Publish cron.job.started before spawning subprocess.
+	startedAt := time.Now()
+	startPayload, _ := json.Marshal(map[string]any{
+		"job":          entry.Name,
+		"target":       entry.Target,
+		"schedule":     entry.Schedule,
+		"triggered_at": startedAt.Format(time.RFC3339),
+	})
+	_ = s.publisher.Publish(context.Background(), topics.CronJobStarted, startPayload)
 
 	// Resolve the orcai binary (same binary as current process).
 	self, err := os.Executable()
@@ -180,7 +196,6 @@ func (s *Scheduler) runEntry(entry Entry) {
 	cmd.Stderr = &buf
 
 	runErr := cmd.Run()
-	output := buf.String()
 
 	exitStatus := 0
 	if runErr != nil {
@@ -194,12 +209,16 @@ func (s *Scheduler) runEntry(entry Entry) {
 		s.logInfo("cron: entry completed", "name", entry.Name)
 	}
 
-	// Record run completion.
-	if s.store != nil && runID != 0 {
-		if err := s.store.RecordRunComplete(runID, exitStatus, output, ""); err != nil {
-			s.logError("cron: store.RecordRunComplete failed", "name", entry.Name, "err", err)
-		}
-	}
+	// Publish cron.job.completed after subprocess exits.
+	durationMs := time.Since(startedAt).Milliseconds()
+	donePayload, _ := json.Marshal(map[string]any{
+		"job":         entry.Name,
+		"target":      entry.Target,
+		"exit_status": exitStatus,
+		"duration_ms": durationMs,
+		"finished_at": time.Now().Format(time.RFC3339),
+	})
+	_ = s.publisher.Publish(context.Background(), topics.CronJobCompleted, donePayload)
 }
 
 // watchConfig uses fsnotify to watch the cron config file for changes,
@@ -271,24 +290,4 @@ func (s *Scheduler) logError(msg string, kv ...any) {
 	if s.logger != nil {
 		s.logger.Error(msg, kv...)
 	}
-}
-
-// cronRunMetadata returns a compact JSON blob for a cron run's metadata.
-// pipelineFile is the target path (for pipeline kind); cwd is the working directory.
-func cronRunMetadata(pipelineFile, cwd string) string {
-	if pipelineFile == "" && cwd == "" {
-		return ""
-	}
-	m := make(map[string]string, 2)
-	if pipelineFile != "" {
-		m["pipeline_file"] = pipelineFile
-	}
-	if cwd != "" {
-		m["cwd"] = cwd
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return ""
-	}
-	return string(b)
 }

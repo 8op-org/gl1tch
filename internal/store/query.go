@@ -1,12 +1,15 @@
 package store
 
-import "database/sql"
+import (
+	"database/sql"
+	"encoding/json"
+)
 
 // QueryRuns returns up to limit runs ordered by started_at descending.
 // Reads use s.db directly since WAL mode allows concurrent readers.
 func (s *Store) QueryRuns(limit int) ([]Run, error) {
 	rows, err := s.db.Query(
-		`SELECT id, kind, name, started_at, finished_at, exit_status, stdout, stderr, metadata
+		`SELECT id, kind, name, started_at, finished_at, exit_status, stdout, stderr, metadata, steps
 		   FROM runs
 		  ORDER BY started_at DESC
 		  LIMIT ?`,
@@ -22,12 +25,12 @@ func (s *Store) QueryRuns(limit int) ([]Run, error) {
 		var r Run
 		var finishedAt sql.NullInt64
 		var exitStatus sql.NullInt64
-		var stdout, stderr, metadata sql.NullString
+		var stdout, stderr, metadata, steps sql.NullString
 
 		if err := rows.Scan(
 			&r.ID, &r.Kind, &r.Name, &r.StartedAt,
 			&finishedAt, &exitStatus,
-			&stdout, &stderr, &metadata,
+			&stdout, &stderr, &metadata, &steps,
 		); err != nil {
 			return nil, err
 		}
@@ -42,6 +45,17 @@ func (s *Store) QueryRuns(limit int) ([]Run, error) {
 		r.Stdout = stdout.String
 		r.Stderr = stderr.String
 		r.Metadata = metadata.String
+
+		// Parse steps JSON; silently return empty slice on failure.
+		if steps.Valid && steps.String != "" {
+			var sr []StepRecord
+			if err := json.Unmarshal([]byte(steps.String), &sr); err == nil {
+				r.Steps = sr
+			}
+		}
+		if r.Steps == nil {
+			r.Steps = []StepRecord{}
+		}
 
 		runs = append(runs, r)
 	}

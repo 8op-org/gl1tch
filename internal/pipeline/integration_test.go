@@ -87,7 +87,7 @@ func TestPipelineFullRun_Llama(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pub)
+	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestPipelineFullRun_Qwen(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pub)
+	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestAgentSingleStep_Llama(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pub)
+	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestAgentSingleStep_Qwen(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	result, err := pipeline.Run(context.Background(), p, mgr, "", pub)
+	result, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestPipelineChain_Llama(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	_, err = pipeline.Run(context.Background(), p, mgr, "", pub)
+	_, err = pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestPipelineChain_Qwen(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	_, err := pipeline.Run(context.Background(), p, mgr, "", pub)
+	_, err := pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestPipelineParallel_LlamaQwen(t *testing.T) {
 	mgr := buildManager()
 	pub := &collectPublisher{}
 
-	_, err = pipeline.Run(context.Background(), p, mgr, "", pub)
+	_, err = pipeline.Run(context.Background(), p, mgr, "", pipeline.WithEventPublisher(pub))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

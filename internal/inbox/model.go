@@ -4,19 +4,26 @@
 package inbox
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/adam-stokes/orcai/internal/busd"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/themes"
 )
 
-// pollInterval is how often the inbox polls the store for new runs.
-const pollInterval = 5 * time.Second
+// pollIntervalFast is the fallback poll interval when the bus is unavailable.
+const pollIntervalFast = 5 * time.Second
+
+// pollIntervalSlow is the poll interval when the bus is connected.
+const pollIntervalSlow = 30 * time.Second
 
 // RunCompletedMsg triggers an immediate inbox refresh when a run completes in-process.
 type RunCompletedMsg struct {
@@ -34,6 +41,22 @@ type RerunMsg struct {
 // tickMsg triggers a poll-based refresh.
 type tickMsg struct{}
 
+// busEventMsg carries a received bus event into the BubbleTea loop.
+type busEventMsg struct {
+	topic   string
+	payload json.RawMessage
+}
+
+// busConnectMsg is sent when the bus connection succeeds and the reader
+// goroutine is running.
+type busConnectMsg struct {
+	ch chan busEventMsg
+}
+
+// busDisconnectedMsg signals the bus subscription failed or the connection
+// dropped.
+type busDisconnectedMsg struct{}
+
 // item wraps a store.Run for display in the bubbles list.
 type item struct {
 	run    store.Run
@@ -48,9 +71,17 @@ func (i item) Title() string {
 	return badge + " " + i.run.Name
 }
 
-// Description returns elapsed/finished time and a status indicator.
+// Description returns elapsed/finished time, a status indicator, and an
+// optional step-count badge.
 func (i item) Description() string {
-	return statusIndicator(i.run, i.bundle) + "  " + elapsedStr(i.run)
+	base := statusIndicator(i.run, i.bundle) + "  " + elapsedStr(i.run)
+	if n := len(i.run.Steps); n > 0 {
+		badge := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(i.bundle.Palette.Dim)).
+			Render(fmt.Sprintf("  %d steps", n))
+		return base + badge
+	}
+	return base
 }
 
 // FilterValue returns the run name for list filtering.
@@ -80,13 +111,15 @@ func elapsedStr(run store.Run) string {
 
 // Model is the BubbleTea model for the inbox panel.
 type Model struct {
-	store   *store.Store
-	bundle  *themes.Bundle
-	list    list.Model
-	runs    []store.Run // parallel slice to list items for modal access
-	width   int
-	height  int
-	focused bool
+	store        *store.Store
+	bundle       *themes.Bundle
+	list         list.Model
+	runs         []store.Run // parallel slice to list items for modal access
+	width        int
+	height       int
+	focused      bool
+	busConnected bool
+	busCh        chan busEventMsg
 }
 
 // New creates an inbox Model. s may be nil (renders an empty state).
@@ -128,30 +161,91 @@ func New(s *store.Store, bundle *themes.Bundle) Model {
 	}
 }
 
-
-// Init returns the initial command that starts the poll tick.
+// Init returns the initial command that starts the poll tick and attempts a
+// bus subscription.
 func (m Model) Init() tea.Cmd {
-	return tea.Tick(pollInterval, func(t time.Time) tea.Msg {
-		return tickMsg{}
-	})
+	return tea.Batch(
+		tryBusSubscribeCmd(),
+		m.scheduleNextTick(),
+	)
 }
 
-// scheduleNextTick returns a command that fires the next poll tick.
-func scheduleNextTick() tea.Cmd {
-	return tea.Tick(pollInterval, func(t time.Time) tea.Msg {
-		return tickMsg{}
-	})
+// scheduleNextTick returns a command that fires the next poll tick. The
+// interval is 30s when the bus is connected, 5s otherwise.
+func (m Model) scheduleNextTick() tea.Cmd {
+	interval := pollIntervalFast
+	if m.busConnected {
+		interval = pollIntervalSlow
+	}
+	return tea.Tick(interval, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+// tryBusSubscribeCmd returns a tea.Cmd that attempts to connect to busd and
+// subscribe to "pipeline.run.*". On success it returns busConnectMsg with the
+// event channel; on failure it returns busDisconnectedMsg.
+func tryBusSubscribeCmd() tea.Cmd {
+	return func() tea.Msg {
+		sockPath, err := busd.SocketPath()
+		if err != nil {
+			return busDisconnectedMsg{}
+		}
+		conn, err := net.DialTimeout("unix", sockPath, 200*time.Millisecond)
+		if err != nil {
+			return busDisconnectedMsg{}
+		}
+
+		// Send the registration frame to subscribe to pipeline.run.* events.
+		reg, _ := json.Marshal(map[string]any{
+			"name":      "inbox",
+			"subscribe": []string{"pipeline.run.*"},
+		})
+		if _, err := conn.Write(append(reg, '\n')); err != nil {
+			conn.Close()
+			return busDisconnectedMsg{}
+		}
+
+		ch := make(chan busEventMsg, 8)
+
+		// Reader goroutine: forwards frames from the socket into ch until EOF.
+		go func() {
+			defer conn.Close()
+			defer close(ch)
+			scanner := bufio.NewScanner(conn)
+			for scanner.Scan() {
+				var frame struct {
+					Event   string          `json:"event"`
+					Payload json.RawMessage `json:"payload"`
+				}
+				if json.Unmarshal(scanner.Bytes(), &frame) == nil {
+					ch <- busEventMsg{topic: frame.Event, payload: frame.Payload}
+				}
+			}
+		}()
+
+		return busConnectMsg{ch: ch}
+	}
+}
+
+// waitForBusEvent returns a tea.Cmd that blocks until the next event arrives
+// on ch, then delivers it as a busEventMsg (or busDisconnectedMsg on close).
+func waitForBusEvent(ch chan busEventMsg) tea.Cmd {
+	return func() tea.Msg {
+		if msg, ok := <-ch; ok {
+			return msg
+		}
+		return busDisconnectedMsg{}
+	}
 }
 
 // refreshRuns queries the store and updates the list items.
 // Returns the updated model and the next tick command.
 func (m Model) refreshRuns() (Model, tea.Cmd) {
 	if m.store == nil {
-		return m, scheduleNextTick()
+		return m, m.scheduleNextTick()
 	}
 	runs, err := m.store.QueryRuns(50)
 	if err != nil {
-		return m, scheduleNextTick()
+		return m, m.scheduleNextTick()
 	}
 	m.runs = runs
 	items := make([]list.Item, len(runs))
@@ -159,15 +253,31 @@ func (m Model) refreshRuns() (Model, tea.Cmd) {
 		items[i] = item{run: r, bundle: m.bundle}
 	}
 	cmd := m.list.SetItems(items)
-	return m, tea.Batch(cmd, scheduleNextTick())
+	return m, tea.Batch(cmd, m.scheduleNextTick())
 }
 
 // Update handles BubbleTea messages.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	switch msg.(type) {
+	switch msg := msg.(type) {
 
 	case tickMsg, RunCompletedMsg:
 		return m.refreshRuns()
+
+	case busConnectMsg:
+		m.busConnected = true
+		m.busCh = msg.ch
+		return m, waitForBusEvent(m.busCh)
+
+	case busEventMsg:
+		// A pipeline.run.* event arrived — refresh immediately and re-arm.
+		m2, cmds := m.refreshRuns()
+		return m2, tea.Batch(cmds, waitForBusEvent(m.busCh))
+
+	case busDisconnectedMsg:
+		// Bus dropped; clear state and fall back to the poll ticker.
+		m.busConnected = false
+		m.busCh = nil
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -266,4 +376,3 @@ func (m Model) Runs() []store.Run { return m.runs }
 
 // SelectedIndex returns the index of the currently selected list item.
 func (m Model) SelectedIndex() int { return m.list.Index() }
-

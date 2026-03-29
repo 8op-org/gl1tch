@@ -13,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/adam-stokes/orcai/internal/cron"
 	crontui "github.com/adam-stokes/orcai/internal/crontui"
-	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/themes"
 	robfigcron "github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
@@ -198,15 +197,7 @@ var cronRunCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "cron: logger setup warning: %v\n", err)
 		}
 
-		s, storeErr := store.Open()
-		if storeErr != nil && logger != nil {
-			logger.Warn("result store unavailable", "error", storeErr)
-		}
-		if s != nil {
-			defer s.Close()
-		}
-
-		scheduler := cron.New(logger, s)
+		scheduler := cron.New(logger)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

@@ -3,6 +3,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -10,6 +11,25 @@ import (
 
 	_ "modernc.org/sqlite" // register the sqlite driver
 )
+
+// StepRecord describes the persisted outcome of a single pipeline step.
+type StepRecord struct {
+	ID         string         `json:"id"`
+	Status     string         `json:"status"`
+	StartedAt  string         `json:"started_at,omitempty"`  // RFC3339
+	FinishedAt string         `json:"finished_at,omitempty"` // RFC3339
+	DurationMs int64          `json:"duration_ms,omitempty"`
+	Output     map[string]any `json:"output,omitempty"`
+}
+
+// StoreWriter is the interface satisfied by *Store for recording run lifecycle
+// events. Callers that only need to write (not query) should depend on this
+// interface rather than *Store directly.
+type StoreWriter interface {
+	RecordRunStart(kind, name, metadata string) (int64, error)
+	RecordRunComplete(id int64, exitStatus int, stdout, stderr string) error
+	RecordStepComplete(ctx context.Context, runID int64, step StepRecord) error
+}
 
 // Run represents a recorded pipeline or agent run.
 type Run struct {
@@ -21,7 +41,8 @@ type Run struct {
 	ExitStatus *int   // nil if in-flight
 	Stdout     string
 	Stderr     string
-	Metadata   string // JSON blob
+	Metadata   string       // JSON blob
+	Steps      []StepRecord // per-step records, populated from the steps column
 }
 
 // Store manages the SQLite result database.

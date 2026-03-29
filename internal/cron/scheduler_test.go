@@ -2,10 +2,14 @@ package cron
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/adam-stokes/orcai/internal/busd/topics"
 )
 
 const validCronYAML = `
@@ -144,7 +148,7 @@ func TestScheduler_Entries(t *testing.T) {
 	// possible without refactoring, so we call loadAndRegister directly via
 	// a sub-test that uses LoadConfigFrom via an overridden path.
 	// Instead, we test the scheduler by wiring it manually.
-	s := New(nil, nil)
+	s := New(nil)
 
 	// Pre-load entries directly to avoid touching ~.
 	entries, err := LoadConfigFrom(path)
@@ -176,7 +180,7 @@ func TestScheduler_Entries(t *testing.T) {
 // TestScheduler_Stop verifies that Stop does not panic when called once or
 // multiple times.
 func TestScheduler_Stop(t *testing.T) {
-	s := New(nil, nil)
+	s := New(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
@@ -189,6 +193,117 @@ func TestScheduler_Stop(t *testing.T) {
 	s.Stop()
 	// Calling Stop again should not panic.
 	s.Stop()
+}
+
+// capturingPublisher records all published events for test assertions.
+type capturingPublisher struct {
+	mu     sync.Mutex
+	events []capturedEvent
+}
+
+type capturedEvent struct {
+	topic   string
+	payload map[string]any
+}
+
+func (p *capturingPublisher) Publish(_ context.Context, topic string, payload []byte) error {
+	var m map[string]any
+	_ = json.Unmarshal(payload, &m)
+	p.mu.Lock()
+	p.events = append(p.events, capturedEvent{topic: topic, payload: m})
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *capturingPublisher) eventsByTopic(topic string) []capturedEvent {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []capturedEvent
+	for _, e := range p.events {
+		if e.topic == topic {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// TestScheduler_NoStoreWriter verifies that the Scheduler has no StoreWriter
+// field and that New accepts only logger + options (no store argument).
+func TestScheduler_NoStoreWriter(t *testing.T) {
+	// This test is a compile-time guard: if StoreWriter were still present,
+	// the New signature would require a second positional argument and the
+	// TestScheduler_Entries / TestScheduler_Stop tests above would fail to
+	// compile.  We simply create a scheduler without a store arg.
+	s := New(nil)
+	if s == nil {
+		t.Fatal("expected non-nil scheduler")
+	}
+	s.Stop()
+}
+
+// TestScheduler_EventsPublished verifies that runEntry emits CronJobStarted
+// and CronJobCompleted events via the configured publisher, and does NOT
+// write to any store.
+func TestScheduler_EventsPublished(t *testing.T) {
+	pub := &capturingPublisher{}
+	s := New(nil, WithPublisher(pub))
+
+	entry := Entry{
+		Name:     "test-job",
+		Schedule: "* * * * *",
+		Kind:     "pipeline",
+		Target:   "some.pipeline.yaml",
+		// Use a very short timeout so the subprocess is killed quickly even if
+		// os.Executable() resolves to the test binary (which won't understand
+		// "pipeline run" and may block).
+		Timeout: "1s",
+	}
+
+	// runEntry spawns a subprocess which may fail (no real orcai binary in test
+	// environment).  We accept any exit — the events should still fire.
+	s.runEntry(entry)
+
+	// Verify CronJobStarted was published.
+	started := pub.eventsByTopic(topics.CronJobStarted)
+	if len(started) != 1 {
+		t.Fatalf("expected 1 %s event, got %d", topics.CronJobStarted, len(started))
+	}
+	if started[0].payload["job"] != "test-job" {
+		t.Errorf("CronJobStarted: expected job=test-job, got %v", started[0].payload["job"])
+	}
+	if started[0].payload["target"] != "some.pipeline.yaml" {
+		t.Errorf("CronJobStarted: expected target=some.pipeline.yaml, got %v", started[0].payload["target"])
+	}
+	if started[0].payload["triggered_at"] == nil {
+		t.Error("CronJobStarted: missing triggered_at field")
+	}
+
+	// Verify CronJobCompleted was published.
+	completed := pub.eventsByTopic(topics.CronJobCompleted)
+	if len(completed) != 1 {
+		t.Fatalf("expected 1 %s event, got %d", topics.CronJobCompleted, len(completed))
+	}
+	if completed[0].payload["job"] != "test-job" {
+		t.Errorf("CronJobCompleted: expected job=test-job, got %v", completed[0].payload["job"])
+	}
+	if completed[0].payload["exit_status"] == nil {
+		t.Error("CronJobCompleted: missing exit_status field")
+	}
+	if completed[0].payload["duration_ms"] == nil {
+		t.Error("CronJobCompleted: missing duration_ms field")
+	}
+	if completed[0].payload["finished_at"] == nil {
+		t.Error("CronJobCompleted: missing finished_at field")
+	}
+}
+
+// TestScheduler_NoopPublisher verifies that New without WithPublisher uses a
+// NoopPublisher and does not panic during runEntry.
+func TestScheduler_NoopPublisher(t *testing.T) {
+	s := New(nil)
+	if _, ok := s.publisher.(NoopPublisher); !ok {
+		t.Errorf("expected default publisher to be NoopPublisher, got %T", s.publisher)
+	}
 }
 
 // writeTempYAML writes content to a temporary file and returns its path.
