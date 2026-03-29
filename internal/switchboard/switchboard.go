@@ -3076,8 +3076,10 @@ func (m Model) viewTopBar(w int) string {
 func (m Model) buildLauncherSection(w int) []string {
 	pal := m.ansiPalette()
 	borderColor := pal.Border
+	titleColor := pal.Accent
 	if m.launcher.focused {
 		borderColor = pal.Accent
+		titleColor = pal.BG
 	}
 
 	var rows []string
@@ -3092,7 +3094,7 @@ func (m Model) buildLauncherSection(w int) []string {
 		if n := len(m.activeJobs); n > 0 {
 			header += fmt.Sprintf(" [%d running]", n)
 		}
-		rows = append(rows, boxTop(w, header, borderColor, pal.Accent))
+		rows = append(rows, boxTop(w, header, borderColor, titleColor))
 	}
 
 	if len(m.launcher.pipelines) == 0 {
@@ -3139,15 +3141,17 @@ func (m Model) buildLauncherSection(w int) []string {
 func (m Model) buildAgentSection(w int) []string {
 	pal := m.ansiPalette()
 	borderColor := pal.Border
+	titleColor := pal.Accent
 	if m.agent.focused {
 		borderColor = pal.Accent
+		titleColor = pal.BG
 	}
 
 	var rows []string
 	if sprite := PanelHeader(m.activeBundle(), "agent_runner", w, borderColor); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
-		rows = append(rows, boxTop(w, RenderHeader("agent_runner"), borderColor, pal.Accent))
+		rows = append(rows, boxTop(w, RenderHeader("agent_runner"), borderColor, titleColor))
 	}
 
 	if len(m.agent.providers) == 0 {
@@ -3222,15 +3226,17 @@ func (m Model) filteredInboxRuns() []store.Run {
 func (m Model) buildInboxSection(w, height int) []string {
 	pal := m.ansiPalette()
 	borderColor := pal.Border
+	titleColor := pal.Accent
 	if m.inboxPanel.focused {
 		borderColor = pal.Accent
+		titleColor = pal.BG
 	}
 
 	var rows []string
 	if sprite := PanelHeader(m.activeBundle(), "inbox", w, borderColor); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
-		rows = append(rows, boxTop(w, RenderHeader("inbox"), borderColor, pal.Accent))
+		rows = append(rows, boxTop(w, RenderHeader("inbox"), borderColor, titleColor))
 	}
 
 	runs := m.filteredInboxRuns()
@@ -3419,8 +3425,10 @@ func (m Model) viewActivityFeed(height, width int) string {
 	visibleH := height - headerH - 2 // minus header, bottom border, and always-present hint footer
 
 	borderColor := pal.Border
+	titleColor := pal.Accent
 	if m.feedFocused {
 		borderColor = pal.Accent
+		titleColor = pal.BG
 	}
 
 	// feedRowAt appends a content row, applying cursor and/or mark highlights.
@@ -3552,7 +3560,7 @@ func (m Model) viewActivityFeed(height, width int) string {
 	if feedSprite != nil {
 		lines = append(lines, feedSprite...)
 	} else {
-		lines = append(lines, boxTop(width, RenderHeader("activity_feed")+scrollSuffix, borderColor, pal.Accent))
+		lines = append(lines, boxTop(width, RenderHeader("activity_feed")+scrollSuffix, borderColor, titleColor))
 	}
 	lines = append(lines, visible...)
 

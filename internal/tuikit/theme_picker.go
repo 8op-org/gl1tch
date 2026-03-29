@@ -133,7 +133,7 @@ func ViewThemePicker(dark, light []themes.Bundle, picker ThemePicker, active *th
 	}
 
 	var rows []string
-	rows = append(rows, panelrender.BoxTop(boxW, "SELECT THEME", pal.Border, pal.Accent))
+	rows = append(rows, panelrender.BoxTop(boxW, "SELECT THEME", pal.Border, pal.FG))
 
 	// Tab bar
 	var darkLabel, lightLabel string

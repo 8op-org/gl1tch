@@ -75,8 +75,10 @@ func (m Model) View() string {
 func (m Model) viewJobList(width, height int) string {
 	pal := m.ansiPal()
 	borderColor := pal.Border
+	titleColor := pal.Accent
 	if m.activePane == 0 {
 		borderColor = pal.Accent
+		titleColor = pal.BG
 	}
 
 	var rows []string
@@ -94,7 +96,7 @@ func (m Model) viewJobList(width, height int) string {
 		if m.filtering {
 			title += " " + m.filterInput.View()
 		}
-		rows = append(rows, panelrender.BoxTop(width, title, borderColor, pal.Accent))
+		rows = append(rows, panelrender.BoxTop(width, title, borderColor, titleColor))
 	}
 
 	// Available content rows (leave 1 for BoxBot, 1 for always-present hint footer).
@@ -193,8 +195,10 @@ func (m Model) formatEntryRowANSI(e cron.Entry, width int, pal styles.ANSIPalett
 func (m Model) viewLogPane(width, height int) string {
 	pal := m.ansiPal()
 	borderColor := pal.Border
+	titleColor := pal.Accent
 	if m.activePane == 1 {
 		borderColor = pal.Accent
+		titleColor = pal.BG
 	}
 
 	var rows []string
@@ -203,7 +207,7 @@ func (m Model) viewLogPane(width, height int) string {
 	if sprite := panelrender.PanelHeader(m.bundle, "log_output", width, borderColor); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
-		rows = append(rows, panelrender.BoxTop(width, "LOG OUTPUT", borderColor, pal.Accent))
+		rows = append(rows, panelrender.BoxTop(width, "LOG OUTPUT", borderColor, titleColor))
 	}
 
 	// -1 for BoxBot, -1 for always-present hint footer.
