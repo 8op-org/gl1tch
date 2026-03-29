@@ -9,6 +9,10 @@ run: install
 	-tmux kill-session -t orcai 2>/dev/null
 	-tmux kill-session -t orcai-cron 2>/dev/null
 	rm -f ~/.config/orcai/layout.yaml ~/.config/orcai/keybindings.yaml
+	@if [ -f ~/.local/share/orcai/orcai.db ]; then \
+		cp ~/.local/share/orcai/orcai.db ~/.local/share/orcai/orcai.db.bak.$$(date +%Y%m%d%H%M%S); \
+		ls -t ~/.local/share/orcai/orcai.db.bak.* 2>/dev/null | tail -n +6 | xargs rm -f; \
+	fi
 	rm -f ~/.local/share/orcai/orcai.db
 	$(BINARY)
 
