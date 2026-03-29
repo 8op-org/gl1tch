@@ -104,8 +104,6 @@ func (m Model) buildCronSection(w, height int) []string {
 		if m.cronPanel.focused {
 			emptyHints = []panelrender.Hint{
 				{Key: "m", Desc: "manage"},
-				{Key: "tab", Desc: "focus"},
-				{Key: "esc", Desc: "unfocus"},
 			}
 		}
 		rows = append(rows, boxRow(panelrender.HintBar(emptyHints, w-2, pal), w, borderColor))
@@ -160,9 +158,7 @@ func (m Model) buildCronSection(w, height int) []string {
 			cronHints = []panelrender.Hint{
 				{Key: "m", Desc: "manage"},
 				{Key: "/", Desc: "search"},
-				{Key: "↑↓", Desc: "nav"},
-				{Key: "tab", Desc: "focus"},
-				{Key: "esc", Desc: "unfocus"},
+				{Key: "j/k", Desc: "nav"},
 			}
 		}
 	}
