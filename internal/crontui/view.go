@@ -32,44 +32,6 @@ func (m Model) ansiPal() styles.ANSIPalette {
 	}
 }
 
-// viewPal caches resolved lipgloss colors for overlay rendering.
-type viewPal struct {
-	accent  lipgloss.Color
-	fg      lipgloss.Color
-	dim     lipgloss.Color
-	selBG   lipgloss.Color
-	errCol  lipgloss.Color
-	success lipgloss.Color
-	pink    lipgloss.Color
-	bg      lipgloss.Color
-}
-
-// pal resolves the active palette from the bundle, falling back to Dracula.
-func (m Model) pal() viewPal {
-	b := m.bundle
-	if b != nil {
-		return viewPal{
-			accent:  lipgloss.Color(b.Palette.Accent),
-			fg:      lipgloss.Color(b.Palette.FG),
-			dim:     lipgloss.Color(b.Palette.Dim),
-			selBG:   lipgloss.Color(b.Palette.Border),
-			errCol:  lipgloss.Color(b.Palette.Error),
-			success: lipgloss.Color(b.Palette.Success),
-			pink:    lipgloss.Color(b.Palette.Accent),
-			bg:      lipgloss.Color(b.Palette.BG),
-		}
-	}
-	return viewPal{
-		accent:  lipgloss.Color(draculaPurple),
-		fg:      lipgloss.Color(draculaFg),
-		dim:     lipgloss.Color(draculaComment),
-		selBG:   lipgloss.Color(draculaCurrent),
-		errCol:  lipgloss.Color(draculaRed),
-		success: lipgloss.Color(draculaGreen),
-		pink:    lipgloss.Color(draculaPink),
-		bg:      lipgloss.Color(draculaBg),
-	}
-}
 
 // View renders the full TUI screen.
 func (m Model) View() string {
@@ -91,21 +53,20 @@ func (m Model) View() string {
 	content := lipgloss.JoinVertical(lipgloss.Left, top, bot)
 
 	// Render overlays on top if open.
-	bgColor := string(m.pal().bg)
 	if m.helpOpen {
-		return renderOverlay(content, m.viewHelpModal(), m.width, m.height, bgColor)
+		return renderOverlay(content, m.viewHelpModal(), m.width, m.height, "")
 	}
 	if m.themePickerOpen {
-		return renderOverlay(content, m.viewThemePicker(), m.width, m.height, bgColor)
+		return renderOverlay(content, m.viewThemePicker(), m.width, m.height, "")
 	}
 	if m.quitConfirm {
-		return renderOverlay(content, m.viewQuitConfirm(), m.width, m.height, bgColor)
+		return renderOverlay(content, m.viewQuitConfirm(), m.width, m.height, "")
 	}
 	if m.editOverlay != nil {
-		return renderOverlay(content, m.viewEditOverlay(), m.width, m.height, bgColor)
+		return renderOverlay(content, m.viewEditOverlay(), m.width, m.height, "")
 	}
 	if m.deleteConfirm != nil {
-		return renderOverlay(content, m.viewDeleteConfirm(), m.width, m.height, bgColor)
+		return renderOverlay(content, m.viewDeleteConfirm(), m.width, m.height, "")
 	}
 	return content
 }
@@ -294,38 +255,66 @@ func (m Model) viewLogPane(width, height int) string {
 	return strings.Join(rows, "\n")
 }
 
-// viewEditOverlay renders the edit form overlay.
+// viewEditOverlay renders the edit form overlay using panelrender box drawing
+// so that theme sprites and palette are honoured.
 func (m Model) viewEditOverlay() string {
-	p := m.pal()
+	pal := m.ansiPal()
 	ov := m.editOverlay
 	labels := [5]string{"Name", "Schedule", "Kind", "Target", "Timeout"}
 
-	overlayStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(p.pink).
-		Background(p.bg).
-		Padding(1, 2)
+	overlayW := m.width * 2 / 3
+	if overlayW < 60 {
+		overlayW = 60
+	}
+	if overlayW > m.width-4 {
+		overlayW = m.width - 4
+	}
 
-	var sb strings.Builder
-	sb.WriteString(lipgloss.NewStyle().Foreground(p.accent).Bold(true).Render("EDIT CRON JOB") + "\n\n")
+	var rows []string
 
+	// Header — themed sprite or dynamic panel header.
+	if sprite := panelrender.PanelHeader(m.bundle, "edit_cron", overlayW, pal.Border); sprite != nil {
+		rows = append(rows, sprite...)
+	} else {
+		rows = append(rows, panelrender.BoxTop(overlayW, "EDIT CRON JOB", pal.Border, pal.Accent))
+	}
+
+	rows = append(rows, panelrender.BoxRow("", overlayW, pal.Border))
+
+	// Field rows — label column (12 visible chars) then the text input.
+	const labelVisW = 12
 	for i, f := range ov.fields {
-		label := labels[i]
+		var labelStr string
 		if i == ov.focusIdx {
-			label = lipgloss.NewStyle().Foreground(p.success).Render("> " + label)
+			labelStr = pal.Accent + panelrender.BLD + "> " + panelrender.RST + pal.Success + labels[i] + panelrender.RST
 		} else {
-			label = lipgloss.NewStyle().Foreground(p.dim).Render("  " + label)
+			labelStr = pal.Dim + "  " + labels[i] + panelrender.RST
 		}
-		sb.WriteString(fmt.Sprintf("%-20s %s\n", label, f.View()))
+		padCount := labelVisW - (2 + len(labels[i])) // "  "/">" + " " = 2 prefix runes
+		if padCount < 0 {
+			padCount = 0
+		}
+		content := " " + labelStr + strings.Repeat(" ", padCount) + pal.Border + ">" + panelrender.RST + " " + f.View()
+		rows = append(rows, panelrender.BoxRow(content, overlayW, pal.Border))
 	}
 
 	if ov.errMsg != "" {
-		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(p.errCol).Render("Error: "+ov.errMsg))
+		rows = append(rows, panelrender.BoxRow("", overlayW, pal.Border))
+		rows = append(rows, panelrender.BoxRow(
+			" "+pal.Error+panelrender.BLD+"Error: "+panelrender.RST+pal.Error+ov.errMsg+panelrender.RST,
+			overlayW, pal.Border))
 	}
 
-	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(p.dim).Render("[tab] next field  [enter] save  [esc] cancel"))
+	rows = append(rows, panelrender.BoxRow("", overlayW, pal.Border))
+	hints := panelrender.HintBar([]panelrender.Hint{
+		{Key: "tab", Desc: "next field"},
+		{Key: "enter", Desc: "save"},
+		{Key: "esc", Desc: "cancel"},
+	}, overlayW-2, pal)
+	rows = append(rows, panelrender.BoxRow(hints, overlayW, pal.Border))
+	rows = append(rows, panelrender.BoxBot(overlayW, pal.Border))
 
-	return overlayStyle.Render(sb.String())
+	return strings.Join(rows, "\n")
 }
 
 // viewThemePicker renders the theme picker overlay using the shared tuikit component.

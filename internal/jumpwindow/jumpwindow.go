@@ -134,6 +134,8 @@ func listWindows() []window {
 
 // listSysopWindows queries the orcai-cron tmux session for its windows.
 // Returns nil if the session does not exist or tmux is unavailable.
+// Returns a non-nil (possibly empty) slice when the session exists, so callers
+// can distinguish "no session" from "session exists but only has window 0".
 func listSysopWindows() []window {
 	out, err := exec.Command("tmux", "list-windows",
 		"-t", "orcai-cron",
@@ -141,7 +143,7 @@ func listSysopWindows() []window {
 	if err != nil {
 		return nil // session doesn't exist or tmux unavailable
 	}
-	var wins []window
+	wins := []window{} // non-nil: signals session exists even when no extra windows
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue

@@ -34,6 +34,7 @@ var panelTitles = map[string]string{
 	"activity_feed": "ACTIVITY FEED",
 	"inbox":         "INBOX",
 	"cron":          "CRON JOBS",
+	"edit_cron":     "EDIT CRON JOB",
 }
 
 // RenderHeader returns the translated (or plain-text fallback) title for a panel.
