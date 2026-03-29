@@ -3092,10 +3092,10 @@ func (m Model) viewAgentModalBox(w, h int) string {
 	modalW := w
 
 	// Full-screen height: topBar takes 1 row; box top+hints+bot = 3.
-	// Fixed overhead: boxTop(1)+pickerViewRows(13:provHdr+4prov+blank+modelHdr+4model+blank+pickerHint)+
+	// Fixed overhead: boxTop(1)+pickerViewRows(12:provHdr+4prov+blank+modelHdr+4model+blank)+
 	// blank(1)+savedPromptRow(1)+blank(1)+promptHdr(1)+blank(1)+useBrain(1)+blank(1)+cwdHdr(1)+cwd(1)+
-	// blank(1)+schedHdr(1)+schedTA(1)+3cronHints(3)+blank(1)+hintStr(1)+boxBot(1) = 33
-	const fixedOverhead = 33
+	// blank(1)+schedHdr(1)+schedTA(1)+3cronHints(3)+blank(1)+hintStr(1)+boxBot(1) = 32
+	const fixedOverhead = 32
 	const minPromptH = 4
 	modalH := max(h-1, 24)
 	promptH := max(modalH-fixedOverhead, minPromptH)

@@ -231,12 +231,6 @@ func (m AgentPickerModel) ViewRows(innerW int, pal styles.ANSIPalette) []string 
 	}
 
 	rows = append(rows, "")
-	rows = append(rows, panelrender.HintBar([]panelrender.Hint{
-		{Key: "j/k", Desc: "nav"},
-		{Key: "tab", Desc: "switch"},
-		{Key: "enter", Desc: "confirm"},
-		{Key: "esc", Desc: "cancel"},
-	}, innerW, pal))
 
 	return rows
 }
@@ -244,13 +238,21 @@ func (m AgentPickerModel) ViewRows(innerW int, pal styles.ANSIPalette) []string 
 // ViewBox renders the picker as a standalone bordered overlay box suitable for
 // use with panelrender.OverlayCenter.
 func (m AgentPickerModel) ViewBox(boxW int, pal styles.ANSIPalette) string {
+	innerW := boxW - 4
 	rows := []string{
 		panelrender.BoxTop(boxW, "AGENT / MODEL", pal.Border, pal.Accent),
 		panelrender.BoxRow("", boxW, pal.Border),
 	}
-	for _, r := range m.ViewRows(boxW-4, pal) {
+	for _, r := range m.ViewRows(innerW, pal) {
 		rows = append(rows, panelrender.BoxRow("  "+r, boxW, pal.Border))
 	}
+	hint := panelrender.HintBar([]panelrender.Hint{
+		{Key: "j/k", Desc: "nav"},
+		{Key: "tab", Desc: "switch"},
+		{Key: "enter", Desc: "confirm"},
+		{Key: "esc", Desc: "cancel"},
+	}, innerW, pal)
+	rows = append(rows, panelrender.BoxRow("  "+hint, boxW, pal.Border))
 	rows = append(rows, panelrender.BoxRow("", boxW, pal.Border))
 	rows = append(rows, panelrender.BoxBot(boxW, pal.Border))
 	return strings.Join(rows, "\n")
