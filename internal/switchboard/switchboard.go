@@ -28,9 +28,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
 	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/styles"
 	"github.com/adam-stokes/orcai/internal/themes"
@@ -2595,79 +2593,39 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	title := "agent: " + agentName
+	entryName := fmt.Sprintf("agent-%s-%d", prov.ID, time.Now().UnixNano())
 
-	feedID := fmt.Sprintf("agent-%d", time.Now().UnixNano())
-
-	// Resolve CWD before creating the entry so it can be displayed immediately.
+	// Resolve CWD and optionally create a git worktree for isolation.
 	cwd := m.agentCWD
 	if cwd == "" {
 		cwd = m.launchCWD
 	}
-	// If the selected CWD is inside a git repo, create (or reuse) a worktree
-	// so the agent session has an isolated branch to work on.
-	if worktreePath, _ := picker.GetOrCreateWorktreeFrom(cwd, feedID); worktreePath != "" {
+	if worktreePath, _ := picker.GetOrCreateWorktreeFrom(cwd, entryName); worktreePath != "" {
 		picker.CopyDotEnv(cwd, worktreePath)
 		cwd = worktreePath
 	}
 
-	entry := feedEntry{
-		id:     feedID,
-		title:  title,
-		status: FeedRunning,
-		ts:     time.Now(),
-		cwd:    cwd,
-	}
-	m.feed = append([]feedEntry{entry}, m.feed...)
-	if len(m.feed) > 200 {
-		m.feed = m.feed[:200]
-	}
-	m.feedSelected = 0
-	m.feedScrollOffset = 0
-	m.feedCursor = 0
-
-	windowName, logFile, _ := createJobWindow(feedID, "", title, cwd)
-	entry.tmuxWindow = windowName
-	entry.logFile = logFile
-	m.feed[0] = entry
-
-	binary := prov.Command
-	if binary == "" {
-		binary = prov.ID
-	}
-	adapter := plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", binary, prov.PipelineArgs...)
-	vars := map[string]string{}
-	if modelID != "" {
-		vars["model"] = modelID
-	}
-	if cwd != "" {
-		vars["cwd"] = cwd
-	}
-
-	ch := make(chan tea.Msg, 256)
-	_, cancel := context.WithCancel(context.Background())
-	jh := &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile}
-	if m.store != nil {
-		if runID, err := m.store.RecordRunStart("agent", title, runMetadataJSON("", cwd, modelID)); err == nil {
-			jh.storeRunID = runID
+	// Write a single-step pipeline so the run goes through the pipeline
+	// runner, which records step prompts, outputs, and durations in the store.
+	pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, m.agentUseBrain)
+	if pipelineErr != nil {
+		feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
+		warnEntry := feedEntry{
+			id:     feedID,
+			title:  "warning",
+			status: FeedFailed,
+			ts:     time.Now(),
+			lines:  []string{"pipeline write error: " + pipelineErr.Error()},
 		}
-	}
-	if m.agentUseBrain && m.store != nil {
-		inj := pipeline.NewStoreBrainInjector(m.store)
-		if preamble, err := inj.ReadContext(context.Background(), jh.storeRunID); err == nil && preamble != "" {
-			input = preamble + "\n\n" + input
+		m.feed = append([]feedEntry{warnEntry}, m.feed...)
+		if len(m.feed) > 200 {
+			m.feed = m.feed[:200]
 		}
+		return m, nil
 	}
-	m.activeJobs[feedID] = jh
 
-	startPayload := map[string]any{"run_id": feedID, "agent": agentName}
-	if jh.storeRunID != 0 {
-		startPayload["store_run_id"] = jh.storeRunID
-	}
-	publishStart := publishAgentEventCmd(topics.AgentRunStarted, startPayload)
-
-	cmd := runAgentCmdCh(adapter, input, vars, feedID, ch, cancel)
-	drain := drainChan(ch)
+	m.pendingPipelineName = entryName
+	m.pendingPipelineYAML = pipelineFile
 
 	// Close modal and reset prompt after submission.
 	m.agentModalOpen = false
@@ -2677,23 +2635,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	m.agentSchedule.Blur()
 	m.agentScheduleErr = ""
 
-	return m, tea.Batch(publishStart, cmd, drain)
-}
-
-// runAgentCmdCh starts CliAdapter.Execute in a goroutine, streaming output to ch.
-func runAgentCmdCh(adapter *plugin.CliAdapter, input string, vars map[string]string, feedID string, ch chan tea.Msg, cancel context.CancelFunc) tea.Cmd {
-	return func() tea.Msg {
-		defer cancel()
-		w := &lineWriter{id: feedID, ch: ch}
-		err := adapter.Execute(context.Background(), input, vars, w)
-		w.flush()
-		if err != nil {
-			ch <- jobFailedMsg{id: feedID, err: err}
-		} else {
-			ch <- jobDoneMsg{id: feedID}
-		}
-		return nil
-	}
+	return m.launchPendingPipeline(cwd)
 }
 
 // orcaiBinaryPath returns the path to the running orcai binary, falling back
@@ -2910,10 +2852,9 @@ func (m Model) View() string {
 		return overlayCenter(base, m.viewPipelineScheduleInput(w), w, h)
 	}
 
-	// Agent modal — floating overlay on top of the switchboard.
+	// Agent modal — full-screen panel like inbox detail.
 	if m.agentModalOpen {
-		base := topBar + "\n" + body
-		return overlayCenter(base, m.viewAgentModalBox(w, h), w, h)
+		return topBar + "\n" + m.viewAgentModalBox(w, h)
 	}
 
 	// Delete confirmation — floating overlay on top of the switchboard.
@@ -3066,19 +3007,15 @@ func (m Model) viewPipelineScheduleInput(w int) string {
 // viewAgentModalBox renders the agent modal box content only. overlayCenter
 // places it over the base view.
 func (m Model) viewAgentModalBox(w, h int) string {
-	modalW := max(w*9/10, 60)
-	if modalW > w-2 {
-		modalW = w - 2
-	}
-	if modalW < 0 {
-		modalW = w
-	}
+	modalW := w
 
-	// Target modal height: 90% of terminal, minimum 24 rows.
-	// Fixed overhead rows (all sections except prompt textarea): ~20 rows.
-	const fixedOverhead = 20
+	// Full-screen height: topBar takes 1 row; box top+hints+bot = 3.
+	// Fixed overhead: boxTop(1)+provHdr(1)+4prov(4)+blank(1)+modelHdr(1)+4model(4)+
+	// blank(1)+promptHdr(1)+blank(1)+useBrain(1)+blank(1)+cwdHdr(1)+cwd(1)+
+	// blank(1)+schedHdr(1)+schedTA(1)+3cronHints(3)+blank(1)+hintStr(1)+boxBot(1) = 29
+	const fixedOverhead = 29
 	const minPromptH = 4
-	modalH := max(h*9/10, 24)
+	modalH := max(h-1, 24)
 	promptH := max(modalH-fixedOverhead, minPromptH)
 
 	pal := m.ansiPalette()
