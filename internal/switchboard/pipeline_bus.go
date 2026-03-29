@@ -233,7 +233,23 @@ func (m Model) handlePipelineBusEvent(msg pipelineBusEventMsg) Model {
 			RunID int64 `json:"run_id"`
 		}
 		if json.Unmarshal(msg.payload, &payload) == nil {
-			m = m.updateFeedEntryStatus(fmt.Sprintf("run-%d", payload.RunID), FeedDone)
+			id := fmt.Sprintf("run-%d", payload.RunID)
+			// If any step recorded a failure, promote the overall status to FeedFailed.
+			finalStatus := FeedDone
+			for _, e := range m.feed {
+				if e.id == id {
+					for _, s := range e.steps {
+						if s.status == "failed" {
+							finalStatus = FeedFailed
+						}
+					}
+					break
+				}
+			}
+			m = m.updateFeedEntryStatus(id, finalStatus)
+			// Settle any steps still in "running" state — they completed since we
+			// received no explicit StepDone event for them.
+			m = m.settleRunningSteps(id, "done")
 		}
 
 	case topics.RunFailed:
@@ -241,7 +257,9 @@ func (m Model) handlePipelineBusEvent(msg pipelineBusEventMsg) Model {
 			RunID int64 `json:"run_id"`
 		}
 		if json.Unmarshal(msg.payload, &payload) == nil {
-			m = m.updateFeedEntryStatus(fmt.Sprintf("run-%d", payload.RunID), FeedFailed)
+			id := fmt.Sprintf("run-%d", payload.RunID)
+			m = m.updateFeedEntryStatus(id, FeedFailed)
+			m = m.settleRunningSteps(id, "failed")
 		}
 
 	// ── pipeline.step.* ───────────────────────────────────────────────────
@@ -326,6 +344,24 @@ func (m Model) updateFeedEntryStatus(id string, status FeedStatus) Model {
 	for i := range m.feed {
 		if m.feed[i].id == id {
 			m.feed[i].status = status
+			return m
+		}
+	}
+	return m
+}
+
+// settleRunningSteps updates all steps in the feed entry that are still in
+// "running" state to finalStatus ("done" or "failed"). Called when a RunCompleted
+// or RunFailed event arrives but some steps never received a StepDone/StepFailed
+// event, leaving them stuck in "running".
+func (m Model) settleRunningSteps(entryID, finalStatus string) Model {
+	for i := range m.feed {
+		if m.feed[i].id == entryID {
+			for j := range m.feed[i].steps {
+				if m.feed[i].steps[j].status == "running" {
+					m.feed[i].steps[j].status = finalStatus
+				}
+			}
 			return m
 		}
 	}

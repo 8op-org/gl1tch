@@ -175,18 +175,53 @@ func (m Model) viewInboxDetail(w, h int, markdownMode bool) string {
 
 	var rows []string
 	rows = append(rows, boxTop(boxW, title, pal.Border, pal.Accent))
-	for _, line := range visible {
-		rows = append(rows, boxRow(" "+line, boxW, pal.Border))
+	for i, line := range visible {
+		absIdx := offset + i
+		prefix := " "
+		rendered := line
+
+		isCursor := absIdx == m.inboxDetailCursor
+		isMarked := m.inboxDetailMarked != nil && m.inboxDetailMarked[absIdx]
+
+		switch {
+		case isCursor && isMarked:
+			// Both: cursor style dominates, add a mark glyph
+			prefix = pal.Accent + "▶" + aRst
+			rendered = lipgloss.NewStyle().
+				Background(lipgloss.Color("#44475a")).
+				Render(stripANSI(line))
+		case isCursor:
+			prefix = pal.Accent + "▶" + aRst
+			rendered = lipgloss.NewStyle().
+				Background(lipgloss.Color("#383a47")).
+				Render(stripANSI(line))
+		case isMarked:
+			prefix = pal.Success + "●" + aRst
+			rendered = lipgloss.NewStyle().
+				Background(lipgloss.Color("#2d4a35")).
+				Render(stripANSI(line))
+		}
+
+		rows = append(rows, boxRow(prefix+rendered, boxW, pal.Border))
 	}
 	// Pad to fill the box height
 	for i := len(visible); i < visibleH; i++ {
 		rows = append(rows, boxRow("", boxW, pal.Border))
 	}
 
+	markCount := len(m.inboxDetailMarked)
+	var dispatchHint panelrender.Hint
+	if markCount > 0 {
+		dispatchHint = panelrender.Hint{Key: "r", Desc: fmt.Sprintf("dispatch (%d)", markCount)}
+	} else {
+		dispatchHint = panelrender.Hint{Key: "r", Desc: "dispatch"}
+	}
 	hints := panelrender.HintBar([]panelrender.Hint{
 		{Key: "j/k", Desc: "scroll"},
 		{Key: "n/p", Desc: "next/prev"},
-		{Key: "m", Desc: "toggle md"},
+		{Key: "m", Desc: "mark"},
+		dispatchHint,
+		{Key: "M", Desc: "md"},
 		{Key: "q", Desc: "close"},
 	}, boxW-2, pal)
 	rows = append(rows, boxRow(hints, boxW, pal.Border))

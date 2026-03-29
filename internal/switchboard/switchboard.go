@@ -288,10 +288,13 @@ type Model struct {
 	inboxPanel              InboxPanel
 	inboxReadIDs            map[int64]bool
 	store                   *store.Store
-	inboxDetailOpen      bool
-	inboxMarkdownMode    bool
-	inboxDetailIdx       int
-	inboxDetailScroll    int
+	inboxDetailOpen         bool
+	inboxMarkdownMode       bool
+	inboxDetailIdx          int
+	inboxDetailScroll       int
+	inboxDetailCursor       int            // absolute line index within current run content
+	inboxDetailMarked       map[int]bool   // marked absolute line indices
+	inboxDetailMarkedLines  map[int]string // content at each marked line
 	// Cron panel
 	cronPanel CronPanel
 	// Pipeline bus subscription (tasks 7.2–7.8)
@@ -1100,33 +1103,93 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		switch key {
 		case "q", "esc":
 			m.inboxDetailOpen = false
+			m.inboxDetailMarked = nil
+			m.inboxDetailMarkedLines = nil
 		case "n":
 			if len(runs) > 0 {
 				m.inboxDetailIdx = (m.inboxDetailIdx + 1) % len(runs)
 				m.inboxDetailScroll = 0
+				m.inboxDetailCursor = 0
+				m.inboxDetailMarked = nil
+				m.inboxDetailMarkedLines = nil
 			}
 		case "p":
 			if len(runs) > 0 {
 				m.inboxDetailIdx = (m.inboxDetailIdx - 1 + len(runs)) % len(runs)
 				m.inboxDetailScroll = 0
+				m.inboxDetailCursor = 0
+				m.inboxDetailMarked = nil
+				m.inboxDetailMarkedLines = nil
 			}
 		case "j", "down":
-			m.inboxDetailScroll++
+			m.inboxDetailCursor++
+			m.inboxDetailScroll = m.inboxDetailCursor
 		case "k", "up":
-			if m.inboxDetailScroll > 0 {
-				m.inboxDetailScroll--
+			if m.inboxDetailCursor > 0 {
+				m.inboxDetailCursor--
 			}
+			m.inboxDetailScroll = m.inboxDetailCursor
 		case "pgup", "[":
 			if m.inboxDetailScroll > 10 {
 				m.inboxDetailScroll -= 10
+				m.inboxDetailCursor = m.inboxDetailScroll
 			} else {
 				m.inboxDetailScroll = 0
+				m.inboxDetailCursor = 0
 			}
 		case "pgdown", "]":
 			m.inboxDetailScroll += 10
-		case "m":
+			m.inboxDetailCursor = m.inboxDetailScroll
+		case "M":
 			m.inboxMarkdownMode = !m.inboxMarkdownMode
 			m.inboxDetailScroll = 0
+			m.inboxDetailCursor = 0
+			return m, nil
+		case "m":
+			// Mark/unmark the current line.
+			if m.inboxDetailMarked == nil {
+				m.inboxDetailMarked = make(map[int]bool)
+				m.inboxDetailMarkedLines = make(map[int]string)
+			}
+			if idx := m.inboxDetailIdx; idx >= 0 && idx < len(runs) {
+				run := runs[idx]
+				pal := m.ansiPalette()
+				content := buildRunContent(run, pal, false, 80)
+				lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+				cursor := m.inboxDetailCursor
+				if cursor < len(lines) {
+					if m.inboxDetailMarked[cursor] {
+						delete(m.inboxDetailMarked, cursor)
+						delete(m.inboxDetailMarkedLines, cursor)
+					} else {
+						m.inboxDetailMarked[cursor] = true
+						m.inboxDetailMarkedLines[cursor] = strings.TrimSpace(stripANSI(lines[cursor]))
+					}
+				}
+			}
+			return m, nil
+		case "r":
+			// Dispatch marked lines to agent modal.
+			if len(m.inboxDetailMarked) > 0 {
+				keys := make([]int, 0, len(m.inboxDetailMarkedLines))
+				for k := range m.inboxDetailMarkedLines {
+					keys = append(keys, k)
+				}
+				sort.Ints(keys)
+				var parts []string
+				for _, k := range keys {
+					if line := strings.TrimSpace(m.inboxDetailMarkedLines[k]); line != "" {
+						parts = append(parts, line)
+					}
+				}
+				m.inboxDetailMarked = nil
+				m.inboxDetailMarkedLines = nil
+				m.inboxDetailOpen = false
+				m.agent.prompt.SetValue(strings.Join(parts, "\n"))
+				m.agentModalOpen = true
+				m.agentModalFocus = 2
+				m.agent.prompt.Focus()
+			}
 			return m, nil
 		default:
 		}
