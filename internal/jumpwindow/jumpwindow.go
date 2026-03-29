@@ -305,7 +305,7 @@ func (m model) View() string {
 	var rows []string
 
 	// Header — sprite or dynamic panel header.
-	if sprite := panelrender.PanelHeader(bundle, "jump_window", w, apal.Accent); sprite != nil {
+	if sprite := panelrender.PanelHeader(bundle, "jump_window", w, apal.Accent, apal.Accent); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
 		rows = append(rows, panelrender.BoxTop(w, "ORCAI  Jump to Window", apal.Border, apal.Accent))

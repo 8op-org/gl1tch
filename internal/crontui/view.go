@@ -78,13 +78,12 @@ func (m Model) viewJobList(width, height int) string {
 	titleColor := pal.Accent
 	if m.activePane == 0 {
 		borderColor = pal.Accent
-		titleColor = pal.BG
 	}
 
 	var rows []string
 
 	// Panel header — themed sprite or dynamic header.
-	if sprite := panelrender.PanelHeader(m.bundle, "cron", width, borderColor); sprite != nil {
+	if sprite := panelrender.PanelHeader(m.bundle, "cron", width, borderColor, titleColor); sprite != nil {
 		rows = append(rows, sprite...)
 		// Filter row appended below header when active.
 		if m.filtering {
@@ -198,13 +197,12 @@ func (m Model) viewLogPane(width, height int) string {
 	titleColor := pal.Accent
 	if m.activePane == 1 {
 		borderColor = pal.Accent
-		titleColor = pal.BG
 	}
 
 	var rows []string
 
 	// Panel header.
-	if sprite := panelrender.PanelHeader(m.bundle, "log_output", width, borderColor); sprite != nil {
+	if sprite := panelrender.PanelHeader(m.bundle, "log_output", width, borderColor, titleColor); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
 		rows = append(rows, panelrender.BoxTop(width, "LOG OUTPUT", borderColor, titleColor))
@@ -277,7 +275,7 @@ func (m Model) viewEditOverlay() string {
 	var rows []string
 
 	// Header — themed sprite or dynamic panel header.
-	if sprite := panelrender.PanelHeader(m.bundle, "edit_cron", overlayW, pal.Border); sprite != nil {
+	if sprite := panelrender.PanelHeader(m.bundle, "edit_cron", overlayW, pal.Border, pal.Accent); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
 		rows = append(rows, panelrender.BoxTop(overlayW, "EDIT CRON JOB", pal.Border, pal.Accent))

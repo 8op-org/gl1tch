@@ -69,7 +69,7 @@ func (m Model) buildCronSection(w, height int) []string {
 	}
 
 	var rows []string
-	if sprite := PanelHeader(m.activeBundle(), "cron", w, borderColor); sprite != nil {
+	if sprite := PanelHeader(m.activeBundle(), "cron", w, borderColor, pal.Accent); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
 		rows = append(rows, boxTop(w, RenderHeader("cron"), borderColor, pal.Accent))

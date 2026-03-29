@@ -122,27 +122,25 @@ func SpriteLines(bundle *themes.Bundle, panel string, panelWidth int) []string {
 
 // DynamicHeader generates a single-line panel header at exactly width visible
 // columns in the style:  ----| PANEL TITLE |----
-// Uses accent color for the dashes and brackets, text color for the title.
+// Uses borderColor for the dashes and brackets, titleColor for the title text.
 //
 // Returns nil when bundle is nil or bundle.HeaderStyle has no entry for panel.
-func DynamicHeader(bundle *themes.Bundle, panel string, width int, _ string) []string {
+func DynamicHeader(bundle *themes.Bundle, panel string, width int, borderColor, titleColor string) []string {
 	if bundle == nil || width < 4 {
 		return nil
 	}
 	hs := bundle.HeaderStyle
-	ps, ok := hs.Panels[panel]
+	_, ok := hs.Panels[panel]
 	if !ok {
 		return nil
 	}
-	accentSeq := hexToFGSeq(bundle.ResolveRef(ps.Accent))
-	textSeq := hexToFGSeq(bundle.ResolveRef(ps.Text))
 
 	title := RenderHeader(panel)
 	inner := "┌┤ " + title + " ├┐"
 	dashes := pmax(width-lipgloss.Width(inner), 0)
 	left := dashes / 2
 	right := dashes - left
-	line := accentSeq + "┌" + strings.Repeat("─", left) + "┤ " + textSeq + BLD + title + RST + accentSeq + " ├" + strings.Repeat("─", right) + "┐" + RST
+	line := borderColor + "┌" + strings.Repeat("─", left) + "┤ " + titleColor + BLD + title + RST + borderColor + " ├" + strings.Repeat("─", right) + "┐" + RST
 	return []string{line}
 }
 
@@ -150,11 +148,11 @@ func DynamicHeader(bundle *themes.Bundle, panel string, width int, _ string) []s
 // It tries fixed-width .ans sprites first (SpriteLines), then falls back to
 // DynamicHeader which always produces the correct panel width.
 // Returns nil only when both sources are unavailable.
-func PanelHeader(bundle *themes.Bundle, panel string, width int, borderColor string) []string {
+func PanelHeader(bundle *themes.Bundle, panel string, width int, borderColor, titleColor string) []string {
 	if lines := SpriteLines(bundle, panel, width); lines != nil {
 		return lines
 	}
-	return DynamicHeader(bundle, panel, width, borderColor)
+	return DynamicHeader(bundle, panel, width, borderColor, titleColor)
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────

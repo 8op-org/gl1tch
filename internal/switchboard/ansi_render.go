@@ -20,16 +20,16 @@ func SpriteLines(bundle *themes.Bundle, panel string, panelWidth int) []string {
 	return panelrender.SpriteLines(bundle, panel, panelWidth)
 }
 
-// DynamicHeader generates a 3-line panel header at exactly width visible
-// columns, using colors from bundle.HeaderStyle.
-func DynamicHeader(bundle *themes.Bundle, panel string, width int, borderColor string) []string {
-	return panelrender.DynamicHeader(bundle, panel, width, borderColor)
+// DynamicHeader generates a single-line panel header at exactly width visible
+// columns, using borderColor for dashes and titleColor for the title text.
+func DynamicHeader(bundle *themes.Bundle, panel string, width int, borderColor, titleColor string) []string {
+	return panelrender.DynamicHeader(bundle, panel, width, borderColor, titleColor)
 }
 
 // PanelHeader returns the best available header for a panel at the given width.
 // It tries fixed-width .ans sprites first (SpriteLines), then falls back to
 // DynamicHeader which always produces the correct panel width.
 // Returns nil only when both sources are unavailable.
-func PanelHeader(bundle *themes.Bundle, panel string, width int, borderColor string) []string {
-	return panelrender.PanelHeader(bundle, panel, width, borderColor)
+func PanelHeader(bundle *themes.Bundle, panel string, width int, borderColor, titleColor string) []string {
+	return panelrender.PanelHeader(bundle, panel, width, borderColor, titleColor)
 }

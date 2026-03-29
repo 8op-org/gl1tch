@@ -858,6 +858,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.feed = m.feed[:200]
 		}
 		m.feedScrollOffset = 0
+		m.feedCursor = 0
 		return m, nil
 
 	case FeedLineMsg:
@@ -2314,6 +2315,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	}
 	m.feedSelected = 0
 	m.feedScrollOffset = 0
+	m.feedCursor = 0
 
 	windowName, logFile, _ := createJobWindow(feedID, "", title, cwd)
 	entry.tmuxWindow = windowName
@@ -3079,11 +3081,10 @@ func (m Model) buildLauncherSection(w int) []string {
 	titleColor := pal.Accent
 	if m.launcher.focused {
 		borderColor = pal.Accent
-		titleColor = pal.BG
 	}
 
 	var rows []string
-	if sprite := PanelHeader(m.activeBundle(), "pipelines", w, borderColor); sprite != nil {
+	if sprite := PanelHeader(m.activeBundle(), "pipelines", w, borderColor, titleColor); sprite != nil {
 		rows = append(rows, sprite...)
 		if n := len(m.activeJobs); n > 0 {
 			countLine := fmt.Sprintf("  %s%d running%s", pal.Accent, n, aRst)
@@ -3144,11 +3145,10 @@ func (m Model) buildAgentSection(w int) []string {
 	titleColor := pal.Accent
 	if m.agent.focused {
 		borderColor = pal.Accent
-		titleColor = pal.BG
 	}
 
 	var rows []string
-	if sprite := PanelHeader(m.activeBundle(), "agent_runner", w, borderColor); sprite != nil {
+	if sprite := PanelHeader(m.activeBundle(), "agent_runner", w, borderColor, titleColor); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
 		rows = append(rows, boxTop(w, RenderHeader("agent_runner"), borderColor, titleColor))
@@ -3229,11 +3229,10 @@ func (m Model) buildInboxSection(w, height int) []string {
 	titleColor := pal.Accent
 	if m.inboxPanel.focused {
 		borderColor = pal.Accent
-		titleColor = pal.BG
 	}
 
 	var rows []string
-	if sprite := PanelHeader(m.activeBundle(), "inbox", w, borderColor); sprite != nil {
+	if sprite := PanelHeader(m.activeBundle(), "inbox", w, borderColor, titleColor); sprite != nil {
 		rows = append(rows, sprite...)
 	} else {
 		rows = append(rows, boxTop(w, RenderHeader("inbox"), borderColor, titleColor))
@@ -3331,12 +3330,35 @@ func (m Model) buildInboxSection(w, height int) []string {
 	return rows
 }
 
-// totalFeedLines computes the total number of content lines for a feed (not counting borders).
+// totalFeedLines computes the total number of content lines the renderer will
+// actually produce for a feed. It mirrors the line-building logic in
+// viewActivityFeed so that navigation bounds match the visible output exactly.
 func totalFeedLines(feed []feedEntry) int {
+	if len(feed) == 0 {
+		return 1 // "no activity yet"
+	}
+	const feedLinesPerEntry = 10
+	const maxStepOutputLines = 5
 	n := 0
 	for _, entry := range feed {
 		n++ // title line
-		n += len(entry.lines)
+		if entry.cwd != "" {
+			n++ // cwd line
+		}
+		for _, step := range entry.steps {
+			n++ // step badge line
+			stepOut := len(step.lines)
+			if stepOut > maxStepOutputLines {
+				stepOut = maxStepOutputLines
+			}
+			n += stepOut
+		}
+		out := len(entry.lines)
+		if out > feedLinesPerEntry {
+			n++ // "… N earlier lines" message
+			out = feedLinesPerEntry
+		}
+		n += out
 	}
 	return n
 }
@@ -3417,19 +3439,18 @@ func (m Model) feedRawLines(width int) []string {
 // viewActivityFeed renders the center activity feed with scroll support.
 func (m Model) viewActivityFeed(height, width int) string {
 	pal := m.ansiPalette()
-	feedSprite := PanelHeader(m.activeBundle(), "activity_feed", width, pal.Border)
+	borderColor := pal.Border
+	titleColor := pal.Accent
+	if m.feedFocused {
+		borderColor = pal.Accent
+	}
+
+	feedSprite := PanelHeader(m.activeBundle(), "activity_feed", width, borderColor, titleColor)
 	headerH := 1
 	if feedSprite != nil {
 		headerH = len(feedSprite)
 	}
 	visibleH := height - headerH - 2 // minus header, bottom border, and always-present hint footer
-
-	borderColor := pal.Border
-	titleColor := pal.Accent
-	if m.feedFocused {
-		borderColor = pal.Accent
-		titleColor = pal.BG
-	}
 
 	// feedRowAt appends a content row, applying cursor and/or mark highlights.
 	appendRow := func(lines *[]string, content string) {

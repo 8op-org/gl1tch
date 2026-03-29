@@ -95,7 +95,7 @@ func (m Model) signalBoardVisibleRows() int {
 	// Plus 1 filter line when filter is not "all". Plus 1 search line when searching.
 	// Plus 1 for boxBot.
 	headerRows := 1 // boxTop fallback
-	if PanelHeader(m.activeBundle(), "signal_board", 80, "") != nil {
+	if PanelHeader(m.activeBundle(), "signal_board", 80, "", "") != nil {
 		headerRows = 3 // sprite(3)
 	}
 	if m.signalBoard.activeFilter != "" && m.signalBoard.activeFilter != "all" {
@@ -136,7 +136,7 @@ func (m Model) buildSignalBoard(height, width int) []string {
 	}
 
 	var lines []string
-	if sprite := PanelHeader(m.activeBundle(), "signal_board", width, borderColor); sprite != nil {
+	if sprite := PanelHeader(m.activeBundle(), "signal_board", width, borderColor, pal.Accent); sprite != nil {
 		lines = append(lines, sprite...)
 		// Only show the filter line when a non-default filter is active.
 		if filter != "all" {
