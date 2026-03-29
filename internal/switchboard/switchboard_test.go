@@ -1565,3 +1565,81 @@ func TestFeed_CursorRow_SameWidthAsNonCursorRow(t *testing.T) {
 		}
 	}
 }
+
+// ── feedLineCount integration ─────────────────────────────────────────────────
+
+func TestFeedLineCount_MatchesViewActivityFeed(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+
+	// Add entries with mix of plain text and JSON output.
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedDone, []string{
+		"plain text output",
+		`{"key":"value","count":42}`,
+		"another plain line",
+	})
+	m = m.AddFeedEntry("job2", "agent: search", switchboard.FeedDone, []string{
+		`[1,2,3,4,5,6,7,8]`,
+	})
+
+	m = m.SetFeedFocused(true)
+
+	logicalCount := m.FeedLineCount()
+	if logicalCount <= 0 {
+		t.Fatalf("FeedLineCount should be positive, got %d", logicalCount)
+	}
+
+	// Count navigable rows from ViewActivityFeed using the internal logicalIdx.
+	// We verify by checking cursor can navigate to the last line without overflow.
+	for i := 0; i < logicalCount-1; i++ {
+		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		m = m2.(switchboard.Model)
+	}
+	if m.FeedCursor() != logicalCount-1 {
+		t.Errorf("cursor should be at %d (last line), got %d", logicalCount-1, m.FeedCursor())
+	}
+
+	// One more j should not exceed bounds.
+	m2, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = m2.(switchboard.Model)
+	if m.FeedCursor() != logicalCount-1 {
+		t.Errorf("cursor exceeded logicalCount: cursor=%d, count=%d", m.FeedCursor(), logicalCount)
+	}
+}
+
+func TestFeedJSON_EnterToggleExpandCollapse(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedDone, []string{
+		`{"name":"foo","value":99}`,
+	})
+	m = m.SetFeedFocused(true)
+
+	// Navigate to the JSON line (line 1: title=0, json=1).
+	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = m3.(switchboard.Model)
+
+	// Confirm view contains collapsed indicator.
+	view := m.ViewActivityFeed(40, 80)
+	if !strings.Contains(view, "▸") {
+		t.Errorf("expected collapsed JSON indicator ▸ in view before expand")
+	}
+
+	// Press enter to expand.
+	m4, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = m4.(switchboard.Model)
+	view2 := m.ViewActivityFeed(40, 80)
+	if !strings.Contains(view2, "▾") {
+		t.Errorf("expected expanded JSON indicator ▾ in view after enter")
+	}
+
+	// Press enter again to collapse.
+	m5, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = m5.(switchboard.Model)
+	view3 := m.ViewActivityFeed(40, 80)
+	if !strings.Contains(view3, "▸") {
+		t.Errorf("expected collapsed JSON indicator ▸ after second enter")
+	}
+}

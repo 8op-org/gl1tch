@@ -267,6 +267,7 @@ type Model struct {
 	feedMarked        map[int]bool   // marked absolute line indices
 	feedMarkedContent map[int]string // ANSI-stripped content at each marked index
 	feedMarkMode      MarkModeState
+	feedJSONExpanded  map[int]bool   // placeholder for future per-line JSON expand state
 	signalBoard           SignalBoard
 	signalBoardFocused    bool
 	confirmDelete         bool
@@ -470,6 +471,9 @@ func (m Model) BuildCronSection(w int) []string { return m.buildCronSection(w, 1
 
 // ViewActivityFeed renders the activity feed panel — used in tests.
 func (m Model) ViewActivityFeed(h, w int) string { return m.viewActivityFeed(h, w) }
+
+// FeedLineCount returns the navigable feed line count — used in tests.
+func (m Model) FeedLineCount() int { return m.feedLineCount() }
 
 // CronPanelFocused returns whether the cron panel is focused — used in tests.
 func (m Model) CronPanelFocused() bool { return m.cronPanel.focused }
@@ -882,6 +886,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.feedScrollOffset = 0
 		m.feedCursor = 0
+		m.feedJSONExpanded = nil
 		return m, nil
 
 	case FeedLineMsg:
@@ -1628,7 +1633,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			if m.feedMarkMode == MarkModeActive {
 				m = m.feedToggleMark(m.feedCursor)
 			}
-			total := totalFeedLines(m.feed, m.feedPanelWidth())
+			total := m.feedLineCount()
 			step := m.feedVisibleHeight()
 			m.feedCursor = min(m.feedCursor+step, max(0, total-1))
 			m.feedScrollOffset = m.feedCursor
@@ -1670,7 +1675,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "G":
 		if m.feedFocused {
-			total := totalFeedLines(m.feed, m.feedPanelWidth())
+			total := m.feedLineCount()
 			m.feedCursor = max(0, total-1)
 			m.feedScrollOffset = m.feedCursor
 			m.clampFeedScroll()
@@ -1877,7 +1882,7 @@ func (m Model) handleDown() Model {
 		if m.feedMarkMode == MarkModeActive {
 			m = m.feedToggleMark(m.feedCursor)
 		}
-		total := totalFeedLines(m.feed, m.feedPanelWidth())
+		total := m.feedLineCount()
 		m.feedCursor = min(m.feedCursor+1, max(0, total-1))
 		m.feedScrollOffset = m.feedCursor
 		m.clampFeedScroll()
@@ -2228,6 +2233,26 @@ func openEditorInWindow(path string) {
 }
 
 func (m Model) handleEnter() (Model, tea.Cmd) {
+	// Feed: toggle JSON expand/collapse on the cursor line.
+	if m.feedFocused {
+		rawLines := m.feedRawLines(m.feedPanelWidth())
+		if m.feedCursor < len(rawLines) {
+			line := strings.TrimSpace(stripANSI(rawLines[m.feedCursor]))
+			if strings.HasPrefix(line, jsonIndicator) {
+				if m.feedJSONExpanded == nil {
+					m.feedJSONExpanded = make(map[int]bool)
+				}
+				if m.feedJSONExpanded[m.feedCursor] {
+					delete(m.feedJSONExpanded, m.feedCursor)
+				} else {
+					m.feedJSONExpanded[m.feedCursor] = true
+				}
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
 	// Signal board: navigate directly into the job's tmux window.
 	if m.signalBoardFocused {
 		filtered := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
@@ -2601,7 +2626,7 @@ func (m *Model) clampFeedScroll() {
 	if visibleH <= 0 {
 		visibleH = 1
 	}
-	total := totalFeedLines(m.feed, m.feedPanelWidth())
+	total := m.feedLineCount()
 	maxOffset := max(0, total-visibleH)
 	if m.feedScrollOffset > maxOffset {
 		m.feedScrollOffset = maxOffset
@@ -3487,58 +3512,13 @@ func (m Model) feedPanelWidth() int {
 	return max(w-m.leftColWidth()-2, 20)
 }
 
-// totalFeedLines computes the total number of content lines the renderer will
-// actually produce for a feed, including lines created by word-wrapping long
-// output. It mirrors the line-building logic in viewActivityFeed so that
-// navigation bounds match the visible output exactly.
-func totalFeedLines(feed []feedEntry, width int) int {
-	if len(feed) == 0 {
-		return 1 // "no activity yet"
-	}
-	const feedLinesPerEntry = 10
-	const maxStepOutputLines = 5
-	stepMaxLen := max(width-10, 1)
-	entryMaxLen := max(width-6, 1)
-	n := 0
-	for _, entry := range feed {
-		n++ // title line
-		if entry.cwd != "" {
-			n++ // cwd line
-		}
-		for _, step := range entry.steps {
-			// Mirror suppression logic from viewActivityFeed.
-			if step.status == "done" && len(step.lines) == 0 {
-				continue
-			}
-			n++ // step badge line
-			stepLines := step.lines
-			if len(stepLines) > maxStepOutputLines {
-				stepLines = stepLines[len(stepLines)-maxStepOutputLines:]
-			}
-			for _, sl := range stepLines {
-				for _, wl := range strings.Split(wrap.String(sl, stepMaxLen), "\n") {
-					if wl != "" {
-						n++
-					}
-				}
-			}
-		}
-		entryLines := entry.lines
-		skipped := 0
-		if len(entryLines) > feedLinesPerEntry {
-			skipped = len(entryLines) - feedLinesPerEntry
-			entryLines = entryLines[skipped:]
-		}
-		if skipped > 0 {
-			n++ // "… N earlier lines" message
-		}
-		for _, outLine := range entryLines {
-			for _, wl := range strings.Split(wrap.String(stripANSI(outLine), entryMaxLen), "\n") {
-				if wl != "" {
-					n++
-				}
-			}
-		}
+// feedLineCount returns the total number of navigable content lines in the feed.
+// It delegates to feedRawLines which is the single source of truth for line
+// count — the same parser pipeline runs in feedRawLines and viewActivityFeed.
+func (m Model) feedLineCount() int {
+	n := len(m.feedRawLines(m.feedPanelWidth()))
+	if n == 0 {
+		return 1
 	}
 	return n
 }
@@ -3607,9 +3587,16 @@ func (m Model) feedRawLines(width int) []string {
 				}
 				stepMaxLen := max(width-10, 1)
 				for _, sl := range stepLines {
-					for _, wl := range strings.Split(wrap.String(sl, stepMaxLen), "\n") {
-						if wl != "" {
-							add("    " + pal.Dim + wl + aRst)
+					sl = stripANSI(sl)
+					if pLines, ok := runFeedLineParsers(sl, stepMaxLen, pal, false); ok {
+						for _, pl := range pLines {
+							add("    " + pl)
+						}
+					} else {
+						for _, wl := range strings.Split(wrap.String(sl, stepMaxLen), "\n") {
+							if wl != "" {
+								add("    " + pal.Dim + wl + aRst)
+							}
 						}
 					}
 				}
@@ -3628,9 +3615,16 @@ func (m Model) feedRawLines(width int) []string {
 		}
 		entryMaxLen := max(width-6, 1)
 		for _, outLine := range entryLines {
-			for _, wl := range strings.Split(wrap.String(stripANSI(outLine), entryMaxLen), "\n") {
-				if wl != "" {
-					add(pal.Dim + "    " + wl + aRst)
+			outLine = stripANSI(outLine)
+			if pLines, ok := runFeedLineParsers(outLine, entryMaxLen, pal, false); ok {
+				for _, pl := range pLines {
+					add("    " + pl)
+				}
+			} else {
+				for _, wl := range strings.Split(wrap.String(outLine, entryMaxLen), "\n") {
+					if wl != "" {
+						add(pal.Dim + "    " + wl + aRst)
+					}
 				}
 			}
 		}
@@ -3654,9 +3648,15 @@ func (m Model) viewActivityFeed(height, width int) string {
 	}
 	visibleH := height - headerH - 2 // minus header, bottom border, and always-present hint footer
 
-	// feedRowAt appends a content row, applying cursor and/or mark highlights.
+	// logicalIdx tracks the cursor-navigable line index — matches feedRawLines indices.
+	// Incremented only by appendRow; appendExtra adds visual-only lines without advancing it.
+	// logicalToVisual maps each logical line index to its visual index in allLines.
+	logicalIdx := 0
+	var logicalToVisual []int
 	appendRow := func(lines *[]string, content string) {
-		idx := len(*lines)
+		logicalToVisual = append(logicalToVisual, len(*lines))
+		idx := logicalIdx
+		logicalIdx++
 		isMarked := m.feedMarked[idx]
 		isCursor := m.feedFocused && idx == m.feedCursor
 		var row string
@@ -3677,6 +3677,10 @@ func (m Model) viewActivityFeed(height, width int) string {
 			row = boxRow(content, width, borderColor)
 		}
 		*lines = append(*lines, row)
+	}
+	// appendExtra adds a visual-only box row without advancing logicalIdx.
+	appendExtra := func(lines *[]string, content string) {
+		*lines = append(*lines, boxRow(content, width, borderColor))
 	}
 
 	// Flatten all feed entries into content lines.
@@ -3750,10 +3754,17 @@ func (m Model) viewActivityFeed(height, width int) string {
 					}
 					stepMaxLen := max(width-10, 1)
 					for _, sl := range stepLines {
-						wlines := strings.Split(wrap.String(sl, stepMaxLen), "\n")
-						for _, wl := range wlines {
-							if wl != "" {
-								appendRow(&allLines, outPrefix+pal.Dim+wl+aRst)
+						sl = stripANSI(sl)
+						if pLines, ok := runFeedLineParsers(sl, stepMaxLen, pal, m.feedJSONExpanded[logicalIdx]); ok {
+							appendRow(&allLines, outPrefix+pLines[0])
+							for _, xl := range pLines[1:] {
+								appendExtra(&allLines, outPrefix+"  "+xl)
+							}
+						} else {
+							for _, wl := range strings.Split(wrap.String(sl, stepMaxLen), "\n") {
+								if wl != "" {
+									appendRow(&allLines, outPrefix+pal.Dim+wl+aRst)
+								}
 							}
 						}
 					}
@@ -3772,14 +3783,19 @@ func (m Model) viewActivityFeed(height, width int) string {
 				skipMsg := fmt.Sprintf("    … %d earlier lines (press f to scroll)", skipped)
 				appendRow(&allLines, pal.Dim+skipMsg+aRst)
 			}
+			entryMaxLen := max(width-6, 1)
 			for _, outLine := range entryLines {
-				// Strip ANSI codes — feed renders with its own dim style.
 				outLine = stripANSI(outLine)
-				maxLen := max(width-6, 1)
-				wrapped := strings.Split(wrap.String(outLine, maxLen), "\n")
-				for _, wl := range wrapped {
-					if wl != "" {
-						appendRow(&allLines, pal.Dim+"    "+wl+aRst)
+				if pLines, ok := runFeedLineParsers(outLine, entryMaxLen, pal, m.feedJSONExpanded[logicalIdx]); ok {
+					appendRow(&allLines, "    "+pLines[0])
+					for _, xl := range pLines[1:] {
+						appendExtra(&allLines, "      "+xl)
+					}
+				} else {
+					for _, wl := range strings.Split(wrap.String(outLine, entryMaxLen), "\n") {
+						if wl != "" {
+							appendRow(&allLines, pal.Dim+"    "+wl+aRst)
+						}
 					}
 				}
 			}
@@ -3787,7 +3803,15 @@ func (m Model) viewActivityFeed(height, width int) string {
 	}
 
 	// Clamp offset and slice visible window.
-	offset := m.feedScrollOffset
+	// Convert logical feedScrollOffset to visual index using the logicalToVisual map.
+	// This ensures the scroll position is correct even when JSON lines are expanded
+	// (expanded lines add visual rows without advancing the logical line index).
+	offset := 0
+	if m.feedScrollOffset < len(logicalToVisual) {
+		offset = logicalToVisual[m.feedScrollOffset]
+	} else if len(logicalToVisual) > 0 {
+		offset = logicalToVisual[len(logicalToVisual)-1]
+	}
 	total := len(allLines)
 	if visibleH <= 0 {
 		visibleH = 1
@@ -3854,6 +3878,18 @@ func (m Model) viewActivityFeed(height, width int) string {
 		}
 		if markCount := len(m.feedMarked); markCount > 0 {
 			feedHints = append(feedHints, panelrender.Hint{Key: "r", Desc: fmt.Sprintf("run (%d)", markCount)})
+		}
+		// Show enter hint when cursor is on an expandable JSON line.
+		rawLines := m.feedRawLines(m.feedPanelWidth())
+		if m.feedCursor < len(rawLines) {
+			cursorContent := strings.TrimSpace(stripANSI(rawLines[m.feedCursor]))
+			if strings.HasPrefix(cursorContent, jsonIndicator) {
+				if m.feedJSONExpanded[m.feedCursor] {
+					feedHints = append(feedHints, panelrender.Hint{Key: "enter", Desc: "collapse"})
+				} else {
+					feedHints = append(feedHints, panelrender.Hint{Key: "enter", Desc: "expand"})
+				}
+			}
 		}
 	}
 	lines = append(lines, boxRow(panelrender.HintBar(feedHints, width-2, pal), width, borderColor))
