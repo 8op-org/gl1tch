@@ -2557,7 +2557,6 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 			m.agentModalOpen = true
 			m.agentModalFocus = 0 // start at picker (provider+model) so user confirms selection
 			m.agentPromptIdx = 0
-			m.agent.agentPicker = modal.NewAgentPickerModel(m.agent.providers)
 			m.agent.prompt.Blur()
 			return m, loadAgentPromptsCmd(m.store)
 		}
