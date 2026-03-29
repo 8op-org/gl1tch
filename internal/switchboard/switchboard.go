@@ -28,6 +28,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
 	"github.com/adam-stokes/orcai/internal/panelrender"
+	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/store"
@@ -2649,6 +2650,12 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	if m.store != nil {
 		if runID, err := m.store.RecordRunStart("agent", title, runMetadataJSON("", cwd, modelID)); err == nil {
 			jh.storeRunID = runID
+		}
+	}
+	if m.agentUseBrain && m.store != nil {
+		inj := pipeline.NewStoreBrainInjector(m.store)
+		if preamble, err := inj.ReadContext(context.Background(), jh.storeRunID); err == nil && preamble != "" {
+			input = preamble + "\n\n" + input
 		}
 	}
 	m.activeJobs[feedID] = jh
