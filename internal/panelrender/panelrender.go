@@ -302,11 +302,14 @@ func OverlayCenter(base, overlay string, w, h int) string {
 		}
 	}
 	popH := len(overlayLines)
-	startRow := pmax((h-popH)/2, 0)
+	startRow := pmax((h-popH)/2, 1)
 	startCol := pmax((w-popW)/2, 0)
 
 	for i, oLine := range overlayLines {
 		row := startRow + i
+		if row >= h {
+			break
+		}
 		for len(baseLines) <= row {
 			baseLines = append(baseLines, "")
 		}
