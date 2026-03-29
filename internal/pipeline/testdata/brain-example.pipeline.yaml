@@ -1,0 +1,55 @@
+# brain-example.pipeline.yaml
+#
+# Demonstrates use_brain and write_brain pipeline flags.
+#
+# use_brain: true  — the runner prepends a context preamble describing the
+#                    ORCAI database schema and recent brain notes to the agent's
+#                    prompt. The agent can use this to reason about past runs.
+#
+# write_brain: true — after the agent responds, the runner scans the output for
+#                     a <brain tags="...">insight</brain> block and persists it
+#                     to the brain_notes table. Future use_brain steps in the
+#                     same run will see this note.
+#
+# Prerequisites:
+#   - claude plugin installed (or replace executor with your AI provider)
+#   - WithRunStore and WithBrainInjector passed to pipeline.Run
+#
+name: brain-example
+version: "1"
+
+# Enable brain context for ALL steps by default.
+# Individual steps can override with use_brain: false or write_brain: false.
+use_brain: true
+write_brain: true
+
+steps:
+  # Step 1: Analyze recent pipeline runs and record an insight.
+  # The agent receives the ORCAI DB schema preamble and is instructed to
+  # embed a <brain> note in its response.
+  - id: analyze-runs
+    executor: claude
+    model: claude-sonnet-4-6
+    prompt: |
+      You have access to the ORCAI result database (read-only).
+      Review the recent pipeline run history provided in your context.
+
+      Write a brief analysis of:
+      1. Which pipelines ran most recently
+      2. Any patterns in success/failure rates
+
+      After your analysis, include a <brain tags="run-analysis"> block
+      summarizing your key insight in one sentence for future steps.
+
+  # Step 2: Use the insight from step 1 to make a recommendation.
+  # The brain note from analyze-runs will appear in this step's preamble.
+  - id: recommend
+    executor: claude
+    model: claude-sonnet-4-6
+    needs: [analyze-runs]
+    # This step only reads brain context; it doesn't need to write new notes.
+    write_brain: false
+    prompt: |
+      Based on the brain notes from earlier steps in this run,
+      suggest one concrete improvement to the ORCAI pipeline configuration.
+      Be specific and actionable.

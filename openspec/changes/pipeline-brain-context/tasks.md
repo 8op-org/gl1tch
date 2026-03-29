@@ -69,6 +69,6 @@
 
 ## 9. Pipeline YAML Validation and Documentation
 
-- [ ] 9.1 Update pipeline YAML validation to accept `use_brain` and `write_brain` as valid top-level and step-level fields (no spurious "unknown field" warnings)
-- [ ] 9.2 Add at least one example pipeline YAML in `testdata/` demonstrating `use_brain` + `write_brain` usage with comments
-- [ ] 9.3 If a `.pipeline.yaml` validator or linter exists, update it to know about the new fields and the removed `db` type
+- [x] 9.1 Update pipeline YAML validation to accept `use_brain` and `write_brain` as valid top-level and step-level fields (no spurious "unknown field" warnings)
+- [x] 9.2 Add at least one example pipeline YAML in `testdata/` demonstrating `use_brain` + `write_brain` usage with comments
+- [x] 9.3 If a `.pipeline.yaml` validator or linter exists, update it to know about the new fields and the removed `db` type
