@@ -90,7 +90,7 @@ func TestStoreBrainInjector_CapAt10(t *testing.T) {
 	ctx := context.Background()
 	const totalNotes = 15
 	const prefix = "captest-note-body-"
-	for i := 0; i < totalNotes; i++ {
+	for i := range totalNotes {
 		_, err := s.InsertBrainNote(ctx, store.BrainNote{
 			RunID:     runID,
 			StepID:    "step-cap",

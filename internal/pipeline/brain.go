@@ -20,6 +20,8 @@ type StoreBrainInjector struct {
 	store *store.Store
 }
 
+var _ BrainInjector = (*StoreBrainInjector)(nil)
+
 // NewStoreBrainInjector creates a BrainInjector backed by the given store.
 func NewStoreBrainInjector(s *store.Store) *StoreBrainInjector {
 	return &StoreBrainInjector{store: s}
@@ -55,15 +57,11 @@ func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (stri
 		sb.WriteString("\n## Brain Notes (this run)\n\n")
 		for _, n := range notes {
 			body := n.Body
-			truncated := false
-			if len(body) > 500 {
-				body = body[:500]
-				truncated = true
+			runes := []rune(body)
+			if len(runes) > 500 {
+				body = string(runes[:500]) + "...[truncated]"
 			}
 			line := fmt.Sprintf("[%s] %s", n.StepID, body)
-			if truncated {
-				line += "...[truncated]"
-			}
 			sb.WriteString(line)
 			sb.WriteString("\n")
 		}
