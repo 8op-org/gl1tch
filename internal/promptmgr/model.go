@@ -62,6 +62,11 @@ type Model struct {
 	runnerErrMsg       string
 	runCancel          context.CancelFunc // cancel func for active run; nil if not running
 
+	// Conversation follow-up
+	runnerTurns    []runnerTurn   // alternating user/assistant turns from this session
+	followUpInput  textinput.Model
+	followUpActive bool
+
 	// Overlay / status
 	confirmDelete bool   // whether delete confirmation overlay is showing
 	statusMsg     string // transient status line message
@@ -81,16 +86,21 @@ func New(st *store.Store, pluginMgr *plugin.Manager, bundle *themes.Bundle) *Mod
 	bi := textarea.New()
 	bi.Placeholder = "Prompt body..."
 
+	fu := textinput.New()
+	fu.Placeholder = "reply to continue conversation…"
+	fu.CharLimit = 2000
+
 	providers := picker.BuildProviders()
 	return &Model{
-		store:       st,
-		pluginMgr:   pluginMgr,
-		themeState:  tuikit.NewThemeState(bundle),
-		filterInput: fi,
-		titleInput:  ti,
-		bodyInput:   bi,
-		dirPicker:   modal.NewDirPickerModel(),
-		agentPicker: modal.NewAgentPickerModel(providers),
+		store:        st,
+		pluginMgr:    pluginMgr,
+		themeState:   tuikit.NewThemeState(bundle),
+		filterInput:  fi,
+		titleInput:   ti,
+		bodyInput:    bi,
+		dirPicker:    modal.NewDirPickerModel(),
+		agentPicker:  modal.NewAgentPickerModel(providers),
+		followUpInput: fu,
 	}
 }
 

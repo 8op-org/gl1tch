@@ -23,6 +23,12 @@ type runDoneMsg struct{ full string }
 type runErrMsg struct{ err error }
 type statusClearMsg struct{}
 
+// runnerTurn is one turn in a follow-up conversation thread.
+type runnerTurn struct {
+	role    string // "user" or "assistant"
+	content string
+}
+
 // loadPromptsCmd fetches all prompts from the store.
 func loadPromptsCmd(st *store.Store) tea.Cmd {
 	return func() tea.Msg {
@@ -204,6 +210,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.runnerStreaming = false
 		m.runCancel = nil
 		m.focusPanel = 2
+		m.runnerTurns = append(m.runnerTurns, runnerTurn{role: "assistant", content: msg.full})
 		if m.editingPrompt.ID != 0 {
 			return m, tea.Batch(saveResponseCmd(m.store, m.editingPrompt.ID, msg.full))
 		}
@@ -329,6 +336,10 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.runnerErrMsg = fmt.Sprintf("plugin %q not found", providerID)
 			return m, nil
 		}
+		// Fresh run: clear conversation history, seed with user turn.
+		m.runnerTurns = []runnerTurn{{role: "user", content: body}}
+		m.followUpActive = false
+		m.followUpInput.SetValue("")
 		ctx, cancel := context.WithCancel(context.Background())
 		m.runCancel = cancel
 		m.runnerStreaming = true
@@ -348,13 +359,24 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "tab":
-		// Cycle editor sub-focus: title→body→model→cwd→title
-		m.editorSubFocus = (m.editorSubFocus + 1) % 4
-		m.syncEditorFocus()
+		// Advance sub-focus; when wrapping past last slot, move to runner panel.
+		if m.editorSubFocus == 3 {
+			m.editorSubFocus = 0
+			m.syncEditorFocus()
+			m.focusPanel = 2
+		} else {
+			m.editorSubFocus++
+			m.syncEditorFocus()
+		}
 
 	case "shift+tab":
-		// Cycle panel: 0→2→1→0
-		m.focusPanel = (m.focusPanel + 2) % 3
+		// Reverse sub-focus; when at first slot, move to list panel.
+		if m.editorSubFocus == 0 {
+			m.focusPanel = 0
+		} else {
+			m.editorSubFocus--
+			m.syncEditorFocus()
+		}
 
 	case "esc":
 		m.focusPanel = 0
@@ -394,6 +416,52 @@ func (m *Model) syncEditorFocus() {
 
 // updateRunnerPanel handles key events when focusPanel == 2.
 func (m *Model) updateRunnerPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When follow-up input is active, route most keys to it.
+	if m.followUpActive {
+		switch msg.String() {
+		case "esc":
+			m.followUpActive = false
+			m.followUpInput.Blur()
+			return m, nil
+		case "ctrl+r", "enter":
+			reply := strings.TrimSpace(m.followUpInput.Value())
+			if reply == "" {
+				return m, nil
+			}
+			// Append user turn and build full conversation context.
+			m.runnerTurns = append(m.runnerTurns, runnerTurn{role: "user", content: reply})
+			input := buildConversationContext(m.runnerTurns)
+			m.followUpInput.SetValue("")
+			m.followUpActive = false
+			m.followUpInput.Blur()
+			slug := m.editingPrompt.ModelSlug
+			if slug == "" {
+				m.runnerErrMsg = "no model selected"
+				return m, nil
+			}
+			providerID, modelID, _ := strings.Cut(slug, "/")
+			p, ok := m.pluginMgr.Get(providerID)
+			if !ok {
+				m.runnerErrMsg = fmt.Sprintf("plugin %q not found", providerID)
+				return m, nil
+			}
+			if m.runCancel != nil {
+				m.runCancel()
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			m.runCancel = cancel
+			m.runnerStreaming = true
+			m.runnerOutput = ""
+			m.runnerErrMsg = ""
+			m.runnerScrollOffset = 0
+			return m, runPluginCmd(ctx, p, input, m.editingPrompt.CWD, modelID)
+		default:
+			var cmd tea.Cmd
+			m.followUpInput, cmd = m.followUpInput.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg.String() {
 	case "ctrl+c", "esc":
 		if m.runnerStreaming && m.runCancel != nil {
@@ -402,6 +470,12 @@ func (m *Model) updateRunnerPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.runCancel = nil
 		} else {
 			m.focusPanel = 1
+		}
+	case "r":
+		// Open follow-up input when there's a response to reply to.
+		if m.runnerOutput != "" && !m.runnerStreaming {
+			m.followUpActive = true
+			m.followUpInput.Focus()
 		}
 	case "j", "down":
 		m.runnerScrollOffset++
@@ -415,6 +489,31 @@ func (m *Model) updateRunnerPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusPanel = (m.focusPanel + 2) % 3
 	}
 	return m, nil
+}
+
+// buildConversationContext constructs the full conversation string to send to the AI.
+// The first user turn is the original prompt body; subsequent turns are appended.
+func buildConversationContext(turns []runnerTurn) string {
+	if len(turns) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	// Original prompt body is always the first user turn.
+	sb.WriteString(turns[0].content)
+	if len(turns) == 1 {
+		return sb.String()
+	}
+	sb.WriteString("\n\n---\n")
+	for _, t := range turns[1:] {
+		if t.role == "assistant" {
+			sb.WriteString("\nAssistant: ")
+		} else {
+			sb.WriteString("\nUser: ")
+		}
+		sb.WriteString(t.content)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // runPluginCmd executes the plugin with input and returns a runDoneMsg or runErrMsg.

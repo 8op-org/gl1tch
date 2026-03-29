@@ -281,8 +281,14 @@ func (m *Model) buildRunnerRows(w, h int) []string {
 	var rows []string
 	rows = append(rows, panelrender.BoxTop(w, headerTitle, borderColor, pal.Accent))
 
-	// Reserve 2 rows for hint + boxBot.
-	maxLines := h - len(rows) - 2
+	// When follow-up is active reserve 3 extra rows: blank + input + blank.
+	followUpRows := 0
+	if m.followUpActive || (m.runnerOutput != "" && !m.runnerStreaming && m.focusPanel == 2) {
+		followUpRows = 3
+	}
+
+	// Reserve 2 rows for hint + boxBot, plus follow-up rows.
+	maxLines := h - len(rows) - 2 - followUpRows
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -309,6 +315,17 @@ func (m *Model) buildRunnerRows(w, h int) []string {
 		}
 	}
 
+	// Follow-up input row — shown when there's a response to reply to.
+	if followUpRows > 0 {
+		rows = append(rows, panelrender.BoxRow("", w, borderColor))
+		replyLabel := pal.Dim + "  REPLY  " + panelrender.RST
+		if m.followUpActive {
+			replyLabel = pal.Accent + panelrender.BLD + "  REPLY  " + panelrender.RST
+		}
+		rows = append(rows, panelrender.BoxRow(replyLabel+m.followUpInput.View(), w, borderColor))
+		rows = append(rows, panelrender.BoxRow("", w, borderColor))
+	}
+
 	// Pad remaining space.
 	for len(rows) < h-2 {
 		rows = append(rows, panelrender.BoxRow("", w, borderColor))
@@ -316,10 +333,17 @@ func (m *Model) buildRunnerRows(w, h int) []string {
 
 	var hints []panelrender.Hint
 	if m.focusPanel == 2 {
-		hints = []panelrender.Hint{
-			{Key: "ctrl+r", Desc: "run"},
-			{Key: "ctrl+c", Desc: "cancel"},
-			{Key: "j/k", Desc: "scroll"},
+		if m.followUpActive {
+			hints = []panelrender.Hint{
+				{Key: "enter", Desc: "send reply"},
+				{Key: "esc", Desc: "cancel reply"},
+			}
+		} else {
+			hints = []panelrender.Hint{
+				{Key: "ctrl+r", Desc: "run"},
+				{Key: "r", Desc: "reply"},
+				{Key: "j/k", Desc: "scroll"},
+			}
 		}
 	}
 	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
