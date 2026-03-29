@@ -67,6 +67,32 @@ func (m AgentPickerModel) SelectedModelLabel() string {
 	return lbl
 }
 
+// SelectBySlug sets the picker selection to match a "providerID/modelID" slug.
+// If the slug is empty or unrecognised the selection is left unchanged.
+func (m AgentPickerModel) SelectBySlug(slug string) AgentPickerModel {
+	if slug == "" {
+		return m
+	}
+	providerID, modelID, ok := strings.Cut(slug, "/")
+	if !ok {
+		return m
+	}
+	for pi, prov := range m.providers {
+		if prov.ID != providerID {
+			continue
+		}
+		models := agentPickerFilterModels(prov.Models)
+		for mi, mo := range models {
+			if mo.ID == modelID {
+				m.selectedProvider = pi
+				m.selectedModel = mi
+				return m
+			}
+		}
+	}
+	return m
+}
+
 // Focus returns the current internal focus: 0 = provider list, 1 = model list.
 func (m AgentPickerModel) Focus() int { return m.focus }
 

@@ -341,6 +341,7 @@ func (m *Model) updateListPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.editingPrompt = p
 			m.titleInput.SetValue(p.Title)
 			m.bodyInput.SetValue(p.Body)
+			m.agentPicker = m.agentPicker.SelectBySlug(p.ModelSlug)
 			m.dirPicker = modal.NewDirPickerModel()
 			m.dirPickerActive = false
 			m.editorSubFocus = 0
