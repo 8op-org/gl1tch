@@ -27,6 +27,7 @@ import (
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
+	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/panelrender"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/store"
@@ -123,13 +124,10 @@ type launcherSection struct {
 }
 
 type agentSection struct {
-	providers              []picker.ProviderDef
-	selectedProvider       int
-	selectedModel          int
-	prompt                 textarea.Model
-	focused                bool
-	agentScrollOffset      int
-	agentModelScrollOffset int
+	providers  []picker.ProviderDef
+	agentPicker modal.AgentPickerModel
+	prompt     textarea.Model
+	focused    bool
 }
 
 type jobHandle struct {
@@ -366,14 +364,16 @@ func NewWithStore(s *store.Store) Model {
 
 	cwd, _ := os.Getwd()
 
+	agentProviders := picker.BuildProviders()
 	m := Model{
 		launcher: launcherSection{
 			pipelines: ScanPipelines(pipelinesDir()),
 			focused:   true,
 		},
 		agent: agentSection{
-			providers: picker.BuildProviders(),
-			prompt:    ta,
+			providers:   agentProviders,
+			agentPicker: modal.NewAgentPickerModel(agentProviders),
+			prompt:      ta,
 		},
 		agentSchedule:         schedTA,
 		pipelineScheduleInput: pipeSchedTA,
@@ -418,7 +418,7 @@ func NewWithPipelines(pipelines []string) Model {
 // NewWithTestProviders creates a Model with synthetic providers for testing.
 func NewWithTestProviders() Model {
 	m := New()
-	m.agent.providers = []picker.ProviderDef{
+	testProviders := []picker.ProviderDef{
 		{
 			ID:    "test-provider",
 			Label: "Test Provider",
@@ -428,6 +428,8 @@ func NewWithTestProviders() Model {
 			},
 		},
 	}
+	m.agent.providers = testProviders
+	m.agent.agentPicker = modal.NewAgentPickerModel(testProviders)
 	return m
 }
 
@@ -1738,9 +1740,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.launcher.selected >= len(m.launcher.pipelines) && m.launcher.selected > 0 {
 			m.launcher.selected = max(len(m.launcher.pipelines)-1, 0)
 		}
-		m.agent.providers = picker.BuildProviders()
-		m.agent.selectedProvider = 0
-		m.agent.selectedModel = 0
+		newProviders := picker.BuildProviders()
+		m.agent.providers = newProviders
+		m.agent.agentPicker = modal.NewAgentPickerModel(newProviders)
 		return m, nil
 
 	case "T":
@@ -2040,9 +2042,8 @@ func (m Model) handleDown() Model {
 		return m
 	}
 	if m.agent.focused {
-		if m.agent.selectedProvider < len(m.agent.providers)-1 {
-			m.agent.selectedProvider++
-		}
+		newPicker, _ := m.agent.agentPicker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m.agent.agentPicker = newPicker
 	}
 	return m
 }
@@ -2074,9 +2075,8 @@ func (m Model) handleUp() Model {
 		return m
 	}
 	if m.agent.focused {
-		if m.agent.selectedProvider > 0 {
-			m.agent.selectedProvider--
-		}
+		newPicker, _ := m.agent.agentPicker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+		m.agent.agentPicker = newPicker
 	}
 	return m
 }
@@ -2096,6 +2096,40 @@ func loadAgentPromptsCmd(st *store.Store) tea.Cmd {
 	}
 }
 
+// agentModalNextFocus advances the agent modal focus slot forward.
+// Focus slots: 0=picker(provider+model), 2=prompt, 3=use_brain, 4=cwd, 5=schedule.
+// Slot 1 is reserved/skipped so the slot numbering stays compatible.
+func agentModalNextFocus(cur int) int {
+	switch cur {
+	case 0:
+		return 2
+	case 2:
+		return 3
+	case 3:
+		return 4
+	case 4:
+		return 5
+	default: // 5 or anything else
+		return 0
+	}
+}
+
+// agentModalPrevFocus advances the agent modal focus slot backward.
+func agentModalPrevFocus(cur int) int {
+	switch cur {
+	case 0:
+		return 5
+	case 2:
+		return 0
+	case 3:
+		return 2
+	case 4:
+		return 3
+	default: // 5
+		return 4
+	}
+}
+
 // handleAgentModal routes key events when the agent modal overlay is open.
 func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 	key := msg.String()
@@ -2111,7 +2145,20 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.submitAgentJob()
 
 	case "tab":
-		m.agentModalFocus = (m.agentModalFocus + 1) % 6
+		if m.agentModalFocus == 0 {
+			// If picker's internal focus is on model list, tab advances outer focus to prompt.
+			if m.agent.agentPicker.Focus() == 1 {
+				m.agentModalFocus = 2
+				m.agent.prompt.Focus()
+				m.agentSchedule.Blur()
+				return m, nil
+			}
+			// Otherwise route tab to picker (switches provider↔model internally).
+			newPicker, _ := m.agent.agentPicker.Update(msg)
+			m.agent.agentPicker = newPicker
+			return m, nil
+		}
+		m.agentModalFocus = agentModalNextFocus(m.agentModalFocus)
 		switch m.agentModalFocus {
 		case 2:
 			m.agent.prompt.Focus()
@@ -2126,7 +2173,7 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "shift+tab":
-		m.agentModalFocus = (m.agentModalFocus + 5) % 6
+		m.agentModalFocus = agentModalPrevFocus(m.agentModalFocus)
 		switch m.agentModalFocus {
 		case 2:
 			m.agent.prompt.Focus()
@@ -2145,15 +2192,10 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 			// Let textarea handle the key when prompt or schedule is focused.
 			break
 		}
-		switch m.agentModalFocus {
-		case 0:
-			if m.agent.selectedProvider > 0 {
-				m.agent.selectedProvider--
-			}
-		case 1:
-			if m.agent.selectedModel > 0 {
-				m.agent.selectedModel--
-			}
+		if m.agentModalFocus == 0 {
+			newPicker, _ := m.agent.agentPicker.Update(msg)
+			m.agent.agentPicker = newPicker
+			return m, nil
 		}
 		return m, nil
 
@@ -2162,21 +2204,24 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 			// Let textarea handle the key when prompt or schedule is focused.
 			break
 		}
-		switch m.agentModalFocus {
-		case 0:
-			if m.agent.selectedProvider < len(m.agent.providers)-1 {
-				m.agent.selectedProvider++
-			}
-		case 1:
-			prov := m.currentProvider()
-			if prov != nil {
-				models := nonSepModels(prov.Models)
-				if m.agent.selectedModel < len(models)-1 {
-					m.agent.selectedModel++
-				}
-			}
+		if m.agentModalFocus == 0 {
+			newPicker, _ := m.agent.agentPicker.Update(msg)
+			m.agent.agentPicker = newPicker
+			return m, nil
 		}
 		return m, nil
+
+	case "enter":
+		if m.agentModalFocus == 0 {
+			newPicker, ev := m.agent.agentPicker.Update(msg)
+			m.agent.agentPicker = newPicker
+			if ev == modal.AgentPickerConfirmed {
+				m.agentModalFocus = 2
+				m.agent.prompt.Focus()
+			}
+			return m, nil
+		}
+		// fall through to default handling below
 
 	default:
 	}
@@ -2478,8 +2523,9 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 	if m.agent.focused {
 		if m.width >= 62 {
 			m.agentModalOpen = true
-			m.agentModalFocus = 0 // start at provider so user confirms selection
+			m.agentModalFocus = 0 // start at picker (provider+model) so user confirms selection
 			m.agentPromptIdx = 0
+			m.agent.agentPicker = modal.NewAgentPickerModel(m.agent.providers)
 			m.agent.prompt.Blur()
 			return m, loadAgentPromptsCmd(m.store)
 		}
@@ -2552,15 +2598,20 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 		p := m.agentPrompts[m.agentPromptIdx-1]
 		input = p.Body + "\n\n" + input
 	}
-	prov := m.currentProvider()
+
+	provID := m.agent.agentPicker.SelectedProviderID()
+	modelID := m.agent.agentPicker.SelectedModelID()
+
+	// Find the ProviderDef for pipeline args.
+	var prov *picker.ProviderDef
+	for i := range m.agent.providers {
+		if m.agent.providers[i].ID == provID {
+			prov = &m.agent.providers[i]
+			break
+		}
+	}
 	if prov == nil {
 		return m, nil
-	}
-
-	var modelID string
-	models := nonSepModels(prov.Models)
-	if len(models) > 0 && m.agent.selectedModel < len(models) {
-		modelID = models[m.agent.selectedModel].ID
 	}
 
 	agentName := prov.ID
@@ -2807,27 +2858,6 @@ func (m Model) filteredFeed() []feedEntry {
 	return out
 }
 
-func (m Model) currentProvider() *picker.ProviderDef {
-	if len(m.agent.providers) == 0 {
-		return nil
-	}
-	if m.agent.selectedProvider >= len(m.agent.providers) {
-		return &m.agent.providers[0]
-	}
-	return &m.agent.providers[m.agent.selectedProvider]
-}
-
-// nonSepModels filters separator entries from a model list.
-func nonSepModels(models []picker.ModelOption) []picker.ModelOption {
-	var out []picker.ModelOption
-	for _, mo := range models {
-		if !mo.Separator {
-			out = append(out, mo)
-		}
-	}
-	return out
-}
-
 // ── View ──────────────────────────────────────────────────────────────────────
 
 // View renders the full-screen switchboard layout.
@@ -3062,10 +3092,10 @@ func (m Model) viewAgentModalBox(w, h int) string {
 	modalW := w
 
 	// Full-screen height: topBar takes 1 row; box top+hints+bot = 3.
-	// Fixed overhead: boxTop(1)+provHdr(1)+4prov(4)+blank(1)+modelHdr(1)+4model(4)+
-	// blank(1)+promptHdr(1)+blank(1)+useBrain(1)+blank(1)+cwdHdr(1)+cwd(1)+
-	// blank(1)+savedPromptRow(1)+blank(1)+schedHdr(1)+schedTA(1)+3cronHints(3)+blank(1)+hintStr(1)+boxBot(1) = 31
-	const fixedOverhead = 31
+	// Fixed overhead: boxTop(1)+pickerViewRows(13:provHdr+4prov+blank+modelHdr+4model+blank+pickerHint)+
+	// blank(1)+savedPromptRow(1)+blank(1)+promptHdr(1)+blank(1)+useBrain(1)+blank(1)+cwdHdr(1)+cwd(1)+
+	// blank(1)+schedHdr(1)+schedTA(1)+3cronHints(3)+blank(1)+hintStr(1)+boxBot(1) = 33
+	const fixedOverhead = 33
 	const minPromptH = 4
 	modalH := max(h-1, 24)
 	promptH := max(modalH-fixedOverhead, minPromptH)
@@ -3094,89 +3124,9 @@ func (m Model) viewAgentModalBox(w, h int) string {
 	var rows []string
 	rows = append(rows, boxTop(modalW, "AGENT", modalBorderColor, modalBorderColor))
 
-	// ── PROVIDER section ──────────────────────────────────────────────────────
-	provHeader := "  " + sectionLabel("PROVIDER", m.agentModalFocus == 0)
-	rows = append(rows, boxRow(provHeader, modalW, modalBorderColor))
-	if len(m.agent.providers) == 0 {
-		rows = append(rows, boxRow(pal.Dim+"  no providers"+aRst, modalW, modalBorderColor))
-	} else {
-		const provWindow = 4
-		offset := m.agent.agentScrollOffset
-		if m.agent.selectedProvider < offset {
-			offset = m.agent.selectedProvider
-		} else if m.agent.selectedProvider >= offset+provWindow {
-			offset = m.agent.selectedProvider - provWindow + 1
-		}
-		end := min(offset+provWindow, len(m.agent.providers))
-		for i := offset; i < end; i++ {
-			prov := m.agent.providers[i]
-			label := prov.Label
-			if label == "" {
-				label = prov.ID
-			}
-			maxLen := max(modalW-6, 1)
-			if len(label) > maxLen {
-				label = label[:maxLen-1] + "…"
-			}
-			contentVis := 4 + len(label)
-			if i == m.agent.selectedProvider {
-				sel := pal.Accent
-				if m.agentModalFocus == 0 {
-					sel = pal.SelBG + aWht
-				}
-				content := sel + "  > " + label + aRst
-				rows = append(rows, modalBorderColor+"│"+content+strings.Repeat(" ", max(modalW-2-contentVis, 0))+modalBorderColor+"│"+aRst)
-			} else {
-				content := pal.Dim + "    " + pal.Accent + label + aRst
-				rows = append(rows, boxRow(content, modalW, modalBorderColor))
-			}
-		}
-	}
-
-	// ── MODEL section ─────────────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	modelHeader := "  " + sectionLabel("MODEL", m.agentModalFocus == 1)
-	rows = append(rows, boxRow(modelHeader, modalW, modalBorderColor))
-	prov := m.currentProvider()
-	if prov == nil {
-		rows = append(rows, boxRow(pal.Dim+"  select a provider first"+aRst, modalW, modalBorderColor))
-	} else {
-		models := nonSepModels(prov.Models)
-		if len(models) == 0 {
-			rows = append(rows, boxRow(pal.Dim+"  no models"+aRst, modalW, modalBorderColor))
-		} else {
-			const modelWindow = 4
-			offset := m.agent.agentModelScrollOffset
-			if m.agent.selectedModel < offset {
-				offset = m.agent.selectedModel
-			} else if m.agent.selectedModel >= offset+modelWindow {
-				offset = m.agent.selectedModel - modelWindow + 1
-			}
-			end := min(offset+modelWindow, len(models))
-			for i := offset; i < end; i++ {
-				mo := models[i]
-				label := mo.Label
-				if label == "" {
-					label = mo.ID
-				}
-				maxLen := max(modalW-6, 1)
-				if len(label) > maxLen {
-					label = label[:maxLen-1] + "…"
-				}
-				contentVis := 4 + len(label)
-				if i == m.agent.selectedModel {
-					sel := pal.Accent
-					if m.agentModalFocus == 1 {
-						sel = pal.SelBG + aWht
-					}
-					content := sel + "  > " + label + aRst
-					rows = append(rows, modalBorderColor+"│"+content+strings.Repeat(" ", max(modalW-2-contentVis, 0))+modalBorderColor+"│"+aRst)
-				} else {
-					content := pal.Dim + "    " + pal.Accent + label + aRst
-					rows = append(rows, boxRow(content, modalW, modalBorderColor))
-				}
-			}
-		}
+	// ── PROVIDER + MODEL picker ───────────────────────────────────────────────
+	for _, r := range m.agent.agentPicker.ViewRows(modalW-4, pal) {
+		rows = append(rows, boxRow("  "+r, modalW, modalBorderColor))
 	}
 
 	// ── SAVED PROMPT picker ───────────────────────────────────────────────────
@@ -3442,13 +3392,19 @@ func (m Model) buildAgentSection(w int) []string {
 	if len(m.agent.providers) == 0 {
 		rows = append(rows, boxRow(pal.Dim+"  no providers available"+aRst, w, borderColor))
 	} else {
-		// Show provider list (scrollable).
+		// Show provider list (scrollable). Derive selected index from the picker.
+		selectedProvID := m.agent.agentPicker.SelectedProviderID()
+		selectedProvIdx := 0
+		for i, p := range m.agent.providers {
+			if p.ID == selectedProvID {
+				selectedProvIdx = i
+				break
+			}
+		}
 		windowSize := agentInnerHeight
-		offset := m.agent.agentScrollOffset
-		if m.agent.selectedProvider < offset {
-			offset = m.agent.selectedProvider
-		} else if m.agent.selectedProvider >= offset+windowSize {
-			offset = m.agent.selectedProvider - windowSize + 1
+		offset := 0
+		if selectedProvIdx >= offset+windowSize {
+			offset = selectedProvIdx - windowSize + 1
 		}
 		end := min(offset+windowSize, len(m.agent.providers))
 		for i := offset; i < end; i++ {
@@ -3461,7 +3417,7 @@ func (m Model) buildAgentSection(w int) []string {
 			if len(label) > maxLen {
 				label = label[:maxLen-1] + "…"
 			}
-			if i == m.agent.selectedProvider {
+			if i == selectedProvIdx {
 				cursor := pal.Dim
 				if m.agent.focused {
 					cursor = pal.Accent
