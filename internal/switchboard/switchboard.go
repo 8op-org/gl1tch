@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -86,7 +87,8 @@ const maxParallelJobs = 8
 // StepInfo tracks the status of a single pipeline step within a feed entry.
 type StepInfo struct {
 	id     string
-	status string // "pending", "running", "done", "failed"
+	status string   // "pending", "running", "done", "failed"
+	lines  []string // per-step output lines
 }
 
 type feedEntry struct {
@@ -252,12 +254,14 @@ type Model struct {
 	feedScrollOffset      int
 	feedCursor            int // absolute line index within all visible feed content
 	feedFocused           bool
+	feedMarked        map[int]bool   // marked absolute line indices
+	feedMarkedContent map[int]string // ANSI-stripped content at each marked index
 	signalBoard           SignalBoard
 	signalBoardFocused    bool
 	confirmDelete         bool
 	pendingDeletePipeline string
-	agentModalOpen        bool
-	agentModalFocus       int // 0=provider, 1=model, 2=prompt, 3=cwd, 4=schedule (within modal)
+	agentModalOpen  bool
+	agentModalFocus int // 0=provider, 1=model, 2=prompt, 3=cwd, 4=schedule (within modal)
 	agentSchedule         textarea.Model
 	agentScheduleErr      string
 	helpOpen              bool
@@ -444,6 +448,9 @@ func (m Model) BuildAgentSection(w int) []string { return m.buildAgentSection(w)
 // BuildSignalBoard is an exported wrapper for tests.
 func (m Model) BuildSignalBoard(height, width int) []string { return m.buildSignalBoard(height, width) }
 
+// ViewAgentModalBox is an exported wrapper for tests.
+func (m Model) ViewAgentModalBox(w, h int) string { return m.viewAgentModalBox(w, h) }
+
 // BuildCronSection is an exported wrapper for tests.
 func (m Model) BuildCronSection(w int) []string { return m.buildCronSection(w, 10) }
 
@@ -509,6 +516,15 @@ func (m Model) FeedEntryArchived(id string) (bool, bool) {
 
 // SignalBoardActiveFilter returns the current active filter — used in tests.
 func (m Model) SignalBoardActiveFilter() string { return m.signalBoard.activeFilter }
+
+// FeedHasMarks returns whether any feed lines are marked — used in tests.
+func (m Model) FeedHasMarks() bool { return len(m.feedMarked) > 0 }
+
+// FeedMarkedAt returns whether the given absolute line index is marked — used in tests.
+func (m Model) FeedMarkedAt(idx int) bool { return m.feedMarked[idx] }
+
+// AgentPromptValue returns the current agent prompt textarea value — used in tests.
+func (m Model) AgentPromptValue() string { return m.agent.prompt.Value() }
 
 // SetSignalBoardFilter sets the active filter directly — used in tests.
 func (m Model) SetSignalBoardFilter(f string) Model {
@@ -1422,6 +1438,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "r":
+		// Feed: open agent runner modal with marked lines injected.
+		if m.feedFocused && len(m.feedMarked) > 0 {
+			keys := make([]int, 0, len(m.feedMarkedContent))
+			for k := range m.feedMarkedContent {
+				keys = append(keys, k)
+			}
+			sort.Ints(keys)
+			var parts []string
+			for _, k := range keys {
+				if content := strings.TrimSpace(m.feedMarkedContent[k]); content != "" {
+					parts = append(parts, content)
+				}
+			}
+			m.feedMarked = nil
+			m.feedMarkedContent = nil
+			m.agent.prompt.SetValue(strings.Join(parts, "\n"))
+			m.agentModalOpen = true
+			m.agentModalFocus = 2
+			m.agent.prompt.Focus()
+			return m, nil
+		}
+		// Global refresh: reload pipelines and providers.
 		m.launcher.pipelines = ScanPipelines(pipelinesDir())
 		if m.launcher.selected >= len(m.launcher.pipelines) && m.launcher.selected > 0 {
 			m.launcher.selected = max(len(m.launcher.pipelines)-1, 0)
@@ -1562,6 +1600,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.launcher.focused && len(m.launcher.pipelines) > 0 {
 			m.confirmDelete = true
 			m.pendingDeletePipeline = m.launcher.pipelines[m.launcher.selected]
+			return m, nil
+		}
+
+	case "m":
+		if m.feedFocused {
+			rawLines := m.feedRawLines(m.width)
+			if m.feedMarked == nil {
+				m.feedMarked = make(map[int]bool)
+			}
+			if m.feedMarkedContent == nil {
+				m.feedMarkedContent = make(map[int]string)
+			}
+			if m.feedMarked[m.feedCursor] {
+				delete(m.feedMarked, m.feedCursor)
+				delete(m.feedMarkedContent, m.feedCursor)
+			} else {
+				m.feedMarked[m.feedCursor] = true
+				if m.feedCursor < len(rawLines) {
+					m.feedMarkedContent[m.feedCursor] = rawLines[m.feedCursor]
+				}
+			}
 			return m, nil
 		}
 
@@ -2456,7 +2515,7 @@ func (m Model) View() string {
 	// Agent modal — floating overlay on top of the switchboard.
 	if m.agentModalOpen {
 		base := topBar + "\n" + body
-		return overlayCenter(base, m.viewAgentModalBox(w), w, h)
+		return overlayCenter(base, m.viewAgentModalBox(w, h), w, h)
 	}
 
 	// Delete confirmation — floating overlay on top of the switchboard.
@@ -2609,11 +2668,21 @@ func (m Model) viewPipelineScheduleInput(w int) string {
 // viewAgentModal renders the full-screen agent overlay.
 // viewAgentModalBox renders the agent modal box content only. overlayCenter
 // places it over the base view.
-func (m Model) viewAgentModalBox(w int) string {
-	modalW := min(max(w-4, 60), 90)
-	if w < 62 {
+func (m Model) viewAgentModalBox(w, h int) string {
+	modalW := max(w*9/10, 60)
+	if modalW > w-2 {
+		modalW = w - 2
+	}
+	if modalW < 0 {
 		modalW = w
 	}
+
+	// Target modal height: 90% of terminal, minimum 24 rows.
+	// Fixed overhead rows (all sections except prompt textarea): ~20 rows.
+	const fixedOverhead = 20
+	const minPromptH = 4
+	modalH := max(h*9/10, 24)
+	promptH := max(modalH-fixedOverhead, minPromptH)
 
 	pal := m.ansiPalette()
 	modalBorderColor := aPur
@@ -2734,6 +2803,7 @@ func (m Model) viewAgentModalBox(w int) string {
 	}
 	promptInnerW := max(modalW-6, 10)
 	m.agent.prompt.SetWidth(promptInnerW)
+	m.agent.prompt.SetHeight(promptH)
 	for _, pLine := range strings.Split(m.agent.prompt.View(), "\n") {
 		pLine = strings.TrimRight(pLine, "\r")
 		padded := "  " + pLine
@@ -3172,6 +3242,79 @@ func totalFeedLines(feed []feedEntry) int {
 	return n
 }
 
+// feedRawLines returns ANSI-stripped content strings for every line in the feed
+// (no box formatting). Used to capture line content when the user marks a line.
+func (m Model) feedRawLines(width int) []string {
+	pal := m.ansiPalette()
+	var lines []string
+	add := func(content string) { lines = append(lines, stripANSI(content)) }
+
+	if len(m.feed) == 0 {
+		add("  no activity yet")
+		return lines
+	}
+	for _, entry := range m.feed {
+		entryBadge, badgeColor := statusBadge(entry.status, pal)
+		ts := entry.ts.Format("15:04:05")
+		titleLine := fmt.Sprintf("  %s%s%s %s%s%s  %s",
+			badgeColor, entryBadge, aRst,
+			pal.Dim, ts, aRst,
+			pal.Accent+entry.title+aRst)
+		add(titleLine)
+
+		if entry.cwd != "" {
+			home, _ := os.UserHomeDir()
+			cwdDisplay := entry.cwd
+			if home != "" && strings.HasPrefix(cwdDisplay, home) {
+				cwdDisplay = "~" + cwdDisplay[len(home):]
+			}
+			add(fmt.Sprintf("  %s  %s%s", pal.Dim, cwdDisplay, aRst))
+		}
+
+		if len(entry.steps) > 0 {
+			const stepIndent = "  "
+			const outputIndent = "    "
+			const maxStepOutputLines = 5
+			for _, step := range entry.steps {
+				var col string
+				switch step.status {
+				case "running":
+					col = aYlw
+				case "done":
+					col = pal.Success
+				case "failed":
+					col = pal.Error
+				default:
+					col = pal.Dim
+				}
+				add(stepIndent + col + stepGlyph(step.status) + " " + step.id + aRst)
+				stepLines := step.lines
+				if len(stepLines) > maxStepOutputLines {
+					stepLines = stepLines[len(stepLines)-maxStepOutputLines:]
+				}
+				for _, sl := range stepLines {
+					add(outputIndent + pal.Dim + sl + aRst)
+				}
+			}
+		}
+
+		const feedLinesPerEntry = 10
+		entryLines := entry.lines
+		skipped := 0
+		if len(entryLines) > feedLinesPerEntry {
+			skipped = len(entryLines) - feedLinesPerEntry
+			entryLines = entryLines[skipped:]
+		}
+		if skipped > 0 {
+			add(pal.Dim + fmt.Sprintf("    … %d earlier lines (press f to scroll)", skipped) + aRst)
+		}
+		for _, outLine := range entryLines {
+			add(pal.Dim + "    " + stripANSI(outLine) + aRst)
+		}
+	}
+	return lines
+}
+
 // viewActivityFeed renders the center activity feed with scroll support.
 func (m Model) viewActivityFeed(height, width int) string {
 	pal := m.ansiPalette()
@@ -3187,15 +3330,19 @@ func (m Model) viewActivityFeed(height, width int) string {
 		borderColor = pal.Accent
 	}
 
-	// feedRowAt appends a content row, applying the cursor highlight if the
-	// current line index matches feedCursor when the feed is focused.
+	// feedRowAt appends a content row, applying cursor and/or mark highlights.
 	appendRow := func(lines *[]string, content string) {
 		idx := len(*lines)
+		var row string
 		if m.feedFocused && idx == m.feedCursor {
-			*lines = append(*lines, boxRowCursorColor(content, width, borderColor))
+			row = boxRowCursorColor(content, width, borderColor)
 		} else {
-			*lines = append(*lines, boxRow(content, width, borderColor))
+			row = boxRow(content, width, borderColor)
 		}
+		if m.feedMarked[idx] {
+			row = pal.SelBG + row + aRst
+		}
+		*lines = append(*lines, row)
 	}
 
 	// Flatten all feed entries into content lines.
@@ -3222,18 +3369,11 @@ func (m Model) viewActivityFeed(height, width int) string {
 				appendRow(&allLines, fmt.Sprintf("  %s  %s%s", pal.Dim, cwdDisplay, aRst))
 			}
 
-			// Render per-step status badges wrapped to terminal width.
+			// Render per-step status badges vertically: one line per step, output beneath.
 			if len(entry.steps) > 0 {
-				const indent = "  "
-				sep := pal.Dim + "  ·  " + aRst
-				sepVis := len("  ·  ")
-				maxW := width - 4
-				if maxW < 8 {
-					maxW = 8
-				}
-				curLine := indent
-				curVis := len(indent)
-				first := true
+				const stepIndent = "  "
+				const outputIndent = "    "
+				const maxStepOutputLines = 5
 				for _, step := range entry.steps {
 					var col string
 					switch step.status {
@@ -3246,27 +3386,16 @@ func (m Model) viewActivityFeed(height, width int) string {
 					default:
 						col = pal.Dim
 					}
-					badge := col + stepGlyph(step.status) + " " + step.id + aRst
-					badgeVis := len(stripANSI(stepGlyph(step.status)+" "+step.id)) // 1 glyph + space + id
-					if !first {
-						// Check if adding separator + badge fits on current line.
-						if curVis+sepVis+badgeVis > maxW {
-							appendRow(&allLines, curLine)
-							curLine = indent
-							curVis = len(indent)
-							first = true
-						}
+					badge := stepIndent + col + stepGlyph(step.status) + " " + step.id + aRst
+					appendRow(&allLines, badge)
+					// Per-step output lines (last maxStepOutputLines).
+					stepLines := step.lines
+					if len(stepLines) > maxStepOutputLines {
+						stepLines = stepLines[len(stepLines)-maxStepOutputLines:]
 					}
-					if !first {
-						curLine += sep
-						curVis += sepVis
+					for _, sl := range stepLines {
+						appendRow(&allLines, outputIndent+pal.Dim+sl+aRst)
 					}
-					curLine += badge
-					curVis += badgeVis
-					first = false
-				}
-				if !first {
-					appendRow(&allLines, curLine)
 				}
 			}
 
@@ -3342,10 +3471,15 @@ func (m Model) viewActivityFeed(height, width int) string {
 	var feedHints []panelrender.Hint
 	if m.feedFocused {
 		feedHints = []panelrender.Hint{
+			{Key: "j/k", Desc: "nav"},
 			{Key: "[", Desc: "page up"},
 			{Key: "]", Desc: "page down"},
 			{Key: "g", Desc: "top"},
 			{Key: "G", Desc: "bottom"},
+			{Key: "m", Desc: "mark"},
+		}
+		if len(m.feedMarked) > 0 {
+			feedHints = append(feedHints, panelrender.Hint{Key: "r", Desc: "run"})
 		}
 	}
 	lines = append(lines, boxRow(panelrender.HintBar(feedHints, width-2, pal), width, borderColor))

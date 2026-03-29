@@ -1216,3 +1216,144 @@ func TestSignalBoard_DefaultFilter_IsRunning(t *testing.T) {
 		t.Errorf("expected default filter 'running', got %q", got)
 	}
 }
+
+// ── Feed mark / highlight / agent runner injection ────────────────────────────
+
+func TestFeed_MarkToggle(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedDone, nil)
+	m = m.SetFeedFocused(true)
+
+	// Press m to mark line 0 (title line).
+	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	afterMark := m3.(switchboard.Model)
+	if !afterMark.FeedMarkedAt(0) {
+		t.Error("expected line 0 to be marked after pressing m")
+	}
+
+	// Press m again to unmark.
+	m4, _ := afterMark.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	afterUnmark := m4.(switchboard.Model)
+	if afterUnmark.FeedMarkedAt(0) {
+		t.Error("expected line 0 to be unmarked after pressing m twice")
+	}
+}
+
+func TestFeed_RKeyWithMarks_OpensModalWithPrompt(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedDone, nil)
+	m = m.SetFeedFocused(true)
+
+	// Mark the current line.
+	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	m = m3.(switchboard.Model)
+
+	// Press r — should open modal with prompt populated.
+	m4, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	result := m4.(switchboard.Model)
+
+	if !result.AgentModalOpen() {
+		t.Fatal("expected agent modal to be open after pressing r with marked feed lines")
+	}
+	if result.AgentModalFocus() != 2 {
+		t.Errorf("expected modal focus slot 2 (prompt), got %d", result.AgentModalFocus())
+	}
+	if result.AgentPromptValue() == "" {
+		t.Error("expected agent prompt to be pre-populated, got empty string")
+	}
+	if result.FeedHasMarks() {
+		t.Error("expected marks to be cleared after r")
+	}
+}
+
+func TestFeed_RKeyWithNoMarks_NoOp(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedDone, nil)
+	m = m.SetFeedFocused(true)
+
+	// Press r with no marks — modal should NOT open.
+	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	result := m3.(switchboard.Model)
+
+	if result.AgentModalOpen() {
+		t.Error("expected agent modal to remain closed when r pressed with no marks")
+	}
+}
+
+func TestAgentModalBox_Width_IsNinetyPercent(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m3 := m2.(switchboard.Model)
+	box := m3.ViewAgentModalBox(160, 40)
+	// modalW = max(160*9/10, 60) = 144.
+	// The first line is the box top border: ╔═...═╗ (plus ANSI color escapes for border).
+	// Count the ═ characters (each represents one content column) plus the two corners.
+	// Expected: 144 - 2 corners = 142 ═ chars (minus any title chars replaced with spaces).
+	// Simpler: count that the first content row (│ ... │) has 142 inner chars.
+	lines := strings.Split(box, "\n")
+	if len(lines) < 2 {
+		t.Fatal("expected at least 2 lines in modal box")
+	}
+	// Count ─ runes in first line — box top border has modalW-2-titleLen of them.
+	// For w=160: modalW=144, title=" AGENT "=7 chars, so 144-2-7=135 dashes.
+	// Old cap was 90 cols → 90-2-7=81 dashes. Check well above the old max.
+	dashCount := strings.Count(lines[0], "─")
+	if dashCount < 120 {
+		t.Errorf("expected at least 120 '─' chars in modal top border (90%% of 160 terminal), got %d", dashCount)
+	}
+}
+
+func TestFeed_HintBar_MarkHintPresent(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedRunning, nil)
+	m = m.SetFeedFocused(true)
+	view := m.View()
+	if !strings.Contains(view, "mark") {
+		t.Error("expected 'm mark' hint in feed hint bar when focused, not found")
+	}
+}
+
+func TestFeed_HintBar_RunHintWhenMarked(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = m2.(switchboard.Model)
+	m = m.AddFeedEntry("job1", "pipeline: alpha", switchboard.FeedRunning, nil)
+	m = m.SetFeedFocused(true)
+	// Mark the current line.
+	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	m = m3.(switchboard.Model)
+	view := m.View()
+	if !strings.Contains(view, "run") {
+		t.Error("expected 'r run' hint in feed hint bar when lines are marked, not found")
+	}
+}
+
+func TestFeedStepDisplay_Vertical(t *testing.T) {
+	m := switchboard.New()
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
+	m3 = m3.AddFeedEntry("job1", "pipeline: test", switchboard.FeedRunning, nil)
+	for _, id := range []string{"step-a", "step-b", "step-c"} {
+		mx, _ := m3.Update(switchboard.StepStatusMsg{FeedID: "job1", StepID: id, Status: "done"})
+		m3 = mx.(switchboard.Model)
+	}
+	view := m3.View()
+	// All step IDs must appear.
+	for _, id := range []string{"step-a", "step-b", "step-c"} {
+		if !strings.Contains(view, id) {
+			t.Errorf("View() missing step id %q in vertical layout output", id)
+		}
+	}
+	// With vertical layout the · separator should NOT appear between step badges.
+	if strings.Contains(view, "  ·  ") {
+		t.Error("View() contains horizontal '·' separator — expected vertical layout")
+	}
+}
