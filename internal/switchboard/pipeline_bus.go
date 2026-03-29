@@ -18,6 +18,22 @@ import (
 	"github.com/adam-stokes/orcai/internal/store"
 )
 
+// ── agent run event publishing ────────────────────────────────────────────────
+
+// publishAgentEventCmd returns a tea.Cmd that publishes an agent run lifecycle
+// event to busd. Errors are silently ignored so the job lifecycle is unaffected
+// when the bus is unavailable.
+func publishAgentEventCmd(topic string, payload any) tea.Cmd {
+	return func() tea.Msg {
+		sockPath, err := busd.SocketPath()
+		if err != nil {
+			return nil
+		}
+		_ = busd.PublishEvent(sockPath, topic, payload)
+		return nil
+	}
+}
+
 // ── feed cap ──────────────────────────────────────────────────────────────────
 
 // feedMaxCap is the maximum number of entries the ring buffer may hold.

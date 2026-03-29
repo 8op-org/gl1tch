@@ -194,10 +194,10 @@ func tryBusSubscribeCmd() tea.Cmd {
 			return busDisconnectedMsg{}
 		}
 
-		// Send the registration frame to subscribe to pipeline.run.* events.
+		// Subscribe to pipeline, agent, and cron run lifecycle events.
 		reg, _ := json.Marshal(map[string]any{
 			"name":      "inbox",
-			"subscribe": []string{"pipeline.run.*"},
+			"subscribe": []string{"pipeline.run.*", "agent.run.*", "cron.job.*"},
 		})
 		if _, err := conn.Write(append(reg, '\n')); err != nil {
 			conn.Close()

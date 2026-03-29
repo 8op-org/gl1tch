@@ -25,6 +25,7 @@ import (
 	robfigcron "github.com/robfig/cron/v3"
 
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
+	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
 	"github.com/adam-stokes/orcai/internal/panelrender"
 	"github.com/adam-stokes/orcai/internal/picker"
@@ -969,8 +970,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			_ = m.store.RecordRunComplete(jh.storeRunID, exitCode, out, "")
 		}
+		var doneCmd tea.Cmd
+		if jh, ok := m.activeJobs[msg.id]; ok {
+			exitCode := 0
+			if finalStatus == FeedFailed {
+				exitCode = 1
+			}
+			doneCmd = publishAgentEventCmd(topics.AgentRunCompleted, map[string]any{
+				"run_id":      msg.id,
+				"store_run_id": jh.storeRunID,
+				"exit_status": exitCode,
+			})
+		}
 		delete(m.activeJobs, msg.id)
-		return m, nil
+		return m, doneCmd
 
 	case jobFailedMsg:
 		if jh, ok := m.activeJobs[msg.id]; ok {
@@ -1006,8 +1019,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			_ = m.store.RecordRunComplete(jh.storeRunID, 1, out, "")
 		}
+		var failCmd tea.Cmd
+		if jh, ok := m.activeJobs[msg.id]; ok {
+			failCmd = publishAgentEventCmd(topics.AgentRunFailed, map[string]any{
+				"run_id":       msg.id,
+				"store_run_id": jh.storeRunID,
+				"exit_status":  1,
+			})
+		}
 		delete(m.activeJobs, msg.id)
-		return m, nil
+		return m, failCmd
 
 	case tea.KeyMsg:
 		// These keys always go through handleKey regardless of which panel is focused.
@@ -2254,6 +2275,12 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	}
 	m.activeJobs[feedID] = jh
 
+	startPayload := map[string]any{"run_id": feedID, "agent": agentName}
+	if jh.storeRunID != 0 {
+		startPayload["store_run_id"] = jh.storeRunID
+	}
+	publishStart := publishAgentEventCmd(topics.AgentRunStarted, startPayload)
+
 	cmd := runAgentCmdCh(adapter, input, vars, feedID, ch, cancel)
 	drain := drainChan(ch)
 
@@ -2265,7 +2292,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	m.agentSchedule.Blur()
 	m.agentScheduleErr = ""
 
-	return m, tea.Batch(cmd, drain)
+	return m, tea.Batch(publishStart, cmd, drain)
 }
 
 // runAgentCmdCh starts CliAdapter.Execute in a goroutine, streaming output to ch.

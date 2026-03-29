@@ -14,6 +14,7 @@ run: install
 		ls -t ~/.local/share/orcai/orcai.db.bak.* 2>/dev/null | tail -n +6 | xargs rm -f; \
 	fi
 	rm -f ~/.local/share/orcai/orcai.db
+	rm -f ~/.config/orcai/inbox-read.json
 	$(BINARY)
 
 build:

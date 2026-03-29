@@ -17,4 +17,9 @@ const (
 	// Cron job lifecycle
 	CronJobStarted   = "cron.job.started"
 	CronJobCompleted = "cron.job.completed"
+
+	// Agent run lifecycle
+	AgentRunStarted   = "agent.run.started"
+	AgentRunCompleted = "agent.run.completed"
+	AgentRunFailed    = "agent.run.failed"
 )
