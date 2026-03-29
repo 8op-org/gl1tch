@@ -294,6 +294,7 @@ type Model struct {
 	agentModalFocus int // 0=provider, 1=model, 2=prompt, 3=cwd, 4=schedule (within modal)
 	agentSchedule         textarea.Model
 	agentScheduleErr      string
+	agentUseBrain         bool
 	helpOpen              bool
 	registry              *themes.Registry
 	themeState            tuikit.ThemeState
@@ -452,6 +453,9 @@ func (m Model) AgentModalFocus() int { return m.agentModalFocus }
 
 // AgentScheduleErr returns the agent schedule error string — used in tests.
 func (m Model) AgentScheduleErr() string { return m.agentScheduleErr }
+
+// AgentUseBrain returns whether the agent should use the brain — used in tests.
+func (m Model) AgentUseBrain() bool { return m.agentUseBrain }
 
 // PipelineLaunchMode returns the pipeline launch mode — used in tests.
 func (m Model) PipelineLaunchMode() int { return m.pipelineLaunchMode }
@@ -2521,7 +2525,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 
 		// Generate a minimal single-step pipeline YAML so the scheduled run
 		// has the prompt embedded and runs via the standard pipeline executor.
-		pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, false)
+		pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, m.agentUseBrain)
 		if pipelineErr != nil {
 			m.agentScheduleErr = "pipeline write error: " + pipelineErr.Error()
 			return m, nil

@@ -1680,3 +1680,10 @@ func TestWriteSingleStepPipeline_NoBrain(t *testing.T) {
 		t.Errorf("expected no use_brain key in YAML when useBrain=false")
 	}
 }
+
+func TestAgentUseBrain_DefaultFalse(t *testing.T) {
+	m := switchboard.New()
+	if m.AgentUseBrain() {
+		t.Error("agentUseBrain should default to false")
+	}
+}
