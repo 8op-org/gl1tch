@@ -78,6 +78,17 @@ func drainCmd(m *Model, cmd tea.Cmd) *Model {
 	if msg == nil {
 		return m
 	}
+	// Unwrap batch messages by draining each sub-command independently.
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = drainCmd(m, c)
+		}
+		return m
+	}
+	// Skip spinner ticks — they loop indefinitely; not useful in tests.
+	if _, ok := msg.(spinnerTickMsg); ok {
+		return m
+	}
 	model, nextCmd := m.Update(msg)
 	m = model.(*Model)
 	return drainCmd(m, nextCmd)

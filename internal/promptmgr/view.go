@@ -275,7 +275,7 @@ func (m *Model) buildRunnerRows(w, h int) []string {
 
 	headerTitle := "TEST RUNNER"
 	if m.runnerStreaming {
-		headerTitle += " ⣾"
+		headerTitle += " " + spinnerFrames[m.spinnerIdx%len(spinnerFrames)]
 	}
 
 	var rows []string

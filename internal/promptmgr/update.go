@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sahilm/fuzzy"
@@ -27,6 +28,14 @@ type statusClearMsg struct{}
 type runnerTurn struct {
 	role    string // "user" or "assistant"
 	content string
+}
+
+type spinnerTickMsg struct{}
+
+var spinnerFrames = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return spinnerTickMsg{} })
 }
 
 // loadPromptsCmd fetches all prompts from the store.
@@ -220,6 +229,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.runnerStreaming = false
 		m.runCancel = nil
 
+	case spinnerTickMsg:
+		if m.runnerStreaming {
+			m.spinnerIdx = (m.spinnerIdx + 1) % len(spinnerFrames)
+			return m, spinnerTickCmd()
+		}
+
 	case tuikit.ThemeChangedMsg:
 		// Already handled above via themeState.Handle.
 	}
@@ -288,12 +303,18 @@ func (m *Model) updateListPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "tab":
-		// cycle 0→1→2→0
+		// cycle 0→1→2→0; sync editor focus when entering editor panel
 		m.focusPanel = (m.focusPanel + 1) % 3
+		if m.focusPanel == 1 {
+			m.syncEditorFocus()
+		}
 
 	case "shift+tab":
 		// cycle 0→2→1→0
 		m.focusPanel = (m.focusPanel + 2) % 3
+		if m.focusPanel == 1 {
+			m.syncEditorFocus()
+		}
 
 	default:
 		// Delegate to filter input.
@@ -343,10 +364,11 @@ func (m *Model) updateEditorPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ctx, cancel := context.WithCancel(context.Background())
 		m.runCancel = cancel
 		m.runnerStreaming = true
+		m.spinnerIdx = 0
 		m.runnerOutput = ""
 		m.runnerErrMsg = ""
 		m.runnerScrollOffset = 0
-		return m, runPluginCmd(ctx, p, body, m.editingPrompt.CWD, modelID)
+		return m, tea.Batch(runPluginCmd(ctx, p, body, m.editingPrompt.CWD, modelID), spinnerTickCmd())
 
 	case "enter":
 		switch m.editorSubFocus {
@@ -451,10 +473,11 @@ func (m *Model) updateRunnerPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			ctx, cancel := context.WithCancel(context.Background())
 			m.runCancel = cancel
 			m.runnerStreaming = true
+			m.spinnerIdx = 0
 			m.runnerOutput = ""
 			m.runnerErrMsg = ""
 			m.runnerScrollOffset = 0
-			return m, runPluginCmd(ctx, p, input, m.editingPrompt.CWD, modelID)
+			return m, tea.Batch(runPluginCmd(ctx, p, input, m.editingPrompt.CWD, modelID), spinnerTickCmd())
 		default:
 			var cmd tea.Cmd
 			m.followUpInput, cmd = m.followUpInput.Update(msg)
@@ -485,8 +508,14 @@ func (m *Model) updateRunnerPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "tab":
 		m.focusPanel = (m.focusPanel + 1) % 3
+		if m.focusPanel == 1 {
+			m.syncEditorFocus()
+		}
 	case "shift+tab":
 		m.focusPanel = (m.focusPanel + 2) % 3
+		if m.focusPanel == 1 {
+			m.syncEditorFocus()
+		}
 	}
 	return m, nil
 }

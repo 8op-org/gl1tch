@@ -61,6 +61,7 @@ type Model struct {
 	runnerScrollOffset int
 	runnerErrMsg       string
 	runCancel          context.CancelFunc // cancel func for active run; nil if not running
+	spinnerIdx         int                // frame index for the running animation
 
 	// Conversation follow-up
 	runnerTurns    []runnerTurn   // alternating user/assistant turns from this session
