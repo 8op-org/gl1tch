@@ -4,32 +4,26 @@
   <table class="sysinfo-table">
     <thead>
       <tr>
-        <th colspan="2" class="sysinfo-title">SYSTEM: ORCAI v0.1.0</th>
+        <th colspan="2" class="sysinfo-title">ORCAI &mdash; AGENTIC BULLETIN BOARD SYSTEM</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td class="box-label">NODE:</td>
+        <td class="box-label">REPO:</td>
         <td class="box-value"><a href="https://github.com/adam-stokes/orcai" target="_blank" rel="noopener">github.com/adam-stokes/orcai</a></td>
       </tr>
       <tr>
-        <td class="box-label">OS:</td>
-        <td class="box-value">Linux · macOS · tmux required</td>
+        <td class="box-label">RUNS ON:</td>
+        <td class="box-value">Linux &nbsp;&middot;&nbsp; macOS &nbsp;&middot;&nbsp; tmux required</td>
       </tr>
       <tr>
-        <td class="box-label">LANG:</td>
-        <td class="box-value">Go 1.21+</td>
+        <td class="box-label">BUILT WITH:</td>
+        <td class="box-value">Go 1.21+ &nbsp;&middot;&nbsp; BubbleTea &nbsp;&middot;&nbsp; tmux</td>
       </tr>
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="2" class="sysinfo-hint"><span class="key-hint">[ENTER]</span> <a href="/orcai/getting-started">Getting Started</a></td>
-      </tr>
-      <tr>
-        <td colspan="2" class="sysinfo-hint"><span class="key-hint">[P]</span>     <a href="/orcai/plugins">Plugin Gallery</a></td>
-      </tr>
-      <tr>
-        <td colspan="2" class="sysinfo-hint"><span class="key-hint">[G]</span>     <a href="https://github.com/adam-stokes/orcai" target="_blank" rel="noopener">GitHub</a></td>
+        <td colspan="2" class="sysinfo-hint"><span class="key-hint">[3]</span> get started &nbsp;&middot;&nbsp; <span class="key-hint">[4]</span> plugins &nbsp;&middot;&nbsp; <span class="key-hint">[8]</span> labs</td>
       </tr>
     </tfoot>
   </table>
@@ -37,28 +31,32 @@
 
 <style>
 .sysinfo-table {
-  border: 1px solid var(--purple);
+  border: 1px solid var(--green);
   border-collapse: collapse;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  min-width: 380px;
+  font-size: 12px;
+  min-width: 420px;
   color: var(--fg);
 }
 .sysinfo-table th,
 .sysinfo-table td {
-  padding: 4px 10px;
+  padding: 4px 12px;
 }
 .sysinfo-title {
-  color: var(--cyan);
+  color: var(--green);
   text-align: left;
   font-weight: normal;
-  border-bottom: 1px solid var(--purple);
-  padding: 6px 10px;
+  border-bottom: 1px solid var(--green);
+  padding: 6px 12px;
+  letter-spacing: 1px;
+  font-size: 11px;
 }
 .box-label {
   color: var(--comment);
   white-space: nowrap;
   vertical-align: top;
+  font-size: 11px;
+  letter-spacing: 1px;
 }
 .box-value {
   color: var(--fg);
@@ -71,17 +69,13 @@
   text-decoration: underline;
 }
 tfoot tr:first-child td {
-  border-top: 1px solid var(--selbg);
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .sysinfo-hint {
-  color: var(--fg);
-}
-.sysinfo-hint a {
-  color: var(--fg);
-  text-decoration: none;
-}
-.sysinfo-hint a:hover {
-  color: var(--cyan);
+  color: var(--comment);
+  font-size: 11px;
 }
 .key-hint {
   color: var(--yellow);

@@ -7,6 +7,8 @@ import PluginsScreen from '../components/screens/PluginsScreen.astro';
 import PipelinesScreen from '../components/screens/PipelinesScreen.astro';
 import ChangelogScreen from '../components/screens/ChangelogScreen.astro';
 import ThemesScreen from '../components/screens/ThemesScreen.astro';
+import LabsScreen from '../components/screens/LabsScreen.astro';
+import DocsScreen from '../components/screens/DocsScreen.astro';
 ---
 <TerminalShell title="Home">
   <section data-screen="home" class="screen">
@@ -29,5 +31,11 @@ import ThemesScreen from '../components/screens/ThemesScreen.astro';
   </section>
   <section data-screen="themes" class="screen">
     <ThemesScreen />
+  </section>
+  <section data-screen="labs" class="screen">
+    <LabsScreen />
+  </section>
+  <section data-screen="docs" class="screen">
+    <DocsScreen />
   </section>
 </TerminalShell>

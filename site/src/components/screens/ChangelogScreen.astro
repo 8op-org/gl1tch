@@ -1,26 +1,57 @@
 ---
 ---
 <div class="term-pane-header">
-  <pre class="fg-yellow" style="margin:0;font-size:13px">&#9556;&#9552;&#9552;[ CHANGELOG ]&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9559;</pre>
+  <div class="tui-panel-header"><span>CHANGELOG</span></div>
 </div>
-<div class="term-pane" style="padding:24px 32px">
+<div class="term-pane" style="overflow-y:auto">
   <h2 class="section-header fg-yellow">// release log //</h2>
-  <pre style="color:var(--fg);font-size:12px;line-height:1.8;font-family:'Share Tech Mono',monospace">
+
+  <pre style="color:var(--fg);font-size:12px;line-height:1.8">
 <span class="fg-comment">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
-<span class="fg-cyan">[2026-03-25]</span> <span class="fg-green">&#9654; feat:</span> ABBS rebrand &mdash; Agentic Bulletin Board System
-             <span class="fg-green">&#9654; feat:</span> terminal emulator website &mdash; single-page, no reload
-             <span class="fg-green">&#9654; feat:</span> keyboard-driven screen navigation (1-7, ?, q)
-             <span class="fg-green">&#9654; feat:</span> pipeline showcase with live YAML typewriter
+<span class="fg-cyan">[2026-03-29]</span> <span class="fg-green">&#9654; feat:</span> brain system — use_brain / write_brain pipeline fields
+             <span class="fg-green">&#9654; feat:</span> switchboard — use_brain checkbox in agent modal
+             <span class="fg-green">&#9654; feat:</span> switchboard — brain context injection on immediate run
+             <span class="fg-green">&#9654; feat:</span> brain — brain_notes tag, write instruction, prompt in inbox
+             <span class="fg-green">&#9654; feat:</span> brain — 4000-char note truncation, full step data in detail
+             <span class="fg-green">&#9654; feat:</span> pipeline — BrainInjector interface, StoreBrainInjector
+             <span class="fg-green">&#9654; feat:</span> pipeline — brain read/write injection, runner integration
+             <span class="fg-green">&#9654; feat:</span> pipeline — on_failure recovery step suppresses run-level error
+             <span class="fg-green">&#9654; feat:</span> cmd — wire WithBrainInjector into CLI pipeline runner
+             <span class="fg-green">&#9654; feat:</span> inbox — step output and prompt in detail view
+             <span class="fg-green">&#9654; feat:</span> feed — collapsible JSON output, feedline parsers, mark mode
+             <span class="fg-yellow">&#9654; fix:</span>  inbox — wrap step prompt and output to panel width
+             <span class="fg-yellow">&#9654; fix:</span>  switchboard — route agent run-now through pipeline runner
+             <span class="fg-yellow">&#9654; fix:</span>  panelrender — clamp overlay startRow, clip rows at height
+             <span class="fg-yellow">&#9654; fix:</span>  cron — simplify hint bar, drop tab/esc hints
 <span class="fg-comment">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
-<span class="fg-cyan">[2026-03-24]</span> <span class="fg-green">&#9654; feat:</span> core plugins as subcommands with PATH override
-             <span class="fg-green">&#9654; feat:</span> opt-in layout/keybindings
-             <span class="fg-purple">&#9654; refactor:</span> sidebar &mdash; remove unused boxMid/boxEmpty
+<span class="fg-cyan">[2026-03-28]</span> <span class="fg-green">&#9654; feat:</span> themes — 55-theme library, tabbed 2-column picker, live preview
+             <span class="fg-green">&#9654; feat:</span> inbox — cursor, mark, dispatch in detail modal
+             <span class="fg-green">&#9654; feat:</span> inbox — agent/pipeline/cron bus signals, stale read fix
+             <span class="fg-green">&#9654; feat:</span> activity feed — line marking, agent runner injection, vertical steps
+             <span class="fg-green">&#9654; feat:</span> jumpwindow — two-column layout, tab focus, scoped search
+             <span class="fg-green">&#9654; feat:</span> pipeline runner — authoritative source of truth via busd
+             <span class="fg-green">&#9654; feat:</span> switchboard — single-line box panel headers, bidirectional theme sync
+             <span class="fg-green">&#9654; feat:</span> switchboard — ANSI box style for modals and pipeline overlay
+             <span class="fg-yellow">&#9654; fix:</span>  jumpwindow — duplicate session listing, sysop ordering
+             <span class="fg-yellow">&#9654; fix:</span>  signal board — busd as sole source for pipeline feed entries
+             <span class="fg-yellow">&#9654; fix:</span>  crontui — edit overlay uses panelrender box headers
 <span class="fg-comment">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
-<span class="fg-cyan">[2026-03-23]</span> <span class="fg-purple">&#9654; chore:</span> gitignore orcai-* binaries and .claude/worktrees/
-             <span class="fg-purple">&#9654; chore:</span> agents: rebrand bbs-site-reviewer to ABBS
+<span class="fg-cyan">[2026-03-26]</span> <span class="fg-green">&#9654; feat:</span> switchboard — pipeline CRUD keys, floating modal overlay system
+             <span class="fg-green">&#9654; feat:</span> switchboard — signal board, jump window popup, feed scroll
+             <span class="fg-green">&#9654; feat:</span> plugins — plugin-driven provider discovery, sidecar kind + models
+             <span class="fg-yellow">&#9654; fix:</span>  picker — propagate SidecarPath, prevent double-registration
+             <span class="fg-yellow">&#9654; fix:</span>  switchboard — ANSI-aware vis lengths, feed bleeding, model IDs
+<span class="fg-comment">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
+<span class="fg-cyan">[2026-03-25]</span> <span class="fg-green">&#9654; feat:</span> ABBS rebrand — Agentic Bulletin Board System
+             <span class="fg-green">&#9654; feat:</span> site — terminal emulator website, full keyboard navigation
+             <span class="fg-green">&#9654; feat:</span> switchboard — unified sysop + welcome TUI, full-screen layout
+             <span class="fg-green">&#9654; feat:</span> picker — plugin-aware provider discovery, pipeline session launch
+             <span class="fg-green">&#9654; feat:</span> pipeline builder — accordion UI, dropdowns, step/name editing
+             <span class="fg-green">&#9654; feat:</span> core plugins as PATH-override subcommands
 <span class="fg-comment">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
   </pre>
-  <p style="color:var(--comment);font-size:11px;margin-top:8px">
-    <span class="fg-yellow">&rarr;</span> Press <span class="fg-yellow">1</span> for home &nbsp;&middot;&nbsp; <span class="fg-yellow">5</span> for pipelines
+
+  <p style="color:var(--comment);font-size:11px;margin-top:4px">
+    <span class="fg-yellow">&rarr;</span> Press <span class="fg-yellow">1</span> for home &nbsp;&middot;&nbsp; <span class="fg-yellow">5</span> for pipelines &nbsp;&middot;&nbsp; <span class="fg-yellow">9</span> for docs
   </p>
 </div>

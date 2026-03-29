@@ -1,40 +1,64 @@
 ---
+import TuiBox from '../TuiBox.astro';
 ---
 <div class="term-pane-header">
-  <pre class="fg-purple" style="margin:0;font-size:13px">&#9556;&#9552;&#9552;[ ABOUT ]&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9559;</pre>
+  <div class="tui-panel-header"><span>ABOUT</span></div>
 </div>
-<div class="term-pane" style="padding:24px 32px">
-  <h2 class="section-header fg-cyan">// orcai &mdash; abbs //</h2>
-  <p style="color:var(--fg);font-size:13px;line-height:2;max-width:700px;margin-bottom:16px">
-    Most AI tools want you in a browser. <span class="fg-purple">orcai</span> runs in your terminal,
-    inside <span class="fg-cyan">tmux</span>, next to your editor and shell. Launch it, get a session.
-    Point any CLI tool at it with a 10-line YAML file. Chain Claude, Ollama, or local models into
-    YAML pipelines where each step knows its input and output types. In the ABBS model,
-    <em>widgets scroll &mdash; not pages</em>. Your workspace is the terminal; orcai is the bulletin board.
+<div class="term-pane" style="overflow-y:auto">
+
+  <h2 class="section-header fg-cyan" >// orcai &mdash; abbs //</h2>
+
+  <p style="color:var(--fg);font-size:13px;line-height:2;max-width:700px;margin-bottom:4px">
+    Browser-based AI tools charge you for every token spent staring at a loading spinner.
+    <span class="fg-purple">orcai</span> runs in your terminal, next to your editor and shell,
+    using the models you already have. Local inference, zero cloud markup.
+    Your API spend goes to actual work &mdash; not UI overhead.
   </p>
 
-  <pre class="fg-comment" style="font-size:11px;margin:16px 0">
-&#9556;&#9552;&#9552;[ FEATURES ]&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9559;
-&#9553;                                                                  &#9553;
-&#9553;  TMUX SESSIONS    Track AI workspaces as tmux sessions in a     &#9553;
-&#9553;  &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;   sidebar. Spawn per task, switch mid-pipeline, &#9553;
-&#9553;                   kill when done. Everything in the terminal.    &#9553;
-&#9553;                                                                  &#9553;
-&#9560;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9559;
-&#9553;                                                                  &#9553;
-&#9553;  PLUGIN SYSTEM    Write a YAML file pointing at any CLI tool &#9472;  &#9553;
-&#9553;  &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;   rg, jq, ffmpeg, your scripts. Need more?      &#9553;
-&#9553;                   Implement the gRPC interface in Go.            &#9553;
-&#9553;                                                                  &#9553;
-&#9560;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9559;
-&#9553;                                                                  &#9553;
-&#9553;  AGENT PIPELINES  YAML pipelines connect AI providers to        &#9553;
-&#9553;  &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;   plugins in sequence. Typed input/output        &#9553;
-&#9553;                   schemas. No glue code. Fully customizable.     &#9553;
-&#9553;                                                                  &#9553;
-&#9562;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9565;</pre>
+  <TuiBox title="COST & EFFICIENCY">
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-green">LOCAL MODELS</div>
+      <div class="tui-box-desc">Run Ollama on-device. No API call, no bill.<br/>Pull qwen2.5-coder once, run it forever.</div>
+    </div>
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-green">TYPED PIPELINES</div>
+      <div class="tui-box-desc">No glue code means no wasted tokens fixing bad output formats.<br/>Steps get what they expect. First time, every time.</div>
+    </div>
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-green">BACKGROUND CRON</div>
+      <div class="tui-box-desc">Agents run while you sleep. Wake up to results,<br/>not a context window full of back-and-forth prompting.</div>
+    </div>
+  </TuiBox>
+
+  <p style="color:var(--fg);font-size:13px;line-height:2;max-width:700px;margin-bottom:4px">
+    <span class="fg-yellow">BRAIN</span> is context injection. Point it at docs, files, URLs, or code.
+    Every agent run gets that context loaded automatically &mdash; your agents know
+    your codebase, your standards, your project layout. They stop asking questions
+    you've already answered elsewhere.
+  </p>
+
+  <TuiBox title="BRAIN, PLUGINS & PRODUCTIVITY">
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-cyan">BRAIN CONTEXT</div>
+      <div class="tui-box-desc">Docs, files, URLs loaded once, reused on every run.<br/>No copy-pasting into chat windows.</div>
+    </div>
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-cyan">TMUX SESSIONS</div>
+      <div class="tui-box-desc">Each agent gets its own workspace. Switch mid-pipeline,<br/>kill when done. Terminal stays yours.</div>
+    </div>
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-cyan">PLUGIN SYSTEM</div>
+      <div class="tui-box-desc">YAML file pointing at any CLI: rg, jq, ffmpeg, your scripts.<br/>Need more? Implement the gRPC interface in Go.</div>
+    </div>
+    <div class="tui-box-row">
+      <div class="tui-box-label fg-cyan">INBOX + FEED</div>
+      <div class="tui-box-desc">Every agent run lands in a scrollable inbox.<br/>Review outputs, replay steps, full audit trail.</div>
+    </div>
+  </TuiBox>
 
   <p style="color:var(--comment);font-size:11px;margin-top:8px">
-    <span class="fg-yellow">&rarr;</span> Press <span class="fg-yellow">3</span> for installation &nbsp;&middot;&nbsp; <span class="fg-yellow">5</span> for pipelines
+    <span class="fg-yellow">&rarr;</span> Press <span class="fg-yellow">3</span> to install &nbsp;&middot;&nbsp;
+    <span class="fg-yellow">5</span> for pipelines &nbsp;&middot;&nbsp;
+    <span class="fg-yellow">8</span> for labs
   </p>
 </div>
