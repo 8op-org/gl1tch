@@ -84,6 +84,8 @@ var pipelineRunCmd = &cobra.Command{
 			return err
 		}
 
+		fmt.Printf("[pipeline] starting: %s\n", p.Name)
+
 		runProviders := picker.BuildProviders()
 		mgr := plugin.NewManager()
 		for _, prov := range runProviders {
