@@ -272,7 +272,7 @@ func runLegacy(ctx context.Context, p *Pipeline, mgr *plugin.Manager, userInput 
 			rawPrompt := Interpolate(step.Prompt+step.Input, legacySnap)
 
 			stepStart := time.Now()
-			output, err := executePluginStep(ctx, step, ec, mgr, lastOutput, p, cfg.store)
+			output, err := executePluginStep(ctx, step, ec, mgr, lastOutput, p, cfg.store, cfg.runID)
 			stepDurationMs := time.Since(stepStart).Milliseconds()
 
 			if err != nil {
@@ -1108,7 +1108,7 @@ func (b *builtinExecutor) Cleanup(_ context.Context) error { return nil }
 
 // executePluginStep runs a single plugin step and returns its string output.
 // This is used by the legacy runner only.
-func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mgr *plugin.Manager, defaultInput string, p *Pipeline, st *store.Store) (string, error) {
+func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mgr *plugin.Manager, defaultInput string, p *Pipeline, st *store.Store, runID int64) (string, error) {
 	pluginName := step.Executor
 	if pluginName == "" {
 		pluginName = step.Plugin
@@ -1140,6 +1140,12 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 
 	promptOrInput = injectBrainContext(ctx, promptOrInput, p, step, ec)
 
+	// Append ORCAI_CLARIFY instruction for reactive executors so the model
+	// knows the protocol for requesting user input.
+	if clarify.IsReactive(pluginName) {
+		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction
+	}
+
 	stepVars := ec.FlatStrings()
 	stepVars["model"] = step.Model
 	for k, v := range step.Vars {
@@ -1149,6 +1155,25 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 	var buf bytes.Buffer
 	execErr := pl.Execute(ctx, promptOrInput, stepVars, &buf)
 	output := buf.String()
+
+	// Clarification: if the executor output contains ORCAI_CLARIFY:, surface it
+	// via AskClarification (busd), then re-execute with the full conversation context.
+	if execErr == nil && clarify.IsReactive(pluginName) {
+		detector := clarify.Get(pluginName)
+		for _, line := range strings.Split(output, "\n") {
+			if q, found := detector.Detect(line); found {
+				answer, cerr := AskClarification(ctx, strconv.FormatInt(runID, 10), q)
+				if cerr == nil && answer != "" {
+					followUp := buildClarificationFollowUp(output, answer)
+					var buf2 bytes.Buffer
+					execErr = pl.Execute(ctx, followUp, stepVars, &buf2)
+					output = buf2.String()
+				}
+				break
+			}
+		}
+	}
+
 	// Parse <brain_notes> from output whenever the step is brain-aware,
 	// even on failure (best-effort from any partial output).
 	if stepUseBrain(p, step) || stepWriteBrain(p, step) {
