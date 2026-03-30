@@ -303,6 +303,21 @@ func (m Model) viewInboxDetail(w, h int, markdownMode bool) string {
 		hintList = append(hintList, panelrender.Hint{Key: "D", Desc: "clear"})
 	}
 	hintList = append(hintList, dispatchHint, panelrender.Hint{Key: "e", Desc: "editor"}, panelrender.Hint{Key: "M", Desc: "md"}, panelrender.Hint{Key: "q", Desc: "close"})
+
+	// When this run has a pending clarification, append the reply section.
+	if m.clarifyActive && m.pendingClarification != nil {
+		filteredRuns := m.filteredInboxRuns()
+		if idx := m.inboxDetailIdx; idx >= 0 && idx < len(filteredRuns) {
+			if fmt.Sprintf("%d", filteredRuns[idx].ID) == m.pendingClarification.RunID {
+				rows = appendClarifyReplyRows(rows, m, pal, boxW, pal.Border)
+				hintList = []panelrender.Hint{
+					{Key: "enter", Desc: "send reply"},
+					{Key: "esc", Desc: "cancel"},
+				}
+			}
+		}
+	}
+
 	hints := panelrender.HintBar(hintList, boxW-2, pal)
 	rows = append(rows, boxRow(hints, boxW, pal.Border))
 	rows = append(rows, boxBot(boxW, pal.Border))
@@ -356,6 +371,35 @@ func (m Model) viewClarificationBox(w int) string {
 	rows = append(rows, boxBot(boxW, borderColor))
 
 	return strings.Join(rows, "\n")
+}
+
+// appendClarifyReplyRows appends the inline clarification reply section to rows.
+// Layout mirrors the test runner reply section in promptmgr/view.go.
+func appendClarifyReplyRows(rows []string, m Model, pal styles.ANSIPalette, boxW int, borderColor string) []string {
+	rows = append(rows, boxRow("", boxW, borderColor))
+	sep := strings.Repeat("─", boxW-4)
+	rows = append(rows, boxRow(pal.Dim+sep+aRst, boxW, borderColor))
+	rows = append(rows, boxRow("", boxW, borderColor))
+
+	// Show the clarification header.
+	agentLabel := pal.Accent + panelrender.BLD + "  CLARIFICATION  " + panelrender.RST
+	rows = append(rows, boxRow(agentLabel, boxW, borderColor))
+	if m.pendingClarification != nil {
+		innerW := boxW - 6
+		if innerW < 10 {
+			innerW = 10
+		}
+		for _, ql := range strings.Split(wrapContent(m.pendingClarification.Question, innerW), "\n") {
+			rows = append(rows, boxRow("  "+pal.FG+ql+aRst, boxW, borderColor))
+		}
+	}
+	rows = append(rows, boxRow("", boxW, borderColor))
+
+	// Reply input.
+	replyLabel := pal.Accent + panelrender.BLD + "  REPLY > " + panelrender.RST
+	rows = append(rows, boxRow(replyLabel+m.clarifyInput.View(), boxW, borderColor))
+	rows = append(rows, boxRow("", boxW, borderColor))
+	return rows
 }
 
 // wrapContent wraps each line in text to maxWidth, preserving existing newlines.

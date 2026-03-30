@@ -24,8 +24,9 @@ const clarificationTimeout = 10 * time.Minute
 // answer string into the conversation context and resumes execution.
 //
 // runID must be the string representation of the store run ID so the TUI can
-// correlate the reply with the correct panel.
-func AskClarification(ctx context.Context, runID, question string) (string, error) {
+// correlate the reply with the correct panel. output is the partial pipeline
+// output accumulated up to the point the question was detected.
+func AskClarification(ctx context.Context, runID, question, output string) (string, error) {
 	sockPath, err := busd.SocketPath()
 	if err != nil {
 		return "", fmt.Errorf("clarification: resolve socket path: %w", err)
@@ -36,6 +37,7 @@ func AskClarification(ctx context.Context, runID, question string) (string, erro
 		RunID:    runID,
 		Question: question,
 		AskedAt:  time.Now(),
+		Output:   output,
 	}
 	if err := busd.PublishEvent(sockPath, topics.ClarificationRequested, req); err != nil {
 		return "", fmt.Errorf("clarification: publish request: %w", err)

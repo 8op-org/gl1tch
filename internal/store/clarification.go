@@ -8,6 +8,7 @@ type ClarificationRequest struct {
 	RunID    string    `json:"run_id"`
 	Question string    `json:"question"`
 	AskedAt  time.Time `json:"asked_at"`
+	Output   string    `json:"output"` // partial output up to the question
 }
 
 // ClarificationReply is the payload published on topics.ClarificationReply

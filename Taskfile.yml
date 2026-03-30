@@ -154,7 +154,8 @@ tasks:
     desc: "Update APM CLI to the latest version"
     cmds:
       - curl -sSL https://aka.ms/apm-unix | sh
-      - echo "APM updated: $(apm --version)"
+      - |
+        echo "APM updated: $(apm --version)"
 
   apm:fetch:
     desc: "Install all agent dependencies from apm.yml and compile tool-native files"

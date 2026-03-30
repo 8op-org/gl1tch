@@ -945,7 +945,7 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 			detector := clarify.Get(typeName)
 			for _, line := range strings.Split(valueStr, "\n") {
 				if q, found := detector.Detect(line); found {
-					answer, cerr := AskClarification(ctx, strconv.FormatInt(runID, 10), q)
+					answer, cerr := AskClarification(ctx, strconv.FormatInt(runID, 10), q, valueStr)
 					if cerr == nil && answer != "" {
 						// Build follow-up: assistant response + user answer, then re-run.
 						followUp := buildClarificationFollowUp(valueStr, answer)
@@ -1162,7 +1162,7 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 		detector := clarify.Get(pluginName)
 		for _, line := range strings.Split(output, "\n") {
 			if q, found := detector.Detect(line); found {
-				answer, cerr := AskClarification(ctx, strconv.FormatInt(runID, 10), q)
+				answer, cerr := AskClarification(ctx, strconv.FormatInt(runID, 10), q, output)
 				if cerr == nil && answer != "" {
 					followUp := buildClarificationFollowUp(output, answer)
 					var buf2 bytes.Buffer

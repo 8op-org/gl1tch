@@ -351,9 +351,10 @@ type Model struct {
 	// Pipeline bus subscription (tasks 7.2–7.8)
 	pipelineBusCh chan pipelineBusEventMsg
 	// Inline clarification reply (agent.run.clarification)
-	pendingClarification *store.ClarificationRequest // non-nil when awaiting reply
-	clarifyInput         textinput.Model
-	clarifyActive        bool
+	pendingClarification       *store.ClarificationRequest // non-nil when awaiting reply
+	pendingClarificationOutput string                      // partial output up to the question
+	clarifyInput               textinput.Model
+	clarifyActive              bool
 }
 
 // New creates a new Switchboard Model, discovering pipelines and providers.
@@ -1086,9 +1087,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var req store.ClarificationRequest
 			if json.Unmarshal(msg.payload, &req) == nil {
 				m.pendingClarification = &req
+				m.pendingClarificationOutput = req.Output
 				m.clarifyInput.Reset()
 				m.clarifyInput.Focus()
 				m.clarifyActive = true
+				// Auto-navigate to inbox detail for the matching run.
+				m, _ = m.navigateToInboxRun(req.RunID)
 			}
 			if m.pipelineBusCh != nil {
 				return m, tea.Batch(textinput.Blink, waitForPipelineBusEvent(m.pipelineBusCh))
@@ -3312,12 +3316,6 @@ func (m Model) View() string {
 		return topBar + "\n" + m.viewInboxDetail(w, h, m.inboxMarkdownMode)
 	}
 
-	// Clarification overlay — shown when an agent is waiting for user input.
-	if m.clarifyActive && m.pendingClarification != nil {
-		base := topBar + "\n" + body
-		return overlayCenter(base, m.viewClarificationBox(w), w, h)
-	}
-
 	return topBar + "\n" + body
 }
 
@@ -3826,6 +3824,31 @@ func (m Model) buildAgentSection(w int) []string {
 	return rows
 }
 
+// navigateToInboxRun focuses the inbox panel and opens the detail view for the
+// run matching runIDStr (decimal store run ID). Returns the updated model and a
+// reload command if the run was found.
+func (m Model) navigateToInboxRun(runIDStr string) (Model, tea.Cmd) {
+	runs := m.inboxModel.Runs()
+	for i, run := range runs {
+		if fmt.Sprintf("%d", run.ID) == runIDStr {
+			m.inboxPanel.focused = true
+			m.inboxModel.SetFocused(true)
+			m.inboxDetailIdx = i
+			m.inboxDetailOpen = true
+			m.inboxDetailScroll = 0
+			m.inboxDetailCursor = 0
+			m.inboxMarkdownMode = false
+			// clear other focus
+			m.launcher.focused = false
+			m.agent.focused = false
+			m.feedFocused = false
+			m.signalBoardFocused = false
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
 // filteredInboxRuns returns inbox runs filtered by read state and search query.
 func (m Model) filteredInboxRuns() []store.Run {
 	all := m.inboxModel.Runs()
@@ -3934,10 +3957,16 @@ func (m Model) buildInboxSection(w, height int) []string {
 			default:
 				dot = aRed + "●" + aRst
 			}
-			// ⚠ attention marker for failed runs.
+			// ⚠ attention marker for failed runs; ? for runs awaiting clarification.
 			warn := ""
 			warnVis := 0
-			if run.ExitStatus != nil && *run.ExitStatus != 0 {
+			// Yellow ? for runs awaiting clarification.
+			awaitsClarification := m.pendingClarification != nil &&
+				m.pendingClarification.RunID == fmt.Sprintf("%d", run.ID)
+			if awaitsClarification {
+				warn = " " + aYlw + "?" + aRst
+				warnVis = 2
+			} else if run.ExitStatus != nil && *run.ExitStatus != 0 {
 				warn = " " + aRed + "⚠" + aRst
 				warnVis = 2 // " ⚠" = 2 visible columns
 			}
