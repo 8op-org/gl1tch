@@ -14,6 +14,7 @@ import (
 
 	"github.com/adam-stokes/orcai/internal/activity"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
+	"github.com/adam-stokes/orcai/internal/clarify"
 	"github.com/adam-stokes/orcai/internal/plugin"
 	"github.com/adam-stokes/orcai/internal/store"
 )
@@ -1038,6 +1039,12 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 	}
 
 	promptOrInput = injectBrainContext(ctx, promptOrInput, p, step, ec)
+
+	// Append the ORCAI_CLARIFY instruction for executors that support reactive
+	// clarification. Pipelines using unregistered executors are unaffected.
+	if clarify.IsReactive(typeName) {
+		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction
+	}
 
 	stepVars := ec.FlatStrings()
 	stepVars["model"] = step.Model

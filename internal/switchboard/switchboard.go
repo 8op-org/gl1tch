@@ -26,6 +26,7 @@ import (
 	robfigcron "github.com/robfig/cron/v3"
 
 	"github.com/adam-stokes/orcai/internal/activity"
+	"github.com/adam-stokes/orcai/internal/clarify"
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
@@ -143,6 +144,9 @@ type jobHandle struct {
 	pipelineName string // non-empty for pipeline jobs; matched against busd RunStarted payload
 	actAgent     string // activity feed agent name; empty for non-agent jobs
 	actLabel     string // activity feed label (truncated prompt)
+	executorID   string // executor type ("claude", "opencode", etc.) — for clarification follow-up
+	modelID      string // model slug — for clarification follow-up
+	detector     clarify.Detector // nil = no clarification detection for this job
 }
 
 // ── Tea messages ──────────────────────────────────────────────────────────────
@@ -317,6 +321,12 @@ type Model struct {
 	pendingPipelineYAML string         // YAML path for pendingPipelineName
 	pendingActAgent     string         // activity feed agent name for the next launch
 	pendingActLabel     string         // activity feed label for the next launch
+	pendingExecutorID   string         // executor ID for the next launch (for clarification wiring)
+	pendingModelID      string         // model ID for the next launch
+	// Reactive clarification state (log-line detected)
+	clarifyFeedID       string         // feedID of job that triggered log-detected clarification
+	clarifyExecutorID   string         // executor to use for the follow-up run
+	clarifyModelID      string         // model to use for the follow-up run
 	activityFeed        activity.Model // JSONL-backed activity timeline
 	// Pipeline mode-select overlay
 	pipelineLaunchMode   int          // plModeNone / plModeSelect / plScheduleInput
@@ -1014,6 +1024,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case FeedLineMsg:
+		wasClarifyActive := m.clarifyActive
 		m = m.appendFeedLine(msg.ID, msg.Line)
 		// For in-process (agent) jobs the log file is written here.
 		// Window-mode (pipeline) jobs write via tee in the shell — skip.
@@ -1022,6 +1033,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				appendToFile(e.logFile, stripANSI(msg.Line)+"\n")
 				break
 			}
+		}
+		// If clarification was just triggered, start cursor blink alongside the drain.
+		if m.clarifyActive && !wasClarifyActive {
+			if jh, ok := m.activeJobs[msg.ID]; ok {
+				return m, tea.Batch(drainChan(jh.ch), textinput.Blink)
+			}
+			return m, textinput.Blink
 		}
 		// Re-issue drain only for the job that produced this message.
 		// Draining all jobs would accumulate goroutines and starve channels.
@@ -1299,11 +1317,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.clarifyActive {
 		switch key {
 		case "esc":
-			// Cancel without sending; the agent will time out on its end.
 			m.clarifyActive = false
 			m.pendingClarification = nil
 			m.clarifyInput.Blur()
 			m.clarifyInput.Reset()
+			m.clarifyFeedID = ""
+			m.clarifyExecutorID = ""
+			m.clarifyModelID = ""
 			return m, nil
 		case "enter":
 			answer := strings.TrimSpace(m.clarifyInput.Value())
@@ -1318,6 +1338,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.pendingClarification = nil
 			m.clarifyInput.Blur()
 			m.clarifyInput.Reset()
+
+			if m.clarifyFeedID != "" {
+				// Log-detected clarification: launch a follow-up run with the answer.
+				executorID := m.clarifyExecutorID
+				modelID := m.clarifyModelID
+				m.clarifyFeedID = ""
+				m.clarifyExecutorID = ""
+				m.clarifyModelID = ""
+				entryName := fmt.Sprintf("agent-%s-%d", executorID, time.Now().UnixNano())
+				cwd := m.agentCWD
+				if cwd == "" {
+					cwd = m.launchCWD
+				}
+				if pipelineFile, err := WriteSingleStepPipeline(entryName, executorID, modelID, answer, true); err == nil {
+					m.pendingPipelineName = entryName
+					m.pendingPipelineYAML = pipelineFile
+					m.pendingActAgent = executorID + "/" + modelID
+					m.pendingActLabel = activityLabel(answer)
+					m.pendingExecutorID = executorID
+					m.pendingModelID = modelID
+					return m.launchPendingPipeline(cwd)
+				}
+				return m, nil
+			}
+
+			// busd-detected clarification: publish reply so the blocking pipeline
+			// step can unblock and continue execution.
 			reply := store.ClarificationReply{RunID: runID, Answer: answer}
 			return m, publishClarificationReplyCmd(reply)
 		default:
@@ -2780,9 +2827,13 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 		id: feedID, cancel: cancel, ch: ch,
 		tmuxWindow: windowName, logFile: logFile, pipelineName: name,
 		actAgent: m.pendingActAgent, actLabel: m.pendingActLabel,
+		executorID: m.pendingExecutorID, modelID: m.pendingModelID,
+		detector: clarify.Get(m.pendingExecutorID),
 	}
 	m.pendingActAgent = ""
 	m.pendingActLabel = ""
+	m.pendingExecutorID = ""
+	m.pendingModelID = ""
 	// Feed entry created by the busd RunStarted event — don't create an eager duplicate here.
 	m.activeJobs[feedID] = jh
 
@@ -2938,6 +2989,8 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	m.pendingPipelineYAML = pipelineFile
 	m.pendingActAgent = agentName
 	m.pendingActLabel = activityLabel(input)
+	m.pendingExecutorID = prov.ID
+	m.pendingModelID = modelID
 
 	// Close modal and reset prompt after submission.
 	m.agentModalOpen = false
@@ -3104,7 +3157,26 @@ func (m Model) appendFeedLine(id, line string) Model {
 	for i := range m.feed {
 		if m.feed[i].id == id {
 			m.feed[i].lines = append(m.feed[i].lines, line)
-			return m
+			break
+		}
+	}
+	// Reactive clarification: detect ORCAI_CLARIFY: marker in agent output.
+	// Only trigger when not already showing a clarification overlay.
+	if !m.clarifyActive {
+		if jh, ok := m.activeJobs[id]; ok && jh.detector != nil {
+			if question, found := jh.detector.Detect(line); found {
+				m.clarifyFeedID = id
+				m.clarifyExecutorID = jh.executorID
+				m.clarifyModelID = jh.modelID
+				m.pendingClarification = &store.ClarificationRequest{
+					RunID:   id,
+					Question: question,
+					AskedAt: time.Now(),
+				}
+				m.clarifyInput.Reset()
+				m.clarifyInput.Focus()
+				m.clarifyActive = true
+			}
 		}
 	}
 	return m
