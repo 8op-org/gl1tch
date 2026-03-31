@@ -3896,8 +3896,8 @@ func (m Model) viewCenterColumn(height, width int) []string {
 	agentRunnerLines := m.buildAgentSection(width)
 	agentRunnerH := len(agentRunnerLines)
 
-	// Grid gets height minus (blank separator + agent runner), minimum useful height.
-	gridH := height - agentRunnerH - 1 // 1 for blank separator
+	// Grid gets remaining height after agent runner (no separator — panels sit flush).
+	gridH := height - agentRunnerH
 	if gridH < 6 {
 		gridH = 6
 	}
@@ -3906,7 +3906,6 @@ func (m Model) viewCenterColumn(height, width int) []string {
 
 	var lines []string
 	lines = append(lines, agentGridLines...)
-	lines = append(lines, "")
 	lines = append(lines, agentRunnerLines...)
 
 	// Pad up to height.
@@ -4084,7 +4083,15 @@ func (m Model) buildAgentsGrid(height, width int) []string {
 	// Hint footer.
 	var gridHints []panelrender.Hint
 	if m.agentsCenterFocused {
-		gridHints = []panelrender.Hint{{Key: "h/j/k/l", Desc: "nav"}}
+		if m.signalBoard.searching {
+			gridHints = []panelrender.Hint{{Key: "esc", Desc: "cancel"}}
+		} else {
+			gridHints = []panelrender.Hint{
+				{Key: "h/j/k/l", Desc: "nav"},
+				{Key: "/", Desc: "search"},
+				{Key: "enter", Desc: "open"},
+			}
+		}
 	}
 	lines = append(lines, boxRow(panelrender.HintBar(gridHints, width-2, pal), width, panelBorder))
 	lines = append(lines, boxBot(width, panelBorder))
@@ -4203,7 +4210,7 @@ func (m Model) buildAgentSection(w int) []string {
 	if len(m.agent.providers) == 0 {
 		rows = append(rows, boxRow(pal.Dim+"  no providers available"+aRst, w, borderColor))
 	} else {
-		// Show provider list (scrollable). Derive selected index from the picker.
+		// Render providers as a horizontal row of inline boxed cards (same style as agents grid).
 		selectedProvID := m.agent.agentPicker.SelectedProviderID()
 		selectedProvIdx := 0
 		for i, p := range m.agent.providers {
@@ -4212,33 +4219,80 @@ func (m Model) buildAgentSection(w int) []string {
 				break
 			}
 		}
-		windowSize := agentInnerHeight
-		offset := 0
-		if selectedProvIdx >= offset+windowSize {
-			offset = selectedProvIdx - windowSize + 1
+
+		innerW := w - 2 // panel body between outer │ chars
+		gridCols := max(1, innerW/20)
+		cardW := max((innerW-2-(gridCols-1))/gridCols, 8)
+		// Shrink cols until cards fit.
+		for gridCols > 1 && 2+(gridCols*cardW)+(gridCols-1) > innerW {
+			gridCols--
 		}
-		end := min(offset+windowSize, len(m.agent.providers))
-		for i := offset; i < end; i++ {
-			prov := m.agent.providers[i]
-			label := prov.Label
-			if label == "" {
-				label = prov.ID
-			}
-			maxLen := max(w-5, 1)
-			if len(label) > maxLen {
-				label = label[:maxLen-1] + "…"
-			}
-			if i == selectedProvIdx {
-				cursor := pal.Dim
-				if m.agent.focused {
-					cursor = pal.Accent
+
+		// Scrolling: keep selected card visible.
+		offset := (selectedProvIdx / gridCols) * gridCols
+		windowRows := agentInnerHeight / 3
+		if windowRows < 1 {
+			windowRows = 1
+		}
+		selectedRow := selectedProvIdx / gridCols
+		startRow := offset / gridCols
+		if selectedRow >= startRow+windowRows {
+			startRow = selectedRow - windowRows + 1
+		}
+		offset = startRow * gridCols
+
+		end := min(offset+windowRows*gridCols, len(m.agent.providers))
+		providers := m.agent.providers[offset:end]
+
+		for rowStart := 0; rowStart < len(providers); rowStart += gridCols {
+			var topRow, midRow, botRow strings.Builder
+			topRow.WriteByte(' ')
+			midRow.WriteByte(' ')
+			botRow.WriteByte(' ')
+			for col := 0; col < gridCols; col++ {
+				if col > 0 {
+					topRow.WriteByte(' ')
+					midRow.WriteByte(' ')
+					botRow.WriteByte(' ')
 				}
-				content := cursor + "> " + pal.FG + label + aRst
-				rows = append(rows, boxRow(content, w, borderColor))
-			} else {
-				content := "  " + pal.Dim + label + aRst
-				rows = append(rows, boxRow(content, w, borderColor))
+				idx := offset + rowStart + col
+				if rowStart+col >= len(providers) || idx >= len(m.agent.providers) {
+					topRow.WriteString(strings.Repeat(" ", cardW))
+					midRow.WriteString(strings.Repeat(" ", cardW))
+					botRow.WriteString(strings.Repeat(" ", cardW))
+					continue
+				}
+				prov := m.agent.providers[idx]
+				isSelected := idx == selectedProvIdx
+				cBorder := pal.Dim
+				if isSelected && m.agent.focused {
+					cBorder = pal.Accent
+				} else if isSelected {
+					cBorder = pal.FG
+				}
+				label := prov.Label
+				if label == "" {
+					label = prov.ID
+				}
+				innerCardW := cardW - 2
+				maxLabelVis := max(innerCardW-2, 1)
+				labelRunes := []rune(label)
+				if len(labelRunes) > maxLabelVis {
+					label = string(labelRunes[:maxLabelVis-1]) + "…"
+				}
+				labelVis := len([]rune(label))
+				padLen := max(innerCardW-2-labelVis, 0)
+				labelColor := pal.Dim
+				if isSelected {
+					labelColor = pal.FG
+				}
+				topRow.WriteString(cBorder + "╭" + strings.Repeat("─", innerCardW) + "╮" + aRst)
+				midRow.WriteString(cBorder + "│" + aRst + " " + labelColor + label + aRst + strings.Repeat(" ", padLen) + " " + cBorder + "│" + aRst)
+				botRow.WriteString(cBorder + "╰" + strings.Repeat("─", innerCardW) + "╯" + aRst)
 			}
+			rows = append(rows, boxRow(topRow.String(), w, borderColor))
+			rows = append(rows, boxRow(midRow.String(), w, borderColor))
+			rows = append(rows, boxRow(botRow.String(), w, borderColor))
 		}
 	}
 
