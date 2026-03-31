@@ -22,5 +22,5 @@ steps:
     needs: [ask-llama, ask-qwen]
     args:
       message: |
-        llama: {{step.ask-llama.data.value}}
-        qwen: {{step.ask-qwen.data.value}}
+        llama: {{get "step.ask-llama.data.value" .}}
+        qwen: {{get "step.ask-qwen.data.value" .}}

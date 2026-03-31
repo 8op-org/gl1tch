@@ -41,14 +41,14 @@ steps:
   - id: issues-ensemble
     plugin: jq
     needs: [fetch-issues-ensemble]
-    input: "{{step.fetch-issues-ensemble.data.value}}"
+    input: '{{get "step.fetch-issues-ensemble.data.value" .}}'
     vars:
       filter: 'map(. + {"repo":"elastic/ensemble"}) | map(select(.updatedAt >= ((now - 259200) | todate)))'
 
   - id: issues-robots
     plugin: jq
     needs: [fetch-issues-robots]
-    input: "{{step.fetch-issues-robots.data.value}}"
+    input: '{{get "step.fetch-issues-robots.data.value" .}}'
     vars:
       filter: 'map(. + {"repo":"elastic/observability-robots"}) | map(select(.updatedAt >= ((now - 259200) | todate)))'
 
@@ -56,14 +56,14 @@ steps:
   - id: prs-ensemble
     plugin: jq
     needs: [fetch-prs-ensemble]
-    input: "{{step.fetch-prs-ensemble.data.value}}"
+    input: '{{get "step.fetch-prs-ensemble.data.value" .}}'
     vars:
       filter: 'map(. + {"repo":"elastic/ensemble"})'
 
   - id: prs-robots
     plugin: jq
     needs: [fetch-prs-robots]
-    input: "{{step.fetch-prs-robots.data.value}}"
+    input: '{{get "step.fetch-prs-robots.data.value" .}}'
     vars:
       filter: 'map(. + {"repo":"elastic/observability-robots"})'
 
@@ -85,23 +85,23 @@ steps:
       3-5 bullet points per section. Do NOT output JSON.
 
       === elastic/ensemble issues (last 3 days) ===
-      {{step.issues-ensemble.data.value}}
+      {{get "step.issues-ensemble.data.value" .}}
 
       === elastic/observability-robots issues (last 3 days) ===
-      {{step.issues-robots.data.value}}
+      {{get "step.issues-robots.data.value" .}}
 
       === elastic/ensemble open PRs ===
-      {{step.prs-ensemble.data.value}}
+      {{get "step.prs-ensemble.data.value" .}}
 
       === elastic/observability-robots open PRs ===
-      {{step.prs-robots.data.value}}
+      {{get "step.prs-robots.data.value" .}}
 
   - id: assert-enriched
     executor: builtin.assert
     needs: [enrich]
     args:
       condition: "not_empty"
-      value: "{{step.enrich.data.value}}"
+      value: "{{.step.enrich.data.value}}"
       message: "opencode enrichment returned empty — is Ollama running with qwen2.5 loaded?"
 
   # ── 6. Claude Haiku: structured JSON digest ───────────────────────────────
@@ -138,25 +138,25 @@ steps:
       }
 
       elastic/ensemble issues (last 3 days):
-      {{step.issues-ensemble.data.value}}
+      {{get "step.issues-ensemble.data.value" .}}
 
       elastic/observability-robots issues (last 3 days):
-      {{step.issues-robots.data.value}}
+      {{get "step.issues-robots.data.value" .}}
 
       elastic/ensemble open PRs:
-      {{step.prs-ensemble.data.value}}
+      {{get "step.prs-ensemble.data.value" .}}
 
       elastic/observability-robots open PRs:
-      {{step.prs-robots.data.value}}
+      {{get "step.prs-robots.data.value" .}}
 
       Enrichment analysis from qwen2.5:
-      {{step.enrich.data.value}}
+      {{.step.enrich.data.value}}
 
   # ── 7. Validate JSON and pretty-print ────────────────────────────────────
   - id: validate-json
     plugin: jq
     needs: [digest]
-    input: "{{step.digest.data.value}}"
+    input: "{{.step.digest.data.value}}"
     vars:
       filter: "."
 
@@ -165,7 +165,7 @@ steps:
     needs: [validate-json]
     args:
       condition: "not_empty"
-      value: "{{step.validate-json.data.value}}"
+      value: '{{get "step.validate-json.data.value" .}}'
       message: "Claude Haiku returned invalid JSON — raw output in step.digest.data.value"
 
   - id: done
@@ -174,5 +174,5 @@ steps:
     args:
       message: |
         ── GitHub Activity Digest ──────────────────────────────────────
-        {{step.validate-json.data.value}}
+        {{get "step.validate-json.data.value" .}}
         ────────────────────────────────────────────────────────────────

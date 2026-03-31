@@ -15,11 +15,11 @@ steps:
     needs: [ask]
     args:
       condition: "not_empty"
-      value: "{{step.ask.data.value}}"
+      value: "{{.step.ask.data.value}}"
       message: "llama3.2 returned empty output"
 
   - id: log-result
     executor: builtin.log
     needs: [assert-non-empty]
     args:
-      message: "llama3.2 said: {{step.ask.data.value}}"
+      message: "llama3.2 said: {{.step.ask.data.value}}"

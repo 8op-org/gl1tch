@@ -87,16 +87,19 @@ steps:
 }
 
 func TestInterpolate_Simple(t *testing.T) {
-	vars := map[string]any{"step1.out": "golang plugins"}
-	result := pipeline.Interpolate("Summarize: {{step1.out}}", vars)
+	vars := map[string]any{"step1": map[string]any{"out": "golang plugins"}}
+	result := pipeline.Interpolate("Summarize: {{.step1.out}}", vars)
 	if result != "Summarize: golang plugins" {
 		t.Errorf("got %q", result)
 	}
 }
 
 func TestInterpolate_Multiple(t *testing.T) {
-	vars := map[string]any{"a.out": "foo", "b.out": "bar"}
-	result := pipeline.Interpolate("{{a.out}} and {{b.out}}", vars)
+	vars := map[string]any{
+		"a": map[string]any{"out": "foo"},
+		"b": map[string]any{"out": "bar"},
+	}
+	result := pipeline.Interpolate("{{.a.out}} and {{.b.out}}", vars)
 	if result != "foo and bar" {
 		t.Errorf("got %q", result)
 	}
@@ -104,16 +107,17 @@ func TestInterpolate_Multiple(t *testing.T) {
 
 func TestInterpolate_Missing(t *testing.T) {
 	vars := map[string]any{}
-	result := pipeline.Interpolate("hello {{missing.out}}", vars)
-	// Missing vars are left as-is.
-	if result != "hello {{missing.out}}" {
+	// Chained access through a missing key causes a template execution error;
+	// the original string is returned unchanged (useful for debugging).
+	result := pipeline.Interpolate("hello {{.missing.out}}", vars)
+	if result != "hello {{.missing.out}}" {
 		t.Errorf("got %q", result)
 	}
 }
 
 func TestInterpolate_NonStringValue(t *testing.T) {
 	vars := map[string]any{"count": 42}
-	result := pipeline.Interpolate("count={{count}}", vars)
+	result := pipeline.Interpolate("count={{.count}}", vars)
 	if result != "count=42" {
 		t.Errorf("got %q", result)
 	}
@@ -150,7 +154,6 @@ steps:
 	}
 }
 
-// TestTemplateInterpolation tests for the new nested path and legacy compat features.
 func TestTemplateInterpolation(t *testing.T) {
 	t.Run("nested step.id.data.key path", func(t *testing.T) {
 		vars := map[string]any{
@@ -162,63 +165,151 @@ func TestTemplateInterpolation(t *testing.T) {
 				},
 			},
 		}
-		result := pipeline.Interpolate("url={{step.fetch.data.url}}", vars)
+		result := pipeline.Interpolate("url={{.step.fetch.data.url}}", vars)
 		if result != "url=https://example.com" {
-			t.Errorf("expected nested path resolution, got %q", result)
+			t.Errorf("got %q", result)
 		}
 	})
 
-	t.Run("missing nested path left unchanged", func(t *testing.T) {
+	t.Run("missing nested path returns original placeholder", func(t *testing.T) {
 		vars := map[string]any{
 			"step": map[string]any{},
 		}
-		result := pipeline.Interpolate("{{step.missing.data.key}}", vars)
-		if result != "{{step.missing.data.key}}" {
-			t.Errorf("expected unchanged placeholder, got %q", result)
+		// Chained access through a nil/missing intermediate value causes a template
+		// execution error; the original placeholder is preserved for debugging.
+		result := pipeline.Interpolate("{{.step.missing.data.key}}", vars)
+		if result != "{{.step.missing.data.key}}" {
+			t.Errorf("got %q", result)
 		}
 	})
 
-	t.Run("legacy {{ID.out}} falls back to step.ID.data.value", func(t *testing.T) {
-		vars := map[string]any{
-			"step": map[string]any{
-				"s1": map[string]any{
-					"data": map[string]any{
-						"value": "legacy output",
-					},
-				},
-			},
-		}
-		result := pipeline.Interpolate("{{s1.out}}", vars)
-		if result != "legacy output" {
-			t.Errorf("expected legacy compat, got %q", result)
-		}
-	})
-
-	t.Run("flat key takes precedence over nested path", func(t *testing.T) {
-		vars := map[string]any{
-			"s1.out": "flat value",
-			"step": map[string]any{
-				"s1": map[string]any{
-					"data": map[string]any{"value": "nested value"},
-				},
-			},
-		}
-		result := pipeline.Interpolate("{{s1.out}}", vars)
-		// Flat key takes precedence.
-		if result != "flat value" {
-			t.Errorf("expected flat key precedence, got %q", result)
-		}
-	})
-
-	t.Run("multi-segment keys resolve via dot traversal", func(t *testing.T) {
+	t.Run("multi-segment param key", func(t *testing.T) {
 		vars := map[string]any{
 			"param": map[string]any{
 				"key": "myvalue",
 			},
 		}
-		result := pipeline.Interpolate("value={{param.key}}", vars)
+		result := pipeline.Interpolate("value={{.param.key}}", vars)
 		if result != "value=myvalue" {
-			t.Errorf("expected dot traversal, got %q", result)
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("get function for hyphenated step IDs", func(t *testing.T) {
+		vars := map[string]any{
+			"step": map[string]any{
+				"ask-llama": map[string]any{
+					"data": map[string]any{"value": "hello from llama"},
+				},
+			},
+		}
+		result := pipeline.Interpolate(`{{get "step.ask-llama.data.value" .}}`, vars)
+		if result != "hello from llama" {
+			t.Errorf("got %q", result)
+		}
+	})
+}
+
+// TestInterpolateTemplateFunctions tests the text/template second pass with FuncMap.
+func TestInterpolateTemplateFunctions(t *testing.T) {
+	t.Run("upper function via pipe", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"query": "hello world"}}
+		result := pipeline.Interpolate("{{.param.query | upper}}", vars)
+		if result != "HELLO WORLD" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("default function for missing key", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{}}
+		result := pipeline.Interpolate(`{{.param.missing | default "fallback"}}`, vars)
+		if result != "fallback" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("default function for empty string", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"mode": ""}}
+		result := pipeline.Interpolate(`{{.param.mode | default "concise"}}`, vars)
+		if result != "concise" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("env function", func(t *testing.T) {
+		t.Setenv("ORCAI_TEST_VAR", "testvalue")
+		vars := map[string]any{}
+		result := pipeline.Interpolate(`{{env "ORCAI_TEST_VAR"}}`, vars)
+		if result != "testvalue" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("trim function via pipe", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"value": "  hello  "}}
+		result := pipeline.Interpolate("{{.param.value | trim}}", vars)
+		if result != "hello" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("lower function via pipe", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"name": "WORLD"}}
+		result := pipeline.Interpolate("{{.param.name | lower}}", vars)
+		if result != "world" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("replace function via pipe", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"text": "foo bar foo"}}
+		result := pipeline.Interpolate(`{{.param.text | replace "foo" "baz"}}`, vars)
+		if result != "baz bar baz" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("conditional if/else", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"verbose": "true"}}
+		result := pipeline.Interpolate(`{{if .param.verbose}}detailed{{else}}concise{{end}}`, vars)
+		if result != "detailed" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("if/else with falsy value", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"verbose": ""}}
+		result := pipeline.Interpolate(`{{if .param.verbose}}detailed{{else}}concise{{end}}`, vars)
+		if result != "concise" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("catLines function via pipe", func(t *testing.T) {
+		vars := map[string]any{"param": map[string]any{"text": "line1\nline2\nline3"}}
+		result := pipeline.Interpolate("{{.param.text | catLines}}", vars)
+		if result != "line1 line2 line3" {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("cwd and param combined", func(t *testing.T) {
+		vars := map[string]any{
+			"cwd":   "/home/user/project",
+			"param": map[string]any{"mode": ""},
+		}
+		result := pipeline.Interpolate(`Context: {{.cwd}}. Mode: {{.param.mode | default "auto"}}`, vars)
+		if result != `Context: /home/user/project. Mode: auto` {
+			t.Errorf("got %q", result)
+		}
+	})
+
+	t.Run("steps pattern preserved for ResolveStepInputs", func(t *testing.T) {
+		vars := map[string]any{}
+		input := "Result: {{ steps.fetch.output }}"
+		result := pipeline.Interpolate(input, vars)
+		if result != input {
+			t.Errorf("steps pattern should be preserved, got %q", result)
 		}
 	})
 }

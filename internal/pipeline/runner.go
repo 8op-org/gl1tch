@@ -1255,10 +1255,11 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 done:
 	stepDurationMs := time.Since(stepStart).Milliseconds()
 	cleanupErr := executor.Cleanup(ctx)
-	// Parse <brain_notes> from any output (including partial on failure).
+	// Parse <brain> blocks from any output (including partial on failure).
 	// Best-effort: called regardless of step success/failure.
-	// Brain is always on — parse whenever write_brain is active or an injector is configured.
-	if stepWriteBrain(p, step) || ec.GetBrainInjector() != nil {
+	// Block-level opt-in: any step output containing a <brain> block is stored
+	// when a store is available — the agent decides what's worth remembering.
+	if ec.DB() != nil {
 		if valueStr, ok := extractOutputValue(out); ok && valueStr != "" {
 			parseBrainBlock(ctx, valueStr, step.ID, ec)
 		}
@@ -1416,7 +1417,7 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 	// Append the ORCAI_CLARIFY instruction for executors that support reactive
 	// clarification. Pipelines using unregistered executors are unaffected.
 	if clarify.IsReactive(typeName) {
-		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction
+		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction()
 	}
 
 	// Build stepVars for the plugin.
@@ -1526,7 +1527,7 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 	// Append ORCAI_CLARIFY instruction for reactive executors so the model
 	// knows the protocol for requesting user input.
 	if clarify.IsReactive(pluginName) {
-		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction
+		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction()
 	}
 
 	stepVars := ec.FlatStrings()
@@ -1575,10 +1576,10 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 		}
 	}
 
-	// Parse <brain_notes> from output whenever the step is brain-aware,
+	// Parse <brain> blocks from output on every step when a store is available,
 	// even on failure (best-effort from any partial output).
-	// Brain is always on — parse whenever write_brain is active or an injector is configured.
-	if stepWriteBrain(p, step) || ec.GetBrainInjector() != nil {
+	// Block-level opt-in: the agent decides what's worth remembering.
+	if ec.DB() != nil {
 		parseBrainBlock(ctx, output, step.ID, ec)
 	}
 	return output, execErr

@@ -143,7 +143,7 @@ func TestRunner_TemplateInterpolation(t *testing.T) {
 		Name: "interp-test",
 		Steps: []pipeline.Step{
 			{ID: "s1", Type: "input"},
-			{ID: "s2", Plugin: "upper", Prompt: "input was: {{s1.out}}"},
+			{ID: "s2", Plugin: "upper", Prompt: "input was: {{.s1.out}}"},
 			{ID: "out", Type: "output"},
 		},
 	}

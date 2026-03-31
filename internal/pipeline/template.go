@@ -1,85 +1,160 @@
 package pipeline
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"log"
+	"os"
 	"regexp"
 	"strings"
+	"text/template"
 )
 
 // stepInputPattern matches {{ steps.<id>.<key> }} template expressions.
 var stepInputPattern = regexp.MustCompile(`\{\{\s*steps\.([^.}\s]+)\.([^}\s]+)\s*\}\}`)
 
-// Interpolate replaces all {{key}} and {{dot.path}} placeholders in s with
-// values from vars. For dot-separated keys like {{step.fetch.data.url}}, it
-// walks the nested map structure. Values of any type are coerced to string via
-// fmt.Sprint. Unknown keys are left unchanged.
-//
-// Legacy backwards-compat: {{<ID>.out}} where <ID> contains no dots is first
-// tried as a flat key lookup (e.g. vars["s1.out"]), then as step.<ID>.data.value
-// in the nested map. A deprecation warning is logged on the second path.
-func Interpolate(s string, vars map[string]any) string {
-	var result strings.Builder
-	remaining := s
-	for {
-		start := strings.Index(remaining, "{{")
-		if start == -1 {
-			result.WriteString(remaining)
-			break
+// templateFuncs is the FuncMap available in all Interpolate calls.
+// Functions follow Go template pipe conventions: the piped value is passed as
+// the last argument, so {{.x | replace "old" "new"}} calls replace("old","new",x).
+var templateFuncs = template.FuncMap{
+	// default returns def when val is nil or the empty string.
+	"default": func(def, val any) any {
+		if val == nil {
+			return def
 		}
-		end := strings.Index(remaining[start:], "}}")
-		if end == -1 {
-			result.WriteString(remaining)
-			break
+		if s, ok := val.(string); ok && s == "" {
+			return def
 		}
-		end += start
-
-		result.WriteString(remaining[:start])
-		key := remaining[start+2 : end]
-
-		if v, ok := resolveKey(vars, key); ok {
-			result.WriteString(fmt.Sprint(v))
-		} else {
-			// Leave placeholder unchanged.
-			result.WriteString("{{")
-			result.WriteString(key)
-			result.WriteString("}}")
-		}
-
-		remaining = remaining[end+2:]
-	}
-	return result.String()
+		return val
+	},
+	// env reads an environment variable.
+	"env": os.Getenv,
+	// get resolves a dot-separated path against a nested map[string]any.
+	// Useful for step IDs that contain hyphens which are invalid in dot notation:
+	//   {{get "step.ask-llama.data.value" .}}
+	"get": func(path string, data map[string]any) any {
+		return getNestedPath(data, strings.Split(path, "."))
+	},
+	"trim":        strings.TrimSpace,
+	"upper":       strings.ToUpper,
+	"lower":       strings.ToLower,
+	"trimPrefix":  func(prefix, s string) string { return strings.TrimPrefix(s, prefix) },
+	"trimSuffix":  func(suffix, s string) string { return strings.TrimSuffix(s, suffix) },
+	"replace":     func(old, new, s string) string { return strings.ReplaceAll(s, old, new) },
+	"split":       func(sep, s string) []string { return strings.Split(s, sep) },
+	"join":        joinFunc,
+	"contains":    func(substr, s string) bool { return strings.Contains(s, substr) },
+	"hasPrefix":   func(prefix, s string) bool { return strings.HasPrefix(s, prefix) },
+	"hasSuffix":   func(suffix, s string) bool { return strings.HasSuffix(s, suffix) },
+	"catLines":    func(s string) string { return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", " "), "\n", " ") },
+	"splitLines":  func(s string) []string { return strings.Split(s, "\n") },
+	"toJson":      toJSONString,
+	"fromJson":    fromJSONString,
 }
 
-// resolveKey resolves a template key against vars. Resolution order:
-//  1. Exact flat key (e.g. "s1.out" stored as a top-level key).
-//  2. Hierarchical dot-path traversal (e.g. "step.fetch.data.url").
-//  3. Legacy shim: if the key is "<ID>.out" with no dots in <ID>,
-//     try "step.<ID>.data.value" with a deprecation warning.
-func resolveKey(vars map[string]any, key string) (any, bool) {
-	// 1. Exact flat key.
-	if v, ok := vars[key]; ok {
-		return v, true
-	}
-
-	// 2. Hierarchical dot-path traversal.
-	if v, ok := resolvePath(vars, key); ok {
-		return v, true
-	}
-
-	// 3. Legacy shim: {{<ID>.out}} → step.<ID>.data.value
-	if strings.HasSuffix(key, ".out") {
-		id := strings.TrimSuffix(key, ".out")
-		if !strings.Contains(id, ".") {
-			newKey := "step." + id + ".data.value"
-			if v, ok := resolvePath(vars, newKey); ok {
-				log.Printf("[pipeline] DEPRECATED: {{%s}} — use {{%s}} instead", key, newKey)
-				return v, true
-			}
+func joinFunc(sep string, s any) string {
+	switch v := s.(type) {
+	case []string:
+		return strings.Join(v, sep)
+	case []any:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			parts[i] = fmt.Sprint(item)
 		}
+		return strings.Join(parts, sep)
+	default:
+		return fmt.Sprint(s)
 	}
+}
 
-	return nil, false
+func toJSONString(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func fromJSONString(s string) any {
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return nil
+	}
+	return v
+}
+
+// getNestedPath walks a nested map[string]any using dot-path parts.
+func getNestedPath(m map[string]any, parts []string) any {
+	if len(parts) == 0 || m == nil {
+		return nil
+	}
+	v, ok := m[parts[0]]
+	if !ok {
+		return nil
+	}
+	if len(parts) == 1 {
+		return v
+	}
+	nested, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return getNestedPath(nested, parts[1:])
+}
+
+// protectStepInputs replaces {{ steps.x.y }} matches with __ORCAI_STEP_N__
+// placeholders so the template engine doesn't evaluate them.
+func protectStepInputs(s string) (string, []string) {
+	var originals []string
+	protected := stepInputPattern.ReplaceAllStringFunc(s, func(match string) string {
+		placeholder := fmt.Sprintf("__ORCAI_STEP_%d__", len(originals))
+		originals = append(originals, match)
+		return placeholder
+	})
+	return protected, originals
+}
+
+// restoreStepInputs replaces __ORCAI_STEP_N__ placeholders with the originals.
+func restoreStepInputs(s string, originals []string) string {
+	for i, orig := range originals {
+		s = strings.ReplaceAll(s, fmt.Sprintf("__ORCAI_STEP_%d__", i), orig)
+	}
+	return s
+}
+
+// Interpolate evaluates s as a Go text/template with vars as the data root.
+//
+// Use {{.key}} for direct field access and {{.a.b.c}} for nested maps.
+// For step IDs containing hyphens, use the get function:
+//
+//	{{get "step.ask-llama.data.value" .}}
+//
+// If the template fails to parse or execute, the original string is returned
+// unchanged. {{ steps.<id>.<key> }} patterns are preserved for ResolveStepInputs.
+//
+// Available functions: default, env, get, trim, upper, lower, trimPrefix, trimSuffix,
+// replace, split, join, contains, hasPrefix, hasSuffix, catLines, splitLines,
+// toJson, fromJson.
+//
+// Examples:
+//
+//	{{.param.query | upper | default "analyze this"}}
+//	{{if .param.verbose}}Be detailed{{else}}Be concise{{end}}
+//	{{env "HOME"}}
+//	{{get "step.ask-llama.data.value" .}}
+func Interpolate(s string, vars map[string]any) string {
+	protected, stepInputs := protectStepInputs(s)
+
+	tpl, err := template.New("").Option("missingkey=zero").Funcs(templateFuncs).Parse(protected)
+	if err != nil {
+		return s
+	}
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, vars); err != nil {
+		return s
+	}
+	result := strings.ReplaceAll(buf.String(), "<no value>", "")
+	return restoreStepInputs(result, stepInputs)
 }
 
 // ResolveStepInputs resolves all {{ steps.<id>.<key> }} template expressions in s
@@ -105,23 +180,4 @@ func ResolveStepInputs(s string, ec *ExecutionContext, stepName, runIDStr string
 		return val
 	})
 	return result, resolveErr
-}
-
-// resolvePath looks up key in vars by walking the nested map using dot-path
-// traversal. E.g. "step.fetch.data.url" → vars["step"]["fetch"]["data"]["url"].
-func resolvePath(vars map[string]any, key string) (any, bool) {
-	if !strings.Contains(key, ".") {
-		v, ok := vars[key]
-		return v, ok
-	}
-	parts := strings.SplitN(key, ".", 2)
-	v, ok := vars[parts[0]]
-	if !ok {
-		return nil, false
-	}
-	nested, ok := v.(map[string]any)
-	if !ok {
-		return nil, false
-	}
-	return resolvePath(nested, parts[1])
 }

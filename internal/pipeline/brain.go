@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/adam-stokes/orcai/internal/systemprompts"
 )
 
 // injectBrainContext applies brain pre-context modifications to a prompt string.
 // It is called by both the legacy and DAG execution paths before dispatching to a plugin.
-//   - Brain is always on: if a BrainInjector is configured, the read preamble
-//     (which includes the brain_notes write instruction) is always prepended.
-//   - If write_brain is active and no injector is configured, the write instruction is appended.
-func injectBrainContext(ctx context.Context, prompt string, p *Pipeline, step *Step, ec *ExecutionContext) string {
+//   - If a BrainInjector is configured, the read preamble (which includes the
+//     write instruction) is always prepended.
+//   - Otherwise the write instruction is always appended — brain is always on.
+func injectBrainContext(ctx context.Context, prompt string, _ *Pipeline, step *Step, ec *ExecutionContext) string {
 	if inj := ec.GetBrainInjector(); inj != nil {
 		if preamble, err := inj.ReadContext(ctx, ec.RunID()); err == nil && preamble != "" {
 			prompt = preamble + "\n\n" + prompt
@@ -26,50 +27,90 @@ func injectBrainContext(ctx context.Context, prompt string, p *Pipeline, step *S
 		// BrainInjector preamble already includes the write instruction.
 		return prompt
 	}
-	// No injector configured — fall back to write instruction only when write_brain is set.
-	if stepWriteBrain(p, step) {
-		prompt = prompt + brainWriteInstruction
-	}
-	return prompt
+	// No injector — append write instruction unconditionally.
+	return prompt + systemprompts.Load(systemprompts.BrainWrite)
 }
 
-// brainWriteInstruction is appended to the prompt of write_brain-only steps
-// (steps where write_brain is true but use_brain is false). For use_brain steps
-// the instruction is embedded directly in the ReadContext preamble.
-const brainWriteInstruction = `
-
----
-BRAIN NOTE INSTRUCTION: Include a <brain_notes> block somewhere in your response to persist an insight for future steps in this pipeline.
-
-  Human-readable summary goes directly as text. Use nested XML elements for structured data:
-
-  <brain_notes>
-  Plain text insight or summary here.
-  <detail key="metric">structured value</detail>
-  </brain_notes>
-
-The brain note will be stored and made available to subsequent agent steps with use_brain enabled.
----`
-
-// TODO: future flag strip_brain_output: true on Pipeline could strip the <brain_notes>
+// TODO: future flag strip_brain_output: true on Pipeline could strip the <brain>
 // block from the user-visible output string before it is published to the feed/inbox.
-// Currently the <brain_notes> XML remains visible in step output.
+// Currently the <brain> XML remains visible in step output.
 
-// brainBlockRe matches <brain_notes> blocks in agent output.
-// The content may contain nested XML elements for structured data.
-var brainBlockRe = regexp.MustCompile(`(?s)<brain_notes\b[^>]*>(.*?)</brain_notes>`)
+// brainBlockRe matches <brain ...> blocks in agent output (primary format).
+var brainBlockRe = regexp.MustCompile(`(?s)<brain\b([^>]*?)>(.*?)</brain>`)
 
-// parseBrainBlock scans output for a <brain_notes> XML block and persists it to the store.
-// It is a best-effort operation: missing or malformed blocks are silently skipped with a
-// debug log. The step never fails due to brain parsing errors.
+// brainNotesRe matches legacy <brain_notes> blocks for backward compatibility.
+var brainNotesRe = regexp.MustCompile(`(?s)<brain_notes\b[^>]*>(.*?)</brain_notes>`)
+
+// brainAttrRe extracts key="value" or key='value' attribute pairs.
+var brainAttrRe = regexp.MustCompile(`(\w+)=["']([^"']*)["']`)
+
+// parsedBrainBlock holds the parsed content of a <brain> or <brain_notes> block.
+type parsedBrainBlock struct {
+	body  string
+	type_ string // "research", "finding", "data", "code", or ""
+	title string
+	tags  string // comma-separated user tags
+}
+
+// extractBrainBlock finds the first <brain> or <brain_notes> block in output
+// and returns its parsed content. <brain> takes priority; <brain_notes> is the
+// backward-compatible fallback.
+func extractBrainBlock(output string) (parsedBrainBlock, bool) {
+	// Try <brain ...> first (primary format).
+	if m := brainBlockRe.FindStringSubmatch(output); m != nil {
+		attrs := parseAttrs(m[1])
+		return parsedBrainBlock{
+			body:  strings.TrimSpace(m[2]),
+			type_: attrs["type"],
+			title: attrs["title"],
+			tags:  attrs["tags"],
+		}, true
+	}
+	// Fall back to legacy <brain_notes> — no structured attributes, tags stay empty.
+	if m := brainNotesRe.FindStringSubmatch(output); m != nil {
+		return parsedBrainBlock{
+			body: strings.TrimSpace(m[1]),
+		}, true
+	}
+	return parsedBrainBlock{}, false
+}
+
+// parseAttrs extracts key="value" pairs from an XML attribute string.
+func parseAttrs(attrStr string) map[string]string {
+	attrs := make(map[string]string)
+	for _, m := range brainAttrRe.FindAllStringSubmatch(attrStr, -1) {
+		attrs[m[1]] = m[2]
+	}
+	return attrs
+}
+
+// buildTagsColumn encodes <brain> structured attributes into the tags column.
+// Format: "type:finding title:My Note tags:tag1,tag2" (only non-empty fields included).
+func buildTagsColumn(b parsedBrainBlock) string {
+	var parts []string
+	if b.type_ != "" {
+		parts = append(parts, "type:"+b.type_)
+	}
+	if b.title != "" {
+		parts = append(parts, "title:"+b.title)
+	}
+	if b.tags != "" {
+		parts = append(parts, "tags:"+b.tags)
+	}
+	return strings.Join(parts, " ")
+}
+
+// parseBrainBlock scans output for a <brain> or <brain_notes> XML block and
+// persists it to the store. It is a best-effort operation: missing or malformed
+// blocks are silently skipped with a debug log. The step never fails due to
+// brain parsing errors. Called for every step when a store is available.
 func parseBrainBlock(ctx context.Context, output, stepID string, ec *ExecutionContext) {
-	matches := brainBlockRe.FindStringSubmatch(output)
-	if matches == nil {
-		fmt.Fprintf(os.Stderr, "[debug] brain step %q: no <brain_notes> block found in output\n", stepID)
+	block, ok := extractBrainBlock(output)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "[debug] brain step %q: no <brain> block found in output\n", stepID)
 		return
 	}
-	body := strings.TrimSpace(matches[1])
-	if body == "" {
+	if block.body == "" {
 		return
 	}
 	s := ec.DB()
@@ -81,7 +122,8 @@ func parseBrainBlock(ctx context.Context, output, stepID string, ec *ExecutionCo
 		RunID:     ec.RunID(),
 		StepID:    stepID,
 		CreatedAt: time.Now().UnixMilli(),
-		Body:      body,
+		Tags:      buildTagsColumn(block),
+		Body:      block.body,
 	}
 	if _, err := s.InsertBrainNote(ctx, note); err != nil {
 		fmt.Fprintf(os.Stderr, "[debug] brain: failed to insert brain note for step %q: %v\n", stepID, err)
@@ -116,7 +158,7 @@ This table is READ-ONLY. Do not issue INSERT, UPDATE, or DELETE against it.`
 
 // ReadContext assembles a brain context preamble for the given runID.
 // It always includes a schema summary. If brain notes exist for the run,
-// they are appended (capped at 10, individual bodies truncated to 500 chars).
+// they are appended (capped at 10, individual bodies truncated to 4000 chars).
 // If fetching notes fails the error is silently dropped and the schema-only
 // preamble is returned.
 func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (string, error) {
@@ -130,7 +172,7 @@ func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (stri
 	if err != nil {
 		// Degrade gracefully: return schema-only preamble.
 		sb.WriteString("\n> Do NOT modify the runs table.\n")
-		sb.WriteString(brainWriteInstruction)
+		sb.WriteString(systemprompts.Load(systemprompts.BrainWrite))
 		return sb.String(), nil
 	}
 
@@ -142,11 +184,15 @@ func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (stri
 			if len(runes) > 4000 {
 				body = string(runes[:4000]) + "...[truncated]"
 			}
-			sb.WriteString(fmt.Sprintf("[%s] %s\n", n.StepID, body))
+			meta := ""
+			if n.Tags != "" {
+				meta = " [" + n.Tags + "]"
+			}
+			sb.WriteString(fmt.Sprintf("[%s]%s %s\n", n.StepID, meta, body))
 		}
 	}
 
 	sb.WriteString("\n> Do NOT modify the runs table.\n")
-	sb.WriteString(brainWriteInstruction)
+	sb.WriteString(systemprompts.Load(systemprompts.BrainWrite))
 	return sb.String(), nil
 }

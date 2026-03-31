@@ -12,6 +12,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/busd"
 	"github.com/adam-stokes/orcai/internal/keybindings"
 	"github.com/adam-stokes/orcai/internal/layout"
+	"github.com/adam-stokes/orcai/internal/systemprompts"
 	"github.com/adam-stokes/orcai/internal/themes"
 	"github.com/adam-stokes/orcai/internal/widgetdispatch"
 )
@@ -244,6 +245,12 @@ func Run() error {
 		if err := os.MkdirAll(filepath.Join(cfgDir, sub), 0o755); err != nil {
 			fmt.Fprintf(os.Stderr, "orcai: warning: could not create %s dir: %v\n", sub, err)
 		}
+	}
+
+	// Install system prompt defaults to ~/.config/orcai/prompts/ on first run.
+	// Existing files are never overwritten, so user customizations are preserved.
+	if err := systemprompts.EnsureInstalled(cfgDir); err != nil {
+		fmt.Fprintf(os.Stderr, "orcai: warning: install system prompts: %v\n", err)
 	}
 
 	// Fast path: session already running (e.g. after detach) — just reattach.

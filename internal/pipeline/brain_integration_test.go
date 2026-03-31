@@ -73,8 +73,9 @@ func TestBrainReadInjection_PreamblePresent(t *testing.T) {
 	}
 }
 
-// TestBrainReadInjection_AbsentWithoutInjector verifies that when no injector
-// is provided, the prompt is NOT prefixed with brain preamble.
+// TestBrainReadInjection_AbsentWithoutInjector verifies that when no BrainInjector
+// is provided, the prompt does NOT get the database context preamble but DOES get
+// the brain write instruction appended (brain is always on).
 func TestBrainReadInjection_AbsentWithoutInjector(t *testing.T) {
 	mgr := plugin.NewManager()
 	var captured string
@@ -96,8 +97,11 @@ func TestBrainReadInjection_AbsentWithoutInjector(t *testing.T) {
 	if strings.Contains(captured, "## ORCAI Database Context") {
 		t.Errorf("unexpected brain preamble in prompt: %q", captured)
 	}
-	if captured != "just the prompt" {
-		t.Errorf("expected prompt unchanged, got: %q", captured)
+	if !strings.HasPrefix(captured, "just the prompt") {
+		t.Errorf("expected prompt to start with original text, got: %q", captured)
+	}
+	if !strings.Contains(captured, "BRAIN NOTE INSTRUCTION") {
+		t.Errorf("expected brain write instruction in prompt, got: %q", captured)
 	}
 }
 

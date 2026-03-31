@@ -13,37 +13,11 @@ import (
 	"github.com/adam-stokes/orcai/internal/buildershared"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/picker"
+	"github.com/adam-stokes/orcai/internal/systemprompts"
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
 )
 
-// generationSystemPrompt is prepended to the user's description when asking
-// the AI to generate pipeline YAML.
-const generationSystemPrompt = `You are an orcai pipeline YAML generator.
-Generate a valid orcai .pipeline.yaml based on the user's description.
-
-Pipeline YAML format:
-  name: <pipeline-name>
-  version: "1"
-  steps:
-    - id: <step-id>
-      executor: <provider>   # e.g. claude, github-copilot, codex, gemini, ollama
-      model: <model-id>      # optional
-      prompt: |
-        <step prompt>
-    - id: <next-step>
-      executor: <provider>
-      prompt: |
-        <prompt using {{.steps.<prev-id>.output}} to reference prior output>
-
-Rules:
-- Output ONLY the raw YAML, no markdown fences, no explanations.
-- Use meaningful step IDs (snake_case).
-- Reference prior step output with {{.steps.<step-id>.output}}.
-- Keep prompts focused on one task per step.
-
-User description:
-`
 
 // startRun invokes the selected AI provider to generate pipeline YAML from the
 // user's description. Output streams via the shared RunnerPanel.
@@ -65,7 +39,7 @@ func (m Model) startRun() (Model, tea.Cmd) {
 	}
 	modelID := m.editor.SelectedModelID()
 
-	generationPrompt := generationSystemPrompt + prompt
+	generationPrompt := systemprompts.Load(systemprompts.PipelineGenerator) + prompt
 	yamlContent := buildYAML("generate-pipeline", executorID, modelID, generationPrompt)
 
 	ch := make(chan string, 200)
@@ -129,7 +103,7 @@ func (m Model) startRunWithPrompt(prompt string) (Model, tea.Cmd) {
 	}
 	modelID := m.editor.SelectedModelID()
 
-	generationPrompt := generationSystemPrompt + prompt
+	generationPrompt := systemprompts.Load(systemprompts.PipelineGenerator) + prompt
 	yamlContent := buildYAML("generate-pipeline", executorID, modelID, generationPrompt)
 
 	ch := make(chan string, 200)
