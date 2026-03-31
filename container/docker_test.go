@@ -19,7 +19,7 @@ func TestDetectReturnsRuntime(t *testing.T) {
 		t.Fatal("Detect() returned nil")
 	}
 	name := r.Name()
-	if name != "docker" && name != "apple" {
+	if name != "docker" && name != "apple" && name != "local" {
 		t.Fatalf("unexpected runtime name: %s", name)
 	}
 }

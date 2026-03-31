@@ -45,7 +45,11 @@ jobs:
           key: ollama-${{ hashFiles('.github/ollama-models.txt') }}
           restore-keys: ollama-
 
-      - uses: ollama/setup-ollama@v1
+      - name: Install ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start ollama
+        run: ollama serve &
 
       - name: Pull model
         run: ollama pull llama3.2:1b
