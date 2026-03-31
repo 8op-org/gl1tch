@@ -431,12 +431,15 @@ func (m Model) noteNames() []string {
 }
 
 func noteLabel(n store.BrainNote) string {
-	body := n.Body
-	if len(body) > 40 {
-		body = body[:40] + "…"
+	// Collapse whitespace (newlines, tabs) to single spaces for single-line display.
+	body := strings.Join(strings.Fields(n.Body), " ")
+	runes := []rune(body)
+	if len(runes) > 40 {
+		body = string(runes[:39]) + "…"
 	}
 	if n.Tags != "" {
-		return fmt.Sprintf("[%d] %s (%s)", n.ID, body, n.Tags)
+		tags := strings.Join(strings.Fields(n.Tags), " ")
+		return fmt.Sprintf("[%d] %s (%s)", n.ID, body, tags)
 	}
 	return fmt.Sprintf("[%d] %s", n.ID, body)
 }
