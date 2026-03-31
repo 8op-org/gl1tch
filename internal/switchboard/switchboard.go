@@ -22,7 +22,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/reflow/wrap"
 	robfigcron "github.com/robfig/cron/v3"
 
 	"github.com/adam-stokes/orcai/internal/activity"
@@ -290,9 +289,11 @@ type Model struct {
 	feedMarked        map[int]bool   // marked absolute line indices
 	feedMarkedContent map[int]string // ANSI-stripped content at each marked index
 	feedMarkMode      MarkModeState
-	feedJSONExpanded  map[int]bool   // placeholder for future per-line JSON expand state
 	signalBoard           SignalBoard
 	signalBoardFocused    bool
+	agentsGridRow         int  // selected row in the agents grid (center panel)
+	agentsGridCol         int  // selected column in the agents grid (center panel)
+	agentsCenterFocused   bool // true when center (agents) panel has keyboard focus
 	confirmDelete         bool
 	pendingDeletePipeline string
 	agentModalOpen       bool
@@ -543,6 +544,27 @@ func (m Model) BuildAgentSection(w int) []string { return m.buildAgentSection(w)
 // BuildSignalBoard is an exported wrapper for tests.
 func (m Model) BuildSignalBoard(height, width int) []string { return m.buildSignalBoard(height, width) }
 
+// AgentsCenterFocused returns whether the agents grid (center panel) is focused — used in tests.
+func (m Model) AgentsCenterFocused() bool { return m.agentsCenterFocused }
+
+// AgentsGridRow returns the agents grid cursor row — used in tests.
+func (m Model) AgentsGridRow() int { return m.agentsGridRow }
+
+// AgentsGridCol returns the agents grid cursor column — used in tests.
+func (m Model) AgentsGridCol() int { return m.agentsGridCol }
+
+// SetAgentsCenterFocused sets the agents center panel focus state — used in tests.
+func (m Model) SetAgentsCenterFocused(v bool) Model { m.agentsCenterFocused = v; return m }
+
+// RightColWidth returns the right column width — used in tests.
+func (m Model) RightColWidth() int { return m.rightColWidth() }
+
+// MidColWidth returns the center column width — used in tests.
+func (m Model) MidColWidth() int { return m.midColWidth() }
+
+// LeftColWidth returns the left column width — used in tests.
+func (m Model) LeftColWidth() int { return m.leftColWidth() }
+
 // ViewAgentModalBox is an exported wrapper for tests.
 func (m Model) ViewAgentModalBox(w, h int) string { return m.viewAgentModalBox(w, h) }
 
@@ -591,6 +613,9 @@ func MakeTickMsg() tea.Msg { return tickMsg(time.Now()) }
 
 // MakeJobDoneMsg returns a jobDoneMsg for use in tests.
 func MakeJobDoneMsg(id string) tea.Msg { return jobDoneMsg{id: id} }
+
+// FeedLen returns the number of entries in the feed ring buffer — used in tests.
+func (m Model) FeedLen() int { return len(m.feed) }
 
 // FeedEntryStatus returns the FeedStatus for the entry with the given id,
 // and whether it was found. Used in tests to inspect state without going
@@ -1029,7 +1054,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.feedScrollOffset = 0
 		m.feedCursor = 0
-		m.feedJSONExpanded = nil
 		return m, nil
 
 	case FeedLineMsg:
@@ -1905,10 +1929,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.signalBoard.clearSearch()
 			m.inboxPanel.focused = true
 			m.inboxModel.SetFocused(true)
-		} else if m.agent.focused {
-			// agent → signalBoard
-			m.agent.focused = false
+		} else if m.agentsCenterFocused {
+			// agentsCenter → signalBoard
+			m.agentsCenterFocused = false
 			m.signalBoardFocused = true
+		} else if m.agent.focused {
+			// agent → agentsCenter
+			m.agent.focused = false
+			m.agentsCenterFocused = true
 		} else if m.launcher.focused {
 			// launcher → agent
 			m.launcher.focused = false
@@ -2071,6 +2099,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case "h":
+		// h/l navigate the agents grid columns when center panel is focused.
+		if m.agentsCenterFocused {
+			if m.agentsGridCol > 0 {
+				m.agentsGridCol--
+			}
+			return m, nil
+		}
+
+	case "l":
+		if m.agentsCenterFocused {
+			entries := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
+			gridCols := max(1, m.midColWidth()/24)
+			gridRows := (len(entries) + gridCols - 1) / gridCols
+			if gridRows == 0 {
+				return m, nil
+			}
+			maxColInRow := min(gridCols, len(entries)-m.agentsGridRow*gridCols) - 1
+			if maxColInRow < 0 {
+				maxColInRow = 0
+			}
+			if m.agentsGridCol < maxColInRow {
+				m.agentsGridCol++
+			}
+			return m, nil
+		}
+
 	case "j", "down":
 		return m.handleDown(), nil
 
@@ -2085,6 +2140,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		} else if m.signalBoardFocused {
 			m.signalBoardFocused = false
 			m.signalBoard.clearSearch()
+			m.launcher.focused = true
+		} else if m.agentsCenterFocused {
+			m.agentsCenterFocused = false
 			m.launcher.focused = true
 		} else if m.agent.focused {
 			m.agent.focused = false
@@ -2281,6 +2339,23 @@ func (m Model) inboxDetailToggleMark() Model {
 }
 
 func (m Model) handleDown() Model {
+	if m.agentsCenterFocused {
+		entries := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
+		gridCols := max(1, m.midColWidth()/24)
+		gridRows := (len(entries) + gridCols - 1) / gridCols
+		if gridRows > 0 && m.agentsGridRow < gridRows-1 {
+			m.agentsGridRow++
+			// Clamp column to valid range in new row.
+			maxColInRow := min(gridCols, len(entries)-m.agentsGridRow*gridCols) - 1
+			if maxColInRow < 0 {
+				maxColInRow = 0
+			}
+			if m.agentsGridCol > maxColInRow {
+				m.agentsGridCol = maxColInRow
+			}
+		}
+		return m
+	}
 	if m.feedFocused {
 		if m.feedMarkMode == MarkModeActive {
 			m = m.feedToggleMark(m.feedCursor)
@@ -2322,6 +2397,22 @@ func (m Model) handleDown() Model {
 }
 
 func (m Model) handleUp() Model {
+	if m.agentsCenterFocused {
+		if m.agentsGridRow > 0 {
+			m.agentsGridRow--
+			// Clamp column to valid range in new row.
+			entries := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
+			gridCols := max(1, m.midColWidth()/24)
+			maxColInRow := min(gridCols, len(entries)-m.agentsGridRow*gridCols) - 1
+			if maxColInRow < 0 {
+				maxColInRow = 0
+			}
+			if m.agentsGridCol > maxColInRow {
+				m.agentsGridCol = maxColInRow
+			}
+		}
+		return m
+	}
 	if m.feedFocused {
 		if m.feedMarkMode == MarkModeActive {
 			m = m.feedToggleMark(m.feedCursor)
@@ -2746,21 +2837,21 @@ func openEditorInWindow(path string) {
 }
 
 func (m Model) handleEnter() (Model, tea.Cmd) {
-	// Feed: toggle JSON expand/collapse on the cursor line.
 	if m.feedFocused {
-		rawLines := m.feedRawLines(m.feedPanelWidth())
-		if m.feedCursor < len(rawLines) {
-			line := strings.TrimSpace(stripANSI(rawLines[m.feedCursor]))
-			if strings.HasPrefix(line, jsonIndicator) {
-				if m.feedJSONExpanded == nil {
-					m.feedJSONExpanded = make(map[int]bool)
-				}
-				if m.feedJSONExpanded[m.feedCursor] {
-					delete(m.feedJSONExpanded, m.feedCursor)
-				} else {
-					m.feedJSONExpanded[m.feedCursor] = true
-				}
-				return m, nil
+		return m, nil
+	}
+
+	// Agents grid: open inbox detail for the selected agent's run.
+	if m.agentsCenterFocused {
+		entries := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
+		gridCols := max(1, m.midColWidth()/24)
+		idx := m.agentsGridRow*gridCols + m.agentsGridCol
+		if idx < len(entries) {
+			entry := entries[idx]
+			// Feed entries for pipeline runs have ID "run-<storeRunID>".
+			if runID := strings.TrimPrefix(entry.id, "run-"); runID != entry.id {
+				m.agentsCenterFocused = false
+				return m.navigateToInboxRun(runID)
 			}
 		}
 		return m, nil
@@ -2788,10 +2879,9 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 			feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
 			warnEntry := feedEntry{
 				id:     feedID,
-				title:  "warning",
+				title:  "max parallel jobs reached (8)",
 				status: FeedFailed,
 				ts:     time.Now(),
-				lines:  []string{"max parallel jobs reached (8)"},
 			}
 			m.feed = append([]feedEntry{warnEntry}, m.feed...)
 			if len(m.feed) > 200 {
@@ -2985,10 +3075,9 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 		feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
 		warnEntry := feedEntry{
 			id:     feedID,
-			title:  "warning",
+			title:  "max parallel jobs reached (8)",
 			status: FeedFailed,
 			ts:     time.Now(),
-			lines:  []string{"max parallel jobs reached (8)"},
 		}
 		m.feed = append([]feedEntry{warnEntry}, m.feed...)
 		if len(m.feed) > 200 {
@@ -3282,7 +3371,13 @@ func (m Model) filteredFeed() []feedEntry {
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
-// View renders the full-screen switchboard layout.
+// View renders the full-screen switchboard layout (three-column).
+//
+// Left column (30%): pipeline launcher, inbox, cron.
+// Center column (remainder): agents grid (top) + agent runner (bottom).
+// Right column (25%): activity feed.
+//
+// Below 80 chars total width, the right column is hidden (two-column fallback).
 func (m Model) View() string {
 	w := m.width
 	if w <= 0 {
@@ -3294,41 +3389,63 @@ func (m Model) View() string {
 	}
 
 	leftW := m.leftColWidth() - 1
-	feedW := max(w-leftW-2, 20)
-	contentH := max(h-2, 5) // reserve 1 line for top bar + 1 for padding row; hint bars live inside each panel
-
-	sbHeight := m.signalBoardPanelHeight(contentH)
-	feedH := max(contentH-sbHeight, 3)
+	contentH := max(h-2, 5) // reserve 1 line for top bar + 1 for padding row
 
 	left := m.viewLeftColumn(contentH, leftW)
-	sb := m.buildSignalBoard(sbHeight, feedW)
-	feed := m.viewActivityFeed(feedH, feedW)
-
-	// Right column: signal board then feed lines, clipped to contentH.
-	rightLines := append(sb, strings.Split(feed, "\n")...)
-	if len(rightLines) > contentH {
-		rightLines = rightLines[:contentH]
-	}
-
 	leftLines := strings.Split(left, "\n")
-	totalRows := max(len(leftLines), len(rightLines))
 
-	var rows []string
-	for i := range totalRows {
-		l := ""
-		if i < len(leftLines) {
-			l = leftLines[i]
-		}
-		f := ""
-		if i < len(rightLines) {
-			f = rightLines[i]
-		}
-		rows = append(rows, padToVis(l, leftW)+"  "+f)
-	}
-
-	body := strings.Join(rows, "\n")
 	// topBar includes the padding row so all join sites below are consistent.
 	topBar := m.viewTopBar(w) + "\n"
+
+	buildBody := func() string {
+		if w < 80 {
+			// Narrow terminal: two-column fallback (left + center only).
+			midW := m.midColWidth()
+			center := m.viewCenterColumn(contentH, midW)
+			totalRows := max(len(leftLines), len(center))
+			var rows []string
+			for i := range totalRows {
+				l := ""
+				if i < len(leftLines) {
+					l = leftLines[i]
+				}
+				c := ""
+				if i < len(center) {
+					c = center[i]
+				}
+				rows = append(rows, padToVis(l, leftW)+"  "+c)
+			}
+			return strings.Join(rows, "\n")
+		}
+
+		midW := m.midColWidth()
+		rightW := m.rightColWidth()
+
+		center := m.viewCenterColumn(contentH, midW)
+		feed := m.viewActivityFeed(contentH, rightW)
+		feedLines := strings.Split(feed, "\n")
+
+		totalRows := max(len(leftLines), len(center), len(feedLines))
+		var rows []string
+		for i := range totalRows {
+			l := ""
+			if i < len(leftLines) {
+				l = leftLines[i]
+			}
+			c := ""
+			if i < len(center) {
+				c = center[i]
+			}
+			f := ""
+			if i < len(feedLines) {
+				f = feedLines[i]
+			}
+			rows = append(rows, padToVis(l, leftW)+"  "+padToVis(c, midW)+"  "+f)
+		}
+		return strings.Join(rows, "\n")
+	}
+
+	body := buildBody()
 
 	// Dir picker overlay — used for pipeline context only.
 	// The agent context renders the dir picker inline within the agent modal.
@@ -3685,6 +3802,9 @@ func sectionLabel(title string, focused bool) string {
 	return aDim + title + aRst
 }
 
+// leftColWidth returns the width of the left column (30%, min 28).
+// In the three-column layout, the left column holds the pipeline launcher,
+// inbox, and cron panels (no agent runner).
 func (m Model) leftColWidth() int {
 	w := m.width
 	if w <= 0 {
@@ -3697,18 +3817,44 @@ func (m Model) leftColWidth() int {
 	return lw
 }
 
-// viewLeftColumn renders the left column: banner + launcher + agent + inbox sections.
+// rightColWidth returns the width of the right (activity feed) column (25%, min 20).
+func (m Model) rightColWidth() int {
+	w := m.width
+	if w <= 0 {
+		w = 120
+	}
+	rw := w * 25 / 100
+	if rw < 20 {
+		rw = 20
+	}
+	return rw
+}
+
+// midColWidth returns the width of the center (agents grid + agent runner) column.
+// Two 2-char gutters separate the three columns, so midW = w - leftW - rightW - 4.
+func (m Model) midColWidth() int {
+	w := m.width
+	if w <= 0 {
+		w = 120
+	}
+	lw := m.leftColWidth()
+	rw := m.rightColWidth()
+	mw := w - lw - rw - 4
+	if mw < 10 {
+		mw = 10
+	}
+	return mw
+}
+
+// viewLeftColumn renders the left column: banner + launcher + inbox + cron sections.
 func (m Model) viewLeftColumn(height, width int) string {
 	var lines []string
 
 	launcherLines := m.buildLauncherSection(width)
 	lines = append(lines, launcherLines...)
-	lines = append(lines, "")
-
-	agentLines := m.buildAgentSection(width)
-	lines = append(lines, agentLines...)
 
 	// Distribute remaining rows between Inbox (60%) and Cron (40%), min 4 each.
+	// Agent runner is now in the center column.
 	remaining := height - len(lines)
 	if remaining >= 4 {
 		lines = append(lines, "")
@@ -3741,6 +3887,216 @@ func (m Model) viewLeftColumn(height, width int) string {
 
 	return strings.Join(lines, "\n")
 }
+
+// viewCenterColumn renders the center column: agents grid (top) + agent runner (bottom).
+// The combined output is clamped to height rows.
+// The agents grid gets the upper ~60% of available height; agent runner gets the rest.
+func (m Model) viewCenterColumn(height, width int) []string {
+	// Measure the agent runner height so we can give it exactly the space it needs.
+	agentRunnerLines := m.buildAgentSection(width)
+	agentRunnerH := len(agentRunnerLines)
+
+	// Grid gets height minus (blank separator + agent runner), minimum useful height.
+	gridH := height - agentRunnerH - 1 // 1 for blank separator
+	if gridH < 6 {
+		gridH = 6
+	}
+
+	agentGridLines := m.buildAgentsGrid(gridH, width)
+
+	var lines []string
+	lines = append(lines, agentGridLines...)
+	lines = append(lines, "")
+	lines = append(lines, agentRunnerLines...)
+
+	// Pad up to height.
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	// Clamp to height.
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	return lines
+}
+
+// buildAgentsGrid renders the Agents panel as a 2-D grid of boxed agent cards.
+// Each card is 3 lines tall (top border, content, bottom border). The selected
+// card's border is rendered in accent color; unselected cards use dim border.
+// gridCols = max(1, width/24).  Source: filteredFeed() (same as signal board).
+func (m Model) buildAgentsGrid(height, width int) []string {
+	pal := m.ansiPalette()
+	panelBorder := pal.Border
+	titleColor := pal.Accent
+	if m.agentsCenterFocused {
+		panelBorder = pal.Accent
+	}
+
+	var lines []string
+	if sprite := PanelHeader(m.activeBundle(), "agents", width, panelBorder, titleColor); sprite != nil {
+		lines = append(lines, sprite...)
+	} else {
+		lines = append(lines, boxTop(width, RenderHeader("agents"), panelBorder, titleColor))
+	}
+
+	entries := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
+
+	// Column count: at least 1, one card per ~24 cols of inner panel width.
+	innerW := width - 2 // panel body (between outer │ chars)
+	gridCols := max(1, innerW/24)
+
+	// Card width: divide inner width evenly; gap of 1 between cards, 1 margin each side.
+	// innerW = 2 (margins) + gridCols*cardW + (gridCols-1) (gaps)
+	cardW := max((innerW-2-(gridCols-1))/gridCols, 10)
+
+	// Recompute cols so cards actually fit (may shrink if innerW was narrow).
+	for gridCols > 1 && 2+(gridCols*cardW)+(gridCols-1) > innerW {
+		gridCols--
+	}
+
+	// Grid dimensions.
+	gridRows := (len(entries) + gridCols - 1) / gridCols
+	if len(entries) == 0 {
+		gridRows = 0
+	}
+
+	// Clamp cursor.
+	selRow := m.agentsGridRow
+	selCol := m.agentsGridCol
+	if gridRows > 0 {
+		if selRow >= gridRows {
+			selRow = gridRows - 1
+		}
+		maxColInRow := min(gridCols, len(entries)-selRow*gridCols) - 1
+		if selCol > maxColInRow {
+			selCol = max(0, maxColInRow)
+		}
+	}
+
+	headerH := len(lines)
+	bodyH := height - headerH - 2 // reserve hint footer + boxBot
+	if bodyH < 1 {
+		bodyH = 1
+	}
+	// Each card row occupies 3 panel lines (top, content, bottom).
+	maxCardRows := bodyH / 3
+
+	if len(entries) == 0 {
+		lines = append(lines, boxRow(pal.Dim+"  no agents"+aRst, width, panelBorder))
+	} else {
+		for row := 0; row < gridRows && row < maxCardRows; row++ {
+			// Accumulate 3 strings: top borders, content lines, bottom borders.
+			var topRow, midRow, botRow strings.Builder
+
+			// Leading margin (1 space).
+			topRow.WriteByte(' ')
+			midRow.WriteByte(' ')
+			botRow.WriteByte(' ')
+
+			for col := 0; col < gridCols; col++ {
+				// Inter-card gap (skip for first column).
+				if col > 0 {
+					topRow.WriteByte(' ')
+					midRow.WriteByte(' ')
+					botRow.WriteByte(' ')
+				}
+
+				idx := row*gridCols + col
+				if idx >= len(entries) {
+					// Empty placeholder card (blank space same width).
+					topRow.WriteString(strings.Repeat(" ", cardW))
+					midRow.WriteString(strings.Repeat(" ", cardW))
+					botRow.WriteString(strings.Repeat(" ", cardW))
+					continue
+				}
+
+				e := entries[idx]
+				isSelected := row == selRow && col == selCol && m.agentsCenterFocused
+
+				// Card border color: accent when selected, dim otherwise.
+				cBorder := pal.Dim
+				if isSelected {
+					cBorder = pal.Accent
+				}
+
+				// LED glyph + status label.
+				var led, statusLabel string
+				switch e.status {
+				case FeedRunning:
+					if m.signalBoard.blinkOn {
+						led = pal.Accent + "●" + aRst
+					} else {
+						led = pal.Dim + "●" + aRst
+					}
+					statusLabel = pal.Accent + "run" + aRst
+				case FeedPaused:
+					led = pal.Warn + "?" + aRst
+					statusLabel = pal.Warn + "paused" + aRst
+				case FeedDone:
+					led = pal.Success + "✓" + aRst
+					statusLabel = pal.Success + "done" + aRst
+				case FeedFailed:
+					led = pal.Error + "✗" + aRst
+					statusLabel = pal.Error + "fail" + aRst
+				default:
+					led = pal.Dim + "●" + aRst
+					statusLabel = pal.Dim + "idle" + aRst
+				}
+
+				statusVis := len(stripANSI(statusLabel))
+				// cardW = 2 borders + innerCardW; content: " led title…pad status "
+				innerCardW := cardW - 2
+				// Fixed visible chars: 1 (left space) + 1 (led) + 1 (space) + 1 (right space) + statusVis = 4 + statusVis
+				maxTitleVis := max(innerCardW-4-statusVis, 1)
+				title := e.title
+				titleRunes := []rune(title)
+				if len(titleRunes) > maxTitleVis {
+					title = string(titleRunes[:maxTitleVis-1]) + "…"
+				}
+				titleVis := len([]rune(title))
+				padLen := max(innerCardW-1-1-1-titleVis-statusVis-1, 0)
+
+				// Top border: ╭─────────────╮
+				topRow.WriteString(cBorder + "╭" + strings.Repeat("─", innerCardW) + "╮" + aRst)
+
+				// Content line: │ led title   status │
+				midRow.WriteString(cBorder + "│" + aRst)
+				midRow.WriteString(" " + led + " " + pal.FG + title + aRst)
+				midRow.WriteString(strings.Repeat(" ", padLen))
+				midRow.WriteString(statusLabel)
+				midRow.WriteString(" " + cBorder + "│" + aRst)
+
+				// Bottom border: ╰─────────────╯
+				botRow.WriteString(cBorder + "╰" + strings.Repeat("─", innerCardW) + "╯" + aRst)
+			}
+
+			lines = append(lines, boxRow(topRow.String(), width, panelBorder))
+			lines = append(lines, boxRow(midRow.String(), width, panelBorder))
+			lines = append(lines, boxRow(botRow.String(), width, panelBorder))
+		}
+	}
+
+	// Pad body to fill available height.
+	for len(lines) < height-2 {
+		lines = append(lines, boxRow("", width, panelBorder))
+	}
+
+	// Hint footer.
+	var gridHints []panelrender.Hint
+	if m.agentsCenterFocused {
+		gridHints = []panelrender.Hint{{Key: "h/j/k/l", Desc: "nav"}}
+	}
+	lines = append(lines, boxRow(panelrender.HintBar(gridHints, width-2, pal), width, panelBorder))
+	lines = append(lines, boxBot(width, panelBorder))
+
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	return lines
+}
+
+// BuildAgentsGrid is an exported wrapper for tests.
+func (m Model) BuildAgentsGrid(height, width int) []string { return m.buildAgentsGrid(height, width) }
 
 // buildBanner renders the ORCAI BBS header banner as a single line.
 func (m Model) buildBanner(w int) string {
@@ -3903,11 +4259,17 @@ func (m Model) buildAgentSection(w int) []string {
 // run matching runIDStr (decimal store run ID). Returns the updated model and a
 // reload command if the run was found.
 func (m Model) navigateToInboxRun(runIDStr string) (Model, tea.Cmd) {
-	runs := m.inboxModel.Runs()
+	// Switch inbox filter to "all" so running/paused entries are always visible.
+	m.inboxPanel.activeFilter = "all"
+	m.inboxPanel.filterQuery = ""
+	m.inboxPanel.scrollOffset = 0
+
+	runs := m.filteredInboxRuns()
 	for i, run := range runs {
 		if fmt.Sprintf("%d", run.ID) == runIDStr {
 			m.inboxPanel.focused = true
 			m.inboxModel.SetFocused(true)
+			m.inboxPanel.selectedIdx = i
 			m.inboxDetailIdx = i
 			m.inboxDetailOpen = true
 			m.inboxDetailScroll = 0
@@ -3918,6 +4280,7 @@ func (m Model) navigateToInboxRun(runIDStr string) (Model, tea.Cmd) {
 			m.agent.focused = false
 			m.feedFocused = false
 			m.signalBoardFocused = false
+			m.agentsCenterFocused = false
 			return m, nil
 		}
 	}
@@ -4102,13 +4465,9 @@ func (m Model) buildInboxSection(w, height int) []string {
 }
 
 // feedPanelWidth returns the actual rendered width of the activity feed panel,
-// matching the feedW calculation in View(). Used for consistent line-count math.
+// matching the rightW calculation in View(). Used for consistent line-count math.
 func (m Model) feedPanelWidth() int {
-	w := m.width
-	if w <= 0 {
-		w = 120
-	}
-	return max(w-m.leftColWidth()-2, 20)
+	return m.rightColWidth()
 }
 
 // feedLineCount returns the total number of navigable content lines in the feed.
@@ -4122,12 +4481,18 @@ func (m Model) feedLineCount() int {
 	return n
 }
 
-// feedRawLines returns ANSI-stripped content strings for every line in the feed
-// (no box formatting). Used to capture line content when the user marks a line.
+// feedRawLines returns ANSI-stripped content strings for every navigable line
+// in the feed (no box formatting). The logical line indices produced here must
+// match the cursor positions used by viewActivityFeed so that cursor/mark/JSON-
+// expand operations reference the correct lines.
 func (m Model) feedRawLines(width int) []string {
 	pal := m.ansiPalette()
 	var lines []string
-	add := func(content string) { lines = append(lines, stripANSI(content)) }
+	logicalIdx := 0
+	add := func(content string) {
+		lines = append(lines, stripANSI(content))
+		logicalIdx++
+	}
 
 	if len(m.feed) == 0 {
 		add("  no activity yet")
@@ -4135,7 +4500,7 @@ func (m Model) feedRawLines(width int) []string {
 	}
 	for _, entry := range m.feed {
 		entryBadge, badgeColor := statusBadge(entry.status, pal)
-		ts := entry.ts.Format("15:04:05")
+		ts := strings.ToLower(entry.ts.Format("3:04 PM"))
 		titleLine := fmt.Sprintf("  %s%s%s %s%s%s  %s",
 			badgeColor, entryBadge, aRst,
 			pal.Dim, ts, aRst,
@@ -4152,7 +4517,7 @@ func (m Model) feedRawLines(width int) []string {
 		}
 
 		if len(entry.steps) > 0 {
-			const maxStepOutputLines = 5
+			// Suppress done steps with no output — matches viewActivityFeed logic.
 			lastVisible := -1
 			for i, step := range entry.steps {
 				if !(step.status == "done" && len(step.lines) == 0) {
@@ -4175,11 +4540,13 @@ func (m Model) feedRawLines(width int) []string {
 				default:
 					col = pal.Dim
 				}
-				connector := "├ "
+				connector := "├─ "
 				if isLast {
-					connector = "└ "
+					connector = "└─ "
 				}
 				add("  " + connector + col + stepGlyph(step.status) + " " + step.id + aRst)
+				// Step output lines (for JSON expand/collapse and cursor navigation).
+				const maxStepOutputLines = 5
 				stepLines := step.lines
 				if len(stepLines) > maxStepOutputLines {
 					stepLines = stepLines[len(stepLines)-maxStepOutputLines:]
@@ -4188,20 +4555,21 @@ func (m Model) feedRawLines(width int) []string {
 				for _, sl := range stepLines {
 					sl = stripANSI(sl)
 					if pLines, ok := runFeedLineParsers(sl, stepMaxLen, pal, false); ok {
-						for _, pl := range pLines {
-							add("    " + pl)
-						}
+						add("      " + pLines[0])
 					} else {
-						for _, wl := range strings.Split(wrap.String(sl, stepMaxLen), "\n") {
-							if wl != "" {
-								add("    " + pal.Dim + wl + aRst)
-							}
+						runes := []rune(sl)
+						if len(runes) > stepMaxLen {
+							sl = string(runes[:stepMaxLen])
+						}
+						if sl != "" {
+							add("      " + sl)
 						}
 					}
 				}
 			}
 		}
 
+		// Top-level output lines for the entry (e.g. plain output or JSON).
 		const feedLinesPerEntry = 10
 		entryLines := entry.lines
 		skipped := 0
@@ -4210,20 +4578,20 @@ func (m Model) feedRawLines(width int) []string {
 			entryLines = entryLines[skipped:]
 		}
 		if skipped > 0 {
-			add(pal.Dim + fmt.Sprintf("    … %d earlier lines (press f to scroll)", skipped) + aRst)
+			add(fmt.Sprintf("    … %d earlier lines", skipped))
 		}
 		entryMaxLen := max(width-6, 1)
 		for _, outLine := range entryLines {
 			outLine = stripANSI(outLine)
 			if pLines, ok := runFeedLineParsers(outLine, entryMaxLen, pal, false); ok {
-				for _, pl := range pLines {
-					add("    " + pl)
-				}
+				add("    " + pLines[0])
 			} else {
-				for _, wl := range strings.Split(wrap.String(outLine, entryMaxLen), "\n") {
-					if wl != "" {
-						add(pal.Dim + "    " + wl + aRst)
-					}
+				runes := []rune(outLine)
+				if len(runes) > entryMaxLen {
+					outLine = string(runes[:entryMaxLen])
+				}
+				if outLine != "" {
+					add("    " + outLine)
 				}
 			}
 		}
@@ -4231,7 +4599,10 @@ func (m Model) feedRawLines(width int) []string {
 	return lines
 }
 
-// viewActivityFeed renders the center activity feed with scroll support.
+// viewActivityFeed renders the activity feed (right column) with full cursor,
+// mark, scroll, and hint-bar support.  Content is sourced from the in-memory
+// m.feed ring buffer; the JSONL-backed activityFeed model is used only when
+// the in-memory feed is empty.
 func (m Model) viewActivityFeed(height, width int) string {
 	pal := m.ansiPalette()
 	borderColor := pal.Border
@@ -4247,26 +4618,203 @@ func (m Model) viewActivityFeed(height, width int) string {
 	}
 	visibleH := height - headerH - 2 // minus header, bottom border, and always-present hint footer
 
-	// Render content from the JSONL-backed activity model.
-	// The model owns scrolling internally; we just wrap its lines in box rows.
+	// logicalIdx tracks the cursor-navigable line index — matches feedRawLines indices.
+	// logicalToVisual maps each logical line index to its visual row index in allLines.
+	logicalIdx := 0
+	var logicalToVisual []int
+	appendRow := func(lines *[]string, content string) {
+		logicalToVisual = append(logicalToVisual, len(*lines))
+		idx := logicalIdx
+		logicalIdx++
+		isMarked := m.feedMarked[idx]
+		isCursor := m.feedFocused && idx == m.feedCursor
+		var row string
+		switch {
+		case isCursor && isMarked:
+			row = boxRowCursorColor(pal.Success+"●"+aRst+content, width, borderColor)
+		case isCursor:
+			row = boxRowCursorColor(content, width, borderColor)
+		case isMarked:
+			markPrefix := pal.Success + "●" + aRst
+			markContent := lipgloss.NewStyle().
+				Background(lipgloss.Color("#2d4a35")).
+				Render(stripANSI(content))
+			row = boxRow(markPrefix+markContent, width, borderColor)
+		default:
+			row = boxRow(content, width, borderColor)
+		}
+		*lines = append(*lines, row)
+	}
+	// appendExtra adds a visual-only box row without advancing logicalIdx.
+	appendExtra := func(lines *[]string, content string) {
+		*lines = append(*lines, boxRow(content, width, borderColor))
+	}
+
 	var allLines []string
-	actContent := strings.TrimRight(m.activityFeed.View(), "\n")
-	if actContent == "" || actContent == aDim+"  no activity yet"+aRst {
-		allLines = append(allLines, boxRow(pal.Dim+"  no activity yet"+aRst, width, borderColor))
+
+	if len(m.feed) == 0 {
+		// Fall back to JSONL-backed activity model when in-memory feed is empty.
+		actContent := strings.TrimRight(m.activityFeed.View(), "\n")
+		if actContent == "" || actContent == aDim+"  no activity yet"+aRst {
+			appendRow(&allLines, pal.Dim+"  no activity yet"+aRst)
+		} else {
+			for _, line := range strings.Split(actContent, "\n") {
+				appendRow(&allLines, line)
+			}
+		}
 	} else {
-		for _, line := range strings.Split(actContent, "\n") {
-			allLines = append(allLines, boxRow(line, width, borderColor))
+		// Render in-memory feed entries with per-step status badges.
+		for _, entry := range m.feed {
+			badge, badgeColor := statusBadge(entry.status, pal)
+			ts := strings.ToLower(entry.ts.Format("3:04 PM"))
+			titleLine := fmt.Sprintf("  %s%s%s %s%s%s  %s",
+				badgeColor, badge, aRst,
+				pal.Dim, ts, aRst,
+				pal.Accent+entry.title+aRst)
+			appendRow(&allLines, titleLine)
+
+			if entry.cwd != "" {
+				home, _ := os.UserHomeDir()
+				cwdDisplay := entry.cwd
+				if home != "" && strings.HasPrefix(cwdDisplay, home) {
+					cwdDisplay = "~" + cwdDisplay[len(home):]
+				}
+				appendRow(&allLines, fmt.Sprintf("  %s  %s%s", pal.Dim, cwdDisplay, aRst))
+			}
+
+			if len(entry.steps) > 0 {
+				const maxStepOutputLines = 5
+				// Find last visible step (suppress done steps with no output).
+				lastVisible := -1
+				for i, step := range entry.steps {
+					if !(step.status == "done" && len(step.lines) == 0) {
+						lastVisible = i
+					}
+				}
+				for i, step := range entry.steps {
+					if step.status == "done" && len(step.lines) == 0 {
+						continue
+					}
+					isLast := i == lastVisible
+					var col string
+					switch step.status {
+					case "running":
+						col = pal.Warn
+					case "done":
+						col = pal.Success
+					case "failed":
+						col = pal.Error
+					default:
+						col = pal.Dim
+					}
+					connector := "├─ "
+					if isLast {
+						connector = "└─ "
+					}
+					badge := "  " + connector + col + stepGlyph(step.status) + " " + step.id + aRst
+					appendRow(&allLines, badge)
+					// Per-step output lines (last maxStepOutputLines only).
+					stepLines := step.lines
+					if len(stepLines) > maxStepOutputLines {
+						stepLines = stepLines[len(stepLines)-maxStepOutputLines:]
+					}
+					var outPrefix string
+					if isLast {
+						outPrefix = "      "
+					} else {
+						outPrefix = "  " + pal.Dim + "│   " + aRst
+					}
+					stepMaxLen := max(width-10, 1)
+					for _, sl := range stepLines {
+						sl = stripANSI(sl)
+						if pLines, ok := runFeedLineParsers(sl, stepMaxLen, pal, false); ok {
+							appendRow(&allLines, outPrefix+pLines[0])
+							for _, xl := range pLines[1:] {
+								appendExtra(&allLines, outPrefix+"  "+xl)
+							}
+						} else {
+							// Truncate long lines to fit within the column.
+							runes := []rune(sl)
+							if len(runes) > stepMaxLen {
+								sl = string(runes[:stepMaxLen])
+							}
+							if sl != "" {
+								appendRow(&allLines, outPrefix+pal.Dim+sl+aRst)
+							}
+						}
+					}
+				}
+			}
+
+			// Cap top-level output lines per entry.
+			const feedLinesPerEntry = 10
+			entryLines := entry.lines
+			skipped := 0
+			if len(entryLines) > feedLinesPerEntry {
+				skipped = len(entryLines) - feedLinesPerEntry
+				entryLines = entryLines[skipped:]
+			}
+			if skipped > 0 {
+				skipMsg := fmt.Sprintf("    … %d earlier lines", skipped)
+				appendRow(&allLines, pal.Dim+skipMsg+aRst)
+			}
+			entryMaxLen := max(width-6, 1)
+			for _, outLine := range entryLines {
+				outLine = stripANSI(outLine)
+				if pLines, ok := runFeedLineParsers(outLine, entryMaxLen, pal, false); ok {
+					appendRow(&allLines, "    "+pLines[0])
+					for _, xl := range pLines[1:] {
+						appendExtra(&allLines, "      "+xl)
+					}
+				} else {
+					runes := []rune(outLine)
+					if len(runes) > entryMaxLen {
+						outLine = string(runes[:entryMaxLen])
+					}
+					if outLine != "" {
+						appendRow(&allLines, pal.Dim+"    "+outLine+aRst)
+					}
+				}
+			}
 		}
 	}
 
+	// Clamp offset and compute visible window using logicalToVisual map.
+	offset := 0
+	if m.feedScrollOffset < len(logicalToVisual) {
+		offset = logicalToVisual[m.feedScrollOffset]
+	} else if len(logicalToVisual) > 0 {
+		offset = logicalToVisual[len(logicalToVisual)-1]
+	}
+	total := len(allLines)
 	if visibleH <= 0 {
 		visibleH = 1
 	}
-	if len(allLines) > visibleH {
-		allLines = allLines[:visibleH]
+	maxOffset := max(0, total-visibleH)
+	if offset > maxOffset {
+		offset = maxOffset
 	}
-	visible := allLines
+	if offset < 0 {
+		offset = 0
+	}
+	end := offset + visibleH
+	if end > total {
+		end = total
+	}
+	visible := allLines[offset:end]
+
+	// Scroll indicators in header.
+	hasAbove := offset > 0
+	hasBelow := end < total
 	scrollSuffix := ""
+	switch {
+	case hasAbove && hasBelow:
+		scrollSuffix = " ↕"
+	case hasAbove:
+		scrollSuffix = " ↑"
+	case hasBelow:
+		scrollSuffix = " ↓"
+	}
 
 	var lines []string
 	if feedSprite != nil {
@@ -4280,12 +4828,31 @@ func (m Model) viewActivityFeed(height, width int) string {
 	for len(lines) < height-2 {
 		lines = append(lines, boxRow("", width, borderColor))
 	}
+
 	// Hint footer row — always present; shows hints when focused, blank when not.
 	var feedHints []panelrender.Hint
 	if m.feedFocused {
+		markDesc := "mark"
+		switch m.feedMarkMode {
+		case MarkModeActive:
+			markDesc = "pause"
+		case MarkModePaused:
+			markDesc = "resume"
+		}
 		feedHints = []panelrender.Hint{
 			{Key: "j/k", Desc: "nav"},
-			{Key: "g/G", Desc: "top/bottom"},
+			{Key: "[", Desc: "page up"},
+			{Key: "]", Desc: "page down"},
+			{Key: "g", Desc: "top"},
+			{Key: "G", Desc: "bottom"},
+			{Key: "m", Desc: markDesc},
+		}
+		if m.feedMarkMode != MarkModeOff {
+			feedHints = append(feedHints, panelrender.Hint{Key: "A", Desc: "mark all"})
+			feedHints = append(feedHints, panelrender.Hint{Key: "D", Desc: "clear"})
+		}
+		if markCount := len(m.feedMarked); markCount > 0 {
+			feedHints = append(feedHints, panelrender.Hint{Key: "r", Desc: fmt.Sprintf("run (%d)", markCount)})
 		}
 	}
 	lines = append(lines, boxRow(panelrender.HintBar(feedHints, width-2, pal), width, borderColor))
