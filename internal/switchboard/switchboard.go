@@ -129,10 +129,8 @@ type launcherSection struct {
 }
 
 type agentSection struct {
-	providers  []picker.ProviderDef
-	agentPicker modal.AgentPickerModel
-	prompt     textarea.Model
-	focused    bool
+	providers []picker.ProviderDef
+	focused   bool
 }
 
 type jobHandle struct {
@@ -295,15 +293,8 @@ type Model struct {
 	agentsCenterFocused   bool // true when center (agents) panel has keyboard focus
 	confirmDelete         bool
 	pendingDeletePipeline string
-	agentModalOpen       bool
-	agentModalFocus      int                    // 0=provider/model, 1=saved-prompt, 2=prompt, 3=use_brain, 4=cwd, 5=schedule, 6=name
-	agentPrompts         []store.Prompt         // loaded from store when modal opens
-	agentPromptIdx       int                    // selected saved-prompt index; 0 = none
-	savedPromptPicker    modal.FuzzyPickerModel // inline fuzzy picker for saved prompts
-	agentSchedule         textarea.Model
-	agentScheduleErr      string
-	agentUseBrain         bool
-	agentNameInput        textinput.Model
+	agentPrompts          []store.Prompt // loaded from store; used for body lookup in submitAgentJob
+	sendPanel             buildershared.SendPanel
 	helpOpen              bool
 	registry              *themes.Registry
 	themeState            tuikit.ThemeState
@@ -311,7 +302,6 @@ type Model struct {
 	previewBundle         *themes.Bundle // non-nil while theme picker is open (live preview)
 	// CWD / dir picker
 	launchCWD           string         // CWD at orcai startup (immutable after New())
-	agentCWD            string         // current agent session CWD (user-editable)
 	dirPicker           DirPickerModel // reusable dir picker overlay
 	dirPickerOpen       bool           // whether the dir picker overlay is visible
 	dirPickerCtx        string         // "agent" or "pipeline"
@@ -371,20 +361,6 @@ func New() Model { return NewWithStore(nil) }
 // The store is passed to the Inbox panel for polling run results.
 // Passing nil is valid; the Inbox will render an empty state.
 func NewWithStore(s *store.Store) Model {
-	ta := textarea.New()
-	ta.Placeholder = "Enter prompt… (ctrl+s to submit)"
-	ta.CharLimit = 4096
-	ta.ShowLineNumbers = false
-	ta.SetWidth(80)
-	ta.SetHeight(4)
-
-	schedTA := textarea.New()
-	schedTA.Placeholder = "cron expr, blank = run now"
-	schedTA.CharLimit = 128
-	schedTA.ShowLineNumbers = false
-	schedTA.SetWidth(80)
-	schedTA.SetHeight(1)
-
 	pipeSchedTA := textarea.New()
 	pipeSchedTA.Placeholder = "cron expr (e.g. 0 * * * *)"
 	pipeSchedTA.CharLimit = 128
@@ -405,13 +381,9 @@ func NewWithStore(s *store.Store) Model {
 			focused:   true,
 		},
 		agent: agentSection{
-			providers:   agentProviders,
-			agentPicker: modal.NewAgentPickerModel(agentProviders),
-			prompt:      ta,
+			providers: agentProviders,
 		},
-		agentSchedule:         schedTA,
-		agentNameInput:        func() textinput.Model { ti := textinput.New(); ti.Placeholder = "agent-<provider>-<timestamp>"; ti.CharLimit = 128; return ti }(),
-		savedPromptPicker:     modal.NewFuzzyPickerModel(8),
+		sendPanel:             buildershared.NewSendPanel(agentProviders),
 		pipelineEditor:        pipelineeditor.New(agentProviders, pipelinesDir(), s),
 		brainEditor:           braineditor.New(s, agentProviders),
 		pipelineScheduleInput: pipeSchedTA,
@@ -419,7 +391,6 @@ func NewWithStore(s *store.Store) Model {
 		inboxPanel:            InboxPanel{activeFilter: "unread"},
 		activeJobs:            make(map[string]*jobHandle),
 		launchCWD:             cwd,
-		agentCWD:              cwd,
 		inboxModel:   inbox.New(s, nil), // bundle set after registry loads
 		store:        s,
 		clarifyInput: clarifyTI,
@@ -469,7 +440,7 @@ func NewWithTestProviders() Model {
 		},
 	}
 	m.agent.providers = testProviders
-	m.agent.agentPicker = modal.NewAgentPickerModel(testProviders)
+	m.sendPanel = buildershared.NewSendPanel(testProviders)
 	return m
 }
 
@@ -482,23 +453,10 @@ func (m Model) readStateFile() string {
 func (m Model) Cursor() int { return m.launcher.selected }
 
 // AgentFormStep is kept for backward compatibility — always returns 0.
-// The inline multi-step wizard has been replaced by the agent modal overlay.
 func (m Model) AgentFormStep() int { return 0 }
-
-// AgentModalOpen returns whether the agent modal overlay is open — used in tests.
-func (m Model) AgentModalOpen() bool { return m.agentModalOpen }
 
 // ThemePickerOpen returns whether the theme picker overlay is open — used in tests.
 func (m Model) ThemePickerOpen() bool { return m.themePicker.Open }
-
-// AgentModalFocus returns the current agent modal focus slot — used in tests.
-func (m Model) AgentModalFocus() int { return m.agentModalFocus }
-
-// AgentPromptIdx returns the selected saved-prompt index — used in tests.
-func (m Model) AgentPromptIdx() int { return m.agentPromptIdx }
-
-// SavedPromptPickerOpen reports whether the saved-prompt inline picker is open — used in tests.
-func (m Model) SavedPromptPickerOpen() bool { return m.savedPromptPicker.IsOpen() }
 
 // DirPickerOpen reports whether the dir picker is open — used in tests.
 func (m Model) DirPickerOpen() bool { return m.dirPickerOpen }
@@ -509,14 +467,22 @@ func (m Model) DirPickerCtx() string { return m.dirPickerCtx }
 // WithAgentPrompts returns a copy of the model with the given prompts loaded — used in tests.
 func (m Model) WithAgentPrompts(prompts []store.Prompt) Model {
 	m.agentPrompts = prompts
+	titles := buildPromptTitles(prompts)
+	m.sendPanel = m.sendPanel.SetSavedPromptTitles(titles)
 	return m
 }
 
-// AgentScheduleErr returns the agent schedule error string — used in tests.
-func (m Model) AgentScheduleErr() string { return m.agentScheduleErr }
+// SendPanelFocused returns whether the send panel has focus — used in tests.
+func (m Model) SendPanelFocused() bool { return m.sendPanel.Focused() }
 
-// AgentUseBrain returns whether the agent should use the brain — used in tests.
-func (m Model) AgentUseBrain() bool { return m.agentUseBrain }
+// SendPanelAgentOpen returns whether the send panel agent picker popup is open — used in tests.
+func (m Model) SendPanelAgentOpen() bool { return m.sendPanel.AgentOpen() }
+
+// SendPanelSavedPromptsOpen returns whether the saved prompts picker is open — used in tests.
+func (m Model) SendPanelSavedPromptsOpen() bool { return m.sendPanel.SavedPromptsOpen() }
+
+// SendPanelSavedPromptIdx returns the selected saved prompt index — used in tests.
+func (m Model) SendPanelSavedPromptIdx() int { return m.sendPanel.SavedPromptIdx() }
 
 // PipelineLaunchMode returns the pipeline launch mode — used in tests.
 func (m Model) PipelineLaunchMode() int { return m.pipelineLaunchMode }
@@ -572,8 +538,7 @@ func (m Model) MidColWidth() int { return m.midColWidth() }
 // LeftColWidth returns the left column width — used in tests.
 func (m Model) LeftColWidth() int { return m.leftColWidth() }
 
-// ViewAgentModalBox is an exported wrapper for tests.
-func (m Model) ViewAgentModalBox(w, h int) string { return m.viewAgentModalBox(w, h) }
+
 
 // BuildCronSection is an exported wrapper for tests.
 func (m Model) BuildCronSection(w int) []string { return m.buildCronSection(w, 10) }
@@ -650,8 +615,8 @@ func (m Model) FeedEntryArchived(id string) (bool, bool) {
 // SignalBoardActiveFilter returns the current active filter — used in tests.
 func (m Model) SignalBoardActiveFilter() string { return m.signalBoard.activeFilter }
 
-// AgentPromptValue returns the current agent prompt textarea value — used in tests.
-func (m Model) AgentPromptValue() string { return m.agent.prompt.Value() }
+// AgentPromptValue returns the current agent prompt textarea value — kept for backward compat.
+func (m Model) AgentPromptValue() string { return "" }
 
 // SetSignalBoardFilter sets the active filter directly — used in tests.
 func (m Model) SetSignalBoardFilter(f string) Model {
@@ -973,6 +938,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case agentPromptsLoadedMsg:
 		m.agentPrompts = msg.prompts
+		m.sendPanel = m.sendPanel.SetSavedPromptTitles(buildPromptTitles(msg.prompts))
 		return m, nil
 
 	// ── Pending clarifications loaded from DB on startup ─────────────────────
@@ -1001,7 +967,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case DirSelectedMsg:
 		m.dirPickerOpen = false
 		if m.dirPickerCtx == "agent" {
-			m.agentCWD = msg.Path
+			m.sendPanel = m.sendPanel.SetCWD(msg.Path)
 		} else if m.dirPickerCtx == "pipeline" {
 			// Launch the pending pipeline with the selected CWD.
 			return m.launchPendingPipeline(msg.Path)
@@ -1018,7 +984,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		leftW := m.leftColWidth()
-		m.agent.prompt.SetWidth(max(leftW-4, 10))
 		m.inboxModel.SetSize(leftW, msg.Height)
 		m.clampFeedScroll()
 		return m, nil
@@ -1304,12 +1269,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if injected != "" {
 			m.inboxDetailOpen = false
-			m.agent.prompt.SetValue(injected)
-			m.agentModalOpen = true
-			m.agentModalFocus = 2
-			m.agentPromptIdx = 0
-			m.agent.prompt.Focus()
-			m.agentNameInput.SetValue(fmt.Sprintf("agent-%s-%d", m.agent.agentPicker.SelectedProviderID(), time.Now().Unix()))
+			// Pre-populate the send panel message with the injected text and focus it.
+			m.sendPanel = m.sendPanel.SetFocused(true)
+			m.agent.focused = true
+			m.launcher.focused = false
+			m.feedFocused = false
 			return m, loadAgentPromptsCmd(m.store)
 		}
 		return m, nil
@@ -1322,7 +1286,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen || m.brainEditorOpen {
+		if m.confirmQuit || m.helpOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen || m.brainEditorOpen {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -1624,12 +1588,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				m.inboxDetailMarked = nil
 				m.inboxDetailMarkedLines = nil
 				m.inboxDetailOpen = false
-				m.agent.prompt.SetValue(strings.Join(parts, "\n"))
-				m.agentModalOpen = true
-				m.agentModalFocus = 2
-				m.agentPromptIdx = 0
-				m.agent.prompt.Focus()
-				m.agentNameInput.SetValue(fmt.Sprintf("agent-%s-%d", m.agent.agentPicker.SelectedProviderID(), time.Now().Unix()))
+				m.agent.focused = true
+				m.launcher.focused = false
+				m.sendPanel = m.sendPanel.Enter()
 				return m, loadAgentPromptsCmd(m.store)
 			}
 			return m, nil
@@ -1687,9 +1648,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Agent modal — all keys captured before panel handlers.
-	if m.agentModalOpen {
-		return m.handleAgentModal(msg)
+	// When agent send panel is focused, route most keys to it.
+	// (tab/shift+tab are already handled above in the tab case)
+	if m.agent.focused && key != "esc" && key != "ctrl+c" && key != "ctrl+q" && key != "tab" && key != "shift+tab" {
+		newPanel, cmd := m.sendPanel.Update(msg)
+		m.sendPanel = newPanel
+		if cmd != nil {
+			outMsg := cmd()
+			switch v := outMsg.(type) {
+			case buildershared.SendSubmitMsg:
+				return m.submitAgentJob(v.Message)
+			case buildershared.SendBrowseCWDMsg:
+				m.dirPicker = NewDirPickerModel()
+				m.dirPickerOpen = true
+				m.dirPickerCtx = "agent"
+				return m, DirPickerInit()
+			default:
+				// Some other cmd result — wrap it back as a Cmd if non-nil
+				if outMsg != nil {
+					return m, func() tea.Msg { return outMsg }
+				}
+			}
+		}
+		return m, nil
 	}
 
 	// Signal board search input — intercept chars when searching.
@@ -1930,30 +1911,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		fwd := key == "tab"
 		// Tab order follows the three-column layout, left→right top→bottom:
 		//   LEFT col:   launcher → inbox → cron
-		//   CENTER col: agentsCenter → agent runner (provider cards)
+		//   CENTER col: agentsCenter → agent runner (send panel)
 		//   RIGHT col:  signalBoard → feed
 		//   wrap back to launcher
 		//
-		// Agent runner: tab/shift+tab cycles the provider selection instead of
-		// leaving the panel — only a second tab press wraps to the next panel.
+		// When agent send panel is focused, tab cycles through its internal fields.
+		// SendTabOutMsg and SendShiftTabOutMsg signals move focus out of the panel.
 		if m.agent.focused {
-			// Agent runner: cycle provider selection within the panel.
-			direction := "j"
-			if !fwd {
-				direction = "k"
-			}
-			newPicker, _ := m.agent.agentPicker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(direction)})
-			// If the picker wrapped (no movement), leave agent runner panel.
-			if newPicker.SelectedProviderID() == m.agent.agentPicker.SelectedProviderID() {
-				if fwd {
+			newPanel, cmd := m.sendPanel.Update(msg)
+			m.sendPanel = newPanel
+			if cmd != nil {
+				outMsg := cmd()
+				switch outMsg.(type) {
+				case buildershared.SendTabOutMsg:
 					m.agent.focused = false
+					m.sendPanel = m.sendPanel.SetFocused(false)
 					m.signalBoardFocused = true
-				} else {
+				case buildershared.SendShiftTabOutMsg:
 					m.agent.focused = false
+					m.sendPanel = m.sendPanel.SetFocused(false)
 					m.agentsCenterFocused = true
 				}
-			} else {
-				m.agent.agentPicker = newPicker
 			}
 			return m, nil
 		}
@@ -1973,6 +1951,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			case m.agentsCenterFocused:
 				m.agentsCenterFocused = false
 				m.agent.focused = true
+				m.sendPanel = m.sendPanel.Enter()
 			case m.signalBoardFocused:
 				m.signalBoardFocused = false
 				m.signalBoard.clearSearch()
@@ -2005,6 +1984,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				m.signalBoardFocused = false
 				m.signalBoard.clearSearch()
 				m.agent.focused = true
+				m.sendPanel = m.sendPanel.Enter()
 			case m.feedFocused:
 				m.feedFocused = false
 				m.signalBoardFocused = true
@@ -2030,7 +2010,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.launcher.focused = false
 		m.agent.focused = true
 		m.feedFocused = false
-		return m, nil
+		m.sendPanel = m.sendPanel.Enter()
+		return m, loadAgentPromptsCmd(m.store)
 
 	case "s":
 		m.launcher.focused = false
@@ -2058,11 +2039,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		newProviders := picker.BuildProviders()
 		m.agent.providers = newProviders
-		m.agent.agentPicker = modal.NewAgentPickerModel(newProviders)
+		m.sendPanel = buildershared.NewSendPanel(newProviders)
 		return m, nil
 
 	case "T":
-		if !m.agentModalOpen && !m.confirmDelete && !m.confirmQuit {
+		if !m.confirmDelete && !m.confirmQuit {
 			m.themePicker.Open = true
 			m.themePicker.OriginalTheme = m.registry.Active()
 			// Set initial tab based on active theme's mode
@@ -2075,7 +2056,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "J":
-		if !m.agentModalOpen && !m.confirmDelete && !m.confirmQuit {
+		if !m.confirmDelete && !m.confirmQuit {
 			return m, func() tea.Msg {
 				self, _ := os.Executable()
 				exec.Command("tmux", "display-popup", "-E", "-w", "80%", "-h", "70%",
@@ -2181,6 +2162,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.launcher.focused = true
 		} else if m.agent.focused {
 			m.agent.focused = false
+			m.sendPanel = m.sendPanel.SetFocused(false)
 			m.launcher.focused = true
 		}
 		return m, nil
@@ -2357,8 +2339,8 @@ func (m Model) handleDown() Model {
 		return m
 	}
 	if m.agent.focused {
-		newPicker, _ := m.agent.agentPicker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-		m.agent.agentPicker = newPicker
+		newPanel, _ := m.sendPanel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m.sendPanel = newPanel
 	}
 	return m
 }
@@ -2408,8 +2390,8 @@ func (m Model) handleUp() Model {
 		return m
 	}
 	if m.agent.focused {
-		newPicker, _ := m.agent.agentPicker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
-		m.agent.agentPicker = newPicker
+		newPanel, _ := m.sendPanel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+		m.sendPanel = newPanel
 	}
 	return m
 }
@@ -2418,7 +2400,7 @@ func (m Model) handleUp() Model {
 type agentPromptsLoadedMsg struct{ prompts []store.Prompt }
 
 // loadAgentPromptsCmd loads all saved prompts from the store asynchronously.
-// Used when the agent modal opens so the user can pick a saved prompt.
+// Used when the agent section focuses so the user can pick a saved prompt.
 func loadAgentPromptsCmd(st *store.Store) tea.Cmd {
 	if st == nil {
 		return nil
@@ -2429,225 +2411,13 @@ func loadAgentPromptsCmd(st *store.Store) tea.Cmd {
 	}
 }
 
-// agentModalNextFocus advances the agent modal focus slot forward.
-// Focus slots: 0=picker(provider+model), 1=saved-prompt, 2=prompt, 3=use_brain, 4=cwd, 5=schedule, 6=name.
-func agentModalNextFocus(cur int) int {
-	switch cur {
-	case 0:
-		return 1
-	case 1:
-		return 2
-	case 2:
-		return 3
-	case 3:
-		return 4
-	case 4:
-		return 5
-	case 5:
-		return 6
-	default: // 6 or anything else
-		return 0
+// buildPromptTitles returns a slice of prompt titles for the saved prompts fuzzy picker.
+func buildPromptTitles(prompts []store.Prompt) []string {
+	titles := make([]string, 0, len(prompts))
+	for _, p := range prompts {
+		titles = append(titles, p.Title)
 	}
-}
-
-// agentModalPrevFocus advances the agent modal focus slot backward.
-func agentModalPrevFocus(cur int) int {
-	switch cur {
-	case 0:
-		return 6
-	case 1:
-		return 0
-	case 2:
-		return 1
-	case 3:
-		return 2
-	case 4:
-		return 3
-	case 5:
-		return 4
-	default: // 6
-		return 5
-	}
-}
-
-// handleAgentModal routes key events when the agent modal overlay is open.
-func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
-	key := msg.String()
-
-	// Saved prompt picker captures all keys when open.
-	if m.savedPromptPicker.IsOpen() {
-		newPicker, ev, cmd := m.savedPromptPicker.Update(msg)
-		m.savedPromptPicker = newPicker
-		switch ev {
-		case modal.FuzzyPickerConfirmed:
-			m.agentPromptIdx = m.savedPromptPicker.SelectedOriginalIdx()
-			// Advance focus to the prompt textarea so the user can add context.
-			m.agentModalFocus = 2
-			m.agent.prompt.Focus()
-		case modal.FuzzyPickerCancelled:
-			// picker closed, agentPromptIdx unchanged
-		}
-		return m, cmd
-	}
-
-	switch key {
-	case "esc", "ctrl+c":
-		m.agentModalOpen = false
-		m.agent.prompt.Blur()
-		m.agentSchedule.Blur()
-		m.agentNameInput.Blur()
-		m.agentScheduleErr = ""
-		return m, nil
-
-	case "ctrl+s":
-		return m.submitAgentJob()
-
-	case "tab":
-		if m.agentModalFocus == 0 {
-			// If picker's internal focus is on model list, tab advances outer focus to saved-prompt.
-			if m.agent.agentPicker.Focus() == 1 {
-				m.agentModalFocus = 1
-				m.agent.prompt.Blur()
-				m.agentSchedule.Blur()
-				return m, nil
-			}
-			// Otherwise route tab to picker (switches provider↔model internally).
-			newPicker, _ := m.agent.agentPicker.Update(msg)
-			m.agent.agentPicker = newPicker
-			return m, nil
-		}
-		m.agentModalFocus = agentModalNextFocus(m.agentModalFocus)
-		switch m.agentModalFocus {
-		case 2:
-			m.agent.prompt.Focus()
-			m.agentSchedule.Blur()
-			m.agentNameInput.Blur()
-		case 5:
-			m.agent.prompt.Blur()
-			m.agentSchedule.Focus()
-			m.agentNameInput.Blur()
-		case 6:
-			m.agent.prompt.Blur()
-			m.agentSchedule.Blur()
-			m.agentNameInput.Focus()
-		default:
-			m.agent.prompt.Blur()
-			m.agentSchedule.Blur()
-			m.agentNameInput.Blur()
-		}
-		return m, nil
-
-	case "shift+tab":
-		m.agentModalFocus = agentModalPrevFocus(m.agentModalFocus)
-		switch m.agentModalFocus {
-		case 2:
-			m.agent.prompt.Focus()
-			m.agentSchedule.Blur()
-			m.agentNameInput.Blur()
-		case 5:
-			m.agent.prompt.Blur()
-			m.agentSchedule.Focus()
-			m.agentNameInput.Blur()
-		case 6:
-			m.agent.prompt.Blur()
-			m.agentSchedule.Blur()
-			m.agentNameInput.Focus()
-		default:
-			m.agent.prompt.Blur()
-			m.agentSchedule.Blur()
-			m.agentNameInput.Blur()
-		}
-		return m, nil
-
-	case "up", "k":
-		if m.agentModalFocus == 2 || m.agentModalFocus == 5 || m.agentModalFocus == 6 {
-			// Let textarea/textinput handle the key when prompt, schedule, or name is focused.
-			break
-		}
-		if m.agentModalFocus == 0 {
-			newPicker, _ := m.agent.agentPicker.Update(msg)
-			m.agent.agentPicker = newPicker
-			return m, nil
-		}
-		return m, nil
-
-	case "down", "j":
-		if m.agentModalFocus == 2 || m.agentModalFocus == 5 || m.agentModalFocus == 6 {
-			// Let textarea/textinput handle the key when prompt, schedule, or name is focused.
-			break
-		}
-		if m.agentModalFocus == 0 {
-			newPicker, _ := m.agent.agentPicker.Update(msg)
-			m.agent.agentPicker = newPicker
-			return m, nil
-		}
-		return m, nil
-
-	case "enter":
-		if m.agentModalFocus == 0 {
-			newPicker, ev := m.agent.agentPicker.Update(msg)
-			m.agent.agentPicker = newPicker
-			if ev == modal.AgentPickerConfirmed {
-				m.agentModalFocus = 2
-				m.agent.prompt.Focus()
-			}
-			return m, nil
-		}
-		if m.agentModalFocus == 1 {
-			// Open inline fuzzy picker for saved prompts.
-			titles := make([]string, 0, len(m.agentPrompts)+1)
-			titles = append(titles, "(none)")
-			for _, p := range m.agentPrompts {
-				titles = append(titles, p.Title)
-			}
-			m.savedPromptPicker.Open(titles)
-			return m, nil
-		}
-		// fall through to default handling below
-
-	default:
-	}
-
-	// USE BRAIN toggle: space or enter toggles the flag.
-	if m.agentModalFocus == 3 {
-		if key == " " || key == "enter" {
-			m.agentUseBrain = !m.agentUseBrain
-		}
-		return m, nil
-	}
-
-	// CWD focus: enter opens the dir picker.
-	if m.agentModalFocus == 4 {
-		if msg.String() == "enter" {
-			m.dirPicker = NewDirPickerModel()
-			m.dirPickerOpen = true
-			m.dirPickerCtx = "agent"
-			return m, DirPickerInit()
-		}
-		return m, nil
-	}
-
-	// Forward key events to the focused textarea.
-	if m.agentModalFocus == 2 {
-		var cmd tea.Cmd
-		m.agent.prompt, cmd = m.agent.prompt.Update(msg)
-		return m, cmd
-	}
-	if m.agentModalFocus == 5 {
-		var cmd tea.Cmd
-		m.agentSchedule, cmd = m.agentSchedule.Update(msg)
-		return m, cmd
-	}
-	if m.agentModalFocus == 6 {
-		if key == "enter" {
-			// Enter in the name field submits the job.
-			return m.submitAgentJob()
-		}
-		var cmd tea.Cmd
-		m.agentNameInput, cmd = m.agentNameInput.Update(msg)
-		return m, cmd
-	}
-	return m, nil
+	return titles
 }
 
 // handlePipelineLaunchOverlay routes key events for the pipeline mode-select
@@ -2836,13 +2606,8 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Agent runner panel: open the agent runner modal.
-	if m.agent.focused {
-		m.agentModalOpen = true
-		m.agentModalFocus = 0
-		m.agentNameInput.SetValue(fmt.Sprintf("agent-%s-%d", m.agent.agentPicker.SelectedProviderID(), time.Now().Unix()))
-		return m, loadAgentPromptsCmd(m.store)
-	}
+	// Agent send panel: enter is routed through the sendPanel routing block above;
+	// this path is not reached when agent.focused.
 
 	// Agents grid: open inbox detail for the selected agent's run.
 	if m.agentsCenterFocused {
@@ -2900,18 +2665,6 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		m.pendingPipelineYAML = yamlPath
 		m.pipelineLaunchMode = plModeSelect
 		m.pipelineModeSelected = 0
-		return m, nil
-	}
-	// Agent section: open modal overlay.
-	if m.agent.focused {
-		if m.width >= 62 {
-			m.agentModalOpen = true
-			m.agentModalFocus = 0 // start at picker (provider+model) so user confirms selection
-			m.agentPromptIdx = 0
-			m.agent.prompt.Blur()
-			m.agentNameInput.SetValue(fmt.Sprintf("agent-%s-%d", m.agent.agentPicker.SelectedProviderID(), time.Now().Unix()))
-			return m, loadAgentPromptsCmd(m.store)
-		}
 		return m, nil
 	}
 
@@ -2982,13 +2735,15 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 	return m, tea.Batch(drainChan(ch), startedCmd)
 }
 
-// submitAgentJob submits the agent job from the modal overlay.
-// If SCHEDULE is non-blank, it writes a cron entry instead of launching immediately.
-func (m Model) submitAgentJob() (Model, tea.Cmd) {
-	input := strings.TrimSpace(m.agent.prompt.Value())
-	// Merge saved prompt + additional context. Either one is sufficient.
-	if m.agentPromptIdx > 0 && m.agentPromptIdx-1 < len(m.agentPrompts) {
-		p := m.agentPrompts[m.agentPromptIdx-1]
+// submitAgentJob submits an agent job using the current sendPanel state.
+// input is the message text from SendSubmitMsg. The saved prompt body (if any) is
+// prepended before submission.
+func (m Model) submitAgentJob(input string) (Model, tea.Cmd) {
+	input = strings.TrimSpace(input)
+	// Merge saved prompt body + additional context. Either one is sufficient.
+	spIdx := m.sendPanel.SavedPromptIdx()
+	if spIdx >= 0 && spIdx < len(m.agentPrompts) {
+		p := m.agentPrompts[spIdx]
 		if input != "" {
 			input = p.Body + "\n\n" + input
 		} else {
@@ -2999,8 +2754,8 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	provID := m.agent.agentPicker.SelectedProviderID()
-	modelID := m.agent.agentPicker.SelectedModelID()
+	provID := m.sendPanel.ProviderID()
+	modelID := m.sendPanel.ModelID()
 
 	// Find the ProviderDef for pipeline args.
 	var prov *picker.ProviderDef
@@ -3017,68 +2772,6 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	agentName := prov.ID
 	if modelID != "" {
 		agentName += "/" + modelID
-	}
-
-	// ── Schedule path ─────────────────────────────────────────────────────────
-	schedExpr := strings.TrimSpace(m.agentSchedule.Value())
-	if schedExpr != "" {
-		parser := robfigcron.NewParser(robfigcron.Minute | robfigcron.Hour | robfigcron.Dom | robfigcron.Month | robfigcron.Dow)
-		if _, err := parser.Parse(schedExpr); err != nil {
-			m.agentScheduleErr = "invalid cron: " + err.Error()
-			return m, nil
-		}
-		m.agentScheduleErr = ""
-
-		entryName := strings.TrimSpace(m.agentNameInput.Value())
-		if entryName == "" {
-			entryName = fmt.Sprintf("agent-%s-%d", prov.ID, time.Now().UnixNano())
-		}
-
-		// Generate a minimal single-step pipeline YAML so the scheduled run
-		// has the prompt embedded and runs via the standard pipeline executor.
-		pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, m.agentUseBrain)
-		if pipelineErr != nil {
-			m.agentScheduleErr = "pipeline write error: " + pipelineErr.Error()
-			return m, nil
-		}
-
-		cronEntry := orcaicron.Entry{
-			Name:     entryName,
-			Schedule: schedExpr,
-			Kind:     "pipeline",
-			Target:   pipelineFile,
-		}
-		if werr := orcaicron.WriteEntry(cronEntry); werr != nil {
-			m.agentScheduleErr = "write error: " + werr.Error()
-			return m, nil
-		}
-		// Auto-start cron daemon if not already running.
-		go ensureCronDaemon()
-
-		feedID := fmt.Sprintf("sched-%d", time.Now().UnixNano())
-		confirmEntry := feedEntry{
-			id:     feedID,
-			title:  "scheduled: " + agentName + " @ " + schedExpr,
-			status: FeedDone,
-			ts:     time.Now(),
-			lines:  []string{"cron entry written to cron.yaml"},
-		}
-		m.feed = append([]feedEntry{confirmEntry}, m.feed...)
-		if len(m.feed) > 200 {
-			m.feed = m.feed[:200]
-		}
-
-		// Close modal and reset.
-		m.agentModalOpen = false
-		m.agent.prompt.SetValue("")
-		m.agent.prompt.Blur()
-		m.agentSchedule.SetValue("")
-		m.agentSchedule.Blur()
-		m.agentScheduleErr = ""
-		m.agentNameInput.SetValue("")
-		m.agentNameInput.Blur()
-		m.agentPromptIdx = 0
-		return m, nil
 	}
 
 	// ── Run-now path ──────────────────────────────────────────────────────────
@@ -3099,13 +2792,13 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	entryName := strings.TrimSpace(m.agentNameInput.Value())
+	entryName := strings.TrimSpace(m.sendPanel.Name())
 	if entryName == "" {
 		entryName = fmt.Sprintf("agent-%s-%d", prov.ID, time.Now().UnixNano())
 	}
 
 	// Resolve CWD and optionally create a git worktree for isolation.
-	cwd := m.agentCWD
+	cwd := m.sendPanel.CWD()
 	if cwd == "" {
 		cwd = m.launchCWD
 	}
@@ -3116,7 +2809,7 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 
 	// Write a single-step pipeline so the run goes through the pipeline
 	// runner, which records step prompts, outputs, and durations in the store.
-	pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, m.agentUseBrain)
+	pipelineFile, pipelineErr := WriteSingleStepPipeline(entryName, prov.ID, modelID, input, false)
 	if pipelineErr != nil {
 		feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
 		warnEntry := feedEntry{
@@ -3140,16 +2833,8 @@ func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	m.pendingExecutorID = prov.ID
 	m.pendingModelID = modelID
 
-	// Close modal and reset prompt after submission.
-	m.agentModalOpen = false
-	m.agent.prompt.SetValue("")
-	m.agent.prompt.Blur()
-	m.agentSchedule.SetValue("")
-	m.agentSchedule.Blur()
-	m.agentScheduleErr = ""
-	m.agentNameInput.SetValue("")
-	m.agentNameInput.Blur()
-	m.agentPromptIdx = 0
+	// Clear saved prompt selection after submission.
+	m.sendPanel = m.sendPanel.ClearSavedPrompt()
 
 	return m.launchPendingPipeline(cwd)
 }
@@ -3503,9 +3188,22 @@ func (m Model) View() string {
 		return m.brainEditor.View()
 	}
 
-	// Agent modal — full-screen panel like inbox detail.
-	if m.agentModalOpen {
-		return topBar + "\n" + m.viewAgentModalBox(w, h)
+	// Agent picker popup — overlay on the normal 3-col view.
+	if m.agent.focused && m.sendPanel.AgentOpen() {
+		base := topBar + "\n" + body
+		return overlayCenter(base, m.sendPanel.OverlayView(w, m.ansiPalette()), w, h)
+	}
+
+	// Saved prompts picker popup — overlay on the normal 3-col view.
+	if m.agent.focused && m.sendPanel.SavedPromptsOpen() {
+		base := topBar + "\n" + body
+		return overlayCenter(base, m.sendPanel.SavedPromptOverlayView(w, m.ansiPalette()), w, h)
+	}
+
+	// Dir picker for agent CWD — overlay on the normal 3-col view.
+	if m.dirPickerOpen && m.dirPickerCtx == "agent" {
+		base := topBar + "\n" + body
+		return overlayCenter(base, m.dirPicker.ViewDirPickerBox(w, m.ansiPalette()), w, h)
 	}
 
 	// Re-run modal — full-screen panel like inbox detail.
@@ -3659,171 +3357,6 @@ func (m Model) viewPipelineScheduleInput(w int) string {
 	return strings.Join(rows, "\n")
 }
 
-// viewAgentModal renders the full-screen agent overlay.
-// viewAgentModalBox renders the agent modal box content only. overlayCenter
-// places it over the base view.
-func (m Model) viewAgentModalBox(w, h int) string {
-	modalW := w
-
-	// Full-screen height: topBar takes 1 row; box top+hints+bot = 3.
-	// Fixed overhead: boxTop(1)+pickerViewRows(12:provHdr+4prov+blank+modelHdr+4model+blank)+
-	// blank(1)+savedPromptRow(1)+blank(1)+promptHdr(1)+blank(1)+useBrain(1)+blank(1)+cwdHdr(1)+cwd(1)+
-	// blank(1)+schedHdr(1)+schedTA(1)+3cronHints(3)+blank(1)+hintStr(1)+boxBot(1) = 32
-	const fixedOverhead = 32
-	const minPromptH = 4
-	modalH := max(h-1, 24)
-	promptH := max(modalH-fixedOverhead, minPromptH)
-
-	pal := m.ansiPalette()
-	modalBorderColor := aPur
-	if b := m.activeBundle(); b != nil {
-		if border := b.ResolveRef(b.Modal.Border); border != "" {
-			r, g, bv := hexToRGBFromStyles(border)
-			modalBorderColor = fmt.Sprintf("\x1b[38;2;%d;%d;%dm", r, g, bv)
-		}
-	}
-
-	hint := func(key, desc string) string {
-		return pal.Accent + key + pal.Dim + " " + desc + aRst
-	}
-	sep := pal.Dim + " · " + aRst
-
-	sectionLabel := func(title string, active bool) string {
-		if active {
-			return pal.Accent + aBld + title + aRst
-		}
-		return pal.Dim + title + aRst
-	}
-
-	var rows []string
-	rows = append(rows, boxTop(modalW, "AGENT", modalBorderColor, modalBorderColor))
-
-	// ── PROVIDER + MODEL picker ───────────────────────────────────────────────
-	for _, r := range m.agent.agentPicker.ViewRows(modalW-4, pal) {
-		rows = append(rows, boxRow("  "+r, modalW, modalBorderColor))
-	}
-
-	// ── SAVED PROMPT picker ───────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	savedPromptLabel := "(none)"
-	if m.agentPromptIdx > 0 && m.agentPromptIdx-1 < len(m.agentPrompts) {
-		savedPromptLabel = m.agentPrompts[m.agentPromptIdx-1].Title
-	}
-	spActive := m.agentModalFocus == 1
-	spLabelColor := pal.Dim
-	if spActive {
-		spLabelColor = pal.Accent + aBld
-	}
-	enterHint := pal.Dim + "  [enter to pick]" + aRst
-	savedPromptRow := "  " + spLabelColor + "Saved Prompt" + aRst + "  " + pal.FG + savedPromptLabel + aRst + enterHint
-	rows = append(rows, boxRow(savedPromptRow, modalW, modalBorderColor))
-
-	// ── PROMPT section ────────────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	promptHeader := "  " + sectionLabel("PROMPT", m.agentModalFocus == 2)
-	rows = append(rows, boxRow(promptHeader, modalW, modalBorderColor))
-	if len(m.activeJobs) > 0 {
-		warn := pal.Error + fmt.Sprintf("  ⚠ %d job(s) running", len(m.activeJobs)) + aRst
-		rows = append(rows, boxRow(warn, modalW, modalBorderColor))
-	}
-	promptInnerW := max(modalW-6, 10)
-	m.agent.prompt.SetWidth(promptInnerW)
-	m.agent.prompt.SetHeight(promptH)
-	for _, pLine := range strings.Split(m.agent.prompt.View(), "\n") {
-		pLine = strings.TrimRight(pLine, "\r")
-		padded := "  " + pLine
-		rows = append(rows, boxRow(padded, modalW, modalBorderColor))
-	}
-
-	// ── USE BRAIN toggle ──────────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	useBrainCheck := "[ ]"
-	if m.agentUseBrain {
-		useBrainCheck = "[x]"
-	}
-	useBrainColor := pal.Dim
-	if m.agentModalFocus == 3 {
-		useBrainColor = pal.Accent + aBld
-	}
-	useBrainRow := "  " + useBrainColor + useBrainCheck + " use brain context" + aRst
-	rows = append(rows, boxRow(useBrainRow, modalW, modalBorderColor))
-
-	// ── WORKING DIRECTORY section ─────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	cwdHeader := "  " + sectionLabel("WORKING DIRECTORY", m.agentModalFocus == 4)
-	rows = append(rows, boxRow(cwdHeader, modalW, modalBorderColor))
-	cwdDisplay := m.agentCWD
-	if cwdDisplay == "" {
-		cwdDisplay = m.launchCWD
-	}
-	if cwdDisplay == "" {
-		cwdDisplay = "(current directory)"
-	}
-	cwdColor := pal.Dim
-	if m.agentModalFocus == 4 {
-		cwdColor = pal.Accent
-	}
-	rows = append(rows, boxRow("  "+cwdColor+cwdDisplay+aRst, modalW, modalBorderColor))
-	if m.agentModalFocus == 4 && !m.dirPickerOpen {
-		rows = append(rows, boxRow(aDim+"  press enter to browse"+aRst, modalW, modalBorderColor))
-	}
-
-	// ── SCHEDULE section ──────────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	schedHeader := "  " + sectionLabel("SCHEDULE (cron expr, blank = run now)", m.agentModalFocus == 5)
-	rows = append(rows, boxRow(schedHeader, modalW, modalBorderColor))
-	schedInnerW := max(modalW-6, 10)
-	m.agentSchedule.SetWidth(schedInnerW)
-	for _, sLine := range strings.Split(m.agentSchedule.View(), "\n") {
-		sLine = strings.TrimRight(sLine, "\r")
-		padded := "  " + sLine
-		rows = append(rows, boxRow(padded, modalW, modalBorderColor))
-	}
-	if m.agentScheduleErr != "" {
-		errLine := "  " + pal.Error + m.agentScheduleErr + aRst
-		rows = append(rows, boxRow(errLine, modalW, modalBorderColor))
-	} else {
-		rows = append(rows, boxRow(aDim+"  0 * * * *    every hour"+aRst, modalW, modalBorderColor))
-		rows = append(rows, boxRow(aDim+"  0 9 * * *    daily at 9am"+aRst, modalW, modalBorderColor))
-		rows = append(rows, boxRow(aDim+"  0 9 * * 1-5  weekdays at 9am"+aRst, modalW, modalBorderColor))
-	}
-
-	// ── NAME section ─────────────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	nameHeader := "  " + sectionLabel("SESSION NAME", m.agentModalFocus == 6)
-	rows = append(rows, boxRow(nameHeader, modalW, modalBorderColor))
-	m.agentNameInput.Width = max(modalW-6, 10)
-	nameView := "  " + m.agentNameInput.View()
-	rows = append(rows, boxRow(nameView, modalW, modalBorderColor))
-
-	// ── Hint bar ──────────────────────────────────────────────────────────────
-	rows = append(rows, boxRow("", modalW, modalBorderColor))
-	hintParts := []string{
-		hint("tab", "focus"),
-		hint("ctrl+s", "submit"),
-		hint("esc", "close"),
-	}
-	hintStr := "  " + strings.Join(hintParts, sep)
-	rows = append(rows, boxRow(hintStr, modalW, modalBorderColor))
-	rows = append(rows, boxBot(modalW, modalBorderColor))
-
-	base := strings.Join(rows, "\n")
-	modalH = len(rows)
-
-	// Saved prompt picker — floating overlay.
-	if m.savedPromptPicker.IsOpen() {
-		overlay := m.savedPromptPicker.ViewBox(modalW, pal)
-		return panelrender.OverlayCenter(base, overlay, modalW, modalH)
-	}
-
-	// Dir picker — floating overlay for agent context.
-	if m.dirPickerOpen && m.dirPickerCtx == "agent" {
-		overlay := m.dirPicker.ViewDirPickerBox(modalW, pal)
-		return panelrender.OverlayCenter(base, overlay, modalW, modalH)
-	}
-
-	return base
-}
 
 // sectionLabel returns a section header with focus indicator.
 func sectionLabel(title string, focused bool) string {
@@ -4243,121 +3776,13 @@ func (m Model) buildLauncherSection(w int) []string {
 
 // buildAgentSection renders a compact Agent Runner box showing the provider list.
 // The full form (model selection + prompt) lives in the modal overlay.
+// sendPanelHeight is the fixed height of the inline send panel.
+// top-border + name-row + blank + saved-prompt-row + blank + msg-row + blank + hint + bot = 9
+const sendPanelHeight = 9
+
 func (m Model) buildAgentSection(w int) []string {
 	pal := m.ansiPalette()
-	borderColor := pal.Border
-	titleColor := pal.Accent
-	if m.agent.focused {
-		borderColor = pal.Accent
-	}
-
-	var rows []string
-	if sprite := PanelHeader(m.activeBundle(), "agent_runner", w, borderColor, titleColor); sprite != nil {
-		rows = append(rows, sprite...)
-	} else {
-		rows = append(rows, boxTop(w, RenderHeader("agent_runner"), borderColor, titleColor))
-	}
-
-	if len(m.agent.providers) == 0 {
-		rows = append(rows, boxRow(pal.Dim+"  no providers available"+aRst, w, borderColor))
-	} else {
-		// Render providers as a horizontal row of inline boxed cards (same style as agents grid).
-		selectedProvID := m.agent.agentPicker.SelectedProviderID()
-		selectedProvIdx := 0
-		for i, p := range m.agent.providers {
-			if p.ID == selectedProvID {
-				selectedProvIdx = i
-				break
-			}
-		}
-
-		innerW := w - 2 // panel body between outer │ chars
-		gridCols := max(1, innerW/20)
-		cardW := max((innerW-2-(gridCols-1))/gridCols, 8)
-		// Shrink cols until cards fit.
-		for gridCols > 1 && 2+(gridCols*cardW)+(gridCols-1) > innerW {
-			gridCols--
-		}
-
-		// Scrolling: keep selected card visible.
-		offset := (selectedProvIdx / gridCols) * gridCols
-		windowRows := agentInnerHeight / 3
-		if windowRows < 1 {
-			windowRows = 1
-		}
-		selectedRow := selectedProvIdx / gridCols
-		startRow := offset / gridCols
-		if selectedRow >= startRow+windowRows {
-			startRow = selectedRow - windowRows + 1
-		}
-		offset = startRow * gridCols
-
-		end := min(offset+windowRows*gridCols, len(m.agent.providers))
-		providers := m.agent.providers[offset:end]
-
-		for rowStart := 0; rowStart < windowRows*gridCols; rowStart += gridCols {
-			var topRow, midRow, botRow strings.Builder
-			topRow.WriteByte(' ')
-			midRow.WriteByte(' ')
-			botRow.WriteByte(' ')
-			for col := 0; col < gridCols; col++ {
-				if col > 0 {
-					topRow.WriteByte(' ')
-					midRow.WriteByte(' ')
-					botRow.WriteByte(' ')
-				}
-				idx := offset + rowStart + col
-				if rowStart+col >= len(providers) || idx >= len(m.agent.providers) {
-					topRow.WriteString(strings.Repeat(" ", cardW))
-					midRow.WriteString(strings.Repeat(" ", cardW))
-					botRow.WriteString(strings.Repeat(" ", cardW))
-					continue
-				}
-				prov := m.agent.providers[idx]
-				isSelected := idx == selectedProvIdx
-				cBorder := pal.Dim
-				if isSelected && m.agent.focused {
-					cBorder = pal.Accent
-				} else if isSelected {
-					cBorder = pal.FG
-				}
-				label := prov.Label
-				if label == "" {
-					label = prov.ID
-				}
-				innerCardW := cardW - 2
-				maxLabelVis := max(innerCardW-2, 1)
-				labelRunes := []rune(label)
-				if len(labelRunes) > maxLabelVis {
-					label = string(labelRunes[:maxLabelVis-1]) + "…"
-				}
-				labelVis := len([]rune(label))
-				padLen := max(innerCardW-2-labelVis, 0)
-				labelColor := pal.Dim
-				if isSelected {
-					labelColor = pal.FG
-				}
-				topRow.WriteString(cBorder + "╭" + strings.Repeat("─", innerCardW) + "╮" + aRst)
-				midRow.WriteString(cBorder + "│" + aRst + " " + labelColor + label + aRst + strings.Repeat(" ", padLen) + " " + cBorder + "│" + aRst)
-				botRow.WriteString(cBorder + "╰" + strings.Repeat("─", innerCardW) + "╯" + aRst)
-			}
-			rows = append(rows, boxRow(topRow.String(), w, borderColor))
-			rows = append(rows, boxRow(midRow.String(), w, borderColor))
-			rows = append(rows, boxRow(botRow.String(), w, borderColor))
-		}
-	}
-
-	// Hint footer row — always present; shows hints when focused, blank when not.
-	var agentHints []panelrender.Hint
-	if m.agent.focused {
-		agentHints = []panelrender.Hint{
-			{Key: "enter", Desc: "launch"},
-			{Key: "j/k", Desc: "nav"},
-		}
-	}
-	rows = append(rows, boxRow(panelrender.HintBar(agentHints, w-2, pal), w, borderColor))
-	rows = append(rows, boxBot(w, borderColor))
-	return rows
+	return m.sendPanel.View(w, sendPanelHeight, pal)
 }
 
 // navigateToInboxRun focuses the inbox panel and opens the detail view for the

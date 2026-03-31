@@ -15,9 +15,10 @@ import (
 
 // SendFocus constants for the send panel sub-fields.
 const (
-	SendFocusName    = 0
-	SendFocusAgent   = 1
-	SendFocusMessage = 2
+	SendFocusName        = 0
+	SendFocusAgent       = 1
+	SendFocusSavedPrompt = 2 // opens fuzzy picker
+	SendFocusMessage     = 3
 )
 
 // SendPopupFocus constants for the agent popup sub-fields.
@@ -35,16 +36,23 @@ type SendTabOutMsg struct{}
 // SendShiftTabOutMsg signals that Shift+Tab was pressed from the first send panel field.
 type SendShiftTabOutMsg struct{}
 
-// SendPanel holds the send bar: a name input, agent selector, and message input.
+// SendBrowseCWDMsg is posted when enter is pressed on the CWD row in the agent popup.
+type SendBrowseCWDMsg struct{}
+
+// SendPanel holds the send bar: a name input, agent selector, saved prompt picker, and message input.
 type SendPanel struct {
-	nameInput       textinput.Model
-	msgInput        textinput.Model
-	agentPicker     modal.AgentPickerModel
-	cwdInput        textinput.Model
-	agentOpen       bool
-	agentPopupFocus int // SendPopupFocusPicker or SendPopupFocusCWD
-	focus           int // SendFocusName, SendFocusAgent, SendFocusMessage
-	focused         bool
+	nameInput          textinput.Model
+	msgInput           textinput.Model
+	agentPicker        modal.AgentPickerModel
+	agentOpen          bool
+	agentPopupFocus    int // SendPopupFocusPicker or SendPopupFocusCWD
+	focus              int // SendFocusName, SendFocusAgent, SendFocusSavedPrompt, SendFocusMessage
+	focused            bool
+	savedPromptsOpen   bool
+	savedPromptPicker  modal.FuzzyPickerModel
+	savedPromptIdx     int    // -1 = none selected
+	savedPromptTitles  []string
+	cwd                string // current CWD value (set externally via SetCWD)
 }
 
 // NewSendPanel creates a SendPanel with the given providers.
@@ -59,16 +67,12 @@ func NewSendPanel(providers []picker.ProviderDef) SendPanel {
 	mi.Prompt = ""
 	mi.CharLimit = 4000
 
-	ci := textinput.New()
-	ci.Placeholder = "working directory (default: cwd)"
-	ci.Prompt = ""
-	ci.CharLimit = 512
-
 	return SendPanel{
-		nameInput:   ni,
-		msgInput:    mi,
-		agentPicker: modal.NewAgentPickerModel(providers),
-		cwdInput:    ci,
+		nameInput:         ni,
+		msgInput:          mi,
+		agentPicker:       modal.NewAgentPickerModel(providers),
+		savedPromptPicker: modal.NewFuzzyPickerModel(8),
+		savedPromptIdx:    -1,
 	}
 }
 
@@ -79,6 +83,9 @@ func (s SendPanel) SetFocused(b bool) SendPanel {
 	s.syncFocus()
 	return s
 }
+
+// Focused returns whether the panel has outer focus.
+func (s SendPanel) Focused() bool { return s.focused }
 
 // Enter sets outer focus and resets inner focus to SendFocusName.
 // Use this in key handlers when transitioning into the send panel.
@@ -110,17 +117,40 @@ func (s SendPanel) ProviderID() string { return s.agentPicker.SelectedProviderID
 // ModelID returns the selected model ID.
 func (s SendPanel) ModelID() string { return s.agentPicker.SelectedModelID() }
 
-// CWD returns the cwd input value.
-func (s SendPanel) CWD() string { return s.cwdInput.Value() }
+// CWD returns the current working directory value.
+func (s SendPanel) CWD() string { return s.cwd }
+
+// SetCWD sets the CWD value (called externally after dir picker resolves).
+func (s SendPanel) SetCWD(path string) SendPanel {
+	s.cwd = path
+	return s
+}
 
 // AgentOpen reports whether the agent picker popup is open.
 func (s SendPanel) AgentOpen() bool { return s.agentOpen }
 
+// SavedPromptsOpen reports whether the saved prompts fuzzy picker is open.
+func (s SendPanel) SavedPromptsOpen() bool { return s.savedPromptsOpen }
+
+// SavedPromptIdx returns the selected saved prompt index (-1 = none).
+func (s SendPanel) SavedPromptIdx() int { return s.savedPromptIdx }
+
+// SetSavedPromptTitles sets the list of saved prompt titles available for selection.
+func (s SendPanel) SetSavedPromptTitles(titles []string) SendPanel {
+	s.savedPromptTitles = titles
+	return s
+}
+
+// ClearSavedPrompt resets the saved prompt selection.
+func (s SendPanel) ClearSavedPrompt() SendPanel {
+	s.savedPromptIdx = -1
+	return s
+}
+
 func (s *SendPanel) syncFocus() {
-	if !s.focused || s.agentOpen {
+	if !s.focused || s.agentOpen || s.savedPromptsOpen {
 		s.nameInput.Blur()
 		s.msgInput.Blur()
-		s.cwdInput.Blur()
 		return
 	}
 	switch s.focus {
@@ -130,7 +160,7 @@ func (s *SendPanel) syncFocus() {
 	case SendFocusMessage:
 		s.nameInput.Blur()
 		s.msgInput.Focus()
-	default: // SendFocusAgent
+	default: // SendFocusAgent or SendFocusSavedPrompt
 		s.nameInput.Blur()
 		s.msgInput.Blur()
 	}
@@ -144,6 +174,22 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 	}
 	key := keyMsg.String()
 
+	// ── Saved prompts picker open ─────────────────────────────────────────────
+	if s.savedPromptsOpen {
+		newPicker, ev, cmd := s.savedPromptPicker.Update(keyMsg)
+		s.savedPromptPicker = newPicker
+		switch ev {
+		case modal.FuzzyPickerConfirmed:
+			s.savedPromptIdx = s.savedPromptPicker.SelectedOriginalIdx()
+			s.savedPromptsOpen = false
+			s.syncFocus()
+		case modal.FuzzyPickerCancelled:
+			s.savedPromptsOpen = false
+			s.syncFocus()
+		}
+		return s, cmd
+	}
+
 	// ── Agent popup open ──────────────────────────────────────────────────────
 	if s.agentOpen {
 		switch key {
@@ -152,22 +198,20 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 			s.syncFocus()
 			return s, nil
 		case "enter":
+			if s.agentPopupFocus == SendPopupFocusCWD {
+				// Emit browse CWD message; keep popup open until caller responds
+				return s, func() tea.Msg { return SendBrowseCWDMsg{} }
+			}
 			s.agentOpen = false
 			s.syncFocus()
 			return s, nil
 		case "tab":
 			s.agentPopupFocus = 1 - s.agentPopupFocus
-			if s.agentPopupFocus == SendPopupFocusCWD {
-				s.cwdInput.Focus()
-			} else {
-				s.cwdInput.Blur()
-			}
 			return s, nil
 		}
 		if s.agentPopupFocus == SendPopupFocusCWD {
-			var cmd tea.Cmd
-			s.cwdInput, cmd = s.cwdInput.Update(keyMsg)
-			return s, cmd
+			// CWD row is display-only; no text input to route to
+			return s, nil
 		}
 		newPicker, _ := s.agentPicker.Update(keyMsg)
 		s.agentPicker = newPicker
@@ -182,6 +226,9 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 			s.focus = SendFocusAgent
 			s.syncFocus()
 		case SendFocusAgent:
+			s.focus = SendFocusSavedPrompt
+			s.syncFocus()
+		case SendFocusSavedPrompt:
 			s.focus = SendFocusMessage
 			s.syncFocus()
 		case SendFocusMessage:
@@ -196,8 +243,11 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 		case SendFocusAgent:
 			s.focus = SendFocusName
 			s.syncFocus()
-		case SendFocusMessage:
+		case SendFocusSavedPrompt:
 			s.focus = SendFocusAgent
+			s.syncFocus()
+		case SendFocusMessage:
+			s.focus = SendFocusSavedPrompt
 			s.syncFocus()
 		}
 		return s, nil
@@ -207,8 +257,14 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 		case SendFocusAgent:
 			s.agentOpen = true
 			s.agentPopupFocus = SendPopupFocusPicker
-			s.cwdInput.Blur()
 			s.syncFocus()
+			return s, nil
+		case SendFocusSavedPrompt:
+			if len(s.savedPromptTitles) > 0 {
+				s.savedPromptsOpen = true
+				s.savedPromptPicker.Open(s.savedPromptTitles)
+				s.syncFocus()
+			}
 			return s, nil
 		case SendFocusMessage:
 			val := strings.TrimSpace(s.msgInput.Value())
@@ -275,6 +331,19 @@ func (s SendPanel) View(w, h int, pal styles.ANSIPalette) []string {
 	nameRow := leftPart + strings.Repeat(" ", padLen) + agentBadge
 	rows = append(rows, panelrender.BoxRow(nameRow, w, borderColor))
 
+	// ── Saved Prompt row ──────────────────────────────────────────────────────
+	rows = append(rows, panelrender.BoxRow("", w, borderColor))
+	spLabel := sbDim + "Saved Prompt" + sbRst
+	if s.focused && s.focus == SendFocusSavedPrompt {
+		spLabel = pal.Accent + sbBld + "Saved Prompt" + sbRst
+	}
+	spValue := sbDim + "(none)" + sbRst
+	if s.savedPromptIdx >= 0 && s.savedPromptIdx < len(s.savedPromptTitles) {
+		spValue = pal.FG + s.savedPromptTitles[s.savedPromptIdx] + sbRst
+	}
+	spRow := "  " + spLabel + "  " + spValue
+	rows = append(rows, panelrender.BoxRow(spRow, w, borderColor))
+
 	// ── Message input ─────────────────────────────────────────────────────────
 	rows = append(rows, panelrender.BoxRow("", w, borderColor))
 	s.msgInput.Width = w - 6
@@ -294,8 +363,10 @@ func (s SendPanel) View(w, h int, pal styles.ANSIPalette) []string {
 			hints = []panelrender.Hint{{Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
 		case SendFocusAgent:
 			hints = []panelrender.Hint{{Key: "enter", Desc: "pick agent"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
+		case SendFocusSavedPrompt:
+			hints = []panelrender.Hint{{Key: "enter", Desc: "pick prompt"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
 		case SendFocusMessage:
-			hints = []panelrender.Hint{{Key: "enter", Desc: "send"}, {Key: "ctrl+r", Desc: "re-run"}, {Key: "ctrl+s", Desc: "save"}, {Key: "shift+tab", Desc: "back"}}
+			hints = []panelrender.Hint{{Key: "enter", Desc: "send"}, {Key: "shift+tab", Desc: "back"}}
 		}
 		rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
 	} else {
@@ -307,6 +378,7 @@ func (s SendPanel) View(w, h int, pal styles.ANSIPalette) []string {
 
 // OverlayView renders the agent picker popup as a string to overlay on the full view.
 // Call this when AgentOpen() is true, using panelrender.OverlayCenter.
+// The CWD row now shows the current path (set via SetCWD) with a hint to browse.
 func (s SendPanel) OverlayView(w int, pal styles.ANSIPalette) string {
 	boxW := w / 2
 	if boxW < 40 {
@@ -325,17 +397,24 @@ func (s SendPanel) OverlayView(w int, pal styles.ANSIPalette) string {
 		rows = append(rows, panelrender.BoxRow("  "+r, boxW, pal.Border))
 	}
 
-	// CWD row.
+	// CWD row — display only, enter triggers browse.
 	cwdLabel := sbDim + "CWD" + sbRst
 	if s.agentPopupFocus == SendPopupFocusCWD {
 		cwdLabel = pal.Accent + sbBld + "CWD" + sbRst
 	}
-	rows = append(rows, panelrender.BoxRow("  "+cwdLabel, boxW, pal.Border))
-	s.cwdInput.Width = innerW - 2
-	if s.cwdInput.Width < 10 {
-		s.cwdInput.Width = 10
+	cwdDisplay := s.cwd
+	if cwdDisplay == "" {
+		cwdDisplay = "(current directory)"
 	}
-	rows = append(rows, panelrender.BoxRow("  "+s.cwdInput.View(), boxW, pal.Border))
+	cwdColor := sbDim
+	if s.agentPopupFocus == SendPopupFocusCWD {
+		cwdColor = pal.Accent
+	}
+	rows = append(rows, panelrender.BoxRow("  "+cwdLabel, boxW, pal.Border))
+	rows = append(rows, panelrender.BoxRow("  "+cwdColor+cwdDisplay+sbRst, boxW, pal.Border))
+	if s.agentPopupFocus == SendPopupFocusCWD {
+		rows = append(rows, panelrender.BoxRow(sbDim+"  enter to browse"+sbRst, boxW, pal.Border))
+	}
 	rows = append(rows, panelrender.BoxRow("", boxW, pal.Border))
 
 	hint := panelrender.HintBar([]panelrender.Hint{
@@ -348,4 +427,10 @@ func (s SendPanel) OverlayView(w int, pal styles.ANSIPalette) string {
 	rows = append(rows, panelrender.BoxBot(boxW, pal.Border))
 
 	return strings.Join(rows, "\n")
+}
+
+// SavedPromptOverlayView renders the saved prompts fuzzy picker as an overlay.
+// Call this when SavedPromptsOpen() is true, using panelrender.OverlayCenter.
+func (s SendPanel) SavedPromptOverlayView(w int, pal styles.ANSIPalette) string {
+	return s.savedPromptPicker.ViewBox(w, pal)
 }

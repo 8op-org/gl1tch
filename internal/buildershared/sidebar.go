@@ -35,6 +35,7 @@ type Sidebar struct {
 	focused       bool
 	confirmDelete bool
 	title         string
+	focusHints    []panelrender.Hint // overrides default hints when focused (nil = use defaults)
 }
 
 // NewSidebar creates a new Sidebar with the given title and items.
@@ -43,6 +44,13 @@ func NewSidebar(title string, items []string) Sidebar {
 		title: title,
 		items: items,
 	}
+}
+
+// SetFocusHints overrides the hint bar shown when the sidebar is focused.
+// Pass nil to restore the default hints.
+func (s Sidebar) SetFocusHints(hints []panelrender.Hint) Sidebar {
+	s.focusHints = hints
+	return s
 }
 
 // SetItems replaces the item list.
@@ -233,6 +241,8 @@ func (s Sidebar) View(w, h int, pal styles.ANSIPalette) []string {
 		var hints []panelrender.Hint
 		if s.confirmDelete {
 			hints = []panelrender.Hint{{Key: "y", Desc: "confirm"}, {Key: "N", Desc: "cancel"}}
+		} else if s.focusHints != nil {
+			hints = s.focusHints
 		} else {
 			hints = []panelrender.Hint{
 				{Key: "d", Desc: "del"},

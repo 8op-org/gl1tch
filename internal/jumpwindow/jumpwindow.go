@@ -29,6 +29,7 @@ type window struct {
 	cronSession     bool   // synthetic entry that switches to the orcai-cron session
 	promptsWindow   bool   // synthetic entry that opens the prompt manager TUI
 	pipelinesWindow bool   // synthetic entry that opens the pipeline editor TUI
+	brainWindow     bool   // synthetic entry that opens the brain editor TUI
 }
 
 // CloseMsg is posted by an EmbeddedModel when it wants the parent to dismiss it.
@@ -107,6 +108,7 @@ func newModel() model {
 	}
 	sysop = append(sysop, window{name: "prompts", promptsWindow: true})
 	sysop = append(sysop, window{name: "pipelines", pipelinesWindow: true})
+	sysop = append(sysop, window{name: "brain", brainWindow: true})
 	m.sysop = sysop
 	return m
 }
@@ -248,6 +250,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						self, _ := os.Executable()
 						self = filepath.Clean(self)
 						exec.Command("tmux", "new-window", "-n", "orcai-pipeline-builder", self+" pipeline-builder").Run() //nolint:errcheck
+					} else if w.brainWindow {
+						self, _ := os.Executable()
+						self = filepath.Clean(self)
+						exec.Command("tmux", "new-window", "-n", "orcai-brain", self+" brain").Run() //nolint:errcheck
 					} else {
 						target := w.id
 						if target == "" {
