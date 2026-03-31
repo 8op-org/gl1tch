@@ -2565,6 +2565,9 @@ func (m Model) handleAgentModal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		switch ev {
 		case modal.FuzzyPickerConfirmed:
 			m.agentPromptIdx = m.savedPromptPicker.SelectedOriginalIdx()
+			// Advance focus to the prompt textarea so the user can add context.
+			m.agentModalFocus = 2
+			m.agent.prompt.Focus()
 		case modal.FuzzyPickerCancelled:
 			// picker closed, agentPromptIdx unchanged
 		}
@@ -2897,7 +2900,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 	if m.agent.focused {
 		m.agentModalOpen = true
 		m.agentModalFocus = 0
-		return m, nil
+		return m, loadAgentPromptsCmd(m.store)
 	}
 
 	// Agents grid: open inbox detail for the selected agent's run.
@@ -3041,13 +3044,17 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 // If SCHEDULE is non-blank, it writes a cron entry instead of launching immediately.
 func (m Model) submitAgentJob() (Model, tea.Cmd) {
 	input := strings.TrimSpace(m.agent.prompt.Value())
-	if input == "" {
-		return m, nil
-	}
-	// Prepend the selected saved prompt body, if any.
+	// Merge saved prompt + additional context. Either one is sufficient.
 	if m.agentPromptIdx > 0 && m.agentPromptIdx-1 < len(m.agentPrompts) {
 		p := m.agentPrompts[m.agentPromptIdx-1]
-		input = p.Body + "\n\n" + input
+		if input != "" {
+			input = p.Body + "\n\n" + input
+		} else {
+			input = p.Body
+		}
+	}
+	if input == "" {
+		return m, nil
 	}
 
 	provID := m.agent.agentPicker.SelectedProviderID()
