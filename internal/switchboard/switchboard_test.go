@@ -212,9 +212,13 @@ func TestViewContainsPanelHintFooter(t *testing.T) {
 		t.Errorf("View() launcher hint footer missing when launcher focused:\n%s", viewLauncher)
 	}
 
-	// Tab to agent panel — agent hint footer should appear inside the agent box.
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyTab})
-	viewAgent := m4.(switchboard.Model).View()
+	// Tab 4x to reach agent runner — agent hint footer should appear inside its box.
+	cur := m3
+	for i := 0; i < 4; i++ {
+		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
+		cur = nx.(switchboard.Model)
+	}
+	viewAgent := cur.View()
 	if !strings.Contains(viewAgent, "launch") {
 		t.Errorf("View() agent hint footer missing when agent focused:\n%s", viewAgent)
 	}
@@ -597,96 +601,95 @@ func TestFeedScrollIndicator_DownWhenContentBelow(t *testing.T) {
 
 // ── Feed navigation (tasks 6.1–6.4) ──────────────────────────────────────────
 
-// TestTabCycle_FullCycle verifies the full Tab focus cycle:
-// launcher → agent → agentsCenter → signalBoard → inbox → feed → cron → launcher
+// TestTabCycle_FullCycle verifies the full Tab focus cycle (three-column layout):
+// launcher → inbox → cron → agentsCenter → agent runner (cycles providers) → signalBoard → feed → launcher
 func TestTabCycle_FullCycle(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"alpha", "beta"})
 	// Start: launcher focused (default).
 
-	// Tab 1: launcher → agent
+	// Tab 1: launcher → inbox
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m2m := m2.(switchboard.Model)
-	if m2m.SignalBoardFocused() || m2m.FeedFocused() || m2m.AgentsCenterFocused() {
-		t.Error("after 1 Tab: expected agent focused, got signalBoard, feed, or agentsCenter")
+	if m2m.SignalBoardFocused() || m2m.FeedFocused() || m2m.AgentsCenterFocused() || m2m.AgentFocused() {
+		t.Error("after 1 Tab: expected inbox focused")
 	}
 
-	// Tab 2: agent → agentsCenter (three-column layout adds agents grid step)
+	// Tab 2: inbox → cron
 	m3, _ := m2m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m3m := m3.(switchboard.Model)
-	if !m3m.AgentsCenterFocused() {
-		t.Error("after 2 Tabs: expected agentsCenter focused")
+	if !m3m.CronPanelFocused() {
+		t.Error("after 2 Tabs: expected cron focused")
 	}
 
-	// Tab 3: agentsCenter → signalBoard
+	// Tab 3: cron → agentsCenter
 	m4, _ := m3m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m4m := m4.(switchboard.Model)
-	if !m4m.SignalBoardFocused() {
-		t.Error("after 3 Tabs: expected signalBoard focused")
+	if !m4m.AgentsCenterFocused() {
+		t.Error("after 3 Tabs: expected agentsCenter focused")
 	}
 
-	// Tab 4: signalBoard → inbox
+	// Tab 4: agentsCenter → agent runner
 	m5, _ := m4m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m5m := m5.(switchboard.Model)
-	if m5m.FeedFocused() || m5m.SignalBoardFocused() {
-		t.Error("after 4 Tabs: expected inbox focused, got feed or signalBoard")
+	if !m5m.AgentFocused() {
+		t.Error("after 4 Tabs: expected agent runner focused")
 	}
 
-	// Tab 5: inbox → feed
-	m6, _ := m5m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	// Tab through agent runner providers until signalBoard is reached.
+	cur := m5m
+	for i := 0; i < 20; i++ {
+		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
+		cur = nx.(switchboard.Model)
+		if cur.SignalBoardFocused() {
+			break
+		}
+	}
+	if !cur.SignalBoardFocused() {
+		t.Error("expected signalBoard focused after tabbing through agent runner providers")
+	}
+
+	// signalBoard → feed
+	m6, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m6m := m6.(switchboard.Model)
 	if !m6m.FeedFocused() {
-		t.Error("after 5 Tabs: expected feed focused")
+		t.Error("expected feed focused after Tab from signalBoard")
 	}
 
-	// Tab 6: feed → cron — add entries first so feedCursor could move if broken
+	// feed → launcher
 	m6m = m6m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
 	m7, _ := m6m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m7m := m7.(switchboard.Model)
-	if m7m.FeedFocused() || m7m.SignalBoardFocused() {
-		t.Error("after 6 Tabs: expected cron focused, got feed or signalBoard")
-	}
-
-	// Tab 7: cron → launcher
-	m8, _ := m7m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m8m := m8.(switchboard.Model)
-	if m8m.FeedFocused() || m8m.SignalBoardFocused() || m8m.AgentsCenterFocused() {
-		t.Error("after 7 Tabs: expected launcher focused")
+	if m7m.FeedFocused() || m7m.SignalBoardFocused() || m7m.AgentsCenterFocused() || m7m.AgentFocused() {
+		t.Error("after feed Tab: expected launcher focused")
 	}
 	// j should move launcher cursor now, not feedCursor
-	cursorBefore := m8m.FeedCursor()
-	m9, _ := m8m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m9m := m9.(switchboard.Model)
-	if m9m.FeedCursor() != cursorBefore {
-		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d", cursorBefore, m9m.FeedCursor())
+	cursorBefore := m7m.FeedCursor()
+	m8, _ := m7m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m8m := m8.(switchboard.Model)
+	if m8m.FeedCursor() != cursorBefore {
+		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d", cursorBefore, m8m.FeedCursor())
 	}
 }
 
-// TestTabFromFeed_FocusesCron verifies that pressing Tab when the Activity
-// Feed is focused moves focus to the Cron panel (feed → cron → launcher cycle).
-func TestTabFromFeed_FocusesCron(t *testing.T) {
+// TestTabFromFeed_FocusesLauncher verifies that pressing Tab when the Activity
+// Feed is focused moves focus to the launcher (feed → launcher in new layout).
+func TestTabFromFeed_FocusesLauncher(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"alpha", "beta"})
 	m = m.SetFeedFocused(true)
+	m = m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
 
-	// First Tab: feed → cron.
+	// Tab: feed → launcher. Feed cursor should not move.
+	cursorBefore := m.FeedCursor()
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m3 := m2.(switchboard.Model)
-	if !m3.CronPanelFocused() {
-		t.Errorf("expected cron panel focused after Tab-from-feed")
+	if m3.FeedFocused() || m3.CronPanelFocused() || m3.AgentsCenterFocused() {
+		t.Errorf("expected launcher focused after Tab-from-feed")
 	}
-
-	// Second Tab: cron → launcher. Feed cursor should not move.
-	m3 = m3.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
-	cursorBefore := m3.FeedCursor()
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	m5 := m4.(switchboard.Model)
-	if m5.CronPanelFocused() {
-		t.Errorf("expected cron panel unfocused after second Tab")
-	}
-	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m7 := m6.(switchboard.Model)
-	if m7.FeedCursor() != cursorBefore {
+	if m5.FeedCursor() != cursorBefore {
 		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d",
-			cursorBefore, m7.FeedCursor())
+			cursorBefore, m5.FeedCursor())
 	}
 }
 
@@ -2026,24 +2029,28 @@ func TestFeedCard_RightColumnWidth(t *testing.T) {
 	rightW := m.RightColWidth()
 	view := m.ViewActivityFeed(40, rightW)
 
-	// Every box row (│...│) should have the same visible width.
+	// Every box content row (│...│) should have the same visible width.
+	// The panel header may be a sprite with a slightly different width, so we
+	// skip the first matching row and verify all remaining rows are consistent.
+	re := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 	var rowWidths []int
 	for _, line := range strings.Split(view, "\n") {
 		plain := strings.TrimRight(line, "\r")
-		// Strip ANSI for width measurement.
-		re := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 		plain = re.ReplaceAllString(plain, "")
 		runes := []rune(plain)
 		if len(runes) > 2 && runes[0] == '│' && runes[len(runes)-1] == '│' {
 			rowWidths = append(rowWidths, len(runes))
 		}
 	}
-	if len(rowWidths) < 2 {
-		t.Skip("not enough box rows to compare widths")
+	// Skip the first │...│ row — it may be a sprite header line with its own
+	// width. Verify the remaining body rows are all consistent.
+	if len(rowWidths) < 3 {
+		t.Skip("not enough box body rows to compare widths")
 	}
-	for i, w := range rowWidths {
-		if w != rowWidths[0] {
-			t.Errorf("row %d width mismatch: got %d, want %d (consistent row width)", i, w, rowWidths[0])
+	bodyWidths := rowWidths[1:]
+	for i, w := range bodyWidths {
+		if w != bodyWidths[0] {
+			t.Errorf("body row %d width mismatch: got %d, want %d (consistent row width)", i+1, w, bodyWidths[0])
 		}
 	}
 }

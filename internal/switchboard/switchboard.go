@@ -663,6 +663,7 @@ func (m Model) SetSignalBoardFilter(f string) Model {
 
 // SignalBoardFocused returns the signal board focus state — used in tests.
 func (m Model) SignalBoardFocused() bool { return m.signalBoardFocused }
+func (m Model) AgentFocused() bool        { return m.agent.focused }
 
 // SetSignalBoardFocused sets the signal board focus state — used in tests.
 func (m Model) SetSignalBoardFocused(v bool) Model {
@@ -1907,43 +1908,94 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.confirmQuit = true
 		return m, nil
 
-	case "tab":
-		if m.cronPanel.focused {
-			// cron → launcher
-			m.cronPanel.focused = false
-			m.launcher.focused = true
-		} else if m.feedFocused {
-			// feed → cron
-			m = m.clearFeedMarkMode()
-			m.feedFocused = false
-			m.cronPanel.focused = true
-		} else if m.inboxPanel.focused {
-			// inbox → feed
-			m.inboxPanel.focused = false
-			m.inboxModel.SetFocused(false)
-			m.feedFocused = true
-			m.feedCursor = 0
-		} else if m.signalBoardFocused {
-			// signalBoard → inbox
-			m.signalBoardFocused = false
-			m.signalBoard.clearSearch()
-			m.inboxPanel.focused = true
-			m.inboxModel.SetFocused(true)
-		} else if m.agentsCenterFocused {
-			// agentsCenter → signalBoard
-			m.agentsCenterFocused = false
-			m.signalBoardFocused = true
-		} else if m.agent.focused {
-			// agent → agentsCenter
-			m.agent.focused = false
-			m.agentsCenterFocused = true
-		} else if m.launcher.focused {
-			// launcher → agent
-			m.launcher.focused = false
-			m.agent.focused = true
+	case "tab", "shift+tab":
+		fwd := key == "tab"
+		// Tab order follows the three-column layout, left→right top→bottom:
+		//   LEFT col:   launcher → inbox → cron
+		//   CENTER col: agentsCenter → agent runner (provider cards)
+		//   RIGHT col:  signalBoard → feed
+		//   wrap back to launcher
+		//
+		// Agent runner: tab/shift+tab cycles the provider selection instead of
+		// leaving the panel — only a second tab press wraps to the next panel.
+		if m.agent.focused {
+			// Agent runner: cycle provider selection within the panel.
+			direction := "j"
+			if !fwd {
+				direction = "k"
+			}
+			newPicker, _ := m.agent.agentPicker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(direction)})
+			// If the picker wrapped (no movement), leave agent runner panel.
+			if newPicker.SelectedProviderID() == m.agent.agentPicker.SelectedProviderID() {
+				if fwd {
+					m.agent.focused = false
+					m.signalBoardFocused = true
+				} else {
+					m.agent.focused = false
+					m.agentsCenterFocused = true
+				}
+			} else {
+				m.agent.agentPicker = newPicker
+			}
+			return m, nil
+		}
+		if fwd {
+			switch {
+			case m.launcher.focused:
+				m.launcher.focused = false
+				m.inboxPanel.focused = true
+				m.inboxModel.SetFocused(true)
+			case m.inboxPanel.focused:
+				m.inboxPanel.focused = false
+				m.inboxModel.SetFocused(false)
+				m.cronPanel.focused = true
+			case m.cronPanel.focused:
+				m.cronPanel.focused = false
+				m.agentsCenterFocused = true
+			case m.agentsCenterFocused:
+				m.agentsCenterFocused = false
+				m.agent.focused = true
+			case m.signalBoardFocused:
+				m.signalBoardFocused = false
+				m.signalBoard.clearSearch()
+				m.feedFocused = true
+				m.feedCursor = 0
+			case m.feedFocused:
+				m = m.clearFeedMarkMode()
+				m.feedFocused = false
+				m.launcher.focused = true
+			default:
+				m.launcher.focused = true
+			}
 		} else {
-			// nothing focused → return to top-left panel
-			m.launcher.focused = true
+			switch {
+			case m.launcher.focused:
+				m.launcher.focused = false
+				m = m.clearFeedMarkMode()
+				m.feedFocused = true
+				m.feedCursor = 0
+			case m.inboxPanel.focused:
+				m.inboxPanel.focused = false
+				m.inboxModel.SetFocused(false)
+				m.launcher.focused = true
+			case m.cronPanel.focused:
+				m.cronPanel.focused = false
+				m.inboxPanel.focused = true
+				m.inboxModel.SetFocused(true)
+			case m.agentsCenterFocused:
+				m.agentsCenterFocused = false
+				m.cronPanel.focused = true
+			case m.signalBoardFocused:
+				m.signalBoardFocused = false
+				m.signalBoard.clearSearch()
+				m.agent.focused = true
+			case m.feedFocused:
+				m = m.clearFeedMarkMode()
+				m.feedFocused = false
+				m.signalBoardFocused = true
+			default:
+				m.launcher.focused = true
+			}
 		}
 		return m, nil
 
