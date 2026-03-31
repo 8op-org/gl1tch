@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/panelrender"
@@ -50,14 +51,17 @@ type SendPanel struct {
 func NewSendPanel(providers []picker.ProviderDef) SendPanel {
 	ni := textinput.New()
 	ni.Placeholder = "session name"
+	ni.Prompt = ""
 	ni.CharLimit = 128
 
 	mi := textinput.New()
 	mi.Placeholder = "send a message…"
+	mi.Prompt = ""
 	mi.CharLimit = 4000
 
 	ci := textinput.New()
 	ci.Placeholder = "working directory (default: cwd)"
+	ci.Prompt = ""
 	ci.CharLimit = 512
 
 	return SendPanel{
@@ -246,18 +250,19 @@ func (s SendPanel) View(w, h int, pal styles.ANSIPalette) []string {
 		agentBadge = pal.Accent + sbBld + "[" + agentLabel + "]" + sbRst
 	}
 
-	s.nameInput.Width = w - 24
-	if s.nameInput.Width < 10 {
-		s.nameInput.Width = 10
+	// Reserve space for badge: visible badge width + 1 gap minimum.
+	badgeVisW := lipgloss.Width(agentBadge)
+	s.nameInput.Width = w - 2 - 9 - badgeVisW - 2 // w-2 inner, minus "  Name > " (9), minus badge+gap
+	if s.nameInput.Width < 6 {
+		s.nameInput.Width = 6
 	}
-	nameRow := "  " + nameLabel + " > " + s.nameInput.View()
-	// Right-align agent badge.
-	visLen := 4 + 3 + s.nameInput.Width // "  Name > " + input
-	padLen := w - visLen - len([]rune(agentLabel)) - 4
+	leftPart := "  " + nameLabel + " > " + s.nameInput.View()
+	// Pad to right-align badge within the box inner width (w-2).
+	padLen := (w - 2) - lipgloss.Width(leftPart) - badgeVisW
 	if padLen < 1 {
 		padLen = 1
 	}
-	nameRow += strings.Repeat(" ", padLen) + agentBadge
+	nameRow := leftPart + strings.Repeat(" ", padLen) + agentBadge
 	rows = append(rows, panelrender.BoxRow(nameRow, w, borderColor))
 
 	// ── Message input ─────────────────────────────────────────────────────────
