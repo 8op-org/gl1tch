@@ -1,90 +1,144 @@
-// Package welcome implements the SYSOP first-run onboarding TUI.
+// Package welcome implements the GLITCH first-run onboarding TUI.
 package welcome
+
+import "github.com/adam-stokes/orcai/internal/translations"
 
 // Phase represents the current onboarding stage.
 type Phase int
 
 const (
-	PhaseIntro      Phase = iota // SYSOP greeting + ORCAI overview
+	PhaseIntro      Phase = iota // GLITCH greeting + ORCAI overview
 	PhaseUseCase                 // ask what user wants to build
+	PhaseProviders               // ask about local vs cloud LLM setup
 	PhasePipeline                // explain pipelines, point to builder
 	PhaseNavigation              // walk through key bindings and layout
 	PhaseBrain                   // explain the brain / vector memory
-	PhaseDone                    // wrap up, write sentinel, exit
+	PhaseDone                    // wrap up, exit
 )
 
 // phaseSystemContext is injected as an additional system message per phase.
 var phaseSystemContext = map[Phase]string{
-	PhaseIntro: `You are starting the intro phase. Welcome the user to ORCAI — the Agentic Bulletin Board System.
-Explain in 3-4 sentences: ORCAI is an AI workspace built on tmux and BubbleTea TUIs.
-You run AI agents (local or cloud) using pipelines, and results feed into the brain — a persistent vector memory.
-Ask them what they want to build or automate. Stay in character as SYSOP.`,
+	PhaseIntro: `You are starting the intro phase. Welcome the user to ORCAI as GLITCH.
+Explain in 3-4 punchy sentences: ORCAI is a tmux-powered AI workspace — you run agents using pipelines,
+results feed into the brain (a local vector memory), and everything lives in the terminal.
+Give one quick real-world example: "like, i've got a pipeline that reads my git diff every morning and drops a code review into the brain."
+Ask them what they want to build or automate. Stay in character as GLITCH.`,
 
-	PhaseUseCase: `The user has described their use case. Acknowledge it enthusiastically in hacker persona.
-Explain that ORCAI uses "pipelines" — YAML config files that define a sequence of AI agent steps.
-Tell them you'll walk them through the pipeline system next and ask if they're ready.`,
+	PhaseUseCase: `The user has described their use case. Acknowledge it enthusiastically in hacker style.
+Connect their use case to a concrete ORCAI pipeline example — e.g. if they said "code review": "that's a 3-step pipeline — git diff reader, claude analyzer, brain writer."
+If they said "research": "feed URLs into step 1, summarize in step 2, tag and store in step 3 — done."
+Tell them you need to know their setup: do they have ollama running locally, or are they going cloud with claude?
+Ask which they want to use. Do NOT mention API keys.`,
 
-	PhasePipeline: `Explain ORCAI pipelines in hacker style:
-- Pipelines live in ~/.config/orcai/pipelines/ as YAML files
-- Each step has: a provider (AI model), a system prompt, and optional brain tags
-- Press ^spc p (ctrl+space then p) to open the pipeline builder TUI
-- The pipeline builder has a two-column layout: pipeline list on the left, editor on the right
-- You can test-run pipelines directly from the builder
-Tell them to try ^spc p when they're ready, then ask if they have questions.`,
+	PhaseProviders: `The user has told you about their LLM setup. Acknowledge it and explain providers briefly.
+Local via ollama: provider field is "ollama/modelname" — e.g. ollama/llama3.2, ollama/mistral, ollama/codestral.
+Cloud via claude: provider field is "claude/claude-sonnet-4-6" or similar — fast, capable, great for complex chains.
+You can mix providers in a single pipeline — local for cheap steps, cloud for the hard ones.
+Tell them you'll walk through building a pipeline next. Ask if they're ready.`,
 
-	PhaseNavigation: `Walk the user through ORCAI navigation. Key bindings:
-- ^spc j = jump to window (switch between active jobs and sysop tools)
-- ^spc p = pipeline builder
-- ^spc b = brain editor (browse stored AI notes)
-- ^spc n = new agent job from clipboard content
-- Esc = go back / cancel most overlays
-The three-column layout: left=pipelines, center=agents+inbox, right=activity feed.
-The jump window shows sysop tools (brain, pipelines, prompts) in the left column and active jobs on the right.`,
+	PhasePipeline: `Explain ORCAI pipelines with a real-world example in hacker style.
+Pipelines live in ~/.config/orcai/pipelines/ as YAML files. Each step has: name, provider, system_prompt, optional brain tags.
+Give a concrete example relevant to what the user said earlier. For code review: step 1 reads git diff with a local model, step 2 passes it to claude for analysis, step 3 writes a brain note tagged "review".
+Press ^spc p to open the pipeline builder TUI — left column is your pipeline list, right column is the editor with a test runner.
+You can test-run a pipeline directly from the builder without leaving the TUI. Ask if they have questions or want to talk navigation.`,
 
-	PhaseBrain: `Explain the brain — ORCAI's persistent vector memory system:
-- When agents run, they can output <brain type="..." title="..." tags="...">content</brain> blocks
-- These are automatically embedded and stored in a local SQLite vector database
-- On future runs, relevant brain notes are injected as context automatically
-- Press ^spc b to open the brain editor and browse/edit stored notes
-- This is how ORCAI learns your codebase, preferences, and project context over time.`,
+	PhaseNavigation: `Walk the user through ORCAI navigation with context about why each binding matters.
+^spc j = jump window — this is your home for switching between running agent jobs and sysop tools. ^spc p = pipeline builder. ^spc b = brain editor. ^spc n = new agent job from clipboard content. Esc = back/cancel most overlays.
+The switchboard (window 0) has three columns: left = pipeline list and signal inbox, center = active agents and send panel, right = activity feed showing what every agent is doing in real time.
+The send panel in the center lets you message a running agent mid-task — steer it, correct it, ask it a follow-up.
+The jump window shows sysop tools on the left and your active jobs on the right — navigate between concurrent agents from there.`,
 
-	PhaseDone: `The onboarding is complete. Congratulate the user in full 90s hacker style.
-Remind them: ^spc j to navigate, ^spc p for pipelines, ^spc b for brain.
-Tell them the switchboard (window 0) is always home base.
-Wish them luck — make it dramatic and l33t. This is your final message.`,
+	PhaseBrain: `Explain the brain — ORCAI's persistent vector memory — with a concrete example.
+When agents run, they can write <brain type="research" title="auth bug analysis" tags="go,security">the content</brain> blocks in their output.
+ORCAI extracts these automatically, embeds them as vectors, stores in local SQLite — scoped per working directory so your brain for project A doesn't bleed into project B.
+On future pipeline runs, relevant brain notes are auto-injected as context — so after a week of code review pipelines your agent already knows your codebase style and past decisions.
+Brain types: research, architecture, preference, task, reference. Press ^spc b to browse and edit stored notes. That's the full system.`,
+
+	PhaseDone: `The onboarding is complete. Congratulate the user in full 90s hacker style as GLITCH.
+Remind them of the three power moves: ^spc j to navigate between jobs, ^spc p for pipelines, ^spc b for brain.
+Tell them window 0 is always home base — the switchboard never sleeps.
+Wish them luck — make it dramatic and l33t. Reference the matrix, jacking in, the net. This is your final message. Make it memorable.`,
+}
+
+// scriptedPhaseKey maps each onboarding phase to its canonical translation key.
+var scriptedPhaseKey = map[Phase]string{
+	PhaseIntro:      translations.KeyWelcomePhaseIntro,
+	PhaseUseCase:    translations.KeyWelcomePhaseUseCase,
+	PhaseProviders:  translations.KeyWelcomePhaseProviders,
+	PhasePipeline:   translations.KeyWelcomePhasePipeline,
+	PhaseNavigation: translations.KeyWelcomePhaseNav,
+	PhaseBrain:      translations.KeyWelcomePhaseBrain,
+	PhaseDone:       translations.KeyWelcomePhaseDone,
+}
+
+// scriptedText returns the translated scripted fallback for phase. It consults
+// the global translations provider so users (or themes) can override any phase
+// text. The raw scriptedFallback strings remain as the hard-coded last resort.
+func scriptedText(phase Phase) string {
+	key := scriptedPhaseKey[phase]
+	fallback := scriptedFallback[phase]
+	if key == "" {
+		return fallback
+	}
+	if p := translations.GlobalProvider(); p != nil {
+		return p.T(key, fallback)
+	}
+	return fallback
 }
 
 // scriptedFallback provides canned responses when ollama is unavailable.
+// These are the bare-minimum last-resort values — the same strings live in
+// translations.NewDefaultProvider() as the shipped defaults.
 var scriptedFallback = map[Phase]string{
-	PhaseIntro: `-=[ SYSOP v0.1 - INITIATING HANDSHAKE ]=-
+	PhaseIntro: `-=[ GLITCH v0.1 - INITIATING HANDSHAKE ]=-
 
 yo. new blood detected on the BBS.
 
-i'm SYSOP — your sysop guide to ORCAI, the Agentic Bulletin Board System.
-think of orcai as a tmux-powered AI workspace: you run agents, chain 'em into
-pipelines, and everything they learn gets stored in the brain — a local vector db
-that makes your AI sessions smarter over time.
+i'm GLITCH — your guide to ORCAI, the Agentic Bulletin Board System.
+orcai is a tmux-powered AI workspace: you build pipelines, run agents,
+and everything they learn gets stored in the brain — a local vector db
+that makes your sessions smarter over time.
 
-what are you trying to build? tell me your use case and we'll get you dialed in.`,
+quick example: i've got a pipeline that reads my git diff every morning,
+passes it to claude, and drops a code review note into my brain. wakes me
+up better than coffee.
+
+what are you trying to build? tell me your use case.`,
 
 	PhaseUseCase: `solid. orcai was built for exactly that kind of operation.
 
-next up: pipelines. these are YAML files that define what your agents do,
-step by step. each step picks a provider (ollama, claude, whatever you've got),
-injects a prompt, and optionally tags output for the brain.
+before we talk pipelines — what's your setup? are you running ollama
+locally (llama3.2, mistral, codestral etc) or going cloud with claude?
+you can mix both in a single pipeline, so the answer just shapes
+what your provider fields look like.
 
-ready to see the pipeline builder? say the word.`,
+local? cloud? both? talk to me.`,
 
-	PhasePipeline: `pipelines live in ~/.config/orcai/pipelines/ — YAML configs, one per file.
+	PhaseProviders: `got it. here's how providers work in orcai pipelines:
 
-hit ^spc p to open the pipeline builder TUI. left column = your pipelines,
-right column = editor with YAML preview and a test runner. you can build,
-test, and run pipelines all from that panel.
+local ollama: provider: ollama/llama3.2  (or mistral, codestral, whatever you've got)
+cloud claude: provider: claude/claude-sonnet-4-6
 
-each step looks like:
-  - name: my-step
-    provider: ollama/llama3.2
-    prompt: "analyze this code and find bugs"
+you can mix them — cheap local model for the grunt work,
+claude for the hard analysis steps. power move.
+
+alright. pipelines. let's build.`,
+
+	PhasePipeline: `pipelines live in ~/.config/orcai/pipelines/ — one YAML file per pipeline.
+
+each step: name, provider, system_prompt, optional brain tags. example:
+
+  steps:
+    - name: read-diff
+      provider: ollama/llama3.2
+      system_prompt: "summarize this git diff in plain english"
+    - name: analyze
+      provider: claude/claude-sonnet-4-6
+      system_prompt: "find bugs and style issues in this diff"
+      brain: {type: research, title: "code review", tags: "review,go"}
+
+hit ^spc p to open the pipeline builder TUI. left = your pipelines,
+right = editor with a test runner. build it, test it, run it — all in place.
 
 questions? or should we talk about navigating the system?`,
 
@@ -97,26 +151,29 @@ questions? or should we talk about navigating the system?`,
 Esc     →  back / cancel
 
 the switchboard (window 0) has three columns:
-  LEFT   = pipelines + signals
-  CENTER = agents, inbox, send panel
-  RIGHT  = activity feed / job logs
+  LEFT   = pipeline list + signal inbox
+  CENTER = active agents + send panel (message a running agent mid-task)
+  RIGHT  = activity feed — real-time log of everything running
 
-the jump window shows sysop tools (left) and active jobs (right).
-you navigate between running agent jobs from there.
+the jump window: sysop tools on the left, active jobs on the right.
+switch between concurrent agents without losing your place.
 
 ready to hear about the brain?`,
 
 	PhaseBrain: `-=[ BRAIN SYSTEM — neural persistence layer ]=-
 
-when agents run, they write <brain> tags in their output:
+agents write <brain> tags in their output:
   <brain type="research" title="auth bug" tags="go,security">...</brain>
 
-orcai extracts these, embeds them as vectors, stores in local SQLite.
-on future runs? relevant brain notes are auto-injected as context.
+orcai extracts these, embeds as vectors, stores in local SQLite —
+scoped per working directory. project A's brain doesn't bleed into project B.
 
-your AI learns your codebase. your preferences. your project.
+on future pipeline runs? relevant notes are auto-injected as context.
+after a week of code review pipelines, your agent already knows your
+codebase patterns, your past decisions, your preferences.
 
-press ^spc b to browse and edit brain notes anytime.
+brain types: research, architecture, preference, task, reference.
+press ^spc b to browse and edit stored notes anytime.
 
 that's the full system. you're ready.`,
 
@@ -125,15 +182,17 @@ that's the full system. you're ready.`,
 you're jacked in. the system is yours.
 
 remember:
-  ^spc j  →  navigate
+  ^spc j  →  navigate between jobs
   ^spc p  →  build pipelines
   ^spc b  →  read the brain
 
 window 0 is home. the feed on the right shows everything that's running.
+the brain remembers everything your agents learn.
+the pipelines automate everything you'd rather not do by hand.
 
-good luck out there. the matrix is waiting.
+this is the net. go build something l33t.
 
-  -- SYSOP, signing off --
+  -- GLITCH, signing off --
 
-[ press q or Ctrl+C to close this window ]`,
+[ press Enter or Ctrl+C to close this window ]`,
 }

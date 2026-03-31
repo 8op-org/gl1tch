@@ -36,14 +36,14 @@ func MarkSeen(cfgDir string) error {
 
 // --- Tea messages ---
 
-// sysopTokenMsg carries a streamed token from the LLM.
-type sysopTokenMsg struct{ token string }
+// glitchTokenMsg carries a streamed token from the LLM.
+type glitchTokenMsg struct{ token string }
 
-// sysopDoneMsg signals the LLM stream has finished.
-type sysopDoneMsg struct{}
+// glitchDoneMsg signals the LLM stream has finished.
+type glitchDoneMsg struct{}
 
-// sysopStreamErrMsg signals a streaming error.
-type sysopStreamErrMsg struct{ err error }
+// glitchStreamErrMsg signals a streaming error.
+type glitchStreamErrMsg struct{ err error }
 
 // streamMsg is the internal message type for chaining async channel reads.
 type streamMsg struct {
@@ -146,14 +146,14 @@ func (m Model) startPhaseOpener(phase Phase) tea.Cmd {
 		return func() tea.Msg {
 			ch, err := m.guide.StreamResponse(phase, "")
 			if err != nil {
-				return sysopStreamErrMsg{err: err}
+				return glitchStreamErrMsg{err: err}
 			}
 			return streamNextToken(ch)()
 		}
 	}
-	// Scripted fallback: emit the whole response immediately via sysopDoneMsg.
+	// Scripted fallback: emit the whole response immediately via glitchDoneMsg.
 	return func() tea.Msg {
-		return sysopDoneMsg{}
+		return glitchDoneMsg{}
 	}
 }
 
@@ -162,7 +162,7 @@ func streamNextToken(ch <-chan string) tea.Cmd {
 	return func() tea.Msg {
 		token, ok := <-ch
 		if !ok {
-			return sysopDoneMsg{}
+			return glitchDoneMsg{}
 		}
 		return streamMsg{token: token, ch: ch}
 	}
@@ -220,11 +220,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Schedule reading next token
 		cmds = append(cmds, streamNextToken(msg.ch))
 
-	case sysopDoneMsg:
+	case glitchDoneMsg:
 		m.streaming = false
 		if m.streamBuf == "" && !m.useOllama {
 			// Scripted: flush full text now
-			text := scriptedFallback[m.phase]
+			text := scriptedText(m.phase)
 			m.messages = append(m.messages, entry{who: speakerGlitch, text: text})
 		} else if m.streamBuf != "" {
 			m.upsertStreamEntry()
@@ -237,11 +237,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-	case sysopStreamErrMsg:
+	case glitchStreamErrMsg:
 		m.streaming = false
 		m.streamBuf = ""
 		// Fall back to scripted on error
-		text := scriptedFallback[m.phase]
+		text := scriptedText(m.phase)
 		m.messages = append(m.messages, entry{who: speakerGlitch, text: text})
 		m.updateViewport()
 	}
@@ -265,6 +265,8 @@ func (m *Model) advancePhase(_ string) Phase {
 	case PhaseIntro:
 		m.phase = PhaseUseCase
 	case PhaseUseCase:
+		m.phase = PhaseProviders
+	case PhaseProviders:
 		m.phase = PhasePipeline
 	case PhasePipeline:
 		m.phase = PhaseNavigation
@@ -282,14 +284,14 @@ func (m Model) streamResponse(phase Phase, userText string) tea.Cmd {
 		return func() tea.Msg {
 			ch, err := m.guide.StreamResponse(phase, userText)
 			if err != nil {
-				return sysopStreamErrMsg{err: err}
+				return glitchStreamErrMsg{err: err}
 			}
 			return streamNextToken(ch)()
 		}
 	}
 	// Scripted fallback
 	return func() tea.Msg {
-		return sysopDoneMsg{}
+		return glitchDoneMsg{}
 	}
 }
 
@@ -391,7 +393,7 @@ func (m *Model) renderConversation() string {
 		accent = lipgloss.Color(m.pal.Accent)
 	}
 
-	sysopLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("SYSOP")
+	glitchLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("GLITCH")
 	userLabel := lipgloss.NewStyle().Foreground(userColor).Bold(true).Render("YOU   ")
 	textStyle := lipgloss.NewStyle().Foreground(textColor)
 	dimStyle := lipgloss.NewStyle().Foreground(dimColor)
@@ -407,7 +409,7 @@ func (m *Model) renderConversation() string {
 			lines := strings.Split(e.text, "\n")
 			for j, line := range lines {
 				if j == 0 {
-					sb.WriteString(fmt.Sprintf("  %s > %s\n", sysopLabel, textStyle.Render(line)))
+					sb.WriteString(fmt.Sprintf("  %s > %s\n", glitchLabel, textStyle.Render(line)))
 				} else {
 					sb.WriteString(fmt.Sprintf("         %s\n", textStyle.Render(line)))
 				}
