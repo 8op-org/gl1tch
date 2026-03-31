@@ -68,9 +68,9 @@ func (m Model) HandleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Navigate back through focus chain; never close the TUI on esc.
 		switch m.focus {
 		case FocusChat:
-			m.chatInput.Blur()
-			m.editor = m.editor.SetFocused(true)
-			m.focus = FocusEditor
+			m.send = m.send.SetFocused(false)
+			m.runner = m.runner.SetFocused(true)
+			m.focus = FocusRunner
 		case FocusRunner:
 			m.runner = m.runner.SetFocused(false)
 			m.editor = m.editor.SetFocused(true)
@@ -79,6 +79,7 @@ func (m Model) HandleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.editor = m.editor.SetFocused(true)
 			m.focus = FocusEditor
 		case FocusEditor:
+			// Editor is removed; fall through to sidebar.
 			m.editor = m.editor.SetFocused(false)
 			m.sidebar = m.sidebar.SetFocused(true)
 			m.focus = FocusList
@@ -188,10 +189,9 @@ func (m Model) handleEditorKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		innerMsg := cmd()
 		switch innerMsg.(type) {
 		case buildershared.EditorTabOutMsg:
-			// Advance to runner / chat.
 			m.editor = m.editor.SetFocused(false)
+			m.send = m.send.SetFocused(true)
 			m.focus = FocusChat
-			m.chatInput.Focus()
 			return m, nil
 		case buildershared.EditorShiftTabOutMsg:
 			m.editor = m.editor.SetFocused(false)
@@ -216,8 +216,8 @@ func (m Model) handleYAMLKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.yamlScroll--
 		}
 	case "tab":
+		m.send = m.send.SetFocused(true)
 		m.focus = FocusChat
-		m.chatInput.Focus()
 	case "shift+tab":
 		m.focus = FocusEditor
 		m.editor = m.editor.SetFocused(true)
@@ -260,49 +260,46 @@ func (m Model) handleRunnerKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.sidebar = m.sidebar.SetFocused(true)
 	case "shift+tab":
 		m.runner = m.runner.SetFocused(false)
-		m.editor = m.editor.SetFocused(true)
-		m.focus = FocusEditor
+		m.send = m.send.SetFocused(true)
+		m.focus = FocusChat
 	}
 	return m, cmd
 }
 
-// ── Chat input ────────────────────────────────────────────────────────────────
+// ── Chat / Send panel ─────────────────────────────────────────────────────────
 
 func (m Model) handleChatKey(msg tea.KeyMsg) (Model, tea.Cmd) {
-	key := msg.String()
+	var cmd tea.Cmd
+	m.send, cmd = m.send.Update(msg)
 
-	switch key {
-	case "enter":
-		prompt := strings.TrimSpace(m.chatInput.Value())
-		m.chatInput.SetValue("")
-		if prompt == "" {
+	if cmd != nil {
+		innerMsg := cmd()
+		switch v := innerMsg.(type) {
+		case buildershared.SendSubmitMsg:
+			if v.Message == "" {
+				return m, nil
+			}
+			if !m.sentOnce {
+				m.firstPrompt = v.Message
+				m.sentOnce = true
+			}
+			m.runner = m.runner.Clear()
+			m.focus = FocusRunner
+			m.runner = m.runner.SetFocused(true)
+			return m.startRunWithPrompt(v.Message)
+		case buildershared.SendTabOutMsg:
+			m.send = m.send.SetFocused(false)
+			m.sidebar = m.sidebar.SetFocused(true)
+			m.focus = FocusList
+			return m, nil
+		case buildershared.SendShiftTabOutMsg:
+			m.send = m.send.SetFocused(false)
+			m.runner = m.runner.SetFocused(true)
+			m.focus = FocusRunner
 			return m, nil
 		}
-		// Store first prompt for ctrl+r.
-		if !m.sentOnce {
-			m.firstPrompt = prompt
-			m.sentOnce = true
-		}
-		m.runner = m.runner.Clear()
-		m.focus = FocusRunner
-		m.runner = m.runner.SetFocused(true)
-		return m.startRunWithPrompt(prompt)
-
-	case "shift+tab", "esc":
-		m.chatInput.Blur()
-		m.editor = m.editor.SetFocused(true)
-		m.focus = FocusEditor
-		return m, nil
-
-	case "tab":
-		m.chatInput.Blur()
-		m.sidebar = m.sidebar.SetFocused(true)
-		m.focus = FocusList
-		return m, nil
 	}
 
-	var cmd tea.Cmd
-	m.chatInput, cmd = m.chatInput.Update(msg)
 	return m, cmd
 }
 

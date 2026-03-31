@@ -228,18 +228,22 @@ func (s Sidebar) View(w, h int, pal styles.ANSIPalette) []string {
 		rows = append(rows, panelrender.BoxRow("  "+searchContent, w, borderColor))
 	}
 
-	// Hint row.
-	var hints []panelrender.Hint
-	if s.confirmDelete {
-		hints = []panelrender.Hint{{Key: "y", Desc: "confirm"}, {Key: "N", Desc: "cancel"}}
-	} else {
-		hints = []panelrender.Hint{
-			{Key: "d", Desc: "del"},
-			{Key: "/", Desc: "search"},
-			{Key: "esc", Desc: "back"},
+	// Hint row — only when focused.
+	if s.focused {
+		var hints []panelrender.Hint
+		if s.confirmDelete {
+			hints = []panelrender.Hint{{Key: "y", Desc: "confirm"}, {Key: "N", Desc: "cancel"}}
+		} else {
+			hints = []panelrender.Hint{
+				{Key: "d", Desc: "del"},
+				{Key: "/", Desc: "search"},
+				{Key: "esc", Desc: "back"},
+			}
 		}
+		rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
+	} else {
+		rows = append(rows, panelrender.BoxRow("", w, borderColor))
 	}
-	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
 	rows = append(rows, panelrender.BoxBot(w, borderColor))
 
 	return rows

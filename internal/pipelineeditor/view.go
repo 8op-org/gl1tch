@@ -60,7 +60,14 @@ func (m Model) View(w, h int) string {
 		rows = append(rows, l+r)
 	}
 
-	return strings.Join(rows, "\n")
+	base := strings.Join(rows, "\n")
+
+	// Overlay agent picker popup if open.
+	if m.send.AgentOpen() {
+		overlay := m.send.OverlayView(w, m.pal)
+		return panelrender.OverlayCenter(base, overlay, w, h)
+	}
+	return base
 }
 
 // buildLeft delegates to the shared Sidebar sub-model.
@@ -69,33 +76,21 @@ func (m Model) buildLeft(w, h int) []string {
 	return sb.View(w, h, m.pal)
 }
 
-// buildRight renders: editor (top ~55%) + runner (middle) + chat input (bottom ~15%).
+// buildRight renders: runner (top) + send panel (bottom).
 func (m Model) buildRight(w, h int) []string {
-	chatH := 4
+	sendH := 6
 	if h < 20 {
-		chatH = 3
+		sendH = 5
 	}
-	remaining := h - chatH
-	editorH := remaining * 55 / 100
-	if editorH < 10 {
-		editorH = 10
-	}
-	runnerH := remaining - editorH
+	runnerH := h - sendH
 	if runnerH < 5 {
 		runnerH = 5
 	}
 
 	var rows []string
-	rows = append(rows, m.buildEditorBox(w, editorH)...)
 	rows = append(rows, m.buildRunnerBox(w, runnerH)...)
-	rows = append(rows, m.buildChatBox(w, chatH)...)
+	rows = append(rows, m.buildSendBox(w, sendH)...)
 	return rows
-}
-
-// buildEditorBox delegates to the shared EditorPanel sub-model.
-func (m Model) buildEditorBox(w, h int) []string {
-	ed := m.editor.SetFocused(m.focus == FocusEditor)
-	return ed.View(w, h, m.pal)
 }
 
 // buildRunnerBox delegates to the shared RunnerPanel sub-model.
@@ -104,39 +99,9 @@ func (m Model) buildRunnerBox(w, h int) []string {
 	return rn.View(w, h, m.pal)
 }
 
-// buildChatBox renders the agent runner chat input at the bottom of the right column.
-func (m Model) buildChatBox(w, h int) []string {
-	pal := m.pal
-	borderColor := pal.Border
-	if m.focus == FocusChat {
-		borderColor = pal.Accent
-	}
-
-	var rows []string
-	rows = append(rows, panelrender.BoxTop(w, "SEND", borderColor, pal.Accent))
-
-	// Chat input row.
-	m.chatInput.Width = w - 6
-	if m.chatInput.Width < 10 {
-		m.chatInput.Width = 10
-	}
-	inputLine := "  " + m.chatInput.View()
-	rows = append(rows, panelrender.BoxRow(inputLine, w, borderColor))
-
-	// Fill remaining rows.
-	for len(rows) < h-2 {
-		rows = append(rows, panelrender.BoxRow("", w, borderColor))
-	}
-
-	// Hint row.
-	hints := []panelrender.Hint{
-		{Key: "enter", Desc: "send"},
-		{Key: "ctrl+r", Desc: "re-run"},
-		{Key: "ctrl+s", Desc: "save"},
-		{Key: "shift+tab", Desc: "editor"},
-	}
-	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
-	rows = append(rows, panelrender.BoxBot(w, borderColor))
-	return rows
+// buildSendBox delegates to the shared SendPanel sub-model.
+func (m Model) buildSendBox(w, h int) []string {
+	snd := m.send.SetFocused(m.focus == FocusChat)
+	return snd.View(w, h, m.pal)
 }
 

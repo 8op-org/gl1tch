@@ -99,8 +99,8 @@ type Model struct {
 	statusMsg string
 	statusErr bool
 
-	// Chat input for agent runner at bottom of right column.
-	chatInput textinput.Model
+	// Send panel for agent runner at bottom of right column.
+	send buildershared.SendPanel
 
 	// Feedback loop state.
 	feedbackHistory []string
@@ -124,10 +124,6 @@ func New(providers []picker.ProviderDef, pipelinesDir string, st *store.Store) M
 	ci.Placeholder = "type your answer…"
 	ci.CharLimit = 2000
 
-	chatIn := textinput.New()
-	chatIn.Placeholder = "send a follow-up message…"
-	chatIn.CharLimit = 4000
-
 	// Default Dracula-ish palette — overridden by SetPalette.
 	pal := styles.ANSIPalette{
 		Accent:  "\x1b[35m",
@@ -150,11 +146,11 @@ func New(providers []picker.ProviderDef, pipelinesDir string, st *store.Store) M
 		nameInput:    ni,
 		promptArea:   pa,
 		clarifyInput: ci,
-		chatInput:    chatIn,
 		// Shared sub-models.
 		sidebar: buildershared.NewSidebar("PIPELINES", nil),
 		editor:  buildershared.NewEditorPanel(providers),
 		runner:  buildershared.NewRunnerPanel(),
+		send:    buildershared.NewSendPanel(providers),
 	}
 	m.pipelines = m.loadPipelines()
 	m.sidebar = m.sidebar.SetItems(m.pipelines)

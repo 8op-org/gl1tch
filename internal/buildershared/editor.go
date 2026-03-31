@@ -263,21 +263,24 @@ func (e EditorPanel) View(w, h int, pal styles.ANSIPalette) []string {
 		rows = append(rows, panelrender.BoxRow("  "+pLine, w, borderColor))
 	}
 
-	// Hint row — contextual to focused field.
-	var editorHints []panelrender.Hint
-	switch e.focus {
-	case EditorFocusPicker:
-		editorHints = []panelrender.Hint{{Key: "↑↓", Desc: "select"}, {Key: "tab", Desc: "next"}}
-	case EditorFocusName:
-		editorHints = []panelrender.Hint{{Key: "enter", Desc: "next"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
-	case EditorFocusContent:
-		editorHints = []panelrender.Hint{{Key: "ctrl+s", Desc: "save"}, {Key: "tab", Desc: "runner"}, {Key: "shift+tab", Desc: "back"}}
-	}
-	// Pad to h-2 then add hint row, then bottom border.
+	// Pad to h-2 then add hint row (only when focused), then bottom border.
 	for len(rows) < h-2 {
 		rows = append(rows, panelrender.BoxRow("", w, borderColor))
 	}
-	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(editorHints, w-2, pal), w, borderColor))
+	if e.focused {
+		var editorHints []panelrender.Hint
+		switch e.focus {
+		case EditorFocusPicker:
+			editorHints = []panelrender.Hint{{Key: "↑↓", Desc: "select"}, {Key: "tab", Desc: "next"}}
+		case EditorFocusName:
+			editorHints = []panelrender.Hint{{Key: "enter", Desc: "next"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
+		case EditorFocusContent:
+			editorHints = []panelrender.Hint{{Key: "ctrl+s", Desc: "save"}, {Key: "tab", Desc: "runner"}, {Key: "shift+tab", Desc: "back"}}
+		}
+		rows = append(rows, panelrender.BoxRow(panelrender.HintBar(editorHints, w-2, pal), w, borderColor))
+	} else {
+		rows = append(rows, panelrender.BoxRow("", w, borderColor))
+	}
 	rows = append(rows, panelrender.BoxBot(w, borderColor))
 	return rows
 }

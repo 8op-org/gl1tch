@@ -213,19 +213,23 @@ func (r RunnerPanel) View(w, h int, pal styles.ANSIPalette) []string {
 		rows = append(rows, panelrender.BoxRow(answerLine, w, borderColor))
 	}
 
-	// Hint row — contextual based on runner state.
-	var hints []panelrender.Hint
-	switch {
-	case r.clarifyActive:
-		hints = []panelrender.Hint{{Key: "enter", Desc: "submit"}, {Key: "esc", Desc: "cancel"}}
-	case r.running:
-		hints = []panelrender.Hint{{Key: "ctrl+c", Desc: "cancel"}}
-	case len(r.lines) > 0:
-		hints = []panelrender.Hint{{Key: "r", Desc: "re-run"}, {Key: "shift+tab", Desc: "editor"}}
-	default:
-		hints = []panelrender.Hint{{Key: "r", Desc: "generate"}, {Key: "shift+tab", Desc: "editor"}}
+	// Hint row — only when focused.
+	if r.focused {
+		var hints []panelrender.Hint
+		switch {
+		case r.clarifyActive:
+			hints = []panelrender.Hint{{Key: "enter", Desc: "submit"}, {Key: "esc", Desc: "cancel"}}
+		case r.running:
+			hints = []panelrender.Hint{{Key: "ctrl+c", Desc: "cancel"}}
+		case len(r.lines) > 0:
+			hints = []panelrender.Hint{{Key: "r", Desc: "re-run"}, {Key: "shift+tab", Desc: "editor"}}
+		default:
+			hints = []panelrender.Hint{{Key: "r", Desc: "generate"}, {Key: "shift+tab", Desc: "editor"}}
+		}
+		rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
+	} else {
+		rows = append(rows, panelrender.BoxRow("", w, borderColor))
 	}
-	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
 	rows = append(rows, panelrender.BoxBot(w, borderColor))
 	return rows
 }

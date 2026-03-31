@@ -3,7 +3,7 @@ package promptbuilder
 // TwoColumnModel is the new two-column prompt builder TUI.
 // Layout:
 //   Left  column : Sidebar (saved prompts)
-//   Right column : EditorPanel (provider/name/content) + RunnerPanel + ChatInput
+//   Right column : RunnerPanel + SendPanel
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -30,17 +29,15 @@ import (
 // tcFocus constants for TwoColumnModel outer focus.
 const (
 	tcFocusSidebar = 0
-	tcFocusEditor  = 1
-	tcFocusRunner  = 2
-	tcFocusChat    = 3
+	tcFocusRunner  = 1
+	tcFocusChat    = 2
 )
 
 // TwoColumnModel implements tea.Model for the prompt builder TUI.
 type TwoColumnModel struct {
-	sidebar   buildershared.Sidebar
-	editor    buildershared.EditorPanel
-	runner    buildershared.RunnerPanel
-	chatInput textinput.Model
+	sidebar buildershared.Sidebar
+	runner  buildershared.RunnerPanel
+	send    buildershared.SendPanel
 
 	focus int
 
@@ -70,10 +67,6 @@ type promptEntry struct {
 
 // NewTwoColumn creates a new TwoColumnModel.
 func NewTwoColumn(promptsDir string, providers []picker.ProviderDef, mgr *plugin.Manager) *TwoColumnModel {
-	chatIn := textinput.New()
-	chatIn.Placeholder = "send a message to run against this prompt…"
-	chatIn.CharLimit = 4000
-
 	pal := styles.ANSIPalette{
 		Accent:  "\x1b[35m",
 		Dim:     "\x1b[2m",
@@ -88,9 +81,8 @@ func NewTwoColumn(promptsDir string, providers []picker.ProviderDef, mgr *plugin
 
 	m := &TwoColumnModel{
 		sidebar:    buildershared.NewSidebar("PROMPTS", nil),
-		editor:     buildershared.NewEditorPanel(providers),
 		runner:     buildershared.NewRunnerPanel(),
-		chatInput:  chatIn,
+		send:       buildershared.NewSendPanel(providers),
 		promptsDir: promptsDir,
 		pluginMgr:  mgr,
 		pal:        pal,
@@ -169,8 +161,6 @@ func (m *TwoColumnModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.focus {
 	case tcFocusSidebar:
 		return m.handleSidebarKey(msg)
-	case tcFocusEditor:
-		return m.handleEditorKey(msg)
 	case tcFocusRunner:
 		return m.handleRunnerKey(msg)
 	case tcFocusChat:
@@ -189,10 +179,10 @@ func (m *TwoColumnModel) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		innerMsg := cmd()
 		switch v := innerMsg.(type) {
 		case buildershared.SidebarSelectMsg:
-			m.loadPromptIntoEditor(v.Name)
+			m.send = m.send.SetName(v.Name)
 			m.sidebar = m.sidebar.SetFocused(false)
-			m.editor = m.editor.SetFocused(true)
-			m.focus = tcFocusEditor
+			m.send = m.send.SetFocused(true)
+			m.focus = tcFocusChat
 			return m, nil
 		case buildershared.SidebarDeleteMsg:
 			os.Remove(filepath.Join(m.promptsDir, v.Name+".json")) //nolint:errcheck
@@ -202,54 +192,21 @@ func (m *TwoColumnModel) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key == "n" {
-		m.editor = m.editor.SetName("new-prompt")
-		m.editor = m.editor.SetContent("")
+		m.send = m.send.SetName("new-prompt")
 		m.sidebar = m.sidebar.SetFocused(false)
-		m.editor = m.editor.SetFocused(true)
-		m.focus = tcFocusEditor
+		m.send = m.send.SetFocused(true)
+		m.focus = tcFocusChat
 		return m, nil
 	}
 
 	if key == "tab" {
 		m.sidebar = m.sidebar.SetFocused(false)
-		m.editor = m.editor.SetFocused(true)
-		m.focus = tcFocusEditor
+		m.send = m.send.SetFocused(true)
+		m.focus = tcFocusChat
 		return m, nil
 	}
 
 	return m, nil
-}
-
-func (m *TwoColumnModel) handleEditorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-
-	var cmd tea.Cmd
-	m.editor, cmd = m.editor.Update(msg)
-
-	if cmd != nil {
-		innerMsg := cmd()
-		switch innerMsg.(type) {
-		case buildershared.EditorTabOutMsg:
-			m.editor = m.editor.SetFocused(false)
-			m.focus = tcFocusChat
-			m.chatInput.Focus()
-			return m, nil
-		case buildershared.EditorShiftTabOutMsg:
-			m.editor = m.editor.SetFocused(false)
-			m.sidebar = m.sidebar.SetFocused(true)
-			m.focus = tcFocusSidebar
-			return m, nil
-		}
-	}
-
-	if key == "esc" {
-		m.editor = m.editor.SetFocused(false)
-		m.sidebar = m.sidebar.SetFocused(true)
-		m.focus = tcFocusSidebar
-		return m, nil
-	}
-
-	return m, cmd
 }
 
 func (m *TwoColumnModel) handleRunnerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -260,50 +217,48 @@ func (m *TwoColumnModel) handleRunnerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "shift+tab", "esc":
 		m.runner = m.runner.SetFocused(false)
-		m.editor = m.editor.SetFocused(true)
-		m.focus = tcFocusEditor
+		m.send = m.send.SetFocused(true)
+		m.focus = tcFocusChat
 	case "tab":
 		m.runner = m.runner.SetFocused(false)
-		m.focus = tcFocusChat
-		m.chatInput.Focus()
+		m.sidebar = m.sidebar.SetFocused(true)
+		m.focus = tcFocusSidebar
 	}
 	return m, cmd
 }
 
 func (m *TwoColumnModel) handleChatKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
+	var cmd tea.Cmd
+	m.send, cmd = m.send.Update(msg)
 
-	switch key {
-	case "enter":
-		prompt := strings.TrimSpace(m.chatInput.Value())
-		m.chatInput.SetValue("")
-		if prompt == "" {
+	if cmd != nil {
+		innerMsg := cmd()
+		switch v := innerMsg.(type) {
+		case buildershared.SendSubmitMsg:
+			if v.Message == "" {
+				return m, nil
+			}
+			if !m.sentOnce {
+				m.firstPrompt = v.Message
+				m.sentOnce = true
+			}
+			m.runner = m.runner.Clear()
+			m.runner = m.runner.SetFocused(true)
+			m.focus = tcFocusRunner
+			return m, m.startRun(v.Message)
+		case buildershared.SendTabOutMsg:
+			m.send = m.send.SetFocused(false)
+			m.sidebar = m.sidebar.SetFocused(true)
+			m.focus = tcFocusSidebar
+			return m, nil
+		case buildershared.SendShiftTabOutMsg:
+			m.send = m.send.SetFocused(false)
+			m.runner = m.runner.SetFocused(true)
+			m.focus = tcFocusRunner
 			return m, nil
 		}
-		if !m.sentOnce {
-			m.firstPrompt = prompt
-			m.sentOnce = true
-		}
-		m.runner = m.runner.Clear()
-		m.runner = m.runner.SetFocused(true)
-		m.focus = tcFocusRunner
-		return m, m.startRun(prompt)
-
-	case "shift+tab", "esc":
-		m.chatInput.Blur()
-		m.editor = m.editor.SetFocused(true)
-		m.focus = tcFocusEditor
-		return m, nil
-
-	case "tab":
-		m.chatInput.Blur()
-		m.sidebar = m.sidebar.SetFocused(true)
-		m.focus = tcFocusSidebar
-		return m, nil
 	}
 
-	var cmd tea.Cmd
-	m.chatInput, cmd = m.chatInput.Update(msg)
 	return m, cmd
 }
 
@@ -354,62 +309,32 @@ func (m *TwoColumnModel) View() string {
 		}
 		rows = append(rows, l+r)
 	}
-	return strings.Join(rows, "\n")
+	base := strings.Join(rows, "\n")
+
+	// Overlay agent picker popup if open.
+	if m.send.AgentOpen() {
+		overlay := m.send.OverlayView(w, pal)
+		return panelrender.OverlayCenter(base, overlay, w, h)
+	}
+	return base
 }
 
 func (m *TwoColumnModel) buildRight(w, h int) []string {
-	chatH := 4
+	sendH := 6
 	if h < 20 {
-		chatH = 3
+		sendH = 5
 	}
-	remaining := h - chatH
-	editorH := remaining * 55 / 100
-	if editorH < 10 {
-		editorH = 10
-	}
-	runnerH := remaining - editorH
+	runnerH := h - sendH
 	if runnerH < 5 {
 		runnerH = 5
 	}
 
-	ed := m.editor.SetFocused(m.focus == tcFocusEditor)
 	rn := m.runner.SetFocused(m.focus == tcFocusRunner)
+	snd := m.send.SetFocused(m.focus == tcFocusChat)
 
 	var rows []string
-	rows = append(rows, ed.View(w, editorH, m.pal)...)
 	rows = append(rows, rn.View(w, runnerH, m.pal)...)
-	rows = append(rows, m.buildChatBox(w, chatH)...)
-	return rows
-}
-
-func (m *TwoColumnModel) buildChatBox(w, h int) []string {
-	pal := m.pal
-	borderColor := pal.Border
-	if m.focus == tcFocusChat {
-		borderColor = pal.Accent
-	}
-
-	var rows []string
-	rows = append(rows, panelrender.BoxTop(w, "SEND", borderColor, pal.Accent))
-
-	m.chatInput.Width = w - 6
-	if m.chatInput.Width < 10 {
-		m.chatInput.Width = 10
-	}
-	rows = append(rows, panelrender.BoxRow("  "+m.chatInput.View(), w, borderColor))
-
-	for len(rows) < h-2 {
-		rows = append(rows, panelrender.BoxRow("", w, borderColor))
-	}
-
-	hints := []panelrender.Hint{
-		{Key: "enter", Desc: "send"},
-		{Key: "ctrl+r", Desc: "re-run"},
-		{Key: "ctrl+s", Desc: "save"},
-		{Key: "shift+tab", Desc: "editor"},
-	}
-	rows = append(rows, panelrender.BoxRow(panelrender.HintBar(hints, w-2, pal), w, borderColor))
-	rows = append(rows, panelrender.BoxBot(w, borderColor))
+	rows = append(rows, snd.View(w, sendH, m.pal)...)
 	return rows
 }
 
@@ -433,24 +358,8 @@ func (m *TwoColumnModel) loadPromptNames() []string {
 	return names
 }
 
-func (m *TwoColumnModel) loadPromptIntoEditor(name string) {
-	data, err := os.ReadFile(filepath.Join(m.promptsDir, name+".json"))
-	if err != nil {
-		return
-	}
-	var p promptEntry
-	if err := json.Unmarshal(data, &p); err != nil {
-		return
-	}
-	m.editor = m.editor.SetName(p.Name)
-	m.editor = m.editor.SetContent(p.Content)
-	if p.Provider != "" || p.Model != "" {
-		m.editor = m.editor.SelectBySlug(p.Provider + "/" + p.Model)
-	}
-}
-
 func (m *TwoColumnModel) saveCurrentPrompt() error {
-	name := strings.TrimSpace(m.editor.Name())
+	name := strings.TrimSpace(m.send.Name())
 	if name == "" {
 		return fmt.Errorf("prompt name is required")
 	}
@@ -459,9 +368,8 @@ func (m *TwoColumnModel) saveCurrentPrompt() error {
 	}
 	p := promptEntry{
 		Name:     name,
-		Provider: m.editor.SelectedProviderID(),
-		Model:    m.editor.SelectedModelID(),
-		Content:  m.editor.Content(),
+		Provider: m.send.ProviderID(),
+		Model:    m.send.ModelID(),
 	}
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
@@ -473,24 +381,17 @@ func (m *TwoColumnModel) saveCurrentPrompt() error {
 // ── Run logic ─────────────────────────────────────────────────────────────────
 
 func (m *TwoColumnModel) startRun(userMsg string) tea.Cmd {
-	content := strings.TrimSpace(m.editor.Content())
-	if content == "" && userMsg == "" {
+	if userMsg == "" {
 		return nil
 	}
 
-	executorID := m.editor.SelectedProviderID()
+	executorID := m.send.ProviderID()
 	if executorID == "" {
 		executorID = "claude"
 	}
-	modelID := m.editor.SelectedModelID()
+	modelID := m.send.ModelID()
 
-	// Build a single-step pipeline: system=content, user=userMsg.
-	fullPrompt := content
-	if userMsg != "" && content != "" {
-		fullPrompt = content + "\n\n" + userMsg
-	} else if userMsg != "" {
-		fullPrompt = userMsg
-	}
+	fullPrompt := userMsg
 
 	yamlContent := buildPromptYAML("run-prompt", executorID, modelID, fullPrompt)
 
