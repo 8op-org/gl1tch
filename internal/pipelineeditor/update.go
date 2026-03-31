@@ -138,7 +138,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m = m.openEdit(v.Name)
 			m.send = m.send.SetName(v.Name)
 			m.sidebar = m.sidebar.SetFocused(false)
-			m.send = m.send.SetFocused(true)
+			m.send = m.send.Enter()
 			m.focus = FocusChat
 			return m, nil
 		case buildershared.SidebarDeleteMsg:
@@ -152,7 +152,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if key == "n" {
 			m = m.openNew()
 			m.sidebar = m.sidebar.SetFocused(false)
-			m.send = m.send.SetFocused(true)
+			m.send = m.send.Enter()
 			m.focus = FocusChat
 			return m, nil
 		}
@@ -162,7 +162,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if key == "n" {
 		m = m.openNew()
 		m.sidebar = m.sidebar.SetFocused(false)
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = FocusChat
 		return m, nil
 	}
@@ -170,7 +170,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// Tab: move focus to send panel (editor panel removed from view).
 	if key == "tab" {
 		m.sidebar = m.sidebar.SetFocused(false)
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = FocusChat
 		return m, nil
 	}
@@ -194,7 +194,7 @@ func (m Model) handleEditorKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		switch innerMsg.(type) {
 		case buildershared.EditorTabOutMsg:
 			m.editor = m.editor.SetFocused(false)
-			m.send = m.send.SetFocused(true)
+			m.send = m.send.Enter()
 			m.focus = FocusChat
 			return m, nil
 		case buildershared.EditorShiftTabOutMsg:
@@ -220,7 +220,7 @@ func (m Model) handleYAMLKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.yamlScroll--
 		}
 	case "tab":
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = FocusChat
 	case "shift+tab":
 		m.focus = FocusEditor
@@ -264,7 +264,7 @@ func (m Model) handleRunnerKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.sidebar = m.sidebar.SetFocused(true)
 	case "shift+tab":
 		m.runner = m.runner.SetFocused(false)
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = FocusChat
 	}
 	return m, cmd

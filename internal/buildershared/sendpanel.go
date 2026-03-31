@@ -72,13 +72,19 @@ func NewSendPanel(providers []picker.ProviderDef) SendPanel {
 	}
 }
 
-// SetFocused sets whether the send panel has outer focus.
-// Entering the panel always resets inner focus to SendFocusName.
+// SetFocused sets the outer focus flag without changing inner field focus.
+// Used by the view for rendering. Use Enter() when actually moving focus into the panel.
 func (s SendPanel) SetFocused(b bool) SendPanel {
 	s.focused = b
-	if b {
-		s.focus = SendFocusName
-	}
+	s.syncFocus()
+	return s
+}
+
+// Enter sets outer focus and resets inner focus to SendFocusName.
+// Use this in key handlers when transitioning into the send panel.
+func (s SendPanel) Enter() SendPanel {
+	s.focused = true
+	s.focus = SendFocusName
 	s.syncFocus()
 	return s
 }

@@ -181,7 +181,7 @@ func (m *TwoColumnModel) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case buildershared.SidebarSelectMsg:
 			m.send = m.send.SetName(v.Name)
 			m.sidebar = m.sidebar.SetFocused(false)
-			m.send = m.send.SetFocused(true)
+			m.send = m.send.Enter()
 			m.focus = tcFocusChat
 			return m, nil
 		case buildershared.SidebarDeleteMsg:
@@ -194,14 +194,14 @@ func (m *TwoColumnModel) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key == "n" {
 		m.send = m.send.SetName("new-prompt")
 		m.sidebar = m.sidebar.SetFocused(false)
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = tcFocusChat
 		return m, nil
 	}
 
 	if key == "tab" {
 		m.sidebar = m.sidebar.SetFocused(false)
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = tcFocusChat
 		return m, nil
 	}
@@ -217,7 +217,7 @@ func (m *TwoColumnModel) handleRunnerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "shift+tab", "esc":
 		m.runner = m.runner.SetFocused(false)
-		m.send = m.send.SetFocused(true)
+		m.send = m.send.Enter()
 		m.focus = tcFocusChat
 	case "tab":
 		m.runner = m.runner.SetFocused(false)
