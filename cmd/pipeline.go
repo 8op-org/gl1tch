@@ -26,6 +26,7 @@ func init() {
 	rootCmd.AddCommand(pipelineCmd)
 	pipelineCmd.AddCommand(pipelineBuildCmd)
 	pipelineCmd.AddCommand(pipelineRunCmd)
+	pipelineRunCmd.Flags().StringVar(&pipelineRunInput, "input", "", "user input passed to the pipeline as {{param.input}}")
 	pipelineCmd.AddCommand(pipelineResumeCmd)
 	pipelineResumeCmd.Flags().Int64Var(&pipelineResumeRunID, "run-id", 0, "Store run ID to resume")
 	_ = pipelineResumeCmd.MarkFlagRequired("run-id")
@@ -143,7 +144,7 @@ var pipelineRunCmd = &cobra.Command{
 			storeOpts = append(storeOpts, pipeline.WithEventPublisher(pub))
 		}
 
-		result, err := pipeline.Run(cmd.Context(), p, mgr, "", storeOpts...)
+		result, err := pipeline.Run(cmd.Context(), p, mgr, pipelineRunInput, storeOpts...)
 		if err != nil {
 			return err
 		}
@@ -159,6 +160,8 @@ func orcaiConfigDir() (string, error) {
 	}
 	return filepath.Join(home, ".config", "orcai"), nil
 }
+
+var pipelineRunInput string
 
 var pipelineResumeRunID int64
 

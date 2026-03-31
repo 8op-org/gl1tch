@@ -47,6 +47,10 @@ func currentTmuxSession() string {
 //
 // Returns (target, logFile, doneFile). All empty strings if tmux is unavailable.
 func createJobWindow(feedID, shellCmd, label, startDir string) (target, logFile, doneFile string) {
+	// Never create real tmux windows during go test runs.
+	if strings.HasSuffix(os.Args[0], ".test") {
+		return "", "", ""
+	}
 	if _, err := exec.LookPath("tmux"); err != nil {
 		return "", "", ""
 	}
@@ -103,6 +107,12 @@ func createJobWindow(feedID, shellCmd, label, startDir string) (target, logFile,
 // content, sending FeedLineMsg values to ch. When doneFile appears it reads the
 // exit code and sends jobDoneMsg (exit 0) or jobFailedMsg (non-zero), then exits.
 func startLogWatcher(feedID, logFile, doneFile string, ch chan<- tea.Msg) {
+	// No log file means no tmux window was created (e.g. test mode). Signal
+	// done immediately so drainChan callers are not left blocking.
+	if logFile == "" {
+		close(ch)
+		return
+	}
 	go func() {
 		var offset int64
 		for {
