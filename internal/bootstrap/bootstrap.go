@@ -14,6 +14,7 @@ import (
 	"github.com/adam-stokes/orcai/internal/layout"
 	"github.com/adam-stokes/orcai/internal/systemprompts"
 	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/adam-stokes/orcai/internal/welcome"
 	"github.com/adam-stokes/orcai/internal/widgetdispatch"
 )
 
@@ -298,6 +299,12 @@ func Run() error {
 	} else {
 		exec.Command("tmux", "set-window-option", "-t", "orcai-cron:0", //nolint:errcheck
 			"@orcai-label", "orcai-cron").Run()
+	}
+
+	// First-run: open the GLITCH welcome TUI in a new window before attaching.
+	if welcome.IsFirstRun(cfgDir) {
+		exec.Command("tmux", "new-window", "-t", SessionName+":", "-n", "orcai-welcome", //nolint:errcheck
+			self+" welcome").Run()
 	}
 
 	cmd := exec.Command("tmux", "-f", confPath, "attach-session", "-t", SessionName)

@@ -1,0 +1,406 @@
+// Package welcome implements the GLITCH first-run onboarding TUI.
+package welcome
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/adam-stokes/orcai/internal/themes"
+)
+
+// SentinelFile is the path (relative to cfgDir) that marks welcome as completed.
+const SentinelFile = ".welcome_seen"
+
+// IsFirstRun returns true if the welcome has not yet been completed.
+func IsFirstRun(cfgDir string) bool {
+	_, err := os.Stat(filepath.Join(cfgDir, SentinelFile))
+	return os.IsNotExist(err)
+}
+
+// MarkSeen writes the sentinel file to indicate welcome has been shown.
+func MarkSeen(cfgDir string) error {
+	f, err := os.Create(filepath.Join(cfgDir, SentinelFile))
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+// --- Tea messages ---
+
+// glitchTokenMsg carries a streamed token from the LLM.
+type glitchTokenMsg struct{ token string }
+
+// glitchDoneMsg signals the LLM stream has finished.
+type glitchDoneMsg struct{}
+
+// glitchStreamErrMsg signals a streaming error.
+type glitchStreamErrMsg struct{ err error }
+
+// streamMsg is the internal message type for chaining async channel reads.
+type streamMsg struct {
+	token string
+	ch    <-chan string
+}
+
+// --- Conversation entry ---
+
+type speaker int
+
+const (
+	speakerGlitch speaker = iota
+	speakerUser
+	speakerSystem
+)
+
+type entry struct {
+	who  speaker
+	text string
+}
+
+// Model is the welcome widget BubbleTea model.
+type Model struct {
+	width, height int
+	pal           styles.ANSIPalette
+
+	titleLines []string  // rendered title (tdfiglet or fallback)
+	messages   []entry   // conversation history
+	viewport   viewport.Model
+	input      textinput.Model
+	phase      Phase
+
+	streaming bool   // LLM response in progress
+	streamBuf string // accumulates current token stream
+	useOllama bool
+	guide     *Guide
+
+	cfgDir string
+	done   bool
+}
+
+// New creates a new welcome Model.
+func New(cfgDir string) Model {
+	input := textinput.New()
+	input.Placeholder = "type a message…"
+	input.Prompt = " >> "
+	input.CharLimit = 2000
+	input.Focus()
+
+	title := RenderTitle()
+
+	useOllama := OllamaAvailable()
+	var guide *Guide
+	if useOllama {
+		modelName := BestModel()
+		guide = NewGuide(modelName)
+	}
+
+	m := Model{
+		width:      80,
+		height:     24,
+		titleLines: title,
+		input:      input,
+		phase:      PhaseIntro,
+		useOllama:  useOllama,
+		guide:      guide,
+		cfgDir:     cfgDir,
+	}
+
+	// Load palette
+	home, _ := os.UserHomeDir()
+	if reg, err := themes.NewRegistry(filepath.Join(home, ".config", "orcai", "themes")); err == nil {
+		if bundle := reg.Active(); bundle != nil {
+			m.pal = styles.BundleANSI(bundle)
+		}
+	}
+
+	return m
+}
+
+func (m Model) Init() tea.Cmd {
+	// Kick off the intro phase response immediately.
+	return tea.Batch(
+		textinput.Blink,
+		m.startPhaseOpener(PhaseIntro),
+	)
+}
+
+// startPhaseOpener triggers the GLITCH opener for the given phase.
+func (m Model) startPhaseOpener(phase Phase) tea.Cmd {
+	if m.useOllama && m.guide != nil {
+		return func() tea.Msg {
+			ch, err := m.guide.StreamResponse(phase, "")
+			if err != nil {
+				return glitchStreamErrMsg{err: err}
+			}
+			return streamNextToken(ch)()
+		}
+	}
+	// Scripted fallback: emit the whole response immediately via glitchDoneMsg.
+	return func() tea.Msg {
+		return glitchDoneMsg{}
+	}
+}
+
+// streamNextToken returns a Cmd that reads one token from ch and emits it.
+func streamNextToken(ch <-chan string) tea.Cmd {
+	return func() tea.Msg {
+		token, ok := <-ch
+		if !ok {
+			return glitchDoneMsg{}
+		}
+		return streamMsg{token: token, ch: ch}
+	}
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.resizeViewport()
+
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC:
+			return m, tea.Quit
+		case tea.KeyEsc:
+			if m.phase == PhaseDone {
+				return m, tea.Quit
+			}
+		case tea.KeyEnter:
+			if m.streaming {
+				break // ignore input while streaming
+			}
+			userText := strings.TrimSpace(m.input.Value())
+			if userText == "" {
+				break
+			}
+			m.input.SetValue("")
+			m.messages = append(m.messages, entry{who: speakerUser, text: userText})
+			m.updateViewport()
+
+			// If done phase, just quit.
+			if m.phase == PhaseDone {
+				return m, tea.Quit
+			}
+
+			// Advance phase on user input.
+			nextPhase := m.advancePhase(userText)
+
+			m.streaming = true
+			m.streamBuf = ""
+			cmds = append(cmds, m.streamResponse(nextPhase, userText))
+		}
+
+	case streamMsg:
+		m.streamBuf += msg.token
+		// Update last glitch message (or append new one)
+		m.upsertStreamEntry()
+		m.updateViewport()
+		// Schedule reading next token
+		cmds = append(cmds, streamNextToken(msg.ch))
+
+	case glitchDoneMsg:
+		m.streaming = false
+		if m.streamBuf == "" && !m.useOllama {
+			// Scripted: flush full text now
+			text := scriptedFallback[m.phase]
+			m.messages = append(m.messages, entry{who: speakerGlitch, text: text})
+		} else if m.streamBuf != "" {
+			m.upsertStreamEntry()
+		}
+		m.streamBuf = ""
+		m.updateViewport()
+
+		// Write sentinel when the done phase response finishes.
+		if m.phase == PhaseDone {
+			if err := MarkSeen(m.cfgDir); err != nil {
+				// best effort
+			}
+		}
+
+	case glitchStreamErrMsg:
+		m.streaming = false
+		m.streamBuf = ""
+		// Fall back to scripted on error
+		text := scriptedFallback[m.phase]
+		m.messages = append(m.messages, entry{who: speakerGlitch, text: text})
+		m.updateViewport()
+	}
+
+	// Update sub-models
+	var inputCmd tea.Cmd
+	m.input, inputCmd = m.input.Update(msg)
+	cmds = append(cmds, inputCmd)
+
+	var vpCmd tea.Cmd
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	cmds = append(cmds, vpCmd)
+
+	return m, tea.Batch(cmds...)
+}
+
+// advancePhase determines the next phase based on current phase and user input.
+// Returns the phase to use for the NEXT LLM response.
+func (m *Model) advancePhase(_ string) Phase {
+	switch m.phase {
+	case PhaseIntro:
+		m.phase = PhaseUseCase
+	case PhaseUseCase:
+		m.phase = PhasePipeline
+	case PhasePipeline:
+		m.phase = PhaseNavigation
+	case PhaseNavigation:
+		m.phase = PhaseBrain
+	case PhaseBrain:
+		m.phase = PhaseDone
+	}
+	return m.phase
+}
+
+// streamResponse triggers LLM streaming for the given phase and user message.
+func (m Model) streamResponse(phase Phase, userText string) tea.Cmd {
+	if m.useOllama && m.guide != nil {
+		return func() tea.Msg {
+			ch, err := m.guide.StreamResponse(phase, userText)
+			if err != nil {
+				return glitchStreamErrMsg{err: err}
+			}
+			return streamNextToken(ch)()
+		}
+	}
+	// Scripted fallback
+	return func() tea.Msg {
+		return glitchDoneMsg{}
+	}
+}
+
+// upsertStreamEntry updates the last glitch entry with streamBuf, or appends a new one.
+func (m *Model) upsertStreamEntry() {
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].who == speakerGlitch {
+			m.messages[i].text = m.streamBuf
+			return
+		}
+		if m.messages[i].who == speakerUser {
+			break
+		}
+	}
+	m.messages = append(m.messages, entry{who: speakerGlitch, text: m.streamBuf})
+}
+
+func (m *Model) resizeViewport() {
+	titleH := len(m.titleLines) + 2 // +2 for subtitle and padding
+	inputH := 3                      // input box height
+	vpH := m.height - titleH - inputH
+	if vpH < 5 {
+		vpH = 5
+	}
+	if m.viewport.Width == 0 {
+		m.viewport = viewport.New(m.width-2, vpH)
+		m.viewport.YPosition = 0
+	} else {
+		m.viewport.Width = m.width - 2
+		m.viewport.Height = vpH
+	}
+	m.updateViewport()
+}
+
+func (m *Model) updateViewport() {
+	m.viewport.SetContent(m.renderConversation())
+	m.viewport.GotoBottom()
+}
+
+// renderConversation renders all conversation entries into a single string.
+func (m *Model) renderConversation() string {
+	if len(m.messages) == 0 {
+		return ""
+	}
+
+	accent := lipgloss.Color("#bd93f9")
+	userColor := lipgloss.Color("#8be9fd")
+	textColor := lipgloss.Color("#f8f8f2")
+	dimColor := lipgloss.Color("#6272a4")
+	if m.pal.Accent != "" {
+		accent = lipgloss.Color(m.pal.Accent)
+	}
+
+	glitchLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("GLITCH")
+	userLabel := lipgloss.NewStyle().Foreground(userColor).Bold(true).Render("YOU   ")
+	textStyle := lipgloss.NewStyle().Foreground(textColor)
+	dimStyle := lipgloss.NewStyle().Foreground(dimColor)
+
+	var sb strings.Builder
+	for i, e := range m.messages {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		switch e.who {
+		case speakerGlitch:
+			// Format multi-line glitch responses with hanging indent
+			lines := strings.Split(e.text, "\n")
+			for j, line := range lines {
+				if j == 0 {
+					sb.WriteString(fmt.Sprintf("  %s > %s\n", glitchLabel, textStyle.Render(line)))
+				} else {
+					sb.WriteString(fmt.Sprintf("         %s\n", textStyle.Render(line)))
+				}
+			}
+			if m.streaming && i == len(m.messages)-1 {
+				sb.WriteString(dimStyle.Render("         ▋") + "\n")
+			}
+		case speakerUser:
+			sb.WriteString(fmt.Sprintf("  %s > %s\n", userLabel, textStyle.Render(e.text)))
+		case speakerSystem:
+			sb.WriteString(dimStyle.Render("  -- "+e.text+" --") + "\n")
+		}
+	}
+	return sb.String()
+}
+
+func (m Model) View() string {
+	accent := lipgloss.Color("#bd93f9")
+	dimColor := lipgloss.Color("#6272a4")
+	if m.pal.Accent != "" {
+		accent = lipgloss.Color(m.pal.Accent)
+	}
+
+	accentStyle := lipgloss.NewStyle().Foreground(accent).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(dimColor)
+
+	var sb strings.Builder
+
+	// Title block
+	for _, line := range m.titleLines {
+		sb.WriteString(accentStyle.Render(line) + "\n")
+	}
+	sb.WriteString(dimStyle.Render("  >> the agentic bulletin board system  //  first-run setup") + "\n")
+	sb.WriteString(dimStyle.Render(strings.Repeat("─", m.width)) + "\n")
+
+	// Conversation viewport
+	sb.WriteString(m.viewport.View())
+	sb.WriteString("\n")
+
+	// Input bar
+	divider := dimStyle.Render(strings.Repeat("─", m.width))
+	sb.WriteString(divider + "\n")
+	sb.WriteString(m.input.View())
+
+	if m.phase == PhaseDone {
+		sb.WriteString("\n" + dimStyle.Render("  [ press Enter or Ctrl+C to exit ]"))
+	}
+
+	return sb.String()
+}
