@@ -1,20 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
 :root {
-  --bg: #262626;
-  --fg: #bcbcbc;
-  --purple: #8787af;
-  --pink: #af87af;
-  --cyan: #87afaf;
-  --green: #87af87;
-  --yellow: #d7af5f;
-  --red: #af5f5f;
-  --orange: #d7875f;
-  --comment: #585858;
-  --selbg: #444444;
-  --current-line: #303030;
-  --selection: #444444;
-  --darkbg: #1c1c1c;
+  --bg: #282a36;
+  --fg: #f8f8f2;
+  --purple: #bd93f9;
+  --pink: #ff79c6;
+  --cyan: #8be9fd;
+  --green: #50fa7b;
+  --yellow: #f1fa8c;
+  --red: #ff5555;
+  --comment: #6272a4;
+  --selbg: #44475a;
+  --darkbg: #1e1f29;
 }
 
 * {
@@ -26,15 +23,9 @@
 html, body {
   background: var(--bg);
   color: var(--fg);
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
   overflow-x: hidden;
   min-height: 100vh;
-}
-
-body {
-  overflow: hidden;
-  height: 100vh;
-  padding-bottom: 22px;
 }
 
 /* CRT scanlines overlay */
@@ -66,7 +57,7 @@ body::before {
 /* ─── TYPOGRAPHY ─────────────────────────────────────────── */
 
 h1, h2, h3 {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   letter-spacing: 2px;
   text-transform: uppercase;
 }
@@ -81,204 +72,6 @@ a:hover {
   text-decoration: underline;
 }
 
-/* ─── TERMINAL SHELL LAYOUT ──────────────────────────────── */
-
-.terminal-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.screens-container {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-.screen {
-  display: none;
-}
-
-.screen.active {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.term-pane {
-  overflow-y: auto;
-  flex: 1;
-  padding: 4px 32px 24px;
-}
-
-.term-pane::-webkit-scrollbar { width: 6px; }
-.term-pane::-webkit-scrollbar-track { background: var(--bg); }
-.term-pane::-webkit-scrollbar-thumb { background: var(--comment); border-radius: 3px; }
-
-.term-pane-header {
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 10;
-  padding: 3px 16px 2px;
-  font-family: monospace;
-  color: var(--green);
-}
-
-/* ─── TUI TITLE BAR (top) ────────────────────────────────── */
-
-.tui-titlebar {
-  position: relative;
-  z-index: 1000;
-  background: var(--darkbg);
-  border-bottom: 1px solid var(--green);
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0 12px;
-  height: 26px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  user-select: none;
-  flex-shrink: 0;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.tui-titlebar-brand {
-  color: var(--green);
-  font-size: 11px;
-  letter-spacing: 1px;
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
-.tui-nav {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  overflow: hidden;
-  gap: 0;
-}
-
-.tui-nav-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--comment);
-  padding: 0;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-  transition: color 0.1s;
-}
-
-.tui-nav-btn:hover { color: var(--fg); }
-.tui-nav-btn.active { color: var(--green); }
-
-.tui-nav-key {
-  color: var(--green);
-  font-weight: bold;
-}
-
-.tui-nav-btn.active .tui-nav-key { color: var(--cyan); }
-
-.tui-sep {
-  color: var(--border);
-  flex-shrink: 0;
-}
-
-.tui-titlebar-status {
-  color: var(--comment);
-  font-size: 11px;
-  flex-shrink: 0;
-  margin-left: 12px;
-}
-
-.tui-titlebar-status .online { color: var(--green); }
-
-/* ─── STATUS BAR (bottom) ────────────────────────────────── */
-
-.status-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 22px;
-  background: var(--darkbg);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--comment);
-  z-index: 50;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.sb-brand {
-  color: var(--green);
-  font-weight: bold;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.sb-keys {
-  flex: 1;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: clip;
-}
-
-.sb-key {
-  color: var(--green);
-  font-weight: bold;
-}
-
-.sb-sep {
-  color: var(--border);
-}
-
-.status-bar .online { color: var(--green); }
-.status-bar .current-screen { color: var(--green); }
-
-/* ─── HELP OVERLAY ───────────────────────────────────────── */
-
-.help-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: none;
-  background: rgba(40,42,54,0.97);
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Share Tech Mono', monospace;
-  color: var(--fg);
-}
-
-.help-overlay.open { display: flex; }
-.help-overlay pre { color: var(--fg); font-size: 13px; line-height: 1.8; }
-
-/* ─── NAV BUTTONS (legacy) ───────────────────────────────── */
-
-.nav-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: inherit;
-  color: var(--fg);
-  padding: 0;
-}
-
-.nav-btn:hover { color: var(--cyan); }
-.nav-btn.active { color: var(--green); }
-
 /* ─── ANSI COLOR HELPERS ─────────────────────────────────── */
 
 .fg-purple  { color: var(--purple); }
@@ -287,7 +80,6 @@ a:hover {
 .fg-green   { color: var(--green); }
 .fg-yellow  { color: var(--yellow); }
 .fg-red     { color: var(--red); }
-.fg-orange  { color: var(--orange); }
 .fg-comment { color: var(--comment); }
 .fg-fg      { color: var(--fg); }
 .bold       { font-weight: bold; }
@@ -315,16 +107,18 @@ a:hover {
 /* ─── NAV BAR ─────────────────────────────────────────────── */
 
 .bbs-nav {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
   background: var(--darkbg);
-  border-bottom: 1px solid var(--green);
+  border-bottom: 1px solid var(--purple);
   padding: 0;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--green);
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--purple);
   font-size: 13px;
   user-select: none;
-  flex-shrink: 0;
 }
 
 .bbs-nav-inner {
@@ -338,8 +132,8 @@ a:hover {
 
 .bbs-nav-border {
   display: block;
-  color: var(--green);
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--purple);
+  font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   padding: 0 16px;
   opacity: 0.6;
@@ -350,7 +144,7 @@ a:hover {
 }
 
 .bbs-nav a {
-  color: var(--green);
+  color: var(--purple);
   text-decoration: none;
   padding: 0 10px;
   transition: color 0.1s;
@@ -366,7 +160,7 @@ a:hover {
 }
 
 .bbs-nav .nav-brand {
-  color: var(--green);
+  color: var(--pink);
   font-weight: bold;
   padding-right: 4px;
 }
@@ -405,12 +199,12 @@ a:hover {
 /* ─── ANSI LOGO ───────────────────────────────────────────── */
 
 .ansi-logo {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
   line-height: 1.2;
   font-size: clamp(7px, 1.1vw, 15px);
   text-align: left;
   display: inline-block;
-  text-shadow: 0 0 12px rgba(135, 175, 135, 0.35);
+  text-shadow: 0 0 12px rgba(189, 147, 249, 0.35);
   margin-bottom: 8px;
 }
 
@@ -418,7 +212,7 @@ a:hover {
 
 .typewriter-wrap {
   min-height: 2em;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: clamp(13px, 1.5vw, 17px);
   color: var(--fg);
   margin: 12px 0 4px;
@@ -435,7 +229,7 @@ a:hover {
 /* ─── SYSTEM INFO BOX ─────────────────────────────────────── */
 
 .sysinfo-box {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   line-height: 1.7;
   margin-top: 28px;
@@ -446,7 +240,7 @@ a:hover {
 
 .sysinfo-box .box-title {
   color: var(--purple);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 16px;
   letter-spacing: 1px;
 }
@@ -494,7 +288,7 @@ a:hover {
 .feature-card {
   border: 1px solid var(--purple);
   padding: 18px 16px 16px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
   line-height: 1.7;
   background: rgba(30, 31, 41, 0.6);
@@ -503,7 +297,7 @@ a:hover {
 
 .feature-card:hover {
   border-color: var(--cyan);
-  box-shadow: 0 0 12px rgba(135, 175, 175, 0.1);
+  box-shadow: 0 0 12px rgba(139, 233, 253, 0.1);
 }
 
 .feature-card:nth-child(2) {
@@ -540,7 +334,7 @@ a:hover {
 .ascii-box {
   border: 1px solid var(--purple);
   padding: 16px 20px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   white-space: pre;
   background: rgba(30, 31, 41, 0.5);
 }
@@ -559,7 +353,7 @@ pre.code-block {
   padding-right: 60px;
   overflow-x: auto;
   font-size: 13px;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
   line-height: 1.65;
   position: relative;
   margin: 12px 0;
@@ -581,7 +375,7 @@ pre.code-block.bash-block {
   background: none;
   border: none;
   color: var(--yellow);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
   cursor: pointer;
   padding: 2px 4px;
@@ -596,7 +390,7 @@ pre.code-block.bash-block {
 /* ─── TERMINAL SESSION CONTENT ────────────────────────────── */
 
 .term-session {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   line-height: 1.8;
   max-width: 800px;
@@ -604,7 +398,7 @@ pre.code-block.bash-block {
 
 .term-section-header {
   color: var(--purple);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 20px;
   letter-spacing: 2px;
   margin-top: 28px;
@@ -648,7 +442,7 @@ pre.code-block.bash-block {
 
 .term-prompt-label {
   color: var(--purple);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 18px;
   display: block;
   margin-top: 20px;
@@ -658,58 +452,13 @@ pre.code-block.bash-block {
 
 h2.section-header {
   color: var(--purple);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: clamp(13px, 1.4vw, 22px);
+  font-family: 'VT323', monospace;
+  font-size: 28px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   border-bottom: 1px solid var(--selbg);
   padding-bottom: 4px;
-  margin: 0 0 8px;
-}
-
-/* ─── TUI BOX ROWS (slot content — must be global) ──────── */
-
-.tui-box-row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 0 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--current-line);
-}
-
-.tui-box-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.tui-box-row:first-child {
-  padding-top: 4px;
-}
-
-.tui-box-label {
-  font-size: 11px;
-  line-height: 1.6;
-  padding-top: 1px;
-  flex-shrink: 0;
-}
-
-.tui-box-label::after {
-  content: '';
-  display: block;
-  margin-top: 3px;
-  height: 1px;
-  width: 80%;
-  background: var(--comment);
-  opacity: 0.4;
-}
-
-.tui-box-desc {
-  font-size: 11px;
-  color: var(--comment);
-  line-height: 1.7;
+  margin: 40px 0 20px;
 }
 
 /* ─── FOOTER ─────────────────────────────────────────────── */
@@ -717,7 +466,7 @@ h2.section-header {
 .bbs-footer {
   text-align: center;
   color: var(--comment);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
   padding: 28px 20px 24px;
   border-top: 1px solid var(--selbg);
@@ -737,7 +486,7 @@ h2.section-header {
 /* ─── PLUGIN DIAGRAM ─────────────────────────────────────── */
 
 .plugin-diagram {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   line-height: 1.8;
   color: var(--fg);
@@ -767,7 +516,7 @@ h2.section-header {
 
 .plugin-tier h3 {
   color: var(--purple);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 20px;
   letter-spacing: 1px;
   margin-bottom: 12px;
@@ -791,7 +540,7 @@ h2.section-header {
   letter-spacing: 3px;
   text-transform: uppercase;
   margin-bottom: 20px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 16px;
 }
 
@@ -859,8 +608,8 @@ h2.section-header {
 /* ─── GLOW PULSE ON LOGO ─────────────────────────────────── */
 
 @keyframes logoPulse {
-  0%, 100% { text-shadow: 0 0 8px rgba(135, 175, 135, 0.3); }
-  50%       { text-shadow: 0 0 18px rgba(135, 175, 135, 0.55), 0 0 32px rgba(135, 175, 175, 0.15); }
+  0%, 100% { text-shadow: 0 0 8px rgba(189, 147, 249, 0.3); }
+  50%       { text-shadow: 0 0 18px rgba(189, 147, 249, 0.55), 0 0 32px rgba(139, 233, 253, 0.15); }
 }
 
 .ansi-logo {
@@ -870,7 +619,7 @@ h2.section-header {
 /* ─── SETUP GUIDE BOX ────────────────────────────────────── */
 
 .setup-header {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   line-height: 1.6;
   color: var(--purple);
@@ -881,7 +630,7 @@ h2.section-header {
 
 .req-item {
   display: block;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   padding-left: 2ch;
   line-height: 1.9;
@@ -890,7 +639,7 @@ h2.section-header {
 /* ─── NODE STATUS LINE ───────────────────────────────────── */
 
 .node-status {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   color: var(--comment);
   text-align: right;
@@ -901,214 +650,4 @@ h2.section-header {
 
 .node-status .online {
   color: var(--green);
-}
-
-/* ─── TUI PANEL HEADERS (replaces pre-formatted box chars) ── */
-
-/* ─────────────────── PANEL NAME ─────────────────── */
-/* CSS-based, no alignment issues */
-.tui-panel-header {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--comment);
-  padding: 8px 16px 4px;
-  white-space: nowrap;
-}
-
-.tui-panel-header::before,
-.tui-panel-header::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--comment);
-  opacity: 0.4;
-}
-
-.tui-panel-header::before { margin-right: 8px; }
-.tui-panel-header::after  { margin-left:  8px; }
-
-.tui-panel-header span {
-  color: var(--green);
-  padding: 0 2px;
-}
-
-/* Step header within a screen: ── 01 · INSTALL ── */
-.tui-step-header {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--comment);
-  margin: 24px 0 12px;
-  white-space: nowrap;
-}
-
-.tui-step-header::before,
-.tui-step-header::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--comment);
-  opacity: 0.3;
-}
-
-.tui-step-header::before { margin-right: 8px; }
-.tui-step-header::after  { margin-left:  8px; }
-
-.tui-step-header span {
-  color: var(--fg);
-  padding: 0 2px;
-}
-
-.tui-step-header span.step-num {
-  color: var(--green);
-}
-
-/* Callout box: bordered panel with title in the border */
-.tui-callout {
-  position: relative;
-  border: 1px solid var(--green);
-  padding: 14px 16px 12px;
-  margin: 16px 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  line-height: 1.8;
-}
-
-.tui-callout-title {
-  position: absolute;
-  top: -8px;
-  left: 12px;
-  background: var(--bg);
-  padding: 0 8px;
-  color: var(--green);
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 1px;
-  white-space: nowrap;
-}
-
-/* Screenshot figure */
-.tui-screenshot {
-  margin: 20px 0;
-}
-
-.tui-screenshot-header {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--green);
-  margin-bottom: 0;
-}
-
-.tui-screenshot-header::before,
-.tui-screenshot-header::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--green);
-  opacity: 0.4;
-}
-
-.tui-screenshot-header::before { margin-right: 6px; }
-.tui-screenshot-header::after  { margin-left:  6px; }
-
-.tui-screenshot img {
-  display: block;
-  max-width: 100%;
-  border-left: 1px solid var(--comment);
-  border-right: 1px solid var(--comment);
-  border-bottom: 1px solid var(--comment);
-}
-
-.tui-screenshot figcaption {
-  color: var(--comment);
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  padding: 4px 0 0;
-  letter-spacing: 1px;
-}
-
-/* Feature grid */
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--comment);
-  border: 1px solid var(--comment);
-  margin: 16px 0;
-}
-
-.feature-grid-item {
-  background: var(--bg);
-  padding: 10px 14px;
-}
-
-.feature-grid-item .feat-label {
-  color: var(--green);
-  font-size: 11px;
-  letter-spacing: 2px;
-  font-family: 'JetBrains Mono', monospace;
-  display: block;
-  margin-bottom: 2px;
-}
-
-.feature-grid-item .feat-desc {
-  color: var(--comment);
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-/* Tagline list */
-.tui-taglines {
-  list-style: none;
-  margin: 16px 0;
-  padding: 0;
-}
-
-.tui-taglines li {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  line-height: 2;
-  color: var(--fg);
-  padding-left: 2ch;
-  position: relative;
-}
-
-.tui-taglines li::before {
-  content: '>';
-  color: var(--green);
-  position: absolute;
-  left: 0;
-}
-
-/* Prereq list */
-.prereq-list {
-  list-style: none;
-  padding: 0;
-  margin: 6px 0 12px;
-}
-
-.prereq-list li {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--fg);
-  line-height: 1.8;
-  padding-left: 2ch;
-  position: relative;
-}
-
-.prereq-list li::before {
-  content: '▸';
-  color: var(--yellow);
-  position: absolute;
-  left: 0;
 }
