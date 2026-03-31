@@ -28,10 +28,10 @@ import (
 	orcaicron "github.com/adam-stokes/orcai/internal/cron"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/inbox"
-	"github.com/adam-stokes/orcai/internal/jumpwindow"
 	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/panelrender"
 	"github.com/adam-stokes/orcai/internal/picker"
+	"github.com/adam-stokes/orcai/internal/buildershared"
 	"github.com/adam-stokes/orcai/internal/pipelineeditor"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/styles"
@@ -307,8 +307,6 @@ type Model struct {
 	agentUseBrain         bool
 	agentNameInput        textinput.Model
 	helpOpen              bool
-	jumpOpen              bool
-	jumpModal             jumpwindow.EmbeddedModel
 	registry              *themes.Registry
 	themeState            tuikit.ThemeState
 	themePicker           tuikit.ThemePicker
@@ -1333,7 +1331,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.jumpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen {
+		if m.confirmQuit || m.helpOpen || m.agentModalOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -1351,25 +1349,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleKey(msg)
 
-	case jumpwindow.CloseMsg:
-		m.jumpOpen = false
-		return m, nil
-
-	case jumpwindow.PipelinesMsg:
-		// Jump window selected the pipelines entry: close jump window and open editor.
-		m.jumpOpen = false
-		m.pipelineEditor.SetProviders(m.agent.providers)
-		m.pipelineEditor.SetPalette(m.ansiPalette())
-		m.pipelineEditor.SetSize(m.width, m.height-1)
-		m.pipelineEditorOpen = true
-		return m, nil
-
 	case pipelineeditor.CloseMsg:
 		m.pipelineEditorOpen = false
 		m.launcher.pipelines = ScanPipelines(pipelinesDir())
 		return m, nil
 
-	case pipelineeditor.RunLineMsg, pipelineeditor.RunDoneMsg, pipelineeditor.ClarifyPollMsg:
+	case buildershared.RunLineMsg, buildershared.RunDoneMsg, pipelineeditor.ClarifyPollMsg:
 		if m.pipelineEditorOpen {
 			updated, cmd := m.pipelineEditor.HandleMsg(msg)
 			m.pipelineEditor = updated
@@ -1484,13 +1469,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.showRerun {
 		var cmd tea.Cmd
 		m.rerunModal, cmd = m.rerunModal.Update(msg)
-		return m, cmd
-	}
-
-	// Jump window modal — route all keys to the embedded model.
-	if m.jumpOpen {
-		var cmd tea.Cmd
-		m.jumpModal, cmd = m.jumpModal.Update(msg)
 		return m, cmd
 	}
 
@@ -2127,11 +2105,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "J":
-		if !m.agentModalOpen && !m.confirmDelete && !m.confirmQuit && !m.jumpOpen {
-			jm := jumpwindow.NewEmbedded(m.themeState.Bundle())
-			jm.SetSize(m.width, m.height-2)
-			m.jumpModal = jm
-			m.jumpOpen = true
+		if !m.agentModalOpen && !m.confirmDelete && !m.confirmQuit {
+			return m, func() tea.Msg {
+				self, _ := os.Executable()
+				exec.Command("tmux", "display-popup", "-E", "-w", "80%", "-h", "70%",
+					filepath.Clean(self)+" widget jump-window").Run() //nolint:errcheck
+				return nil
+			}
 		}
 		return m, nil
 
@@ -3588,12 +3568,6 @@ func (m Model) View() string {
 	if m.dirPickerOpen && m.dirPickerCtx != "agent" {
 		base := topBar + "\n" + body
 		return overlayCenter(base, m.dirPicker.ViewDirPickerBox(w, m.ansiPalette()), w, h)
-	}
-
-	if m.jumpOpen {
-		base := topBar + "\n" + body
-		m.jumpModal.SetSize(w, h-2)
-		return overlayCenter(base, m.jumpModal.View(), w, h)
 	}
 
 	if m.helpOpen {

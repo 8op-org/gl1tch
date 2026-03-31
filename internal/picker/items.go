@@ -68,6 +68,9 @@ func ApplyFuzzy(query string, items []PickerItem) []PickerItem {
 	return out
 }
 
+// OrcaiConfigDir returns ~/.config/orcai, or "" on error.
+func OrcaiConfigDir() string { return orcaiConfigDir() }
+
 // orcaiConfigDir returns ~/.config/orcai, or "" on error.
 func orcaiConfigDir() string {
 	home, err := os.UserHomeDir()

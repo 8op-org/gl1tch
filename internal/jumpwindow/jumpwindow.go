@@ -242,12 +242,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else if w.promptsWindow {
 						self, _ := os.Executable()
 						self = filepath.Clean(self)
-						exec.Command("tmux", "new-window", "-n", "orcai-prompts", self+" prompts tui").Run() //nolint:errcheck
+						exec.Command("tmux", "new-window", "-n", "orcai-prompt-builder", self+" prompt-builder").Run() //nolint:errcheck
 					} else if w.pipelinesWindow {
-						if m.embedded {
-							return m, func() tea.Msg { return PipelinesMsg{} }
-						}
-						// Standalone mode: nothing to do here.
+						// Always open pipeline-builder in a new tmux window.
+						self, _ := os.Executable()
+						self = filepath.Clean(self)
+						exec.Command("tmux", "new-window", "-n", "orcai-pipeline-builder", self+" pipeline-builder").Run() //nolint:errcheck
 					} else {
 						target := w.id
 						if target == "" {

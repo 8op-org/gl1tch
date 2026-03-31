@@ -27,7 +27,7 @@ func main() {
 		case "--version", "-v":
 			fmt.Printf("orcai %s (commit %s, built %s)\n", version, commit, date)
 			return
-		case "_promptbuilder", "pipeline-builder":
+		case "_promptbuilder":
 			promptbuilder.Run()
 			return
 		case "_reload":
@@ -35,7 +35,8 @@ func main() {
 			exec.Command("tmux", "detach-client").Run() //nolint:errcheck
 			return
 		case "agent", "bridge", "help", "pipeline", "_opsx", "completion",
-			"config", "cron", "prompts":
+			"config", "cron", "prompts",
+			"prompt-builder", "pipeline-builder", "widget":
 			cmd.Execute()
 			return
 		default:

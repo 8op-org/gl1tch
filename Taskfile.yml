@@ -56,6 +56,31 @@ tasks:
     cmds:
       - "{{.BINARY}}"
 
+  run:prompt-builder:
+    desc: "Open the interactive prompt builder TUI"
+    cmds:
+      - "{{.BINARY}} prompt-builder"
+
+  run:prompt-builder:start:
+    desc: "Open prompt builder in a new tmux window (orcai-prompt-builder)"
+    cmds:
+      - "{{.BINARY}} prompt-builder start"
+
+  run:pipeline-builder:
+    desc: "Open the interactive pipeline builder TUI"
+    cmds:
+      - "{{.BINARY}} pipeline-builder"
+
+  run:pipeline-builder:start:
+    desc: "Open pipeline builder in a new tmux window (orcai-pipeline-builder)"
+    cmds:
+      - "{{.BINARY}} pipeline-builder start"
+
+  run:widget:jump-window:
+    desc: "Open the standalone jump window widget"
+    cmds:
+      - "{{.BINARY}} widget jump-window"
+
   run:clean:
     desc: "Wipe db/config, kill tmux sessions (orcai, orcai-cron), then start orcai (mirrors old 'make run')"
     cmds:

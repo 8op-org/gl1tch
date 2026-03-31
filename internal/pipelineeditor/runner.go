@@ -5,84 +5,90 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/adam-stokes/orcai/internal/buildershared"
 	"github.com/adam-stokes/orcai/internal/busd/topics"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/pipeline"
 	"github.com/adam-stokes/orcai/internal/plugin"
 )
 
-// startRun builds a pipeline from current editor state and runs it in a goroutine.
+// generationSystemPrompt is prepended to the user's description when asking
+// the AI to generate pipeline YAML.
+const generationSystemPrompt = `You are an orcai pipeline YAML generator.
+Generate a valid orcai .pipeline.yaml based on the user's description.
+
+Pipeline YAML format:
+  name: <pipeline-name>
+  version: "1"
+  steps:
+    - id: <step-id>
+      executor: <provider>   # e.g. claude, github-copilot, codex, gemini, ollama
+      model: <model-id>      # optional
+      prompt: |
+        <step prompt>
+    - id: <next-step>
+      executor: <provider>
+      prompt: |
+        <prompt using {{.steps.<prev-id>.output}} to reference prior output>
+
+Rules:
+- Output ONLY the raw YAML, no markdown fences, no explanations.
+- Use meaningful step IDs (snake_case).
+- Reference prior step output with {{.steps.<step-id>.output}}.
+- Keep prompts focused on one task per step.
+
+User description:
+`
+
+// startRun invokes the selected AI provider to generate pipeline YAML from the
+// user's description. Output streams via the shared RunnerPanel.
 func (m Model) startRun() (Model, tea.Cmd) {
-	if m.runRunning {
+	if m.runner.IsRunning() {
 		return m, nil
 	}
 
-	// Cancel any previous run.
-	if m.runCancel != nil {
-		m.runCancel()
-		m.runCancel = nil
+	prompt := strings.TrimSpace(m.editor.Content())
+	if prompt == "" {
+		m.statusMsg = "enter a description in the PROMPT field first"
+		m.statusErr = true
+		return m, nil
 	}
 
-	// Build YAML from editor state.
-	name := strings.TrimSpace(m.nameInput.Value())
-	if name == "" {
-		name = "test-pipeline"
+	executorID := m.editor.SelectedProviderID()
+	if executorID == "" {
+		executorID = "claude"
 	}
-	executorID := m.picker.SelectedProviderID()
-	modelID := m.picker.SelectedModelID()
-	prompt := m.promptArea.Value()
-	yamlContent := buildYAML(name, executorID, modelID, prompt)
+	modelID := m.editor.SelectedModelID()
 
-	// Create output channel.
-	ch := make(chan string, 100)
-	m.runOutputCh = ch
-	m.runLines = nil
-	m.runRunning = true
-	m.statusMsg = ""
-	m.statusErr = false
-	m.clarifyActive = false
+	generationPrompt := generationSystemPrompt + prompt
+	yamlContent := buildYAML("generate-pipeline", executorID, modelID, generationPrompt)
 
-	// Create cancel context.
+	ch := make(chan string, 200)
 	ctx, cancel := context.WithCancel(context.Background())
-	m.runCancel = cancel
 
-	// Capture store for the goroutine.
 	st := m.store
 	providers := picker.BuildProviders()
 
 	go func() {
 		defer close(ch)
 
-		// Build plugin manager.
-		mgr := plugin.NewManager()
-		for _, prov := range providers {
-			if prov.Command == "" {
-				continue
-			}
-			// Register as a plugin by command.
-			_ = mgr // providers registered elsewhere for CLI providers
-		}
-		_ = mgr
-
-		// Rebuild manager from BuildProviders (same pattern as cmd/pipeline.go).
-		mgr2, err := buildPluginManager(providers)
+		mgr, err := buildPluginManager(providers)
 		if err != nil {
 			ch <- "error building plugin manager: " + err.Error()
 			return
 		}
 
-		// Parse pipeline.
 		p, err := pipeline.Load(strings.NewReader(yamlContent))
 		if err != nil {
 			ch <- "error: " + err.Error()
 			return
 		}
 
-		// Create event publisher that sends output lines to ch.
 		pub := &linePublisher{ch: ch}
 
 		var opts []pipeline.RunOption
@@ -91,40 +97,112 @@ func (m Model) startRun() (Model, tea.Cmd) {
 			opts = append(opts, pipeline.WithRunStore(st))
 		}
 
-		_, runErr := pipeline.Run(ctx, p, mgr2, "", opts...)
+		_, runErr := pipeline.Run(ctx, p, mgr, "", opts...)
 		if runErr != nil {
 			if ctx.Err() != nil {
-				ch <- "run cancelled"
+				ch <- "cancelled"
 			} else {
 				ch <- "error: " + runErr.Error()
 			}
 		}
 	}()
 
-	return m, waitForLine(ch)
+	m.runner, _ = m.runner.StartRun(ch, cancel)
+	m.focus = FocusRunner
+	return m, buildershared.WaitForLine(ch)
 }
 
-// buildPluginManager constructs a plugin.Manager from the given provider list.
-// For each provider backed by a command, it registers a command-based executor.
+// startRunWithPrompt runs with an explicit prompt string (for chat input / ctrl+r).
+func (m Model) startRunWithPrompt(prompt string) (Model, tea.Cmd) {
+	if m.runner.IsRunning() {
+		return m, nil
+	}
+
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return m, nil
+	}
+
+	executorID := m.editor.SelectedProviderID()
+	if executorID == "" {
+		executorID = "claude"
+	}
+	modelID := m.editor.SelectedModelID()
+
+	generationPrompt := generationSystemPrompt + prompt
+	yamlContent := buildYAML("generate-pipeline", executorID, modelID, generationPrompt)
+
+	ch := make(chan string, 200)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	st := m.store
+	providers := picker.BuildProviders()
+
+	go func() {
+		defer close(ch)
+
+		mgr, err := buildPluginManager(providers)
+		if err != nil {
+			ch <- "error building plugin manager: " + err.Error()
+			return
+		}
+
+		p, err := pipeline.Load(strings.NewReader(yamlContent))
+		if err != nil {
+			ch <- "error: " + err.Error()
+			return
+		}
+
+		pub := &linePublisher{ch: ch}
+
+		var opts []pipeline.RunOption
+		opts = append(opts, pipeline.WithEventPublisher(pub))
+		if st != nil {
+			opts = append(opts, pipeline.WithRunStore(st))
+		}
+
+		_, runErr := pipeline.Run(ctx, p, mgr, "", opts...)
+		if runErr != nil {
+			if ctx.Err() != nil {
+				ch <- "cancelled"
+			} else {
+				ch <- "error: " + runErr.Error()
+			}
+		}
+	}()
+
+	m.runner, _ = m.runner.StartRun(ch, cancel)
+	m.focus = FocusRunner
+	return m, buildershared.WaitForLine(ch)
+}
+
+// buildPluginManager constructs a plugin.Manager from the provider list,
+// matching the registration pattern used in cmd/pipeline.go.
 func buildPluginManager(providers []picker.ProviderDef) (*plugin.Manager, error) {
 	mgr := plugin.NewManager()
-	// Providers that are command-backed are handled by the pipeline executor
-	// lookup directly (the executor field in the YAML step). The manager is
-	// used for builtin steps; command-based executors are looked up differently.
-	// We return an empty manager here which handles builtin steps only.
-	_ = providers
-	return mgr, nil
-}
-
-// waitForLine returns a cmd that blocks until the next line arrives from ch.
-func waitForLine(ch <-chan string) tea.Cmd {
-	return func() tea.Msg {
-		line, ok := <-ch
-		if !ok {
-			return RunDoneMsg{}
+	for _, prov := range providers {
+		// Sidecar-backed providers are registered by LoadWrappersFromDir.
+		if prov.SidecarPath != "" {
+			continue
 		}
-		return RunLineMsg(line)
+		binary := prov.Command
+		if binary == "" {
+			binary = prov.ID
+		}
+		if err := mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", binary, prov.PipelineArgs...)); err != nil {
+			// Non-fatal: provider just won't be available.
+			_ = err
+		}
 	}
+
+	// Load sidecar plugins from ~/.config/orcai/wrappers/.
+	configDir := picker.OrcaiConfigDir()
+	if configDir != "" {
+		wrappersDir := filepath.Join(configDir, "wrappers")
+		_ = mgr.LoadWrappersFromDir(wrappersDir) // non-fatal
+	}
+
+	return mgr, nil
 }
 
 // pollClarify returns a cmd that polls the store for pending clarification requests.
@@ -157,15 +235,14 @@ func (p *linePublisher) Publish(_ context.Context, topic string, payload []byte)
 			StepID string `json:"step_id"`
 		}
 		if err := json.Unmarshal(payload, &evt); err == nil {
-			prefix := "[done]"
 			if topic == topics.StepFailed {
-				prefix = "[fail]"
+				p.ch <- fmt.Sprintf("[fail] %s", evt.StepID)
 			}
 			if evt.Output != "" {
 				for _, line := range strings.Split(evt.Output, "\n") {
 					line = strings.TrimRight(line, "\r")
 					if line != "" {
-						p.ch <- fmt.Sprintf("%s %s: %s", prefix, evt.StepID, line)
+						p.ch <- line
 					}
 				}
 			}
@@ -175,17 +252,10 @@ func (p *linePublisher) Publish(_ context.Context, topic string, payload []byte)
 			StepID string `json:"step_id"`
 		}
 		if err := json.Unmarshal(payload, &evt); err == nil && evt.StepID != "" {
-			p.ch <- fmt.Sprintf("[run] step: %s", evt.StepID)
-		}
-	case topics.RunStarted:
-		var evt struct {
-			Pipeline string `json:"pipeline"`
-		}
-		if err := json.Unmarshal(payload, &evt); err == nil {
-			p.ch <- fmt.Sprintf("[start] pipeline: %s", evt.Pipeline)
+			p.ch <- fmt.Sprintf("[generating via %s…]", evt.StepID)
 		}
 	case topics.RunCompleted:
-		p.ch <- "[done] pipeline complete"
+		p.ch <- "[done]"
 	case topics.RunFailed:
 		var evt struct {
 			Error string `json:"error"`
@@ -193,7 +263,7 @@ func (p *linePublisher) Publish(_ context.Context, topic string, payload []byte)
 		if err := json.Unmarshal(payload, &evt); err == nil && evt.Error != "" {
 			p.ch <- "[fail] " + evt.Error
 		} else {
-			p.ch <- "[fail] pipeline failed"
+			p.ch <- "[fail] generation failed"
 		}
 	}
 	return nil
@@ -207,4 +277,11 @@ func runCmd(name string, args ...string) ([]byte, error) {
 // runCmdIgnore executes a command, ignoring errors.
 func runCmdIgnore(name string, args ...string) {
 	exec.Command(name, args...).Run() //nolint:errcheck
+}
+
+func trimNL(s string) string {
+	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
+		s = s[:len(s)-1]
+	}
+	return s
 }

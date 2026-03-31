@@ -97,7 +97,7 @@ func buildTmuxConf(self string) string {
 		"bind-key -T orcai-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
 		"bind-key -T orcai-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
 		"bind-key -T orcai-chord t     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys T } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 T } }\n" +
-		"bind-key -T orcai-chord j     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys J } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 J } }\n" +
+		"bind-key -T orcai-chord j     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys J } { if-shell -F '#{||:#{==:#{window_name},orcai-prompt-builder},#{==:#{window_name},orcai-pipeline-builder}}' { send-keys J } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 J } } }\n" +
 		// Window management
 		"bind-key -T orcai-chord c     { switch-client -T root ; new-window }\n" +
 		"bind-key -T orcai-chord [     { switch-client -T root ; previous-window }\n" +

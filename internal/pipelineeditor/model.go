@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/adam-stokes/orcai/internal/buildershared"
 	"github.com/adam-stokes/orcai/internal/modal"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/pipeline"
@@ -29,9 +30,10 @@ const (
 	FocusEditor = 1
 	FocusYAML   = 2
 	FocusRunner = 3
+	FocusChat   = 4
 )
 
-// Editor subfield constants.
+// Legacy editor subfield constants — used by save/load helpers.
 const (
 	editorFieldPicker = 0
 	editorFieldName   = 1
@@ -40,12 +42,6 @@ const (
 
 // CloseMsg is posted when the editor should be dismissed by the parent.
 type CloseMsg struct{}
-
-// RunLineMsg carries a single line of output from the test runner goroutine.
-type RunLineMsg string
-
-// RunDoneMsg signals that the test runner goroutine has finished.
-type RunDoneMsg struct{ Err error }
 
 // ClarifyPollMsg signals a pending clarification question from the store.
 type ClarifyPollMsg struct {
@@ -60,7 +56,12 @@ type Model struct {
 	store         *store.Store
 	pal           styles.ANSIPalette
 
-	// Left panel
+	// Shared sub-models (buildershared).
+	sidebar buildershared.Sidebar
+	editor  buildershared.EditorPanel
+	runner  buildershared.RunnerPanel
+
+	// Left panel (legacy — kept for backward compat; sidebar mirrors these)
 	pipelines     []string
 	listSel       int
 	listScroll    int
@@ -71,7 +72,7 @@ type Model struct {
 	// Focus
 	focus int // FocusList, FocusEditor, FocusYAML, FocusRunner
 
-	// Editor
+	// Editor (legacy — kept for backward compat)
 	editorFocus int // editorFieldPicker, editorFieldName, editorFieldPrompt
 	providers   []picker.ProviderDef
 	picker      modal.AgentPickerModel
@@ -82,7 +83,7 @@ type Model struct {
 	// YAML preview
 	yamlScroll int
 
-	// Test runner
+	// Test runner (legacy — kept for backward compat)
 	runLines    []string
 	runRunning  bool
 	runCancel   context.CancelFunc
@@ -97,6 +98,14 @@ type Model struct {
 	// Status
 	statusMsg string
 	statusErr bool
+
+	// Chat input for agent runner at bottom of right column.
+	chatInput textinput.Model
+
+	// Feedback loop state.
+	feedbackHistory []string
+	firstPrompt     string
+	sentOnce        bool
 }
 
 // New creates a new pipelineeditor Model.
@@ -114,6 +123,10 @@ func New(providers []picker.ProviderDef, pipelinesDir string, st *store.Store) M
 	ci := textinput.New()
 	ci.Placeholder = "type your answer…"
 	ci.CharLimit = 2000
+
+	chatIn := textinput.New()
+	chatIn.Placeholder = "send a follow-up message…"
+	chatIn.CharLimit = 4000
 
 	// Default Dracula-ish palette — overridden by SetPalette.
 	pal := styles.ANSIPalette{
@@ -137,8 +150,14 @@ func New(providers []picker.ProviderDef, pipelinesDir string, st *store.Store) M
 		nameInput:    ni,
 		promptArea:   pa,
 		clarifyInput: ci,
+		chatInput:    chatIn,
+		// Shared sub-models.
+		sidebar: buildershared.NewSidebar("PIPELINES", nil),
+		editor:  buildershared.NewEditorPanel(providers),
+		runner:  buildershared.NewRunnerPanel(),
 	}
 	m.pipelines = m.loadPipelines()
+	m.sidebar = m.sidebar.SetItems(m.pipelines)
 	return m
 }
 
@@ -194,12 +213,9 @@ func (m Model) OpenEdit(name string) Model { return m.openEdit(name) }
 // openNew clears the editor for a brand-new pipeline.
 func (m Model) openNew() Model {
 	defaultName := fmt.Sprintf("pipeline-%d", time.Now().Unix())
-	m.nameInput.SetValue(defaultName)
-	m.promptArea.SetValue("")
+	m.editor = m.editor.SetName(defaultName)
+	m.editor = m.editor.SetContent("")
 	m.currentPath = ""
-	m.editorFocus = editorFieldName
-	m.nameInput.Focus()
-	m.promptArea.Blur()
 	m.focus = FocusEditor
 	m.statusMsg = ""
 	m.statusErr = false
@@ -210,38 +226,35 @@ func (m Model) openNew() Model {
 func (m Model) openEdit(name string) Model {
 	path := filepath.Join(m.pipelinesDir, name+".pipeline.yaml")
 	m.currentPath = path
-	m.nameInput.SetValue(name)
-	m.promptArea.SetValue("")
 	m.statusMsg = ""
 	m.statusErr = false
+
+	m.editor = m.editor.SetName(name)
+	m.editor = m.editor.SetContent("")
 
 	data, err := os.ReadFile(path)
 	if err == nil {
 		var pl pipeline.Pipeline
 		if yaml.Unmarshal(data, &pl) == nil && len(pl.Steps) == 1 {
 			step := pl.Steps[0]
-			m.promptArea.SetValue(step.Prompt)
-			// Try to restore picker selection from executor/model.
+			m.editor = m.editor.SetContent(step.Prompt)
+			// Restore picker selection from executor/model.
 			if step.Executor != "" || step.Model != "" {
-				slug := step.Executor + "/" + step.Model
-				m.picker = m.picker.SelectBySlug(slug)
+				m.editor = m.editor.SelectBySlug(step.Executor + "/" + step.Model)
 			}
 		} else {
-			// Multi-step or unparseable: show raw YAML.
-			m.promptArea.SetValue(string(data))
+			// Multi-step or unparseable: show raw YAML as content.
+			m.editor = m.editor.SetContent(string(data))
 		}
 	}
 
-	m.editorFocus = editorFieldPrompt
-	m.nameInput.Blur()
-	m.promptArea.Focus()
 	m.focus = FocusEditor
 	return m
 }
 
 // save persists the current editor state to a .pipeline.yaml file.
 func (m Model) save() (Model, error) {
-	name := strings.TrimSpace(m.nameInput.Value())
+	name := strings.TrimSpace(m.editor.Name())
 	if name == "" {
 		return m, fmt.Errorf("pipeline name is required")
 	}
@@ -254,9 +267,9 @@ func (m Model) save() (Model, error) {
 		return m, fmt.Errorf("mkdir: %w", err)
 	}
 
-	executorID := m.picker.SelectedProviderID()
-	modelID := m.picker.SelectedModelID()
-	prompt := m.promptArea.Value()
+	executorID := m.editor.SelectedProviderID()
+	modelID := m.editor.SelectedModelID()
+	prompt := m.editor.Content()
 
 	content := buildYAML(name, executorID, modelID, prompt)
 
