@@ -19,26 +19,28 @@ var fallbackTitle = []string{
 	`  ░░░░░░░░ ░░░░░░░░░░    ░░░░░░░░ ░░░░░░░░░░░░░░░░░░░░░`,
 }
 
-// RenderTitle tries to render "ORCAI" using the native Go TDF renderer first,
-// then tdfiglet binary, then plain figlet, and finally falls back to the embedded block art.
-func RenderTitle() []string {
-	// 1. Try native Go TDF renderer (no external binary needed)
+// RenderTitle tries to render "ORCAI" via the native Go TDF renderer, then
+// tdfiglet binary, then plain figlet, and finally falls back to embedded block
+// art. The bool return is true when the lines already contain ANSI color codes
+// (TDF or tdfiglet output) and should not be re-wrapped by lipgloss.
+func RenderTitle() ([]string, bool) {
+	// 1. Native Go TDF renderer (embedded font, no external binary needed).
 	if f, err := tdf.LoadEmbedded("amnesiax"); err == nil {
 		lines := tdf.RenderString("ORCAI", f)
 		if len(lines) > 0 {
-			return lines
+			return lines, true
 		}
 	}
-	// 2. tdfiglet binary
+	// 2. tdfiglet binary.
 	if lines := runFiglet("tdfiglet", "-f", "amnesiax", "ORCAI"); lines != nil {
-		return lines
+		return lines, true
 	}
-	// 3. figlet binary
+	// 3. Plain figlet binary (no color).
 	if lines := runFiglet("figlet", "-f", "standard", "ORCAI"); lines != nil {
-		return lines
+		return lines, false
 	}
-	// 4. Embedded block art
-	return fallbackTitle
+	// 4. Embedded block art.
+	return fallbackTitle, false
 }
 
 // runFiglet executes the given command and returns its output split into lines,

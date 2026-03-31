@@ -71,11 +71,13 @@ type Model struct {
 	width, height int
 	pal           styles.ANSIPalette
 
-	titleLines []string  // rendered title (tdfiglet or fallback)
-	messages   []entry   // conversation history
-	viewport   viewport.Model
-	input      textinput.Model
-	phase      Phase
+	titleLines    []string // rendered title (tdfiglet or fallback)
+	titleHasANSI  bool     // true when titleLines already carry ANSI color (TDF output)
+	messages      []entry  // conversation history
+	viewport      viewport.Model
+	viewportReady bool // true after first WindowSizeMsg
+	input         textinput.Model
+	phase         Phase
 
 	streaming bool   // LLM response in progress
 	streamBuf string // accumulates current token stream
@@ -94,7 +96,7 @@ func New(cfgDir string) Model {
 	input.CharLimit = 2000
 	input.Focus()
 
-	title := RenderTitle()
+	title, titleHasANSI := RenderTitle()
 
 	useOllama := OllamaAvailable()
 	var guide *Guide
@@ -104,14 +106,15 @@ func New(cfgDir string) Model {
 	}
 
 	m := Model{
-		width:      80,
-		height:     24,
-		titleLines: title,
-		input:      input,
-		phase:      PhaseIntro,
-		useOllama:  useOllama,
-		guide:      guide,
-		cfgDir:     cfgDir,
+		width:        80,
+		height:       24,
+		titleLines:   title,
+		titleHasANSI: titleHasANSI,
+		input:        input,
+		phase:        PhaseIntro,
+		useOllama:    useOllama,
+		guide:        guide,
+		cfgDir:       cfgDir,
 	}
 
 	// Load palette
@@ -170,6 +173,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.resizeViewport()
+		m.viewportReady = true
 
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -319,6 +323,9 @@ func (m *Model) resizeViewport() {
 }
 
 func (m *Model) updateViewport() {
+	if !m.viewportReady {
+		return
+	}
 	m.viewport.SetContent(m.renderConversation())
 	m.viewport.GotoBottom()
 }
@@ -382,9 +389,13 @@ func (m Model) View() string {
 
 	var sb strings.Builder
 
-	// Title block
+	// Title block — TDF lines carry their own ANSI color; plain fallback gets accent style.
 	for _, line := range m.titleLines {
-		sb.WriteString(accentStyle.Render(line) + "\n")
+		if m.titleHasANSI {
+			sb.WriteString(line + "\n")
+		} else {
+			sb.WriteString(accentStyle.Render(line) + "\n")
+		}
 	}
 	sb.WriteString(dimStyle.Render("  >> the agentic bulletin board system  //  first-run setup") + "\n")
 	sb.WriteString(dimStyle.Render(strings.Repeat("─", m.width)) + "\n")
