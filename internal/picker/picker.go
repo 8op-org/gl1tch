@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,6 +39,19 @@ type ProviderDef struct {
 var Providers = []ProviderDef{
 	{ID: "ollama", Label: "Ollama"},
 	{ID: "shell", Label: "Shell"},
+}
+
+// providerPriority defines the canonical display order for the agent runner
+// grid. Providers not in this list appear after all ranked entries, in their
+// original discovery order.
+var providerPriority = []string{
+	"claude",
+	"copilot",
+	"codex",
+	"gemini",
+	"opencode",
+	"ollama",
+	"shell",
 }
 
 // queryOllamaModels calls the local Ollama API and returns model names.
@@ -229,6 +243,29 @@ func buildProviders() []ProviderDef {
 			}
 		}
 	}
+
+	// Sort extras by providerPriority before appending so the agent runner grid
+	// displays providers in canonical order (claude → copilot → codex → …).
+	priorityRank := make(map[string]int, len(providerPriority))
+	for i, name := range providerPriority {
+		priorityRank[name] = i
+	}
+	sort.SliceStable(extras, func(i, j int) bool {
+		ri, iOk := priorityRank[extras[i].name]
+		rj, jOk := priorityRank[extras[j].name]
+		if iOk && jOk {
+			return ri < rj
+		}
+		// Known priority providers sort before unknown ones.
+		if iOk {
+			return true
+		}
+		if jOk {
+			return false
+		}
+		// Both unknown: preserve original discovery order (SliceStable).
+		return false
+	})
 
 	// Append discovered plugins that are not in the static Providers list.
 	staticIDs := make(map[string]bool, len(Providers))

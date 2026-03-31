@@ -24,6 +24,122 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
 
+  # Core provider plugins — built from the sibling orcai-plugins repo.
+  # Requires ../orcai-plugins to be checked out alongside this repo.
+  - id: orcai-claude
+    binary: orcai-claude
+    dir: ../orcai-plugins/plugins/claude
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+  - id: orcai-github-copilot
+    binary: orcai-github-copilot
+    dir: ../orcai-plugins/plugins/github-copilot
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+  - id: orcai-codex
+    binary: orcai-codex
+    dir: ../orcai-plugins/plugins/codex
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+  - id: orcai-gemini
+    binary: orcai-gemini
+    dir: ../orcai-plugins/plugins/gemini
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+  - id: orcai-opencode
+    binary: orcai-opencode
+    dir: ../orcai-plugins/plugins/opencode
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+  - id: orcai-ollama
+    binary: orcai-ollama
+    dir: ../orcai-plugins/plugins/ollama
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
 archives:
   - id: default
     # .tar.gz for POSIX systems, .zip for Windows
@@ -31,6 +147,22 @@ archives:
       - goos: windows
         format: zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Bundle sidecar YAML files and the install script alongside the binaries.
+    files:
+      - src: ../orcai-plugins/plugins/claude/claude.yaml
+        dst: wrappers
+      - src: ../orcai-plugins/plugins/github-copilot/github-copilot.yaml
+        dst: wrappers
+      - src: ../orcai-plugins/plugins/codex/codex.yaml
+        dst: wrappers
+      - src: ../orcai-plugins/plugins/gemini/gemini.yaml
+        dst: wrappers
+      - src: ../orcai-plugins/plugins/opencode/opencode.yaml
+        dst: wrappers
+      - src: ../orcai-plugins/plugins/ollama/ollama.yaml
+        dst: wrappers
+      - src: install.sh
+        dst: .
 
 checksum:
   name_template: "checksums.txt"

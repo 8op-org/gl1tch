@@ -2893,6 +2893,13 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Agent runner panel: open the agent runner modal.
+	if m.agent.focused {
+		m.agentModalOpen = true
+		m.agentModalFocus = 0
+		return m, nil
+	}
+
 	// Agents grid: open inbox detail for the selected agent's run.
 	if m.agentsCenterFocused {
 		entries := fuzzyFeed(m.signalBoard.query, m.filteredFeed())
