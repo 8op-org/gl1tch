@@ -87,12 +87,15 @@ func NewSendPanel(providers []picker.ProviderDef) SendPanel {
 
 // SetFocused sets the outer focus flag without changing inner field focus.
 // Used by the view for rendering. Use Enter() when actually moving focus into the panel.
+// When b is false, all open sub-modals (agent popup, pickers, dir picker) are closed so
+// they don't persist after the panel loses focus.
 func (s SendPanel) SetFocused(b bool) SendPanel {
 	s.focused = b
 	if !b {
 		s.agentOpen = false
 		s.savedPromptsOpen = false
 		s.savedPipelineOpen = false
+		s.dirPickerOpen = false
 	}
 	s.syncFocus()
 	return s

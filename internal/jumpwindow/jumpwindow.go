@@ -101,14 +101,14 @@ func newModel() model {
 	m.windows = listWindows()
 	m.filtered = m.windows
 	sysop := []window{{name: "switchboard", switchboard: true}}
+	sysop = append(sysop, window{name: "prompts", promptsWindow: true})
+	sysop = append(sysop, window{name: "pipelines", pipelinesWindow: true})
+	sysop = append(sysop, window{name: "brain", brainWindow: true})
 	cronWins := listSysopWindows()
 	if cronWins != nil {
 		sysop = append(sysop, window{name: "cron", cronSession: true})
 		sysop = append(sysop, cronWins...)
 	}
-	sysop = append(sysop, window{name: "prompts", promptsWindow: true})
-	sysop = append(sysop, window{name: "pipelines", pipelinesWindow: true})
-	sysop = append(sysop, window{name: "brain", brainWindow: true})
 	m.sysop = sysop
 	return m
 }
@@ -136,6 +136,10 @@ func listWindows() []window {
 		idx, id, rawName, label := parts[0], parts[1], parts[2], parts[3]
 		if idx == "0" {
 			continue // skip switchboard window
+		}
+		switch rawName {
+		case "orcai-prompt-builder", "orcai-pipeline-builder", "orcai-brain":
+			continue // sysop tools live in the left column, not active jobs
 		}
 		display := label
 		if display == "" {

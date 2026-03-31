@@ -5,6 +5,9 @@ package braineditor
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -197,6 +200,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Global keys.
 	switch key {
+	case "J":
+		if os.Getenv("TMUX") != "" {
+			return m, func() tea.Msg {
+				self, _ := os.Executable()
+				exec.Command("tmux", "display-popup", "-E", "-w", "80%", "-h", "70%",
+					filepath.Clean(self)+" widget jump-window").Run() //nolint:errcheck
+				return nil
+			}
+		}
+		return m, nil
 	case "ctrl+c", "q", "esc":
 		if m.focus == focusSend {
 			// Fall through to send panel handling (esc might cancel input).

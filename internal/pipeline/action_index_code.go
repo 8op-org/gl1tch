@@ -20,10 +20,124 @@ func init() {
 var defaultCodeExtensions = []string{".go", ".ts", ".py", ".md"}
 
 // skipDirs are directory names skipped during code indexing.
+// Sourced from github.com/github/gitignore for the 10 major languages plus
+// common editor/OS patterns. All hidden directories (name starting with ".")
+// are also skipped unconditionally via the walk condition below — this handles
+// the long tail of hidden tool dirs (.claude, .config, .local, etc.).
 var skipDirs = map[string]bool{
-	"vendor":       true,
-	"node_modules": true,
-	".git":         true,
+	// ── Version control ──────────────────────────────────────────────────────
+	".git": true, ".svn": true, ".hg": true, ".bzr": true,
+
+	// ── Dependency trees (Go, JS/TS, Ruby, Swift, PHP, Elixir) ──────────────
+	"vendor":           true, // Go, PHP, Ruby
+	"node_modules":     true, // JS/TS/Node
+	"bower_components": true,
+	"jspm_packages":    true,
+	"web_modules":      true,
+	"Pods":             true, // Swift/ObjC CocoaPods
+	"Carthage":         true, // Swift/ObjC Carthage
+	"deps":             true, // Elixir mix deps
+	"apm_modules":      true, // orcai Agent Package Manager
+
+	// ── Build / compiled output ──────────────────────────────────────────────
+	"build":   true, // Go, Java, C/C++, JS
+	"dist":    true, // JS/TS, Python
+	"target":  true, // Rust, Java/Maven, Kotlin
+	"out":     true, // Java, Go
+	"output":  true,
+	"bin":     true, // Go, C/C++
+	"obj":     true, // C/C++
+	"pkg":     true, // Go pkg cache
+	"_build":  true, // Elixir
+	"debug":   true, // Rust/C debug builds
+	"release": true, // Rust release builds
+	"classes": true, // Java compiled classes
+
+	// ── Framework / SSR build caches ─────────────────────────────────────────
+	".next":        true, // Next.js
+	".nuxt":        true, // Nuxt.js
+	".svelte-kit":  true, // SvelteKit
+	".astro":       true, // Astro
+	".output":      true, // Nuxt/Nitro
+	".vuepress":    true,
+	".docusaurus":  true,
+	".serverless":  true,
+	".fusebox":     true,
+	".firebase":    true,
+	".swiftpm":     true, // Swift Package Manager
+	"fastlane":     true, // iOS/Android CI
+
+	// ── Python ────────────────────────────────────────────────────────────────
+	"__pycache__":    true,
+	"__pypackages__": true,
+	".pytest_cache":  true,
+	".mypy_cache":    true,
+	".ruff_cache":    true,
+	".tox":           true,
+	".nox":           true,
+	".hypothesis":    true,
+	".pybuilder":     true,
+	"venv":           true,
+	".venv":          true,
+	"env":            true,
+	"site-packages":  true,
+	"htmlcov":        true,
+	".coverage":      true,
+	"develop-eggs":   true,
+	"eggs":           true,
+	"sdist":          true,
+	"wheels":         true,
+
+	// ── Java / Kotlin / Android ───────────────────────────────────────────────
+	".gradle":              true,
+	".mvn":                 true,
+	".kotlin":              true,
+	".externalNativeBuild": true,
+	".cxx":                 true,
+	"captures":             true, // Android profiler
+
+	// ── Rust ──────────────────────────────────────────────────────────────────
+	// (target/ covered above)
+
+	// ── Test / coverage output ────────────────────────────────────────────────
+	"coverage":     true,
+	".nyc_output":  true,
+	"test-results": true,
+	"testdata":     true, // Go testdata dirs (golden files, fixtures)
+	"__snapshots__": true, // Jest snapshots
+	"snapshots":    true,
+	"fixtures":     true,
+
+	// ── Editor / IDE ──────────────────────────────────────────────────────────
+	".idea":        true, // JetBrains
+	".vscode":      true, // VS Code
+	".vs":          true, // Visual Studio
+	"xcuserdata":   true, // Xcode
+	".idea_modules": true,
+
+	// ── OS artefacts ─────────────────────────────────────────────────────────
+	"__MACOSX":              true,
+	".AppleDouble":          true,
+	".Spotlight-V100":       true,
+	".TemporaryItems":       true,
+	".Trashes":              true,
+	".fseventsd":            true,
+	".DocumentRevisions-V100": true,
+
+	// ── Infra / cloud ─────────────────────────────────────────────────────────
+	".terraform": true,
+	".dynamodb":  true, // local DynamoDB data
+
+	// ── Generic temps / caches ───────────────────────────────────────────────
+	"tmp":    true,
+	"temp":   true,
+	"cache":  true,
+	".cache": true,
+	"log":    true,
+	"logs":   true,
+
+	// ── orcai-specific non-source dirs ────────────────────────────────────────
+	".worktrees": true, // git worktrees
 }
 
 // builtinIndexCode walks a path, chunks source files, embeds them with Ollama,
@@ -95,7 +209,8 @@ func builtinIndexCode(ctx context.Context, args map[string]any, w io.Writer) (ma
 			return err
 		}
 		if d.IsDir() {
-			if skipDirs[d.Name()] {
+			name := d.Name()
+			if skipDirs[name] || (strings.HasPrefix(name, ".") && name != ".") {
 				return filepath.SkipDir
 			}
 			return nil
