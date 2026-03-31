@@ -2000,7 +2000,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "f":
-		if m.signalBoardFocused {
+		if m.signalBoardFocused || m.agentsCenterFocused {
 			m.signalBoard.cycleFilter()
 		} else {
 			// Toggle activity feed focus so ↑↓ scrolls through output lines.
