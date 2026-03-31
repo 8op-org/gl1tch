@@ -78,10 +78,7 @@ func (m Model) buildLeft(w, h int) []string {
 
 // buildRight renders: runner (top) + send panel (bottom).
 func (m Model) buildRight(w, h int) []string {
-	sendH := 6
-	if h < 20 {
-		sendH = 5
-	}
+	sendH := 8
 	runnerH := h - sendH
 	if runnerH < 5 {
 		runnerH = 5

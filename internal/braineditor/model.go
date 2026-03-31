@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/adam-stokes/orcai/internal/buildershared"
+	"github.com/adam-stokes/orcai/internal/panelrender"
 	"github.com/adam-stokes/orcai/internal/picker"
 	"github.com/adam-stokes/orcai/internal/store"
 	"github.com/adam-stokes/orcai/internal/styles"
@@ -85,8 +86,13 @@ func New(db *store.Store, providers []picker.ProviderDef) Model {
 		SelBG:   "\x1b[44m",
 	}
 
+	sidebarHints := []panelrender.Hint{
+		{Key: "n", Desc: "new"},
+		{Key: "e", Desc: "edit"},
+		{Key: "d", Desc: "del"},
+	}
 	m := Model{
-		sidebar:        buildershared.NewSidebar("BRAIN NOTES", nil),
+		sidebar:        buildershared.NewSidebar("BRAIN NOTES", nil).SetFocusHints(sidebarHints),
 		runner:         buildershared.NewRunnerPanel(),
 		send:           buildershared.NewSendPanel(providers),
 		db:             db,
@@ -303,8 +309,8 @@ func (m Model) handleRunnerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = focusSend
 	case "tab":
 		m.runner = m.runner.SetFocused(false)
-		m.sidebar = m.sidebar.SetFocused(true)
-		m.focus = focusSidebar
+		m.send = m.send.Enter()
+		m.focus = focusSend
 	case "q":
 		return m, func() tea.Msg { return CloseMsg{} }
 	}

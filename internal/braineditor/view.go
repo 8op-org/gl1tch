@@ -35,10 +35,6 @@ func (m Model) View() string {
 			topBar += sep + pal.Success + m.statusMsg + "\x1b[0m"
 		}
 	}
-	// Key hint strip.
-	hints := pal.Dim + " [n]ew  [e]dit  [d]elete  [q]uit\x1b[0m"
-	topBar = padRight(topBar, w-lipgloss.Width(hints)) + hints
-
 	// Confirm-delete overlay row.
 	if m.confirmDelete {
 		confirmLine := pal.Error + "\x1b[1m  Delete this note? [y] confirm, any other key = cancel\x1b[0m"
@@ -72,10 +68,7 @@ func (m Model) View() string {
 }
 
 func (m Model) buildRight(w, h int) []string {
-	sendH := 6
-	if h < 20 {
-		sendH = 5
-	}
+	sendH := 8
 	runnerH := h - sendH
 	if runnerH < 3 {
 		runnerH = 3
@@ -90,14 +83,6 @@ func (m Model) buildRight(w, h int) []string {
 	return rows
 }
 
-// padRight pads s to width n with spaces.
-func padRight(s string, n int) string {
-	v := lipgloss.Width(s)
-	if v >= n {
-		return s
-	}
-	return s + strings.Repeat(" ", n-v)
-}
 
 // Helpers for stable formatting (used by statusMsg).
 var _ = fmt.Sprintf // suppress unused import warning
