@@ -240,7 +240,8 @@ a:hover {
 
 .sysinfo-box .box-title {
   color: var(--purple);
-  font-weight: bold;
+  font-family: 'VT323', monospace;
+  font-size: 16px;
   letter-spacing: 1px;
 }
 
