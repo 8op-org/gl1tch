@@ -52,8 +52,7 @@ func buildManager() *plugin.Manager {
 		if binary == "" {
 			binary = prov.ID
 		}
-		args := picker.PipelineLaunchArgs(prov.ID)
-		_ = mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", binary, args...))
+		_ = mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", binary, prov.PipelineArgs...))
 	}
 	return mgr
 }
