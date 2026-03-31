@@ -15,10 +15,11 @@ import (
 
 // SendFocus constants for the send panel sub-fields.
 const (
-	SendFocusName        = 0
-	SendFocusAgent       = 1
-	SendFocusSavedPrompt = 2 // opens fuzzy picker
-	SendFocusMessage     = 3
+	SendFocusName          = 0
+	SendFocusAgent         = 1
+	SendFocusSavedPrompt   = 2 // opens saved-prompt fuzzy picker
+	SendFocusSavedPipeline = 3 // opens saved-pipeline fuzzy picker
+	SendFocusMessage       = 4
 )
 
 // SendPopupFocus constants for the agent popup sub-fields.
@@ -39,20 +40,24 @@ type SendShiftTabOutMsg struct{}
 // SendBrowseCWDMsg is posted when enter is pressed on the CWD row in the agent popup.
 type SendBrowseCWDMsg struct{}
 
-// SendPanel holds the send bar: a name input, agent selector, saved prompt picker, and message input.
+// SendPanel holds the send bar: a name input, agent selector, saved prompt picker, pipeline picker, and message input.
 type SendPanel struct {
-	nameInput          textinput.Model
-	msgInput           textinput.Model
-	agentPicker        modal.AgentPickerModel
-	agentOpen          bool
-	agentPopupFocus    int // SendPopupFocusPicker or SendPopupFocusCWD
-	focus              int // SendFocusName, SendFocusAgent, SendFocusSavedPrompt, SendFocusMessage
-	focused            bool
-	savedPromptsOpen   bool
-	savedPromptPicker  modal.FuzzyPickerModel
-	savedPromptIdx     int    // -1 = none selected
-	savedPromptTitles  []string
-	cwd                string // current CWD value (set externally via SetCWD)
+	nameInput            textinput.Model
+	msgInput             textinput.Model
+	agentPicker          modal.AgentPickerModel
+	agentOpen            bool
+	agentPopupFocus      int // SendPopupFocusPicker or SendPopupFocusCWD
+	focus                int // SendFocusName … SendFocusMessage
+	focused              bool
+	savedPromptsOpen     bool
+	savedPromptPicker    modal.FuzzyPickerModel
+	savedPromptIdx       int      // -1 = none selected
+	savedPromptTitles    []string
+	savedPipelineOpen    bool
+	savedPipelinePicker  modal.FuzzyPickerModel
+	savedPipelineIdx     int      // -1 = none selected
+	savedPipelineTitles  []string
+	cwd                  string   // current CWD value (set externally via SetCWD)
 }
 
 // NewSendPanel creates a SendPanel with the given providers.
@@ -68,11 +73,13 @@ func NewSendPanel(providers []picker.ProviderDef) SendPanel {
 	mi.CharLimit = 4000
 
 	return SendPanel{
-		nameInput:         ni,
-		msgInput:          mi,
-		agentPicker:       modal.NewAgentPickerModel(providers),
-		savedPromptPicker: modal.NewFuzzyPickerModel(8),
-		savedPromptIdx:    -1,
+		nameInput:           ni,
+		msgInput:            mi,
+		agentPicker:         modal.NewAgentPickerModel(providers),
+		savedPromptPicker:   modal.NewFuzzyPickerModel(8),
+		savedPromptIdx:      -1,
+		savedPipelinePicker: modal.NewFuzzyPickerModel(8),
+		savedPipelineIdx:    -1,
 	}
 }
 
@@ -147,8 +154,26 @@ func (s SendPanel) ClearSavedPrompt() SendPanel {
 	return s
 }
 
+// SavedPipelineOpen reports whether the saved pipeline fuzzy picker is open.
+func (s SendPanel) SavedPipelineOpen() bool { return s.savedPipelineOpen }
+
+// SavedPipelineIdx returns the selected saved pipeline index (-1 = none).
+func (s SendPanel) SavedPipelineIdx() int { return s.savedPipelineIdx }
+
+// SetSavedPipelineTitles sets the list of saved pipeline names available for selection.
+func (s SendPanel) SetSavedPipelineTitles(titles []string) SendPanel {
+	s.savedPipelineTitles = titles
+	return s
+}
+
+// ClearSavedPipeline resets the saved pipeline selection.
+func (s SendPanel) ClearSavedPipeline() SendPanel {
+	s.savedPipelineIdx = -1
+	return s
+}
+
 func (s *SendPanel) syncFocus() {
-	if !s.focused || s.agentOpen || s.savedPromptsOpen {
+	if !s.focused || s.agentOpen || s.savedPromptsOpen || s.savedPipelineOpen {
 		s.nameInput.Blur()
 		s.msgInput.Blur()
 		return
@@ -185,6 +210,22 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 			s.syncFocus()
 		case modal.FuzzyPickerCancelled:
 			s.savedPromptsOpen = false
+			s.syncFocus()
+		}
+		return s, cmd
+	}
+
+	// ── Saved pipeline picker open ────────────────────────────────────────────
+	if s.savedPipelineOpen {
+		newPicker, ev, cmd := s.savedPipelinePicker.Update(keyMsg)
+		s.savedPipelinePicker = newPicker
+		switch ev {
+		case modal.FuzzyPickerConfirmed:
+			s.savedPipelineIdx = s.savedPipelinePicker.SelectedOriginalIdx()
+			s.savedPipelineOpen = false
+			s.syncFocus()
+		case modal.FuzzyPickerCancelled:
+			s.savedPipelineOpen = false
 			s.syncFocus()
 		}
 		return s, cmd
@@ -229,6 +270,9 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 			s.focus = SendFocusSavedPrompt
 			s.syncFocus()
 		case SendFocusSavedPrompt:
+			s.focus = SendFocusSavedPipeline
+			s.syncFocus()
+		case SendFocusSavedPipeline:
 			s.focus = SendFocusMessage
 			s.syncFocus()
 		case SendFocusMessage:
@@ -246,8 +290,11 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 		case SendFocusSavedPrompt:
 			s.focus = SendFocusAgent
 			s.syncFocus()
-		case SendFocusMessage:
+		case SendFocusSavedPipeline:
 			s.focus = SendFocusSavedPrompt
+			s.syncFocus()
+		case SendFocusMessage:
+			s.focus = SendFocusSavedPipeline
 			s.syncFocus()
 		}
 		return s, nil
@@ -263,6 +310,13 @@ func (s SendPanel) Update(msg tea.Msg) (SendPanel, tea.Cmd) {
 			if len(s.savedPromptTitles) > 0 {
 				s.savedPromptsOpen = true
 				s.savedPromptPicker.Open(s.savedPromptTitles)
+				s.syncFocus()
+			}
+			return s, nil
+		case SendFocusSavedPipeline:
+			if len(s.savedPipelineTitles) > 0 {
+				s.savedPipelineOpen = true
+				s.savedPipelinePicker.Open(s.savedPipelineTitles)
 				s.syncFocus()
 			}
 			return s, nil
@@ -331,18 +385,38 @@ func (s SendPanel) View(w, h int, pal styles.ANSIPalette) []string {
 	nameRow := leftPart + strings.Repeat(" ", padLen) + agentBadge
 	rows = append(rows, panelrender.BoxRow(nameRow, w, borderColor))
 
-	// ── Saved Prompt row ──────────────────────────────────────────────────────
+	// ── Saved Prompt | Saved Pipeline row ────────────────────────────────────
 	rows = append(rows, panelrender.BoxRow("", w, borderColor))
-	spLabel := sbDim + "Saved Prompt" + sbRst
+
+	spLabel := sbDim + "Prompt" + sbRst
 	if s.focused && s.focus == SendFocusSavedPrompt {
-		spLabel = pal.Accent + sbBld + "Saved Prompt" + sbRst
+		spLabel = pal.Accent + sbBld + "Prompt" + sbRst
 	}
 	spValue := sbDim + "(none)" + sbRst
 	if s.savedPromptIdx >= 0 && s.savedPromptIdx < len(s.savedPromptTitles) {
 		spValue = pal.FG + s.savedPromptTitles[s.savedPromptIdx] + sbRst
 	}
-	spRow := "  " + spLabel + "  " + spValue
-	rows = append(rows, panelrender.BoxRow(spRow, w, borderColor))
+
+	plLabel := sbDim + "Pipeline" + sbRst
+	if s.focused && s.focus == SendFocusSavedPipeline {
+		plLabel = pal.Accent + sbBld + "Pipeline" + sbRst
+	}
+	plValue := sbDim + "(none)" + sbRst
+	if s.savedPipelineIdx >= 0 && s.savedPipelineIdx < len(s.savedPipelineTitles) {
+		plValue = pal.FG + s.savedPipelineTitles[s.savedPipelineIdx] + sbRst
+	}
+
+	leftHalf := "  " + spLabel + "  " + spValue
+	rightHalf := plLabel + "  " + plValue
+	innerW := w - 2
+	leftVisW := lipgloss.Width(leftHalf)
+	rightVisW := lipgloss.Width(rightHalf)
+	gap := innerW - leftVisW - rightVisW
+	if gap < 2 {
+		gap = 2
+	}
+	splitRow := leftHalf + strings.Repeat(" ", gap) + rightHalf
+	rows = append(rows, panelrender.BoxRow(splitRow, w, borderColor))
 
 	// ── Message input ─────────────────────────────────────────────────────────
 	rows = append(rows, panelrender.BoxRow("", w, borderColor))
@@ -365,6 +439,8 @@ func (s SendPanel) View(w, h int, pal styles.ANSIPalette) []string {
 			hints = []panelrender.Hint{{Key: "enter", Desc: "pick agent"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
 		case SendFocusSavedPrompt:
 			hints = []panelrender.Hint{{Key: "enter", Desc: "pick prompt"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
+		case SendFocusSavedPipeline:
+			hints = []panelrender.Hint{{Key: "enter", Desc: "pick pipeline"}, {Key: "tab", Desc: "next"}, {Key: "shift+tab", Desc: "back"}}
 		case SendFocusMessage:
 			hints = []panelrender.Hint{{Key: "enter", Desc: "send"}, {Key: "shift+tab", Desc: "back"}}
 		}
@@ -433,4 +509,10 @@ func (s SendPanel) OverlayView(w int, pal styles.ANSIPalette) string {
 // Call this when SavedPromptsOpen() is true, using panelrender.OverlayCenter.
 func (s SendPanel) SavedPromptOverlayView(w int, pal styles.ANSIPalette) string {
 	return s.savedPromptPicker.ViewBox(w, pal)
+}
+
+// SavedPipelineOverlayView renders the saved pipeline fuzzy picker as an overlay.
+// Call this when SavedPipelineOpen() is true, using panelrender.OverlayCenter.
+func (s SendPanel) SavedPipelineOverlayView(w int, pal styles.ANSIPalette) string {
+	return s.savedPipelinePicker.ViewBox(w, pal)
 }

@@ -96,39 +96,28 @@ func TestChanPublisher_SendsFeedLineMsg(t *testing.T) {
 	}
 }
 
-// ── Launcher navigation ───────────────────────────────────────────────────────
+// ── Saved pipeline picker in send panel ──────────────────────────────────────
 
-func TestLauncherNavDown(t *testing.T) {
+func TestSendPanelPipelinePickerOpens(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"alpha", "beta", "gamma"})
-	// Initially focused on launcher; cursor at 0.
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	if got := m2.(switchboard.Model).Cursor(); got != 1 {
-		t.Errorf("cursor after j: got %d, want 1", got)
-	}
-}
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m3 := m2.(switchboard.Model)
 
-func TestLauncherNavUp(t *testing.T) {
-	m := switchboard.NewWithPipelines([]string{"alpha", "beta", "gamma"})
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	if got := m3.(switchboard.Model).Cursor(); got != 0 {
-		t.Errorf("cursor after j then k: got %d, want 0", got)
-	}
-}
+	// Focus the send panel.
+	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m5 := m4.(switchboard.Model)
 
-func TestLauncherNavClampedAtBottom(t *testing.T) {
-	m := switchboard.NewWithPipelines([]string{"alpha"})
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	if got := m2.(switchboard.Model).Cursor(); got != 0 {
-		t.Errorf("cursor should stay at 0 with one item: got %d", got)
+	// Tab through: Name → Agent → SavedPrompt → SavedPipeline.
+	for range 3 {
+		m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m5 = m6.(switchboard.Model)
 	}
-}
 
-func TestLauncherNavClampedAtTop(t *testing.T) {
-	m := switchboard.NewWithPipelines([]string{"alpha"})
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	if got := m2.(switchboard.Model).Cursor(); got != 0 {
-		t.Errorf("cursor should not go negative: got %d", got)
+	// Press Enter — pipeline picker should open.
+	m7, _ := m5.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m8 := m7.(switchboard.Model)
+	if !m8.SendPanelSavedPipelineOpen() {
+		t.Error("expected saved pipeline picker to be open after Enter on pipeline field")
 	}
 }
 
@@ -174,15 +163,13 @@ func TestViewContainsBanner(t *testing.T) {
 	}
 }
 
-func TestViewContainsPipelinesSection(t *testing.T) {
+func TestViewContainsSendPanelPipelineField(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"my-pipeline"})
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	view := m2.(switchboard.Model).View()
-	if !strings.Contains(view, "PIPELINES") {
-		t.Errorf("View() missing PIPELINES section:\n%s", view)
-	}
-	if !strings.Contains(view, "my-pipeline") {
-		t.Errorf("View() missing pipeline name:\n%s", view)
+	// The send panel always renders a "Pipeline" label in its row.
+	if !strings.Contains(view, "Pipeline") {
+		t.Errorf("View() missing Pipeline field in send panel:\n%s", view)
 	}
 }
 
@@ -440,19 +427,13 @@ func TestParallelJobs(t *testing.T) {
 	if !strings.Contains(rendered, "running") {
 		t.Errorf("signal board missing 'running' status: %s", rendered)
 	}
-
-	// View should show [2 running] badge.
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	view := m2.(switchboard.Model).View()
-	if !strings.Contains(view, "2 running") {
-		t.Errorf("expected view to show '2 running', got:\n%s", view)
-	}
 }
 
 func TestParallelJobCap(t *testing.T) {
-	m := switchboard.New()
 	cap := switchboard.MaxParallelJobs()
 
+	// Use test providers so the provider lookup in submitAgentJob succeeds.
+	m := switchboard.NewWithTestProviders()
 	// Fill activeJobs to the cap.
 	for i := 0; i < cap; i++ {
 		m = m.AddActiveJob(fmt.Sprintf("job%d", i))
@@ -461,16 +442,9 @@ func TestParallelJobCap(t *testing.T) {
 		t.Fatalf("expected %d active jobs before cap check, got %d", cap, got)
 	}
 
-	// Give the model some pipelines so we can try to launch.
-	m = switchboard.NewWithPipelines([]string{"test-pipeline"})
-	// Re-inject active jobs after creating new model.
-	for i := 0; i < cap; i++ {
-		m = m.AddActiveJob(fmt.Sprintf("job%d", i))
-	}
-
-	// Try to launch another job via Enter key.
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m3 := m2.(switchboard.Model)
+	// Submit directly via test helper — triggers submitAgentJob which checks the cap.
+	m2, _ := m.SubmitJobForTest("test message")
+	m3 := m2
 
 	// activeJobs count should still be cap (no new job added).
 	if got := m3.ActiveJobsCount(); got != cap {
@@ -478,66 +452,47 @@ func TestParallelJobCap(t *testing.T) {
 	}
 
 	// A warning feed entry should have been added.
-	view := m3.View()
+	m4, _ := m3.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	view := m4.(switchboard.Model).View()
 	if !strings.Contains(view, "max parallel") {
 		t.Errorf("expected warning 'max parallel' in view after cap exceeded:\n%s", view)
 	}
 }
 
-// ── [p] pipelines focus shortcut ─────────────────────────────────────────────
+// ── [p] send panel focus shortcut ────────────────────────────────────────────
 
-func TestPKeyFocusesPipelines_FromAgent(t *testing.T) {
+func TestPKeyFocusesSendPanel_FromAgent(t *testing.T) {
 	m := switchboard.New()
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	// Focus agent section.
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	// Focus signal board first.
+	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 	m4 := m3.(switchboard.Model)
 
-	// Press p — should focus pipelines (launcher).
+	// Press p — should focus the agent send panel.
 	m5, _ := m4.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
 	m6 := m5.(switchboard.Model)
-	if m6.Cursor() == -1 {
-		// Cursor() reads launcher.selected; if it panics we have a problem.
-		t.Fatal("launcher should be accessible after p key")
+	if !m6.AgentFocused() {
+		t.Error("expected agent send panel focused after pressing 'p'")
 	}
-	// Signal board and feed should not be focused — verified by view rendering.
-	view := m6.View()
-	if !strings.Contains(view, "PIPELINES") {
-		t.Errorf("expected PIPELINES panel in view after p key:\n%s", view)
+	if !m6.SendPanelFocused() {
+		t.Error("expected send panel focused after pressing 'p'")
 	}
 }
 
-func TestPKeyFocusesPipelines_FromFeed(t *testing.T) {
+func TestPKeyFocusesSendPanel_FromFeed(t *testing.T) {
 	m := switchboard.New()
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	// Focus feed.
 	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-	// Press p — should focus pipelines.
+	// Press p — should focus send panel.
 	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	view := m4.(switchboard.Model).View()
-	if !strings.Contains(view, "PIPELINES") {
-		t.Errorf("expected PIPELINES panel in view after p key from feed:\n%s", view)
+	m5 := m4.(switchboard.Model)
+	if !m5.AgentFocused() {
+		t.Error("expected agent send panel focused after pressing 'p' from feed")
 	}
 }
 
-// ── [d] delete pipeline confirmation ─────────────────────────────────────────
-
-func TestDKey_ShowsConfirmation(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "my-pipe.pipeline.yaml")
-	if err := os.WriteFile(path, []byte("name: my-pipe\nsteps: []\n"), 0o600); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	// Press d — confirmation modal should appear in view.
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	view := m3.(switchboard.Model).View()
-	if !strings.Contains(view, "delete pipeline") {
-		t.Errorf("expected delete pipeline confirmation in view after d key:\n%s", view)
-	}
-}
+// ── [d] delete pipeline confirmation (via signal board archive) ──────────────
 
 func TestDKey_CancelWithN(t *testing.T) {
 	dir := t.TempDir()
@@ -601,41 +556,34 @@ func TestFeedScrollIndicator_DownWhenContentBelow(t *testing.T) {
 // ── Feed navigation (tasks 6.1–6.4) ──────────────────────────────────────────
 
 // TestTabCycle_FullCycle verifies the full Tab focus cycle (three-column layout):
-// launcher → inbox → cron → agentsCenter → agent runner (cycles providers) → signalBoard → feed → launcher
+// inbox → cron → agentsCenter → agent runner (cycles providers) → signalBoard → feed → inbox
 func TestTabCycle_FullCycle(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"alpha", "beta"})
-	// Start: launcher focused (default).
+	// Start: inbox focused (default).
 
-	// Tab 1: launcher → inbox
+	// Tab 1: inbox → cron
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m2m := m2.(switchboard.Model)
-	if m2m.SignalBoardFocused() || m2m.FeedFocused() || m2m.AgentsCenterFocused() || m2m.AgentFocused() {
-		t.Error("after 1 Tab: expected inbox focused")
+	if !m2m.CronPanelFocused() {
+		t.Error("after 1 Tab: expected cron focused")
 	}
 
-	// Tab 2: inbox → cron
+	// Tab 2: cron → agentsCenter
 	m3, _ := m2m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m3m := m3.(switchboard.Model)
-	if !m3m.CronPanelFocused() {
-		t.Error("after 2 Tabs: expected cron focused")
+	if !m3m.AgentsCenterFocused() {
+		t.Error("after 2 Tabs: expected agentsCenter focused")
 	}
 
-	// Tab 3: cron → agentsCenter
+	// Tab 3: agentsCenter → agent runner
 	m4, _ := m3m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m4m := m4.(switchboard.Model)
-	if !m4m.AgentsCenterFocused() {
-		t.Error("after 3 Tabs: expected agentsCenter focused")
-	}
-
-	// Tab 4: agentsCenter → agent runner
-	m5, _ := m4m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m5m := m5.(switchboard.Model)
-	if !m5m.AgentFocused() {
-		t.Error("after 4 Tabs: expected agent runner focused")
+	if !m4m.AgentFocused() {
+		t.Error("after 3 Tabs: expected agent runner focused")
 	}
 
 	// Tab through agent runner providers until signalBoard is reached.
-	cur := m5m
+	cur := m4m
 	for i := 0; i < 20; i++ {
 		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
 		cur = nx.(switchboard.Model)
@@ -654,40 +602,41 @@ func TestTabCycle_FullCycle(t *testing.T) {
 		t.Error("expected feed focused after Tab from signalBoard")
 	}
 
-	// feed → launcher
+	// feed → inbox (wraps around)
 	m6m = m6m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
 	m7, _ := m6m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m7m := m7.(switchboard.Model)
 	if m7m.FeedFocused() || m7m.SignalBoardFocused() || m7m.AgentsCenterFocused() || m7m.AgentFocused() {
-		t.Error("after feed Tab: expected launcher focused")
+		t.Error("after feed Tab: expected inbox focused (wrap-around)")
 	}
-	// j should move launcher cursor now, not feedCursor
+	// j should move inbox cursor, not feedCursor
 	cursorBefore := m7m.FeedCursor()
 	m8, _ := m7m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	m8m := m8.(switchboard.Model)
 	if m8m.FeedCursor() != cursorBefore {
-		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d", cursorBefore, m8m.FeedCursor())
+		t.Errorf("feedCursor should not change when inbox is focused, got %d → %d", cursorBefore, m8m.FeedCursor())
 	}
 }
 
-// TestTabFromFeed_FocusesLauncher verifies that pressing Tab when the Activity
-// Feed is focused moves focus to the launcher (feed → launcher in new layout).
-func TestTabFromFeed_FocusesLauncher(t *testing.T) {
+// TestTabFromFeed_FocusesInbox verifies that pressing Tab when the Activity
+// Feed is focused moves focus to inbox (feed → inbox wrap-around in new layout).
+func TestTabFromFeed_FocusesInbox(t *testing.T) {
 	m := switchboard.NewWithPipelines([]string{"alpha", "beta"})
 	m = m.SetFeedFocused(true)
 	m = m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b"})
 
-	// Tab: feed → launcher. Feed cursor should not move.
+	// Tab: feed → inbox. Feed cursor should not move.
 	cursorBefore := m.FeedCursor()
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m3 := m2.(switchboard.Model)
-	if m3.FeedFocused() || m3.CronPanelFocused() || m3.AgentsCenterFocused() {
-		t.Errorf("expected launcher focused after Tab-from-feed")
+	if m3.FeedFocused() || m3.CronPanelFocused() || m3.AgentsCenterFocused() || m3.AgentFocused() {
+		t.Errorf("expected inbox focused after Tab-from-feed")
 	}
+	// j should NOT change feedCursor when inbox is focused
 	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	m5 := m4.(switchboard.Model)
 	if m5.FeedCursor() != cursorBefore {
-		t.Errorf("feedCursor should not change when launcher is focused, got %d → %d",
+		t.Errorf("feedCursor should not change when inbox is focused, got %d → %d",
 			cursorBefore, m5.FeedCursor())
 	}
 }
@@ -699,7 +648,7 @@ func TestFeedCursor_JKOnlyWhenFocused(t *testing.T) {
 	m := switchboard.New()
 	m = m.AddFeedEntry("id1", "job one", switchboard.FeedDone, []string{"line a", "line b", "line c"})
 	m = m.AddFeedEntry("id2", "job two", switchboard.FeedDone, []string{"line d", "line e"})
-	// Default state: launcher focused, feed not focused.
+	// Default state: inbox focused, feed not focused.
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	if got := m2.(switchboard.Model).FeedCursor(); got != 0 {
 		t.Errorf("feedCursor should be 0 when feed not focused after j, got %d", got)
@@ -978,118 +927,6 @@ func TestSendPanel_NoScheduleError(t *testing.T) {
 	m5 := m4.(switchboard.Model)
 	_ = m5 // just verify model is valid
 }
-
-// ── Pipeline Launcher mode-select overlay ─────────────────────────────────────
-
-// TestPipelineLauncher_EnterShowsModeSelect verifies that pressing Enter in the
-// pipeline launcher (with pipelines available) opens the mode-select overlay.
-func TestPipelineLauncher_EnterShowsModeSelect(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "my-pipe.pipeline.yaml"),
-		[]byte("name: my-pipe\nsteps: []\n"), 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	// Press Enter in launcher — mode-select overlay should open.
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m4 := m3.(switchboard.Model)
-
-	if got := m4.PipelineLaunchMode(); got != switchboard.PlModeSelect() {
-		t.Errorf("expected PipelineLaunchMode == plModeSelect (%d), got %d", switchboard.PlModeSelect(), got)
-	}
-}
-
-// TestPipelineLauncher_EscResetsModeSelect verifies that Esc from the
-// mode-select overlay resets the launch mode to none.
-func TestPipelineLauncher_EscResetsModeSelect(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "my-pipe.pipeline.yaml"), //nolint:errcheck
-		[]byte("name: my-pipe\nsteps: []\n"), 0o600)
-	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEscape})
-	m5 := m4.(switchboard.Model)
-
-	if got := m5.PipelineLaunchMode(); got != switchboard.PlModeNone() {
-		t.Errorf("expected PipelineLaunchMode == plModeNone after Esc, got %d", got)
-	}
-}
-
-// TestPipelineLauncher_DownMovesSelection verifies Down/j moves the cursor in
-// the mode-select overlay.
-func TestPipelineLauncher_DownMovesSelection(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "pipe.pipeline.yaml"), //nolint:errcheck
-		[]byte("name: pipe\nsteps: []\n"), 0o600)
-	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m5 := m4.(switchboard.Model)
-
-	if got := m5.PipelineModeSelected(); got != 1 {
-		t.Errorf("expected pipelineModeSelected == 1 after j, got %d", got)
-	}
-}
-
-// TestPipelineLauncher_SelectScheduleTransitionsToInput verifies that selecting
-// "Schedule recurring" (item 1) in the mode-select overlay transitions to the
-// schedule-input state.
-func TestPipelineLauncher_SelectScheduleTransitionsToInput(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "pipe.pipeline.yaml"), //nolint:errcheck
-		[]byte("name: pipe\nsteps: []\n"), 0o600)
-	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	// Enter mode-select, move to Schedule, press Enter.
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m6 := m5.(switchboard.Model)
-
-	if got := m6.PipelineLaunchMode(); got != switchboard.PlScheduleInput() {
-		t.Errorf("expected PipelineLaunchMode == plScheduleInput (%d), got %d", switchboard.PlScheduleInput(), got)
-	}
-}
-
-// TestPipelineScheduleInput_InvalidCronShowsError verifies that submitting an
-// invalid cron expression in the schedule-input overlay sets PipelineScheduleErr.
-func TestPipelineScheduleInput_InvalidCronShowsError(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "pipe.pipeline.yaml"), //nolint:errcheck
-		[]byte("name: pipe\nsteps: []\n"), 0o600)
-	m := switchboard.NewWithPipelines(switchboard.ScanPipelines(dir))
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	// Enter mode-select → schedule-input.
-	m3, _ := m2.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m4, _ := m3.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m5, _ := m4.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	// Type an invalid cron expression.
-	cur := m5
-	for _, r := range "bad cron" {
-		nx, _ := cur.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-		cur = nx
-	}
-	// Submit.
-	m6, _ := cur.(switchboard.Model).Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	m7 := m6.(switchboard.Model)
-
-	if m7.PipelineScheduleErr() == "" {
-		t.Error("expected PipelineScheduleErr to be set for invalid cron")
-	}
-	if m7.PipelineLaunchMode() != switchboard.PlScheduleInput() {
-		t.Errorf("expected to stay in schedule-input state on error, got mode %d", m7.PipelineLaunchMode())
-	}
-}
-
 
 // ── Kill and Archive (signal-board-kill-and-archive) ──────────────────────────
 
@@ -1823,9 +1660,10 @@ func TestWideTerminal_ShowsAllThreeColumns(t *testing.T) {
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = m2.(switchboard.Model)
 	view := m.View()
-	// All three column headers should be visible.
-	if !strings.Contains(view, "PIPELINES") {
-		t.Error("expected PIPELINES in left column")
+	// Left column header (inbox or cron replaces the removed pipelines panel).
+	if !strings.Contains(view, "INBOX") && !strings.Contains(view, "inbox") &&
+		!strings.Contains(view, "CRON") && !strings.Contains(view, "cron") {
+		t.Error("expected INBOX or CRON in left column")
 	}
 	if !strings.Contains(view, "AGENTS") && !strings.Contains(view, "agents") {
 		t.Error("expected AGENTS in center column")

@@ -305,12 +305,13 @@ type Model struct {
 	dirPicker           DirPickerModel // reusable dir picker overlay
 	dirPickerOpen       bool           // whether the dir picker overlay is visible
 	dirPickerCtx        string         // "agent" or "pipeline"
-	pendingPipelineName string         // pipeline waiting for CWD selection
-	pendingPipelineYAML string         // YAML path for pendingPipelineName
-	pendingActAgent     string         // activity feed agent name for the next launch
-	pendingActLabel     string         // activity feed label for the next launch
-	pendingExecutorID   string         // executor ID for the next launch (for clarification wiring)
-	pendingModelID      string         // model ID for the next launch
+	pendingPipelineName  string         // pipeline waiting for CWD selection
+	pendingPipelineYAML  string         // YAML path for pendingPipelineName
+	pendingPipelineInput string         // --input value forwarded to orcai pipeline run
+	pendingActAgent      string         // activity feed agent name for the next launch
+	pendingActLabel      string         // activity feed label for the next launch
+	pendingExecutorID    string         // executor ID for the next launch (for clarification wiring)
+	pendingModelID       string         // model ID for the next launch
 	activityFeed        activity.Model // JSONL-backed activity timeline
 	// Pipeline mode-select overlay
 	pipelineLaunchMode   int          // plModeNone / plModeSelect / plScheduleInput
@@ -375,20 +376,20 @@ func NewWithStore(s *store.Store) Model {
 	clarifyTI.CharLimit = 2000
 
 	agentProviders := picker.BuildProviders()
+	pipelines := ScanPipelines(pipelinesDir())
 	m := Model{
 		launcher: launcherSection{
-			pipelines: ScanPipelines(pipelinesDir()),
-			focused:   true,
+			pipelines: pipelines,
 		},
 		agent: agentSection{
 			providers: agentProviders,
 		},
-		sendPanel:             buildershared.NewSendPanel(agentProviders),
+		sendPanel:             buildershared.NewSendPanel(agentProviders).SetSavedPipelineTitles(pipelines),
 		pipelineEditor:        pipelineeditor.New(agentProviders, pipelinesDir(), s),
 		brainEditor:           braineditor.New(s, agentProviders),
 		pipelineScheduleInput: pipeSchedTA,
 		signalBoard:           SignalBoard{activeFilter: "running"},
-		inboxPanel:            InboxPanel{activeFilter: "unread"},
+		inboxPanel:            InboxPanel{activeFilter: "unread", focused: true},
 		activeJobs:            make(map[string]*jobHandle),
 		launchCWD:             cwd,
 		inboxModel:   inbox.New(s, nil), // bundle set after registry loads
@@ -422,7 +423,7 @@ func NewWithPipelines(pipelines []string) Model {
 	m := New()
 	m.launcher.pipelines = pipelines
 	m.launcher.selected = 0
-	m.launcher.focused = true
+	m.sendPanel = m.sendPanel.SetSavedPipelineTitles(pipelines)
 	return m
 }
 
@@ -484,6 +485,18 @@ func (m Model) SendPanelSavedPromptsOpen() bool { return m.sendPanel.SavedPrompt
 // SendPanelSavedPromptIdx returns the selected saved prompt index — used in tests.
 func (m Model) SendPanelSavedPromptIdx() int { return m.sendPanel.SavedPromptIdx() }
 
+// SendPanelSavedPipelineOpen returns whether the saved pipeline picker is open — used in tests.
+func (m Model) SendPanelSavedPipelineOpen() bool { return m.sendPanel.SavedPipelineOpen() }
+
+// SendPanelSavedPipelineIdx returns the selected saved pipeline index — used in tests.
+func (m Model) SendPanelSavedPipelineIdx() int { return m.sendPanel.SavedPipelineIdx() }
+
+// SubmitJobForTest calls submitAgentJob directly — used in tests to trigger the
+// cap check and pipeline-submit path without going through the full key sequence.
+func (m Model) SubmitJobForTest(input string) (Model, tea.Cmd) {
+	return m.submitAgentJob(input)
+}
+
 // PipelineLaunchMode returns the pipeline launch mode — used in tests.
 func (m Model) PipelineLaunchMode() int { return m.pipelineLaunchMode }
 
@@ -527,7 +540,12 @@ func (m Model) AgentsGridRow() int { return m.agentsGridRow }
 func (m Model) AgentsGridCol() int { return m.agentsGridCol }
 
 // SetAgentsCenterFocused sets the agents center panel focus state — used in tests.
-func (m Model) SetAgentsCenterFocused(v bool) Model { m.agentsCenterFocused = v; return m }
+func (m Model) SetAgentsCenterFocused(v bool) Model {
+	m.agentsCenterFocused = v
+	m.inboxPanel.focused = false
+	m.inboxModel.SetFocused(false)
+	return m
+}
 
 // RightColWidth returns the right column width — used in tests.
 func (m Model) RightColWidth() int { return m.rightColWidth() }
@@ -634,6 +652,8 @@ func (m Model) SetSignalBoardFocused(v bool) Model {
 	m.launcher.focused = false
 	m.agent.focused = false
 	m.feedFocused = false
+	m.inboxPanel.focused = false
+	m.inboxModel.SetFocused(false)
 	return m
 }
 
@@ -643,6 +663,8 @@ func (m Model) SetFeedFocused(v bool) Model {
 	m.launcher.focused = false
 	m.agent.focused = false
 	m.signalBoardFocused = false
+	m.inboxPanel.focused = false
+	m.inboxModel.SetFocused(false)
 	return m
 }
 
@@ -1755,9 +1777,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			go ensureCronDaemon()
 			exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
 			return m, nil
-		case "esc", "p":
+		case "esc":
 			m.cronPanel.focused = false
-			m.launcher.focused = true
+			m.inboxPanel.focused = true
+			m.inboxModel.SetFocused(true)
 			return m, nil
 		case "j", "down":
 			if m.cronPanel.selectedIdx < len(entries)-1 {
@@ -1878,15 +1901,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 	}
 
-	// Global focus shortcuts — p focuses pipelines.
+	// Global focus shortcuts — p focuses the agent send panel (pipeline picker is in sendpanel).
 	switch key {
 	case "p":
-		m.launcher.focused = true
-		m.agent.focused = false
+		m.launcher.focused = false
+		m.agent.focused = true
 		m.feedFocused = false
 		m.signalBoardFocused = false
 		m.cronPanel.focused = false
-		return m, nil
+		m.inboxPanel.focused = false
+		m.inboxModel.SetFocused(false)
+		m.sendPanel = m.sendPanel.Enter()
+		return m, loadAgentPromptsCmd(m.store)
 	case "c":
 		m.launcher.focused = false
 		m.agent.focused = false
@@ -1910,10 +1936,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "tab", "shift+tab":
 		fwd := key == "tab"
 		// Tab order follows the three-column layout, left→right top→bottom:
-		//   LEFT col:   launcher → inbox → cron
+		//   LEFT col:   inbox → cron
 		//   CENTER col: agentsCenter → agent runner (send panel)
 		//   RIGHT col:  signalBoard → feed
-		//   wrap back to launcher
+		//   wrap back to inbox
 		//
 		// When agent send panel is focused, tab cycles through its internal fields.
 		// SendTabOutMsg and SendShiftTabOutMsg signals move focus out of the panel.
@@ -1937,10 +1963,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		if fwd {
 			switch {
-			case m.launcher.focused:
-				m.launcher.focused = false
-				m.inboxPanel.focused = true
-				m.inboxModel.SetFocused(true)
 			case m.inboxPanel.focused:
 				m.inboxPanel.focused = false
 				m.inboxModel.SetFocused(false)
@@ -1959,20 +1981,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				m.feedCursor = 0
 			case m.feedFocused:
 				m.feedFocused = false
-				m.launcher.focused = true
+				m.inboxPanel.focused = true
+				m.inboxModel.SetFocused(true)
 			default:
-				m.launcher.focused = true
+				m.inboxPanel.focused = true
+				m.inboxModel.SetFocused(true)
 			}
 		} else {
 			switch {
-			case m.launcher.focused:
-				m.launcher.focused = false
-				m.feedFocused = true
-				m.feedCursor = 0
 			case m.inboxPanel.focused:
 				m.inboxPanel.focused = false
 				m.inboxModel.SetFocused(false)
-				m.launcher.focused = true
+				m.feedFocused = true
+				m.feedCursor = 0
 			case m.cronPanel.focused:
 				m.cronPanel.focused = false
 				m.inboxPanel.focused = true
@@ -1989,7 +2010,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				m.feedFocused = false
 				m.signalBoardFocused = true
 			default:
-				m.launcher.focused = true
+				m.inboxPanel.focused = true
+				m.inboxModel.SetFocused(true)
 			}
 		}
 		return m, nil
@@ -2010,6 +2032,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.launcher.focused = false
 		m.agent.focused = true
 		m.feedFocused = false
+		m.inboxPanel.focused = false
+		m.inboxModel.SetFocused(false)
 		m.sendPanel = m.sendPanel.Enter()
 		return m, loadAgentPromptsCmd(m.store)
 
@@ -2039,7 +2063,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		newProviders := picker.BuildProviders()
 		m.agent.providers = newProviders
-		m.sendPanel = buildershared.NewSendPanel(newProviders)
+		m.sendPanel = buildershared.NewSendPanel(newProviders).SetSavedPipelineTitles(m.launcher.pipelines)
 		return m, nil
 
 	case "T":
@@ -2151,19 +2175,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "esc":
 		if m.feedFocused {
 			m.feedFocused = false
-			m.launcher.focused = true
+			m.inboxPanel.focused = true
+			m.inboxModel.SetFocused(true)
 			return m, nil
 		} else if m.signalBoardFocused {
 			m.signalBoardFocused = false
 			m.signalBoard.clearSearch()
-			m.launcher.focused = true
+			m.inboxPanel.focused = true
+			m.inboxModel.SetFocused(true)
 		} else if m.agentsCenterFocused {
 			m.agentsCenterFocused = false
-			m.launcher.focused = true
+			m.inboxPanel.focused = true
+			m.inboxModel.SetFocused(true)
 		} else if m.agent.focused {
 			m.agent.focused = false
 			m.sendPanel = m.sendPanel.SetFocused(false)
-			m.launcher.focused = true
+			m.inboxPanel.focused = true
+			m.inboxModel.SetFocused(true)
 		}
 		return m, nil
 
@@ -2710,6 +2738,10 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 
 	orcaiBin := orcaiBinaryPath()
 	shellCmd := orcaiBin + " pipeline run " + yamlPath
+	if m.pendingPipelineInput != "" {
+		shellCmd += " --input " + shellescape(m.pendingPipelineInput)
+		m.pendingPipelineInput = ""
+	}
 	windowName, logFile, doneFile := createJobWindow(feedID, shellCmd, name, cwd)
 
 	ch := make(chan tea.Msg, 256)
@@ -2752,6 +2784,34 @@ func (m Model) submitAgentJob(input string) (Model, tea.Cmd) {
 	}
 	if input == "" {
 		return m, nil
+	}
+
+	// ── Pipeline-selected path ────────────────────────────────────────────────
+	// If the user picked a saved pipeline, run it directly with the message as
+	// --input pre-context instead of creating a new single-step agent pipeline.
+	pipelineIdx := m.sendPanel.SavedPipelineIdx()
+	if pipelineIdx >= 0 && pipelineIdx < len(m.launcher.pipelines) {
+		if len(m.activeJobs) >= maxParallelJobs {
+			feedID := fmt.Sprintf("warn-%d", time.Now().UnixNano())
+			m.feed = append([]feedEntry{{id: feedID, title: "max parallel jobs reached (8)", status: FeedFailed, ts: time.Now()}}, m.feed...)
+			if len(m.feed) > 200 {
+				m.feed = m.feed[:200]
+			}
+			return m, nil
+		}
+		name := m.launcher.pipelines[pipelineIdx]
+		yamlPath := filepath.Join(pipelinesDir(), name+".pipeline.yaml")
+		m.pendingPipelineName = name
+		m.pendingPipelineYAML = yamlPath
+		m.pendingPipelineInput = input
+		m.pendingActAgent = name
+		m.pendingActLabel = activityLabel(input)
+		m.sendPanel = m.sendPanel.ClearSavedPipeline()
+		cwd := m.sendPanel.CWD()
+		if cwd == "" {
+			cwd = m.launchCWD
+		}
+		return m.launchPendingPipeline(cwd)
 	}
 
 	provID := m.sendPanel.ProviderID()
@@ -2965,6 +3025,12 @@ func orcaiBinaryPath() string {
 		return p
 	}
 	return "orcai"
+}
+
+// shellescape wraps s in single quotes, escaping any embedded single quotes,
+// so the value can be safely appended to a shell command string.
+func shellescape(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // drainChan returns a tea.Cmd that blocks until a message arrives on ch.
@@ -3200,6 +3266,12 @@ func (m Model) View() string {
 		return overlayCenter(base, m.sendPanel.SavedPromptOverlayView(w, m.ansiPalette()), w, h)
 	}
 
+	// Saved pipeline picker popup — overlay on the normal 3-col view.
+	if m.agent.focused && m.sendPanel.SavedPipelineOpen() {
+		base := topBar + "\n" + body
+		return overlayCenter(base, m.sendPanel.SavedPipelineOverlayView(w, m.ansiPalette()), w, h)
+	}
+
 	// Dir picker for agent CWD — overlay on the normal 3-col view.
 	if m.dirPickerOpen && m.dirPickerCtx == "agent" {
 		base := topBar + "\n" + body
@@ -3410,15 +3482,12 @@ func (m Model) midColWidth() int {
 	return mw
 }
 
-// viewLeftColumn renders the left column: banner + launcher + inbox + cron sections.
+// viewLeftColumn renders the left column: inbox + cron sections.
 func (m Model) viewLeftColumn(height, width int) string {
 	var lines []string
 
-	launcherLines := m.buildLauncherSection(width)
-	lines = append(lines, launcherLines...)
-
-	// Distribute remaining rows between Inbox (60%) and Cron (40%), min 4 each.
-	// Agent runner is now in the center column.
+	// Distribute all rows between Inbox (60%) and Cron (40%), min 4 each.
+	// Agent runner is in the center column; pipeline launcher moved to sendpanel popup.
 	remaining := height - len(lines)
 	if remaining >= 4 {
 		lines = append(lines, "")
