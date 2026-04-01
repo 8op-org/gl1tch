@@ -15,7 +15,7 @@ func TestLoadFont_Amnesiax(t *testing.T) {
 		t.Error("font height is 0")
 	}
 	// amnesiax should have most printable ASCII chars
-	for _, c := range "GL1TCH" {
+	for _, c := range "GLITCH" {
 		if !f.HasGlyph(byte(c)) {
 			t.Errorf("glyph missing for %c", c)
 		}

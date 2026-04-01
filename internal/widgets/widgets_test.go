@@ -137,7 +137,7 @@ func TestDiscover_SkipsFiles(t *testing.T) {
 func TestResolveOverride_UsesOverrideBinary(t *testing.T) {
 	// Create a temp dir with a fake orcai-weather executable.
 	tmpDir := t.TempDir()
-	overridePath := filepath.Join(tmpDir, "orcai-weather")
+	overridePath := filepath.Join(tmpDir, "glitch-weather")
 	if err := os.WriteFile(overridePath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write fake override: %v", err)
 	}

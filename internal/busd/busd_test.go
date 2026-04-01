@@ -115,7 +115,7 @@ func TestSocketPath_XDG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "/run/user/1000/orcai/bus.sock"
+	want := "/run/user/1000/glitch/bus.sock"
 	if got != want {
 		t.Errorf("SocketPath() = %q; want %q", got, want)
 	}
@@ -128,8 +128,8 @@ func TestSocketPath_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(got, "/orcai/bus.sock") {
-		t.Errorf("SocketPath() fallback = %q; expected suffix /orcai/bus.sock", got)
+	if !strings.HasSuffix(got, "/glitch/bus.sock") {
+		t.Errorf("SocketPath() fallback = %q; expected suffix /glitch/bus.sock", got)
 	}
 	// Must not reference /run when XDG_RUNTIME_DIR is unset.
 	if strings.Contains(got, "/run/user") {

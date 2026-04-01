@@ -19,13 +19,13 @@ func TestLoadBundled_ReturnsABS(t *testing.T) {
 	}
 	found := false
 	for _, b := range bundles {
-		if b.Name == "abs" {
+		if b.Name == "glitch" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("LoadBundled() did not return the ABS theme; got %v", bundleNames(bundles))
+		t.Errorf("LoadBundled() did not return the glitch theme; got %v", bundleNames(bundles))
 	}
 }
 
@@ -34,28 +34,28 @@ func TestLoadBundled_ABSPaletteComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBundled() error: %v", err)
 	}
-	var abs *themes.Bundle
+	var glitch *themes.Bundle
 	for i := range bundles {
-		if bundles[i].Name == "abs" {
-			abs = &bundles[i]
+		if bundles[i].Name == "glitch" {
+			glitch = &bundles[i]
 			break
 		}
 	}
-	if abs == nil {
-		t.Fatal("ABS theme not found in bundled themes")
+	if glitch == nil {
+		t.Fatal("glitch theme not found in bundled themes")
 	}
 	fields := map[string]string{
-		"bg":      abs.Palette.BG,
-		"fg":      abs.Palette.FG,
-		"accent":  abs.Palette.Accent,
-		"dim":     abs.Palette.Dim,
-		"border":  abs.Palette.Border,
-		"error":   abs.Palette.Error,
-		"success": abs.Palette.Success,
+		"bg":      glitch.Palette.BG,
+		"fg":      glitch.Palette.FG,
+		"accent":  glitch.Palette.Accent,
+		"dim":     glitch.Palette.Dim,
+		"border":  glitch.Palette.Border,
+		"error":   glitch.Palette.Error,
+		"success": glitch.Palette.Success,
 	}
 	for key, val := range fields {
 		if val == "" {
-			t.Errorf("ABS theme palette.%s is empty", key)
+			t.Errorf("glitch theme palette.%s is empty", key)
 		}
 	}
 }
@@ -133,10 +133,10 @@ func TestLoadUser_MissingDir_ReturnsEmpty(t *testing.T) {
 
 func TestRegistry_UserOverridesBundled(t *testing.T) {
 	dir := t.TempDir()
-	// Override the bundled "abs" theme with a custom version.
-	writeTheme(t, dir, "abs", `
-name: abs
-display_name: "ABS Custom"
+	// Override the bundled "glitch" theme with a custom version.
+	writeTheme(t, dir, "glitch", `
+name: glitch
+display_name: "Glitch Custom"
 palette:
   bg: "#111111"
   fg: "#eeeeee"
@@ -156,12 +156,12 @@ statusbar:
 	if err != nil {
 		t.Fatalf("NewRegistry() error: %v", err)
 	}
-	b, ok := reg.Get("abs")
+	b, ok := reg.Get("glitch")
 	if !ok {
-		t.Fatal("abs theme not found in registry")
+		t.Fatal("glitch theme not found in registry")
 	}
-	if b.DisplayName != "ABS Custom" {
-		t.Errorf("user theme should win: got DisplayName %q, want %q", b.DisplayName, "ABS Custom")
+	if b.DisplayName != "Glitch Custom" {
+		t.Errorf("user theme should win: got DisplayName %q, want %q", b.DisplayName, "Glitch Custom")
 	}
 }
 
@@ -185,15 +185,15 @@ func TestRegistry_SetActive_PersistsAndRestores(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRegistry() error: %v", err)
 	}
-	if _, ok := reg1.Get("abs"); !ok {
-		t.Skip("abs theme not in bundled set; skipping persistence test")
+	if _, ok := reg1.Get("glitch"); !ok {
+		t.Skip("glitch theme not in bundled set; skipping persistence test")
 	}
 
-	if err := reg1.SetActive("abs"); err != nil {
-		t.Fatalf("SetActive(%q) error: %v", "abs", err)
+	if err := reg1.SetActive("glitch"); err != nil {
+		t.Fatalf("SetActive(%q) error: %v", "glitch", err)
 	}
 
-	// Create a second registry in the same HOME — it should restore "abs".
+	// Create a second registry in the same HOME — it should restore "glitch".
 	reg2, err := themes.NewRegistry("")
 	if err != nil {
 		t.Fatalf("second NewRegistry() error: %v", err)
@@ -201,8 +201,8 @@ func TestRegistry_SetActive_PersistsAndRestores(t *testing.T) {
 	if reg2.Active() == nil {
 		t.Fatal("second registry Active() is nil")
 	}
-	if reg2.Active().Name != "abs" {
-		t.Errorf("persisted active theme restored as %q, want %q", reg2.Active().Name, "abs")
+	if reg2.Active().Name != "glitch" {
+		t.Errorf("persisted active theme restored as %q, want %q", reg2.Active().Name, "glitch")
 	}
 }
 
@@ -265,19 +265,19 @@ func TestLoadBundled_ABSHeaderStylePresent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBundled() error: %v", err)
 	}
-	var abs *themes.Bundle
+	var glitch *themes.Bundle
 	for i := range bundles {
-		if bundles[i].Name == "abs" {
-			abs = &bundles[i]
+		if bundles[i].Name == "glitch" {
+			glitch = &bundles[i]
 			break
 		}
 	}
-	if abs == nil {
-		t.Fatal("ABS theme not found in bundled themes")
+	if glitch == nil {
+		t.Fatal("glitch theme not found in bundled themes")
 	}
-	// ABS uses DynamicHeader via HeaderStyle; verify all four panel keys are configured.
+	// glitch uses DynamicHeader via HeaderStyle; verify all four panel keys are configured.
 	for _, key := range []string{"pipelines", "agent_runner", "signal_board", "activity_feed"} {
-		ps, ok := abs.HeaderStyle.Panels[key]
+		ps, ok := glitch.HeaderStyle.Panels[key]
 		if !ok {
 			t.Errorf("HeaderStyle.Panels[%q] not present", key)
 			continue

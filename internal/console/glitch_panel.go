@@ -791,7 +791,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Tab cycles between input focus and scroll focus (skip when picker is open).
-		if msg.String() == "tab" && !p.modelPickerOpen {
+		if msg.String() == "tab" && !p.modelPickerOpen && !p.acActive {
 			if p.focused {
 				p = p.setFocused(false)
 				p.scrollFocused = true
@@ -1582,7 +1582,21 @@ func (p glitchChatPanel) build(height, width int, pal styles.ANSIPalette) []stri
 			{Key: "/help", Desc: "commands"},
 		}
 	}
-	lines = append(lines, padStr+panelrender.BoxRow(panelrender.HintBar(hints, sendW-2, pal), sendW, borderColor))
+	hintContent := panelrender.HintBar(hints, sendW-2, pal)
+	// Right-align CWD in the hint bar (mirrors the clock in the subtitle above).
+	cwdDisplay := p.launchCWD
+	if home, err := os.UserHomeDir(); err == nil {
+		cwdDisplay = strings.Replace(cwdDisplay, home, "~", 1)
+	}
+	cwdStr := pal.Dim + cwdDisplay + aRst
+	innerW := sendW - 2
+	hintVisW := panelrender.VisibleWidth(hintContent)
+	cwdVisW := len(cwdDisplay)
+	gap := innerW - hintVisW - cwdVisW
+	if gap > 0 {
+		hintContent = hintContent + strings.Repeat(" ", gap) + cwdStr
+	}
+	lines = append(lines, padStr+panelrender.BoxRow(hintContent, sendW, borderColor))
 	lines = append(lines, padStr+borderColor+"╰"+dash+"╯"+aRst)
 
 	// Clamp to exact height.

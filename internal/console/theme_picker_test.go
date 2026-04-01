@@ -48,9 +48,9 @@ func TestThemePicker_CloseOnEsc(t *testing.T) {
 // TestThemePicker_ViewContainsBundleNames verifies viewThemePicker renders bundle names.
 func TestThemePicker_ViewContainsBundleNames(t *testing.T) {
 	view := console.ViewThemePickerForTest()
-	// The ABS theme should be listed.
-	if !strings.Contains(view, "abs") && !strings.Contains(view, "ABS") {
-		t.Errorf("theme picker view should contain 'abs' or 'ABS', got:\n%s", view)
+	// The GL1TCH theme should be listed.
+	if !strings.Contains(view, "GL1TCH") {
+		t.Errorf("theme picker view should contain 'GL1TCH', got:\n%s", view)
 	}
 }
 

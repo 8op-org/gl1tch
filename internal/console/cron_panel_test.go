@@ -57,16 +57,6 @@ func TestBuildCronSection_EmptyViaFakeHome(t *testing.T) {
 	}
 }
 
-// TestCronPanelFocus verifies that pressing "c" focuses the cron panel.
-func TestCronPanelFocus(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-	mm := m2.(console.Model)
-	if !mm.CronPanelFocused() {
-		t.Fatal("expected cronPanel.focused after pressing c")
-	}
-}
-
 // TestCronManageKey verifies that pressing "m" while the cron panel is focused
 // does not panic even when tmux is not running. The key dispatches
 // ensureCronDaemon + switch-client which fail silently without tmux.

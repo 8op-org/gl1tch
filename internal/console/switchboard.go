@@ -967,7 +967,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if m.glitchChat.focused || m.glitchChat.scrollFocused {
-		if km, ok := msg.(tea.KeyMsg); ok && km.String() != "ctrl+c" && km.String() != "ctrl+q" {
+		if km, ok := msg.(tea.KeyMsg); ok && km.String() != "ctrl+c" && km.String() != "ctrl+q" && km.String() != "T" {
 			// Global overlays (quit modal, help, theme picker, etc.) take priority
 			// over the focused chat panel so ESC/y/n reach the overlay handler.
 			overlayActive := m.confirmQuit || m.themePicker.Open ||
@@ -2100,12 +2100,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "T":
 		if !m.confirmDelete && !m.confirmQuit {
 			m.themePicker.Open = true
-			m.themePicker.OriginalTheme = m.registry.Active()
-			// Set initial tab based on active theme's mode
-			if active := m.registry.Active(); active != nil && active.Mode == "light" {
-				m.themePicker.Tab = 1
-			} else {
-				m.themePicker.Tab = 0
+			if m.registry != nil {
+				m.themePicker.OriginalTheme = m.registry.Active()
+				// Set initial tab based on active theme's mode
+				if active := m.registry.Active(); active != nil && active.Mode == "light" {
+					m.themePicker.Tab = 1
+				} else {
+					m.themePicker.Tab = 0
+				}
 			}
 		}
 		return m, nil

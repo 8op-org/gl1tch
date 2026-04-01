@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/executor"
+	"github.com/powerglove-dev/gl1tch/internal/executor"
 )
 
 // noopBusClientForTest satisfies executor.BusClient without importing busd,

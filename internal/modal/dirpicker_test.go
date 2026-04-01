@@ -20,7 +20,7 @@ func TestFuzzyScore_NoMatch(t *testing.T) {
 }
 
 func TestFuzzyScore_ContiguousBaseNameMatch(t *testing.T) {
-	score := fuzzyScore("/Users/stokes/Projects/orcai", "glitch")
+	score := fuzzyScore("/Users/stokes/Projects/glitch", "glitch")
 	if score < 1000 {
 		t.Errorf("contiguous base name match should score ≥1000, got %d", score)
 	}
@@ -28,8 +28,8 @@ func TestFuzzyScore_ContiguousBaseNameMatch(t *testing.T) {
 
 func TestFuzzyScore_BaseNameBeatsFull(t *testing.T) {
 	// "glitch" in base name should score higher than "glitch" buried in a long path.
-	scoreBase := fuzzyScore("/Users/stokes/Projects/orcai", "glitch")
-	scoreFull := fuzzyScore("/orcai/deep/nested/something-else", "glitch")
+	scoreBase := fuzzyScore("/Users/stokes/Projects/glitch", "glitch")
+	scoreFull := fuzzyScore("/glitch/deep/nested/something-else", "glitch")
 	if scoreBase <= scoreFull {
 		t.Errorf("basename match (%d) should beat full-path early match (%d)", scoreBase, scoreFull)
 	}
@@ -70,15 +70,15 @@ func TestDirPickerModel_ApplyFilter_Caps50(t *testing.T) {
 func TestDirPickerModel_ApplyFilter_FiltersCorrectly(t *testing.T) {
 	m := NewDirPickerModel()
 	m.allDirs = []string{
-		"/home/user/orcai",
+		"/home/user/glitch",
 		"/home/user/documents",
 		"/home/user/go",
 	}
 	m.walking = false
 	m.input.SetValue("glitch")
 	m.applyFilter()
-	if len(m.shown) != 1 || m.shown[0] != "/home/user/orcai" {
-		t.Errorf("filter 'orcai' should match only orcai, got %v", m.shown)
+	if len(m.shown) != 1 || m.shown[0] != "/home/user/glitch" {
+		t.Errorf("filter 'glitch' should match only glitch, got %v", m.shown)
 	}
 }
 

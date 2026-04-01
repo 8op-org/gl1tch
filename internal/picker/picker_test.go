@@ -84,7 +84,7 @@ func TestGetOrCreateWorktreeFrom_EmptyPathReturnsEmpty(t *testing.T) {
 }
 
 func TestParseWindowList_Basic(t *testing.T) {
-	input := "0 ORCAI\n1 claude-1\n2 gemini-2\n"
+	input := "0 GL1TCH\n1 claude-1\n2 gemini-2\n"
 	got := picker.ParseWindowList(input)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 windows, got %d: %v", len(got), got)
@@ -98,7 +98,7 @@ func TestParseWindowList_Basic(t *testing.T) {
 }
 
 func TestParseWindowList_FiltersSystemWindows(t *testing.T) {
-	input := "0 ORCAI\n1 _sidebar\n2 claude-1\n"
+	input := "0 GL1TCH\n1 _sidebar\n2 claude-1\n"
 	got := picker.ParseWindowList(input)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 window, got %d: %v", len(got), got)

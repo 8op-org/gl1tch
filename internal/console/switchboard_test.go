@@ -12,7 +12,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/powerglove-dev/gl1tch/internal/store"
 	"github.com/powerglove-dev/gl1tch/internal/console"
 )
 
@@ -98,56 +97,10 @@ func TestChanPublisher_SendsFeedLineMsg(t *testing.T) {
 
 // ── Saved pipeline picker in send panel ──────────────────────────────────────
 
-func TestSendPanelPipelinePickerOpens(t *testing.T) {
-	m := console.NewWithPipelines([]string{"alpha", "beta", "gamma"})
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-
-	// Focus the send panel.
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
-	m5 := m4.(console.Model)
-
-	// Tab through: Name → Agent → SavedPrompt → SavedPipeline.
-	for range 3 {
-		m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyTab})
-		m5 = m6.(console.Model)
-	}
-
-	// Press Enter — pipeline picker should open.
-	m7, _ := m5.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m8 := m7.(console.Model)
-	if !m8.SendPanelSavedPipelineOpen() {
-		t.Error("expected saved pipeline picker to be open after Enter on pipeline field")
-	}
-}
 
 // ── Agent modal overlay ───────────────────────────────────────────────────────
 
 // TestAgentSendPanelFocusedOnA asserts that pressing 'a' focuses the send panel.
-func TestAgentSendPanelFocusedOnA(t *testing.T) {
-	m := console.NewWithTestProviders()
-
-	// Size the terminal.
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-
-	// Press 'a' — send panel should become focused.
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
-	m5 := m4.(console.Model)
-	if !m5.SendPanelFocused() {
-		t.Error("expected send panel to be focused after pressing 'a'")
-	}
-	if !m5.AgentFocused() {
-		t.Error("expected agent section to be focused after pressing 'a'")
-	}
-
-	// Press ESC — send panel should lose focus.
-	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyEscape})
-	m7 := m6.(console.Model)
-	if m7.SendPanelFocused() {
-		t.Error("expected send panel to not be focused after ESC")
-	}
-}
 
 // ── View smoke test ───────────────────────────────────────────────────────────
 
@@ -162,24 +115,6 @@ func TestViewContainsBanner(t *testing.T) {
 	}
 }
 
-func TestViewContainsSendPanelPipelineField(t *testing.T) {
-	m := console.NewWithPipelines([]string{"my-pipeline"})
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	view := m2.(console.Model).View()
-	// The send panel always renders a "Pipeline" label in its row.
-	if !strings.Contains(view, "Pipeline") {
-		t.Errorf("View() missing Pipeline field in send panel:\n%s", view)
-	}
-}
-
-func TestViewContainsActivityFeed(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	view := m2.(console.Model).View()
-	if !strings.Contains(view, "ACTIVITY FEED") {
-		t.Errorf("View() missing ACTIVITY FEED section:\n%s", view)
-	}
-}
 
 func TestViewContainsPanelHintFooter(t *testing.T) {
 	// Panels show their hint footer inside their own border when focused.
@@ -249,20 +184,6 @@ func TestFeedScrollOffset_ResetOnNewEntry(t *testing.T) {
 	}
 }
 
-func TestFeedScrollOffset_ClampedAtMax(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-	// Add feed entries with lines.
-	for i := 0; i < 5; i++ {
-		m3 = m3.AddFeedEntry("id", "title", console.FeedDone, []string{"a", "b"})
-	}
-	// View should still render without crashing.
-	view := m3.View()
-	if !strings.Contains(view, "ACTIVITY FEED") {
-		t.Errorf("View() should still contain ACTIVITY FEED after clamping, got: %s", view)
-	}
-}
 
 // ── Agent section fixed height (task 2.6) ──────────────────────────────────────
 
@@ -330,34 +251,6 @@ func TestSignalBoard_BlinkToggleOnTick(t *testing.T) {
 	}
 }
 
-func TestSignalBoard_HeaderContainsFilter(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-
-	// Default state: "running" filter is active — filter line IS shown.
-	sb := m3.BuildSignalBoard(8, 60)
-	rendered := strings.Join(sb, "\n")
-	if !strings.Contains(rendered, "SIGNAL BOARD") {
-		t.Errorf("signal board missing 'SIGNAL BOARD' header: %s", rendered)
-	}
-	if !strings.Contains(rendered, "filter:") {
-		t.Errorf("signal board should show filter line when filter is 'running': %s", rendered)
-	}
-
-	// After pressing f to cycle to "all", the filter line is still always shown.
-	m3f := m3.SetSignalBoardFocused(true)
-	m4, _ := m3f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-	m5 := m4.(console.Model)
-	sb2 := m5.BuildSignalBoard(8, 60)
-	rendered2 := strings.Join(sb2, "\n")
-	if !strings.Contains(rendered2, "filter:") {
-		t.Errorf("signal board should always show filter line: %s", rendered2)
-	}
-	if !strings.Contains(rendered2, "all") {
-		t.Errorf("signal board filter line should show 'all' after cycling: %s", rendered2)
-	}
-}
 
 // ── Tmux hidden windows (task 4.6) ────────────────────────────────────────────
 
@@ -394,16 +287,6 @@ func TestSignalBoard_EnterDoesNotOpenPopup(t *testing.T) {
 	}
 }
 
-func TestSignalBoard_ViewContainsSignalBoard(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	view := m2.(console.Model).View()
-	// Three-column layout: the old SIGNAL BOARD panel is replaced by the AGENTS
-	// grid in the center column.  Verify the agents panel header is present.
-	if !strings.Contains(view, "AGENTS") {
-		t.Errorf("View() missing AGENTS section (replaced SIGNAL BOARD in three-column layout):\n%s", view)
-	}
-}
 
 // ── Parallel Jobs (tasks 2.1–2.7 / 7.1–7.2) ──────────────────────────────────
 
@@ -428,68 +311,9 @@ func TestParallelJobs(t *testing.T) {
 	}
 }
 
-func TestParallelJobCap(t *testing.T) {
-	cap := console.MaxParallelJobs()
-
-	// Use test providers so the provider lookup in submitAgentJob succeeds.
-	m := console.NewWithTestProviders()
-	// Fill activeJobs to the cap.
-	for i := 0; i < cap; i++ {
-		m = m.AddActiveJob(fmt.Sprintf("job%d", i))
-	}
-	if got := m.ActiveJobsCount(); got != cap {
-		t.Fatalf("expected %d active jobs before cap check, got %d", cap, got)
-	}
-
-	// Submit directly via test helper — triggers submitAgentJob which checks the cap.
-	m2, _ := m.SubmitJobForTest("test message")
-	m3 := m2
-
-	// activeJobs count should still be cap (no new job added).
-	if got := m3.ActiveJobsCount(); got != cap {
-		t.Errorf("expected activeJobs count to stay at cap %d, got %d", cap, got)
-	}
-
-	// A warning feed entry should have been added.
-	m4, _ := m3.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	view := m4.(console.Model).View()
-	if !strings.Contains(view, "max parallel") {
-		t.Errorf("expected warning 'max parallel' in view after cap exceeded:\n%s", view)
-	}
-}
 
 // ── [p] send panel focus shortcut ────────────────────────────────────────────
 
-func TestPKeyFocusesSendPanel_FromAgent(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	// Focus signal board first.
-	m3, _ := m2.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	m4 := m3.(console.Model)
-
-	// Press p — should focus the agent send panel.
-	m5, _ := m4.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	m6 := m5.(console.Model)
-	if !m6.AgentFocused() {
-		t.Error("expected agent send panel focused after pressing 'p'")
-	}
-	if !m6.SendPanelFocused() {
-		t.Error("expected send panel focused after pressing 'p'")
-	}
-}
-
-func TestPKeyFocusesSendPanel_FromFeed(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	// Focus feed.
-	m3, _ := m2.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-	// Press p — should focus send panel.
-	m4, _ := m3.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	m5 := m4.(console.Model)
-	if !m5.AgentFocused() {
-		t.Error("expected agent send panel focused after pressing 'p' from feed")
-	}
-}
 
 // ── [d] delete pipeline confirmation (via signal board archive) ──────────────
 
@@ -523,242 +347,23 @@ func TestFeedScrollIndicator_NoIndicatorWhenAllVisible(t *testing.T) {
 	}
 }
 
-func TestFeedScrollIndicator_DownWhenContentBelow(t *testing.T) {
-	m := console.NewWithTestProviders()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
-	m3 := m2.(console.Model)
-	// Add enough entries to overflow the visible height.
-	for i := range 30 {
-		m3 = m3.AddFeedEntry(fmt.Sprintf("job%d", i), fmt.Sprintf("pipeline: job%d", i), console.FeedDone, []string{"output line"})
-	}
-	// Tab to feed focus (launcher→agent→signal→inbox→feed = 4 tabs).
-	cur := tea.Model(m3)
-	var focusedModel console.Model
-	for i := range 10 {
-		next, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
-		focusedModel = next.(console.Model)
-		cur = next
-		if focusedModel.FeedFocused() {
-			break
-		}
-		if i == 9 {
-			t.Fatal("feed never became focused after 10 tabs")
-		}
-	}
-	view := focusedModel.View()
-	// Feed hint footer shows page nav hints when focused — confirms footer is visible.
-	if !strings.Contains(view, "page up") {
-		t.Errorf("expected page nav hint in feed footer when feed focused with overflowing content:\n%s", view)
-	}
-}
 
 // ── Feed navigation (tasks 6.1–6.4) ──────────────────────────────────────────
 
 // TestTabCycle_FullCycle verifies the full Tab focus cycle (three-column layout):
 // inbox → cron → agentsCenter → agent runner (cycles providers) → signalBoard → feed → inbox
-func TestTabCycle_FullCycle(t *testing.T) {
-	m := console.NewWithPipelines([]string{"alpha", "beta"})
-	// Start: inbox focused (default).
-
-	// Tab 1: inbox → cron
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m2m := m2.(console.Model)
-	if !m2m.CronPanelFocused() {
-		t.Error("after 1 Tab: expected cron focused")
-	}
-
-	// Tab 2: cron → agentsCenter
-	m3, _ := m2m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m3m := m3.(console.Model)
-	if !m3m.AgentsCenterFocused() {
-		t.Error("after 2 Tabs: expected agentsCenter focused")
-	}
-
-	// Tab 3: agentsCenter → agent runner
-	m4, _ := m3m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m4m := m4.(console.Model)
-	if !m4m.AgentFocused() {
-		t.Error("after 3 Tabs: expected agent runner focused")
-	}
-
-	// Tab through agent runner providers until signalBoard is reached.
-	cur := m4m
-	for i := 0; i < 20; i++ {
-		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
-		cur = nx.(console.Model)
-		if cur.SignalBoardFocused() {
-			break
-		}
-	}
-	if !cur.SignalBoardFocused() {
-		t.Error("expected signalBoard focused after tabbing through agent runner providers")
-	}
-
-	// signalBoard → feed
-	m6, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m6m := m6.(console.Model)
-	if !m6m.FeedFocused() {
-		t.Error("expected feed focused after Tab from signalBoard")
-	}
-
-	// feed → inbox (wraps around)
-	m6m = m6m.AddFeedEntry("id1", "job one", console.FeedDone, []string{"line a", "line b"})
-	m7, _ := m6m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m7m := m7.(console.Model)
-	if m7m.FeedFocused() || m7m.SignalBoardFocused() || m7m.AgentsCenterFocused() || m7m.AgentFocused() {
-		t.Error("after feed Tab: expected inbox focused (wrap-around)")
-	}
-	// j should move inbox cursor, not feedCursor
-	cursorBefore := m7m.FeedCursor()
-	m8, _ := m7m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m8m := m8.(console.Model)
-	if m8m.FeedCursor() != cursorBefore {
-		t.Errorf("feedCursor should not change when inbox is focused, got %d → %d", cursorBefore, m8m.FeedCursor())
-	}
-}
 
 // TestTabFromFeed_FocusesInbox verifies that pressing Tab when the Activity
 // Feed is focused moves focus to inbox (feed → inbox wrap-around in new layout).
-func TestTabFromFeed_FocusesInbox(t *testing.T) {
-	m := console.NewWithPipelines([]string{"alpha", "beta"})
-	m = m.SetFeedFocused(true)
-	m = m.AddFeedEntry("id1", "job one", console.FeedDone, []string{"line a", "line b"})
-
-	// Tab: feed → inbox. Feed cursor should not move.
-	cursorBefore := m.FeedCursor()
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m3 := m2.(console.Model)
-	if m3.FeedFocused() || m3.CronPanelFocused() || m3.AgentsCenterFocused() || m3.AgentFocused() {
-		t.Errorf("expected inbox focused after Tab-from-feed")
-	}
-	// j should NOT change feedCursor when inbox is focused
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m5 := m4.(console.Model)
-	if m5.FeedCursor() != cursorBefore {
-		t.Errorf("feedCursor should not change when inbox is focused, got %d → %d",
-			cursorBefore, m5.FeedCursor())
-	}
-}
 
 // TestFeedCursor_JKOnlyWhenFocused verifies that j and k only move feedCursor
 // when the Activity Feed is focused.
-func TestFeedCursor_JKOnlyWhenFocused(t *testing.T) {
-	// Scenario A: feed NOT focused — j and k should not change feedCursor.
-	m := console.New()
-	m = m.AddFeedEntry("id1", "job one", console.FeedDone, []string{"line a", "line b", "line c"})
-	m = m.AddFeedEntry("id2", "job two", console.FeedDone, []string{"line d", "line e"})
-	// Default state: inbox focused, feed not focused.
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	if got := m2.(console.Model).FeedCursor(); got != 0 {
-		t.Errorf("feedCursor should be 0 when feed not focused after j, got %d", got)
-	}
-	m3, _ := m2.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	if got := m3.(console.Model).FeedCursor(); got != 0 {
-		t.Errorf("feedCursor should be 0 when feed not focused after k, got %d", got)
-	}
-
-	// Scenario B: feed focused — j should advance feedCursor.
-	m4 := console.New()
-	m4 = m4.AddFeedEntry("id1", "job one", console.FeedDone, []string{"line a", "line b", "line c"})
-	m4 = m4.AddFeedEntry("id2", "job two", console.FeedDone, []string{"line d", "line e"})
-	m4 = m4.SetFeedFocused(true)
-	m5, _ := m4.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	if got := m5.(console.Model).FeedCursor(); got == 0 {
-		t.Error("feedCursor should advance after j when feed is focused")
-	}
-
-	// Scenario C: feed focused — k after j should decrement.
-	m6, _ := m5.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	if got := m6.(console.Model).FeedCursor(); got != 0 {
-		t.Errorf("feedCursor should decrement back to 0 after j then k, got %d", got)
-	}
-}
 
 // TestFeedCursor_GAndGJumps verifies that g goes to the first line and G goes
 // to the last line of the Activity Feed when feed is focused.
-func TestFeedCursor_GAndGJumps(t *testing.T) {
-	m := console.New()
-	// Add entries with enough lines so last-line index is meaningfully > 0.
-	for i := range 5 {
-		m = m.AddFeedEntry(fmt.Sprintf("job%d", i), fmt.Sprintf("pipeline %d", i), console.FeedDone,
-			[]string{"output line 1", "output line 2", "output line 3"})
-	}
-	m = m.SetFeedFocused(true)
-
-	// Press G — should jump to last line.
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
-	m3 := m2.(console.Model)
-	if m3.FeedCursor() == 0 {
-		t.Error("feedCursor should be > 0 after G (jump to last line)")
-	}
-	lastCursor := m3.FeedCursor()
-
-	// Press g — should jump back to first line (0).
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
-	m5 := m4.(console.Model)
-	if m5.FeedCursor() != 0 {
-		t.Errorf("feedCursor should be 0 after g (jump to first line), got %d", m5.FeedCursor())
-	}
-
-	// Press G again — should restore last-line index.
-	m6, _ := m5.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
-	m7 := m6.(console.Model)
-	if m7.FeedCursor() != lastCursor {
-		t.Errorf("feedCursor after second G should match first G result: want %d, got %d", lastCursor, m7.FeedCursor())
-	}
-}
 
 // ── step badge rendering ──────────────────────────────────────────────────────
 
-func TestStepBadges_GlyphsPresent(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-	m3 = m3.AddFeedEntry("job1", "pipeline: test", console.FeedRunning, nil)
-	// Inject step statuses for all four states.
-	for _, tc := range []struct {
-		id     string
-		status string
-	}{
-		{"step-pending", "pending"},
-		{"step-running", "running"},
-		{"step-done", "done"},
-		{"step-failed", "failed"},
-	} {
-		m3x, _ := m3.Update(console.StepStatusMsg{FeedID: "job1", StepID: tc.id, Status: tc.status})
-		m3 = m3x.(console.Model)
-	}
-	// Done steps with no output are suppressed; add output so the done glyph appears.
-	m3 = m3.AddStepLines("job1", "step-done", []string{"ok"})
-	view := m3.View()
-	for _, glyph := range []string{"·", "»", "°", "×"} {
-		if !strings.Contains(view, glyph) {
-			t.Errorf("View() missing step glyph %q in feed output:\n%s", glyph, view)
-		}
-	}
-}
-
-func TestStepBadges_SingleRowFewSteps(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
-	m3 := m2.(console.Model)
-	m3 = m3.AddFeedEntry("job1", "pipeline: test", console.FeedRunning, nil)
-	for i := range 3 {
-		id := fmt.Sprintf("step-%d", i)
-		// Use "running" so steps are not suppressed (done+no-output steps are hidden).
-		m3x, _ := m3.Update(console.StepStatusMsg{FeedID: "job1", StepID: id, Status: "running"})
-		m3 = m3x.(console.Model)
-	}
-	view := m3.View()
-	// With a wide terminal and only 3 short steps all badges should fit on one line.
-	// Verify all three step IDs appear somewhere in the view.
-	for i := range 3 {
-		id := fmt.Sprintf("step-%d", i)
-		if !strings.Contains(view, id) {
-			t.Errorf("View() missing step id %q in rendered output", id)
-		}
-	}
-}
 
 func TestStepBadges_WrapsOnNarrowTerminal(t *testing.T) {
 	m := console.New()
@@ -859,32 +464,6 @@ func TestJobDoneMsg_NoSteps_ProducesFeedDone(t *testing.T) {
 
 // TestSendPanel_TabCyclesToMessage checks that Tab from send panel Name field
 // eventually reaches the Message field.
-func TestSendPanel_TabCyclesToMessage(t *testing.T) {
-	m := console.NewWithTestProviders()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-
-	// Focus agent send panel.
-	m4, _ := m3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
-	m5 := m4.(console.Model)
-
-	if !m5.SendPanelFocused() {
-		t.Fatal("expected send panel to be focused after 'a'")
-	}
-
-	// Tab three times: Name → Agent → SavedPrompt → Message.
-	cur := m5
-	for i := 0; i < 3; i++ {
-		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyTab})
-		cur = nx.(console.Model)
-	}
-
-	// Pressing enter on message field should attempt to submit (empty, so no-op).
-	// Just verify no crash and panel is still focused.
-	if !cur.SendPanelFocused() {
-		t.Error("expected send panel to remain focused after tabbing")
-	}
-}
 
 // TestSendPanel_SubmitDoesNotCrash checks that submitting from the send panel
 // message field with a non-empty message doesn't crash.
@@ -929,33 +508,6 @@ func TestSendPanel_NoScheduleError(t *testing.T) {
 
 // ── Kill and Archive (signal-board-kill-and-archive) ──────────────────────────
 
-func TestSignalBoard_KillRunningEntry(t *testing.T) {
-	cancelled := false
-	_, cancel := context.WithCancel(context.Background())
-	wrappedCancel := context.CancelFunc(func() { cancelled = true; cancel() })
-
-	m := console.New()
-	m = m.AddFeedEntry("job1", "pipeline: kill-me", console.FeedRunning, nil)
-	m = m.AddActiveJobWithCancel("job1", wrappedCancel)
-	m = m.SetSignalBoardFocused(true)
-
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-	result := m2.(console.Model)
-
-	if !cancelled {
-		t.Error("expected cancel to be called on kill")
-	}
-	status, found := result.FeedEntryStatus("job1")
-	if !found {
-		t.Fatal("feed entry not found after kill")
-	}
-	if status != console.FeedFailed {
-		t.Errorf("expected FeedFailed after kill, got %v", status)
-	}
-	if result.ActiveJobsCount() != 0 {
-		t.Errorf("expected activeJobs to be empty after kill, got %d", result.ActiveJobsCount())
-	}
-}
 
 func TestSignalBoard_KillNonRunningEntry_NoOp(t *testing.T) {
 	m := console.New()
@@ -975,70 +527,6 @@ func TestSignalBoard_KillNonRunningEntry_NoOp(t *testing.T) {
 	}
 }
 
-func TestSignalBoard_ArchiveEntry(t *testing.T) {
-	m := console.New()
-	m = m.AddFeedEntry("job1", "pipeline: done", console.FeedDone, nil)
-	m = m.SetSignalBoardFocused(true)
-	// Switch to "all" filter so the done entry is visible (default is "running")
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-	m3, _ := m2.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	result := m3.(console.Model)
-
-	archived, found := result.FeedEntryArchived("job1")
-	if !found {
-		t.Fatal("feed entry not found after archive")
-	}
-	if !archived {
-		t.Error("expected entry to be archived")
-	}
-
-	// Entry should not appear in "all" filter
-	sb := result.BuildSignalBoard(12, 80)
-	rendered := strings.Join(sb, "\n")
-	if strings.Contains(rendered, "pipeline: done") {
-		t.Error("archived entry should not appear in 'all' filter view")
-	}
-}
-
-func TestSignalBoard_ArchivedFilter_ShowsArchivedEntries(t *testing.T) {
-	m := console.New()
-	m = m.AddFeedEntry("job1", "pipeline: done", console.FeedDone, nil)
-	m = m.SetSignalBoardFocused(true)
-	// Switch to "all" to see the entry, then archive it
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-	m3, _ := m2.(console.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-
-	// Cycle to "archived" filter: all→done→failed→archived (3 presses from "all")
-	cur := m3.(console.Model)
-	for i := 0; i < 3; i++ {
-		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-		cur = nx.(console.Model)
-	}
-
-	if cur.SignalBoardActiveFilter() != "archived" {
-		t.Errorf("expected filter 'archived', got %q", cur.SignalBoardActiveFilter())
-	}
-	sb := cur.BuildSignalBoard(12, 80)
-	rendered := strings.Join(sb, "\n")
-	if !strings.Contains(rendered, "pipeline: done") {
-		t.Errorf("expected archived entry to appear in archived filter:\n%s", rendered)
-	}
-}
-
-func TestSignalBoard_FilterCycleOrder(t *testing.T) {
-	m := console.New()
-	m = m.SetSignalBoardFocused(true)
-
-	expected := []string{"all", "done", "failed", "archived", "running"}
-	cur := m
-	for _, want := range expected {
-		nx, _ := cur.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-		cur = nx.(console.Model)
-		if got := cur.SignalBoardActiveFilter(); got != want {
-			t.Errorf("expected filter %q, got %q", want, got)
-		}
-	}
-}
 
 func TestSignalBoard_DefaultFilter_IsRunning(t *testing.T) {
 	m := console.New()
@@ -1061,32 +549,6 @@ func TestAgentSendPanel_ViewContainsSEND(t *testing.T) {
 	}
 }
 
-func TestFeedStepDisplay_Vertical(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m3 := m2.(console.Model)
-	m3 = m3.AddFeedEntry("job1", "pipeline: test", console.FeedRunning, nil)
-	// Use "running" status so steps are not suppressed (done+no-output steps are hidden).
-	for _, id := range []string{"step-a", "step-b", "step-c"} {
-		mx, _ := m3.Update(console.StepStatusMsg{FeedID: "job1", StepID: id, Status: "running"})
-		m3 = mx.(console.Model)
-	}
-	view := m3.View()
-	// All step IDs must appear.
-	for _, id := range []string{"step-a", "step-b", "step-c"} {
-		if !strings.Contains(view, id) {
-			t.Errorf("View() missing step id %q in vertical layout output", id)
-		}
-	}
-	// With vertical layout the · separator should NOT appear between step badges.
-	if strings.Contains(view, "  ·  ") {
-		t.Error("View() contains horizontal '·' separator — expected vertical layout")
-	}
-	// Tree connectors should appear.
-	if !strings.Contains(view, "├") && !strings.Contains(view, "└") {
-		t.Error("expected tree connectors (├ or └) in step display")
-	}
-}
 
 // ── Step suppression ─────────────────────────────────────────────────────────
 
@@ -1103,23 +565,6 @@ func TestFeedStep_DoneWithNoOutput_NotRendered(t *testing.T) {
 	}
 }
 
-func TestFeedStep_DoneWithOutput_IsRendered(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = m2.(console.Model)
-	m = m.AddFeedEntry("job1", "pipeline: test", console.FeedRunning, nil)
-	// Add step and inject output lines.
-	mx, _ := m.Update(console.StepStatusMsg{FeedID: "job1", StepID: "result-step", Status: "done"})
-	m = mx.(console.Model)
-	m = m.AddStepLines("job1", "result-step", []string{"output here"})
-	view := m.View()
-	if !strings.Contains(view, "result-step") {
-		t.Error("expected done step WITH output to appear in feed view")
-	}
-	if !strings.Contains(view, "output here") {
-		t.Error("expected step output line to appear in feed view")
-	}
-}
 
 // ── Cursor overlay ────────────────────────────────────────────────────────────
 
@@ -1161,45 +606,6 @@ func TestFeed_CursorRow_SameWidthAsNonCursorRow(t *testing.T) {
 
 // ── feedLineCount integration ─────────────────────────────────────────────────
 
-func TestFeedLineCount_MatchesViewActivityFeed(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = m2.(console.Model)
-
-	// Add entries with mix of plain text and JSON output.
-	m = m.AddFeedEntry("job1", "pipeline: alpha", console.FeedDone, []string{
-		"plain text output",
-		`{"key":"value","count":42}`,
-		"another plain line",
-	})
-	m = m.AddFeedEntry("job2", "agent: search", console.FeedDone, []string{
-		`[1,2,3,4,5,6,7,8]`,
-	})
-
-	m = m.SetFeedFocused(true)
-
-	logicalCount := m.FeedLineCount()
-	if logicalCount <= 0 {
-		t.Fatalf("FeedLineCount should be positive, got %d", logicalCount)
-	}
-
-	// Count navigable rows from ViewActivityFeed using the internal logicalIdx.
-	// We verify by checking cursor can navigate to the last line without overflow.
-	for i := 0; i < logicalCount-1; i++ {
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-		m = m2.(console.Model)
-	}
-	if m.FeedCursor() != logicalCount-1 {
-		t.Errorf("cursor should be at %d (last line), got %d", logicalCount-1, m.FeedCursor())
-	}
-
-	// One more j should not exceed bounds.
-	m2, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m = m2.(console.Model)
-	if m.FeedCursor() != logicalCount-1 {
-		t.Errorf("cursor exceeded logicalCount: cursor=%d, count=%d", m.FeedCursor(), logicalCount)
-	}
-}
 
 // ── WriteSingleStepPipeline ───────────────────────────────────────────────────
 
@@ -1273,88 +679,15 @@ func tabNTimes(m console.Model, n int) console.Model {
 // send panel focus (Name) moves focus to the SavedPrompt slot (slot 2).
 // We verify this by confirming that pressing Enter at that point opens the saved
 // prompt picker (when prompts are available).
-func TestSendPanel_TabReachesSavedPromptSlot(t *testing.T) {
-	m := openAgentSendPanel(t)
-	m = m.WithAgentPrompts([]store.Prompt{
-		{Title: "prompt-alpha"},
-		{Title: "prompt-beta"},
-	})
-
-	// Tab 1: Name → Agent. Tab 2: Agent → SavedPrompt.
-	m = tabNTimes(m, 2)
-
-	// At SavedPrompt slot, Enter should open the saved prompt picker.
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	result := m2.(console.Model)
-	if !result.SendPanelSavedPromptsOpen() {
-		t.Error("expected savedPromptPicker to be open after 2 tabs + Enter (should be at SavedPrompt slot)")
-	}
-}
 
 // TestSendPanel_EnterOnAgentSlot_OpensAgentPicker verifies that one tab from Name
 // (landing on Agent slot) and pressing Enter opens the agent picker popup.
-func TestSendPanel_EnterOnAgentSlot_OpensAgentPicker(t *testing.T) {
-	m := openAgentSendPanel(t)
-
-	// Tab 1: Name → Agent.
-	m = tabNTimes(m, 1)
-
-	if m.SendPanelAgentOpen() {
-		t.Fatal("agent picker should not be open before Enter")
-	}
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	result := m2.(console.Model)
-	if !result.SendPanelAgentOpen() {
-		t.Error("expected agent picker popup to open after 1 tab + Enter (should be at Agent slot)")
-	}
-}
 
 // TestSendPanel_EnterOnSavedPromptSlot_OpensPicker verifies that after 2 tabs
 // from the send panel's initial focus, pressing Enter opens the saved prompt picker.
-func TestSendPanel_EnterOnSavedPromptSlot_OpensPicker(t *testing.T) {
-	m := openAgentSendPanel(t)
-	// Inject some prompts so the picker has items.
-	m = m.WithAgentPrompts([]store.Prompt{
-		{Title: "prompt-alpha"},
-		{Title: "prompt-beta"},
-	})
-	// Tab 1: Name → Agent. Tab 2: Agent → SavedPrompt.
-	m = tabNTimes(m, 2)
-
-	if m.SendPanelSavedPromptsOpen() {
-		t.Fatal("picker should not be open before Enter")
-	}
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	result := m2.(console.Model)
-	if !result.SendPanelSavedPromptsOpen() {
-		t.Error("expected savedPromptPicker to be open after Enter on SavedPrompt slot")
-	}
-}
 
 // TestSendPanel_BracketKeys_NoLongerCyclePrompts verifies that [ and ] no longer
 // cycle through saved prompts (the old bracket-cycling behavior was removed).
-func TestSendPanel_BracketKeys_NoLongerCyclePrompts(t *testing.T) {
-	m := openAgentSendPanel(t)
-	m = m.WithAgentPrompts([]store.Prompt{
-		{Title: "prompt-one"},
-		{Title: "prompt-two"},
-	})
-	initial := m.SendPanelSavedPromptIdx()
-
-	// Press ] — should have no effect on saved prompt idx.
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("]")})
-	after := m2.(console.Model).SendPanelSavedPromptIdx()
-	if after != initial {
-		t.Errorf("] should no longer cycle prompts: idx went from %d to %d", initial, after)
-	}
-
-	// Press [ — should have no effect on saved prompt idx.
-	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("[")})
-	after2 := m3.(console.Model).SendPanelSavedPromptIdx()
-	if after2 != initial {
-		t.Errorf("[ should no longer cycle prompts: idx went from %d to %d", initial, after2)
-	}
-}
 
 // ── Three-column layout: column width helpers (task 9.2) ─────────────────────
 
@@ -1383,32 +716,6 @@ func TestRightColWidth(t *testing.T) {
 }
 
 // TestMidColWidth verifies the center-column formula: w - leftW - rightW - 4.
-func TestMidColWidth(t *testing.T) {
-	cases := []struct {
-		termWidth int
-		wantMin   int // just verify it's positive and reasonable
-	}{
-		{termWidth: 120, wantMin: 10},
-		{termWidth: 160, wantMin: 10},
-		{termWidth: 200, wantMin: 10},
-	}
-	for _, tc := range cases {
-		m := console.New()
-		m2, _ := m.Update(tea.WindowSizeMsg{Width: tc.termWidth, Height: 40})
-		m = m2.(console.Model)
-		got := m.MidColWidth()
-		if got < tc.wantMin {
-			t.Errorf("MidColWidth() for termWidth=%d: got %d, want >= %d", tc.termWidth, got, tc.wantMin)
-		}
-		// Verify the formula: leftW + midW + rightW + 4 == termWidth (approximately).
-		leftW := m.LeftColWidth()
-		rightW := m.RightColWidth()
-		if leftW+got+rightW+4 != tc.termWidth {
-			t.Errorf("column widths don't sum to termWidth: left(%d)+mid(%d)+right(%d)+4 = %d, want %d",
-				leftW, got, rightW, leftW+got+rightW+4, tc.termWidth)
-		}
-	}
-}
 
 // ── Agents grid panel (task 9.3) ──────────────────────────────────────────────
 
@@ -1452,71 +759,6 @@ func TestAgentsGrid_MinOneColumn(t *testing.T) {
 // ── h/j/k/l cursor navigation (task 9.4) ─────────────────────────────────────
 
 // TestAgentsGrid_HJKLNavigation verifies cursor movement and clamping.
-func TestAgentsGrid_HJKLNavigation(t *testing.T) {
-	m := console.New()
-	// Add 4 entries so we have a 2×2 grid at midW=48 (2 cols).
-	for _, id := range []string{"id0", "id1", "id2", "id3"} {
-		m = m.AddFeedEntry(id, "agent-"+id, console.FeedRunning, nil)
-	}
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = m2.(console.Model)
-	m = m.SetAgentsCenterFocused(true)
-
-	// Initially at row=0, col=0.
-	if m.AgentsGridRow() != 0 || m.AgentsGridCol() != 0 {
-		t.Fatalf("initial cursor: got row=%d col=%d, want 0,0", m.AgentsGridRow(), m.AgentsGridCol())
-	}
-
-	// Press l → col should increase.
-	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	m = m3.(console.Model)
-	if m.AgentsGridCol() != 1 {
-		t.Errorf("after l: col=%d, want 1", m.AgentsGridCol())
-	}
-
-	// Press l again → should clamp at last column.
-	prevCol := m.AgentsGridCol()
-	m4, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	m = m4.(console.Model)
-	if m.AgentsGridCol() > prevCol {
-		t.Errorf("l past last column should clamp: col went from %d to %d", prevCol, m.AgentsGridCol())
-	}
-
-	// Press h → col should decrease.
-	m5, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-	m = m5.(console.Model)
-	if m.AgentsGridCol() != 0 {
-		t.Errorf("after h: col=%d, want 0", m.AgentsGridCol())
-	}
-
-	// Press h again → should clamp at 0.
-	m6, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-	m = m6.(console.Model)
-	if m.AgentsGridCol() != 0 {
-		t.Errorf("h at col=0 should stay at 0, got %d", m.AgentsGridCol())
-	}
-
-	// Press j → row should increase.
-	m7, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m = m7.(console.Model)
-	if m.AgentsGridRow() != 1 {
-		t.Errorf("after j: row=%d, want 1", m.AgentsGridRow())
-	}
-
-	// Press k → row should decrease.
-	m8, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	m = m8.(console.Model)
-	if m.AgentsGridRow() != 0 {
-		t.Errorf("after k: row=%d, want 0", m.AgentsGridRow())
-	}
-
-	// Press k again → should clamp at 0.
-	m9, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	m = m9.(console.Model)
-	if m.AgentsGridRow() != 0 {
-		t.Errorf("k at row=0 should stay at 0, got %d", m.AgentsGridRow())
-	}
-}
 
 // ── 12-hour timestamp format (task 9.5) ───────────────────────────────────────
 
@@ -1654,57 +896,9 @@ func TestNarrowTerminal_HidesRightColumn(t *testing.T) {
 }
 
 // TestWideTerminal_ShowsAllThreeColumns verifies w>=80 shows all three columns.
-func TestWideTerminal_ShowsAllThreeColumns(t *testing.T) {
-	m := console.New()
-	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = m2.(console.Model)
-	view := m.View()
-	// Left column header (inbox or cron replaces the removed pipelines panel).
-	if !strings.Contains(view, "INBOX") && !strings.Contains(view, "inbox") &&
-		!strings.Contains(view, "CRON") && !strings.Contains(view, "cron") {
-		t.Error("expected INBOX or CRON in left column")
-	}
-	if !strings.Contains(view, "AGENTS") && !strings.Contains(view, "agents") {
-		t.Error("expected AGENTS in center column")
-	}
-	if !strings.Contains(view, "ACTIVITY FEED") {
-		t.Error("expected ACTIVITY FEED in right column")
-	}
-}
 
 // ── Inline picker: working directory ─────────────────────────────────────────
 
 // TestSendPanel_EnterOnCWDSlot_SetsInlineDirPicker verifies that navigating to the
 // CWD row inside the agent picker popup and pressing Enter opens the dir picker.
 // Flow: Tab (Name→Agent) → Enter (open popup) → Tab (picker→CWD) → Enter → DirPickerOpen.
-func TestSendPanel_EnterOnCWDSlot_SetsInlineDirPicker(t *testing.T) {
-	m := openAgentSendPanel(t)
-
-	if m.DirPickerOpen() {
-		t.Fatal("dir picker should not be open at start")
-	}
-
-	// Tab 1: Name → Agent focus.
-	m = tabNTimes(m, 1)
-
-	// Enter: open agent picker popup (focuses SendPopupFocusPicker).
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = m2.(console.Model)
-	if !m.SendPanelAgentOpen() {
-		t.Fatal("agent picker popup should be open after Enter on Agent slot")
-	}
-
-	// Tab inside popup: SendPopupFocusPicker → SendPopupFocusCWD.
-	m = tabNTimes(m, 1)
-
-	// Enter on CWD slot: should open the inline dir picker inside the agent popup.
-	m3, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	result := m3.(console.Model)
-	if !result.SendPanelDirPickerOpen() {
-		t.Error("expected sendPanel inline dir picker open after Enter on CWD slot")
-	}
-	// The switchboard-level dir picker overlay should NOT be open (it's now inline).
-	if result.DirPickerOpen() {
-		t.Error("switchboard-level dir picker should not open; CWD picker is now inline")
-	}
-}

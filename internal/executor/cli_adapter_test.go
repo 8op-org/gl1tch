@@ -123,15 +123,15 @@ func TestCliAdapter_Capabilities_NoSidecar(t *testing.T) {
 }
 
 func TestCliAdapter_Execute_VarsAsEnv(t *testing.T) {
-	// Use `sh -c 'echo $ORCAI_MY_KEY'` to verify the env var is set on the subprocess.
-	a := executor.NewCliAdapter("sh-tool", "shell", "sh", "-c", "echo $ORCAI_MY_KEY")
+	// Use `sh -c 'echo $GLITCH_MY_KEY'` to verify the env var is set on the subprocess.
+	a := executor.NewCliAdapter("sh-tool", "shell", "sh", "-c", "echo $GLITCH_MY_KEY")
 	var buf bytes.Buffer
 	err := a.Execute(context.Background(), "", map[string]string{"my_key": "hello-from-var"}, &buf)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if !strings.Contains(buf.String(), "hello-from-var") {
-		t.Errorf("expected ORCAI_MY_KEY in subprocess output, got %q", buf.String())
+		t.Errorf("expected GLITCH_MY_KEY in subprocess output, got %q", buf.String())
 	}
 }
 
