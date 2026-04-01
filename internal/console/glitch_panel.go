@@ -454,7 +454,7 @@ func (b *glitchCLIBackend) stream(ctx context.Context, turns []glitchTurn, userM
 
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
-	cmd.Stderr = pw
+	cmd.Stderr = io.Discard
 
 	if err := cmd.Start(); err != nil {
 		pr.Close()
