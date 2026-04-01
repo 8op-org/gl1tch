@@ -2010,55 +2010,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "tab", "shift+tab":
-		fwd := key == "tab"
-		// Tab order: signalBoard → sendPanel → signalBoard (wrap).
-		// 'A' toggles GLITCH focus independently.
-		// When send panel is focused, tab cycles through its internal fields.
-		// SendTabOutMsg and SendShiftTabOutMsg signals move focus out of the panel.
-		if m.agent.focused {
-			newPanel, cmd := m.sendPanel.Update(msg)
-			m.sendPanel = newPanel
-			if cmd != nil {
-				outMsg := cmd()
-				switch outMsg.(type) {
-				case buildershared.SendTabOutMsg:
-					m.agent.focused = false
-					m.sendPanel = m.sendPanel.SetFocused(false)
-					m.signalBoardFocused = true
-				case buildershared.SendShiftTabOutMsg:
-					m.agent.focused = false
-					m.sendPanel = m.sendPanel.SetFocused(false)
-					m.signalBoardFocused = true
-				}
-			}
-			return m, nil
+		// Tab toggles GLITCH focus on/off.
+		newPanel, cmd := m.glitchChat.update(msg)
+		m.glitchChat = newPanel
+		if !m.glitchChat.focused {
+			m.glitchChat = m.glitchChat.setFocused(true)
 		}
-		if fwd {
-			switch {
-			case m.signalBoardFocused:
-				m.signalBoardFocused = false
-				m.signalBoard.clearSearch()
-				m.agent.focused = true
-				m.sendPanel = m.sendPanel.Enter()
-			default:
-				m.agent.focused = false
-				m.sendPanel = m.sendPanel.SetFocused(false)
-				m.signalBoardFocused = true
-			}
-		} else {
-			switch {
-			case m.signalBoardFocused:
-				m.signalBoardFocused = false
-				m.signalBoard.clearSearch()
-				m.agent.focused = true
-				m.sendPanel = m.sendPanel.Enter()
-			default:
-				m.agent.focused = false
-				m.sendPanel = m.sendPanel.SetFocused(false)
-				m.signalBoardFocused = true
-			}
-		}
-		return m, nil
+		return m, cmd
 
 	case "f":
 		if m.signalBoardFocused || m.agentsCenterFocused {
@@ -3222,33 +3180,8 @@ func (m Model) View() string {
 	header := m.viewTDFHeader(w)
 
 	buildBody := func() string {
-		if w < 80 {
-			// Narrow terminal: center only.
-			midW := m.midColWidth()
-			center := m.viewCenterColumn(contentH, midW)
-			return strings.Join(center, "\n")
-		}
-
-		midW := m.midColWidth()
-		rightW := m.rightColWidth()
-
-		center := m.viewCenterColumn(contentH, midW)
-		sbLines := m.buildSignalBoard(contentH, rightW)
-
-		totalRows := max(len(center), len(sbLines))
-		var rows []string
-		for i := range totalRows {
-			c := ""
-			if i < len(center) {
-				c = center[i]
-			}
-			r := ""
-			if i < len(sbLines) {
-				r = sbLines[i]
-			}
-			rows = append(rows, padToVis(c, midW)+"  "+r)
-		}
-		return strings.Join(rows, "\n")
+		center := m.viewCenterColumn(contentH, w)
+		return strings.Join(center, "\n")
 	}
 
 	body := buildBody()
@@ -3497,19 +3430,13 @@ func (m Model) rightColWidth() int {
 	return rw
 }
 
-// midColWidth returns the width of the center (GLITCH + send panel) column.
-// One 2-char gutter separates center and right columns.
+// midColWidth returns the full terminal width — GLITCH takes the entire screen.
 func (m Model) midColWidth() int {
 	w := m.width
 	if w <= 0 {
 		w = 120
 	}
-	rw := m.rightColWidth()
-	mw := w - rw - 2
-	if mw < 10 {
-		mw = 10
-	}
-	return mw
+	return w
 }
 
 // viewLeftColumn renders the left column: inbox only.
@@ -3530,24 +3457,12 @@ func (m Model) viewLeftColumn(height, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// viewCenterColumn renders the center column: GLITCH chat (top) + send panel (bottom).
-// The combined output is clamped to height rows.
+// viewCenterColumn renders the center column: GLITCH chat (full height).
 func (m Model) viewCenterColumn(height, width int) []string {
-	// Measure the send panel height so we can give GLITCH the remaining space.
-	agentRunnerLines := m.buildAgentSection(width)
-	agentRunnerH := len(agentRunnerLines)
-
-	// GLITCH gets remaining height after send panel.
-	glitchH := height - agentRunnerH
-	if glitchH < 6 {
-		glitchH = 6
-	}
-
-	glitchLines := m.glitchChat.build(glitchH, width, m.ansiPalette())
+	glitchLines := m.glitchChat.build(height, width, m.ansiPalette())
 
 	var lines []string
 	lines = append(lines, glitchLines...)
-	lines = append(lines, agentRunnerLines...)
 
 	// Pad up to height.
 	for len(lines) < height {

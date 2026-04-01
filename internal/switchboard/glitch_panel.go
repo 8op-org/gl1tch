@@ -384,7 +384,7 @@ func newGlitchPanel(cfgDir string, providers []picker.ProviderDef, s *store.Stor
 		}
 	}
 
-	return glitchChatPanel{
+	p := glitchChatPanel{
 		input:   ti,
 		backend: backend,
 		ctx:     ctx,
@@ -392,6 +392,9 @@ func newGlitchPanel(cfgDir string, providers []picker.ProviderDef, s *store.Stor
 		cfgDir:  cfgDir,
 		store:   s,
 	}
+	// Start focused so users can type immediately.
+	p = p.setFocused(true)
+	return p
 }
 
 // initCmd returns the init Cmd for the GLITCH panel (intro streaming if first run).
@@ -461,6 +464,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 		}
 		switch msg.Type {
 		case tea.KeyEsc:
+			// Esc unfocuses but input is still always visible.
 			p = p.setFocused(false)
 			return p, nil
 		case tea.KeyEnter:
@@ -709,28 +713,28 @@ func (p glitchChatPanel) build(height, width int, pal styles.ANSIPalette) []stri
 		lines = append(lines, boxRow("  "+line, width, borderColor))
 	}
 
-	// Input row.
-	if p.focused {
-		inputStr := p.input.View()
-		lines = append(lines, boxRow(inputStr, width, borderColor))
-	} else if p.backend == nil {
+	// Input row — always shown; shows error when no provider configured.
+	if p.backend == nil {
 		lines = append(lines, boxRow(pal.Error+"  no provider — install ollama or configure one"+aRst, width, borderColor))
 	} else {
-		lines = append(lines, boxRow(pal.Dim+"  press A to chat with GLITCH"+aRst, width, borderColor))
+		lines = append(lines, boxRow(p.input.View(), width, borderColor))
 	}
 
 	// Hint row.
 	var hints []panelrender.Hint
-	if p.focused {
+	if p.streaming {
+		hints = []panelrender.Hint{{Key: "streaming", Desc: "▋"}}
+	} else if p.focused {
 		hints = []panelrender.Hint{
 			{Key: "enter", Desc: "send"},
 			{Key: "esc", Desc: "unfocus"},
-		}
-		if p.streaming {
-			hints = []panelrender.Hint{{Key: "streaming", Desc: "▋"}}
+			{Key: "/help", Desc: "commands"},
 		}
 	} else {
-		hints = []panelrender.Hint{{Key: "A", Desc: "focus GLITCH"}}
+		hints = []panelrender.Hint{
+			{Key: "A", Desc: "focus"},
+			{Key: "/help", Desc: "commands"},
+		}
 	}
 	lines = append(lines, boxRow(panelrender.HintBar(hints, width-2, pal), width, borderColor))
 	lines = append(lines, boxBot(width, borderColor))
