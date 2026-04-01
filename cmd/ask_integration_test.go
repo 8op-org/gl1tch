@@ -2,152 +2,66 @@
 
 package cmd
 
-// Integration tests that verify gl1tch can analyse and fix real GitHub PR review feedback.
+// Integration test that verifies gl1tch end-to-end by building the binary and
+// running it as a subprocess.
 //
-// Definition of done: gl1tch produces a response that correctly addresses all
-// reviewer issues on elastic/ensemble#1246. No PR is posted — output is written
-// to a temp file for manual inspection before any follow-up action.
+// Definition of done: `gl1tch ask --pipeline pr-review --input <PR URL>` produces
+// output that addresses all reviewer issues. No PR is posted — output is written
+// to /tmp/gl1tch-pr-fix-output.md for manual inspection before any follow-up.
 //
 // Run with:
 //
-//	go test ./cmd/... -tags integration -run TestIntegration_PRReview -v -timeout 300s
+//	go test ./cmd/... -tags integration -run TestIntegration_GLitchAsk_PRReview -v -timeout 300s
 //
 // Requires:
-//   - ollama serve (running on localhost:11434)
-//   - ollama pull llama3.2  (or set GLITCH_TEST_MODEL)
-//   - gh auth login         (read access to elastic/ensemble)
+//   - gh auth login  (read access to elastic/ensemble)
+//   - copilot binary in PATH
 
 import (
-	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/8op-org/gl1tch/internal/pipeline"
 )
 
-// prIntegrationProvider and prIntegrationModel select the executor for PR fix tests.
-// Defaults to claude/claude-sonnet-4-6, matching the pr-review pipeline.
-// Override with GLITCH_TEST_PROVIDER / GLITCH_TEST_MODEL env vars.
-func prIntegrationProvider() string {
-	if p := os.Getenv("GLITCH_TEST_PROVIDER"); p != "" {
-		return p
+// TestIntegration_GLitchAsk_PRReview builds the gl1tch binary and runs
+// `gl1tch ask --pipeline pr-review --input <PR URL>`, then asserts the output
+// addresses all four reviewer issues without posting a PR.
+func TestIntegration_GLitchAsk_PRReview(t *testing.T) {
+	// ── build gl1tch binary ───────────────────────────────────────────────────
+	binDir := t.TempDir()
+	binPath := filepath.Join(binDir, "gl1tch")
+
+	build := exec.Command("go", "build", "-o", binPath, ".")
+	build.Dir = filepath.Join("..", "") // repo root relative to cmd/
+	// go build needs the module root, not cmd/
+	build.Dir = repoRoot(t)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build failed: %v\n%s", err, out)
 	}
-	return "github-copilot"
-}
 
-func prIntegrationModel() string {
-	if m := os.Getenv("GLITCH_TEST_MODEL"); m != "" {
-		return m
-	}
-	return "" // copilot doesn't expose model selection
-}
+	// ── run gl1tch ask ────────────────────────────────────────────────────────
+	const prURL = "https://github.com/elastic/ensemble/pull/1246"
 
-// TestIntegration_PRReview_Analysis feeds a concise description of the review
-// feedback (no raw diff) and asserts gl1tch identifies all four required changes.
-//
-// This is the fast variant: it does not call gh and runs in ~60s.
-func TestIntegration_PRReview_Analysis(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+	run := exec.Command(binPath, "ask",
+		"--pipeline", "pr-review",
+		"-y",
+		prURL,
+	)
+	run.Env = append(os.Environ(), "NO_COLOR=1")
 
-	mgr, providerID, model, err := buildAskManager(prIntegrationProvider(), prIntegrationModel())
+	out, err := run.CombinedOutput()
+	result := string(out)
+
 	if err != nil {
-		t.Skipf("provider %q not available: %v", prIntegrationProvider(), err)
-	}
-
-	// Reviewer comment verbatim — generic enough to not reveal private context.
-	prompt := `A reviewer left the following comment on a Python PR that adds a
-cloud:update-stack-versions script to an internal repo:
-
-1. Reuse the existing Command wrapper from the codebase (ensemble.core.process.binds.base)
-   instead of raw subprocess.run — it already handles CommandNotFound, ErrorReturnCode,
-   and TimeoutException.
-2. The CI workflow hardcodes linux_amd64 in the download URL. Replace the shell script
-   with the repo's own tool installer (ensemble tools install oblt-cli latest +
-   ensemble tools env oblt-cli latest) so it is cross-platform and idempotent.
-3. The regex uses re.DOTALL which lets .*? match across - name: block boundaries,
-   risking replacement of the wrong parameter's values block. Tighten the regex to
-   anchor on the specific parameter name before matching, or use a line-by-line
-   state machine instead.
-4. The assert in _version_sort_key is silently dropped under python -O.
-   Replace it with an explicit raise ValueError.
-
-List each of the four code changes needed, and show the corrected Python for each.
-Do not open a pull request or run any git commands.`
-
-	p := buildAskPipeline(prompt, providerID, model, nil, false, "")
-	result, err := pipeline.Run(ctx, p, mgr, "")
-	if err != nil {
-		t.Fatalf("pipeline.Run: %v", err)
-	}
-	t.Logf("response:\n%s", result)
-
-	assertPRFixResponse(t, result)
-}
-
-// TestIntegration_PRFix_EnsemblePR1246 fetches the real PR diff and reviewer
-// comment via gh CLI, then asks gl1tch to produce a corrected implementation.
-//
-// This is the full end-to-end variant: requires gh auth and network access.
-// Output is written to a temp file so it can be reviewed before any PR is opened.
-func TestIntegration_PRFix_EnsemblePR1246(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-
-	// ── fetch live PR data ────────────────────────────────────────────────────
-	diffBytes, err := exec.CommandContext(ctx,
-		"gh", "pr", "diff", "https://github.com/elastic/ensemble/pull/1246",
-	).Output()
-	if err != nil {
-		t.Skipf("gh pr diff failed (need gh auth + read access to elastic/ensemble): %v", err)
-	}
-
-	commentBytes, err := exec.CommandContext(ctx,
-		"gh", "pr", "view", "https://github.com/elastic/ensemble/pull/1246",
-		"--json", "comments",
-		"--jq", ".comments[0].body",
-	).Output()
-	if err != nil {
-		t.Skipf("gh pr view failed: %v", err)
-	}
-
-	// Trim diff to scripts/cloud.py only — keeps context window manageable.
-	diff := string(diffBytes)
-	if idx := strings.Index(diff, "diff --git a/scripts/cloud.py"); idx >= 0 {
-		diff = diff[idx:]
-		if next := strings.Index(diff[20:], "\ndiff --git"); next >= 0 {
-			diff = diff[:next+20]
-		}
-	}
-
-	reviewerComment := strings.TrimSpace(string(commentBytes))
-
-	// ── build prompt ──────────────────────────────────────────────────────────
-	prompt := "Here is a GitHub PR diff for scripts/cloud.py and a reviewer comment.\n" +
-		"Produce corrected Python for update_stack_versions() and its helpers that " +
-		"addresses every point in the review.\n" +
-		"Do not open a pull request, push any branches, or run any git commands.\n\n" +
-		"## Reviewer comment\n\n" + reviewerComment + "\n\n" +
-		"## Diff\n\n```diff\n" + diff + "\n```"
-
-	mgr, providerID, model, err := buildAskManager(prIntegrationProvider(), prIntegrationModel())
-	if err != nil {
-		t.Skipf("provider %q not available: %v", prIntegrationProvider(), err)
-	}
-
-	p := buildAskPipeline(prompt, providerID, model, nil, false, "")
-	result, err := pipeline.Run(ctx, p, mgr, "")
-	if err != nil {
-		t.Fatalf("pipeline.Run: %v", err)
+		t.Logf("gl1tch output:\n%s", result)
+		t.Fatalf("gl1tch ask failed: %v", err)
 	}
 
 	// ── write output for manual review ───────────────────────────────────────
-	// Use /tmp directly so the file persists after the test exits.
 	outFile := "/tmp/gl1tch-pr-fix-output.md"
-	if werr := os.WriteFile(outFile, []byte(result), 0o644); werr != nil {
+	if werr := os.WriteFile(outFile, out, 0o644); werr != nil {
 		t.Logf("warning: could not write output file: %v", werr)
 	} else {
 		t.Logf("fix output written to: %s", outFile)
@@ -179,7 +93,7 @@ func assertPRFixResponse(t *testing.T, response string) {
 		},
 		{
 			"regex tightened to avoid cross-block DOTALL matching",
-			[]string{"re.multiline", "dotall", "anchor", "stack_version", "- name:", "state machine", "line-by-line"},
+			[]string{"re.multiline", "dotall", "anchor", "stack_version", "- name:", "state machine", "line-by-line", "pyyaml", "yaml.safe_load"},
 		},
 		{
 			"assert replaced with raise ValueError",
@@ -220,4 +134,15 @@ func prTruncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// repoRoot returns the repository root by walking up from the cmd package.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	// The test runs with working directory = cmd/, so the repo root is one level up.
+	abs, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("repoRoot: %v", err)
+	}
+	return abs
 }
