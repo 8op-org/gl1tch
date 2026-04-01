@@ -751,8 +751,8 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 		return p.handleRunEvent(msg)
 
 	case tea.KeyMsg:
-		// Tab cycles between input focus and scroll focus.
-		if msg.String() == "tab" {
+		// Tab cycles between input focus and scroll focus (skip when picker is open).
+		if msg.String() == "tab" && !p.modelPickerOpen {
 			if p.focused {
 				p = p.setFocused(false)
 				p.scrollFocused = true
@@ -763,7 +763,8 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 			return p, nil
 		}
 		// Scroll-focused mode: j/k scroll by line, [/] by page, esc returns to input.
-		if p.scrollFocused {
+		// When the model picker is open, let keys fall through to the picker handler.
+		if p.scrollFocused && !p.modelPickerOpen {
 			switch msg.String() {
 			case "k", "[":
 				p.scrollOffset += 3
@@ -779,7 +780,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 			}
 			return p, nil
 		}
-		if !p.focused {
+		if !p.focused && !p.modelPickerOpen {
 			return p, nil
 		}
 		// Route keys to model picker when open.
