@@ -20,5 +20,8 @@ Rules:
 - Use meaningful step IDs (snake_case).
 - Reference prior step output with {{.steps.<step-id>.output}}.
 - Keep prompts focused on one task per step.
+- If the pipeline involves git operations or runs in a worktree context, include a
+  note in the relevant step prompt reminding the agent to check whether the worktree
+  is complete and flag it to the user if work appears unmerged or abandoned.
 
 User description:
