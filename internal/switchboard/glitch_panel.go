@@ -70,17 +70,17 @@ type slashSuggestion struct {
 // glitchSlashCommands is the canonical list of slash commands for autocomplete.
 // Keep in sync with the switch statement in update().
 var glitchSlashCommands = []slashSuggestion{
-	{cmd: "/terminal", hint: "[cmd] — open 25% right split, run cmd or get guidance"},
-	{cmd: "/brain",    hint: "[query] — search brain notes, or start an interactive session"},
+	{cmd: "/init",     hint: "first-run wizard"},
+	{cmd: "/models",   hint: "pick a provider and model"},
+	{cmd: "/cwd",      hint: "[path] — set working directory"},
+	{cmd: "/prompt",   hint: "[name] — load or build a system prompt with AI"},
+	{cmd: "/pipeline", hint: "[name] — run a pipeline, or build one from scratch"},
+	{cmd: "/brain",    hint: "[query] — search notes, or start an interactive brain session"},
+	{cmd: "/rerun",    hint: "[name] — rerun a pipeline by name"},
+	{cmd: "/terminal", hint: "[cmd] — open 25% right split; run cmd or get guidance"},
 	{cmd: "/cron",     hint: "switch to cron session"},
-	{cmd: "/rerun",    hint: "[name] — rerun a pipeline"},
-	{cmd: "/pipeline", hint: "[name] — run pipeline, or build one from scratch"},
-	{cmd: "/models",   hint: "open provider/model picker"},
-	{cmd: "/model",    hint: "[name] — switch provider/model"},
-	{cmd: "/cwd",      hint: "[path] — change working directory"},
+	{cmd: "/model",    hint: "[name] — switch provider/model inline"},
 	{cmd: "/themes",   hint: "open theme picker"},
-	{cmd: "/prompt",   hint: "[name] — load or build a system prompt"},
-	{cmd: "/init",     hint: "run first-run wizard"},
 	{cmd: "/clear",    hint: "clear chat history"},
 	{cmd: "/quit",     hint: "exit glitch"},
 	{cmd: "/help",     hint: "this list"},
@@ -1163,7 +1163,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
 					p.messages = append(p.messages, glitchEntry{
 						who: glitchSpeakerBot,
-						text: "slash commands:\n  /terminal [cmd]   — open 25% right split; run cmd or get guidance\n  /brain [query]    — search brain notes, or start an interactive brain session\n  /cron             — switch to cron session\n  /rerun [name]     — rerun a pipeline by name\n  /pipeline [name]  — run a pipeline, or build one from scratch with AI\n  /models           — open provider/model picker\n  /model [name]     — switch provider/model\n  /cwd [path]       — change working directory\n  /themes           — open theme picker\n  /prompt [name]    — load or build a system prompt with AI\n  /init             — run first-run wizard\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
+						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n  /cwd [path]       — set working directory\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open a 25% right split; run cmd or get guidance\n  /cron             — switch to cron session\n\n  workspace\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
 					})
 					return p, nil
 				}
