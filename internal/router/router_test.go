@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"sync/atomic"
 	"testing"
 
@@ -400,6 +401,114 @@ func TestHybridRouter_ExtractsCron(t *testing.T) {
 	}
 	if result.CronExpr != "0 */2 * * *" {
 		t.Errorf("expected cron %q, got %q", "0 */2 * * *", result.CronExpr)
+	}
+}
+
+func TestHybridRouter_DefaultThresholds(t *testing.T) {
+	// Zero Config → New() fills in DefaultConfidentThreshold and DefaultAmbiguousThreshold.
+	mgr := makeMgr(t, `{"pipeline":"NONE","confidence":0.0,"input":"","cron":""}`)
+	emb := &fixedEmbedder{vec: []float32{1, 0}}
+	r := New(mgr, emb, Config{Model: "test-model"})
+	if r.cfg.ConfidentThreshold != DefaultConfidentThreshold {
+		t.Errorf("ConfidentThreshold = %f, want %f", r.cfg.ConfidentThreshold, DefaultConfidentThreshold)
+	}
+	if r.cfg.AmbiguousThreshold != DefaultAmbiguousThreshold {
+		t.Errorf("AmbiguousThreshold = %f, want %f", r.cfg.AmbiguousThreshold, DefaultAmbiguousThreshold)
+	}
+}
+
+func TestHybridRouter_EmbeddingAtExactThreshold(t *testing.T) {
+	// A unit vector with cosine exactly 0.85 against [1,0] should use the embedding
+	// fast path (>= threshold), NOT fall through to LLM.
+	llmCalled := int64(0)
+	mgr := executor.NewManager()
+	if err := mgr.Register(&executor.StubExecutor{
+		ExecutorName: "ollama",
+		ExecuteFn: func(_ context.Context, _ string, _ map[string]string, w io.Writer) error {
+			atomic.AddInt64(&llmCalled, 1)
+			_, err := fmt.Fprint(w, `{"pipeline":"NONE","confidence":0.0,"input":"","cron":""}`)
+			return err
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	pipelines := []pipeline.PipelineRef{
+		{Name: "alpha-pipeline", Description: "alpha unit"},
+	}
+
+	// cos([0.85, b], [1,0]) = 0.85 when b = sqrt(1 - 0.85²) (unit vector)
+	b := float32(math.Sqrt(float64(1 - 0.85*0.85)))
+	embedFn := func(text string) []float32 {
+		if text == "alpha unit" {
+			return []float32{1, 0}
+		}
+		return []float32{0.85, b}
+	}
+
+	cfg := Config{
+		ConfidentThreshold: 0.85,
+		AmbiguousThreshold: 0.65,
+		Model:              "test-model",
+	}
+	r := New(mgr, &funcEmbedder{fn: embedFn}, cfg)
+
+	result, err := r.Route(context.Background(), "alpha query", pipelines)
+	if err != nil {
+		t.Fatalf("Route error: %v", err)
+	}
+	if result.Pipeline == nil {
+		t.Fatal("expected pipeline match at exact threshold, got nil")
+	}
+	if result.Method != "embedding" {
+		t.Errorf("expected method 'embedding' at exact threshold, got %q", result.Method)
+	}
+	if atomic.LoadInt64(&llmCalled) != 0 {
+		t.Errorf("LLM should not be called when embedding meets exact threshold, called %d times", llmCalled)
+	}
+}
+
+func TestHybridRouter_MultiplePipelines_EmbeddingPicksBest(t *testing.T) {
+	// Three orthogonal pipelines; query is identical to beta → cosine=1.0 → picks beta.
+	pipelines := []pipeline.PipelineRef{
+		{Name: "alpha", Description: "alpha desc"},
+		{Name: "beta", Description: "beta desc"},
+		{Name: "gamma", Description: "gamma desc"},
+	}
+
+	embedFn := func(text string) []float32 {
+		switch text {
+		case "alpha desc":
+			return []float32{1, 0, 0}
+		case "beta desc":
+			return []float32{0, 1, 0}
+		case "gamma desc":
+			return []float32{0, 0, 1}
+		default: // query
+			return []float32{0, 1, 0} // identical to beta → cosine=1.0
+		}
+	}
+
+	mgr := makeMgr(t, `{"pipeline":"NONE","confidence":0.0,"input":"","cron":""}`)
+	cfg := Config{
+		ConfidentThreshold: 0.85,
+		AmbiguousThreshold: 0.65,
+		Model:              "test-model",
+	}
+	r := New(mgr, &funcEmbedder{fn: embedFn}, cfg)
+
+	result, err := r.Route(context.Background(), "beta query", pipelines)
+	if err != nil {
+		t.Fatalf("Route error: %v", err)
+	}
+	if result.Pipeline == nil {
+		t.Fatal("expected pipeline match, got nil")
+	}
+	if result.Pipeline.Name != "beta" {
+		t.Errorf("expected best match 'beta', got %q", result.Pipeline.Name)
+	}
+	if result.Method != "embedding" {
+		t.Errorf("expected method 'embedding', got %q", result.Method)
 	}
 }
 
