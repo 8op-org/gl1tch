@@ -198,6 +198,9 @@ func (s *Scheduler) runEntry(entry Entry) {
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	if entry.WorkingDir != "" {
+		cmd.Dir = entry.WorkingDir
+	}
 
 	runErr := cmd.Run()
 
