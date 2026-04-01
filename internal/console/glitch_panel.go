@@ -1156,6 +1156,13 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 					p.turns = nil
 					p.scrollOffset = 0
 					p.scrollFocused = false
+					p.streaming = false
+					p.streamBuf = ""
+					p.streamIsPromptFlow = false
+					p.streamIsPipelineFlow = false
+					p.streamIsRunAnalysis = false
+					p.promptFlow = glitchPromptFlow{}
+					p.pipelineFlow = glitchPipelineFlow{}
 					return p, nil
 				case "/quit", "/exit":
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
@@ -1612,6 +1619,10 @@ func (p glitchChatPanel) handlePromptFlowInput(userText string) (glitchChatPanel
 			p.promptFlow = glitchPromptFlow{}
 			return p, nil
 		}
+		p.messages = append(p.messages, glitchEntry{
+			who:  glitchSpeakerBot,
+			text: "building prompt: " + p.promptFlow.description,
+		})
 		p.streaming = true
 		p.streamBuf = ""
 		p.streamIsPromptFlow = true
@@ -1619,7 +1630,6 @@ func (p glitchChatPanel) handlePromptFlowInput(userText string) (glitchChatPanel
 		backend := p.backend
 		ctx := p.ctx
 		return p, func() tea.Msg {
-			// Use the prompt-builder system prompt; pass description as the sole user message.
 			ch, err := backend.stream(ctx, nil, desc, "", systemprompts.Load(systemprompts.PromptBuilder))
 			if err != nil {
 				return glitchErrMsg{err: err}
@@ -1671,6 +1681,10 @@ func (p glitchChatPanel) handlePipelineFlowInput(userText string) (glitchChatPan
 			p.pipelineFlow = glitchPipelineFlow{}
 			return p, nil
 		}
+		p.messages = append(p.messages, glitchEntry{
+			who:  glitchSpeakerBot,
+			text: "generating pipeline: " + p.pipelineFlow.description,
+		})
 		p.streaming = true
 		p.streamBuf = ""
 		p.streamIsPipelineFlow = true

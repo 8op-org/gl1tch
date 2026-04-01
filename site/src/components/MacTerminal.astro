@@ -34,7 +34,7 @@ import GlitchLogo from './GlitchLogo.astro';
           aria-label="GLITCH terminal input"
         />
       </div>
-      <div class="terminal-input-hint">enter send  ·  ↑↓ history  ·  tab complete  ·  /install /pipelines /screenshots</div>
+      <div class="terminal-input-hint">enter send  ·  ↑↓ history  ·  tab complete  ·  /install /pipelines /docs</div>
     </div>
   </div>
 </div>
@@ -83,6 +83,9 @@ async function init() {
   document.getElementById('mac-terminal')?.addEventListener('click', () => {
     inputEl.focus();
   });
+
+  // Docs panel close button
+  document.getElementById('docs-panel-close')?.addEventListener('click', closeDocs);
 
   // Run intro, then enable input
   inputEl.disabled = true;
@@ -161,6 +164,21 @@ function processCommand(raw: string) {
 
     if (name === 'screenshots' || name === 'ss') {
       openScreenshots();
+      return;
+    }
+
+    if (name === 'docs' || name === 'd') {
+      const workspace = document.getElementById('terminal-workspace');
+      if (workspace?.classList.contains('docs-open')) {
+        closeDocs();
+      } else {
+        openDocs();
+      }
+      return;
+    }
+
+    if (name === 'pipelines' || name === 'pipeline') {
+      showRandomPipeline();
       return;
     }
 
@@ -396,6 +414,195 @@ function closeGallery() {
   if (galleryEl) { galleryEl.remove(); galleryEl = null; }
 }
 
+// ── Random pipeline examples ─────────────────────────────────
+
+const PIPELINES = [
+  {
+    name: 'code-review',
+    desc: 'local model reads the diff, cloud model judges it',
+    yaml: `name: code-review
+version: "1"
+
+steps:
+  - id: read
+    plugin: ollama
+    model: qwen2.5-coder:latest
+    prompt: |
+      Summarize what changed in this diff: {{input}}
+      Be specific. List files touched and intent.
+
+  - id: review
+    executor: claude
+    model: claude-haiku-4-5-20251001
+    use_brain: true
+    prompt: |
+      {{steps.read.output}}
+      Flag bugs, security issues, or patterns that look wrong.`,
+  },
+  {
+    name: 'morning-standup',
+    desc: 'summarize yesterday\'s commits into a standup update',
+    yaml: `name: morning-standup
+version: "1"
+
+steps:
+  - id: commits
+    plugin: sh
+    vars:
+      cmd: "git log --oneline --since=yesterday"
+
+  - id: standup
+    executor: claude
+    model: claude-haiku-4-5-20251001
+    prompt: |
+      Commits from yesterday:
+      {{steps.commits.output}}
+
+      Write a 3-sentence standup update.
+      What was done. Any blockers. What's next.`,
+  },
+  {
+    name: 'gh-triage',
+    desc: 'pull open issues and prioritize them by impact',
+    yaml: `name: gh-triage
+version: "1"
+
+steps:
+  - id: issues
+    plugin: gh
+    use_brain: false
+    vars:
+      args: "issue list --json number,title,labels --limit 20"
+
+  - id: triage
+    executor: claude
+    model: claude-sonnet-4-6
+    use_brain: true
+    prompt: |
+      Open issues:
+      {{steps.issues.output}}
+
+      Rank by impact. Flag anything blocking a release.
+      Output as a numbered list with one-line rationale each.`,
+  },
+  {
+    name: 'brain-map',
+    desc: 'index the codebase architecture into brain context',
+    yaml: `name: brain-map
+version: "1"
+
+steps:
+  - id: scan
+    plugin: sh
+    vars:
+      cmd: "find . -name '*.go' | head -30 | xargs head -5"
+
+  - id: map
+    plugin: ollama
+    model: qwen2.5-coder:latest
+    write_brain: true
+    prompt: |
+      Source files:
+      {{steps.scan.output}}
+
+      Write a concise architecture map.
+      Packages, responsibilities, key patterns.
+      Start with "ARCHITECTURE:"`,
+  },
+  {
+    name: 'doc-gen',
+    desc: 'generate godoc comments for undocumented functions',
+    yaml: `name: doc-gen
+version: "1"
+
+steps:
+  - id: read
+    plugin: sh
+    vars:
+      cmd: "grep -n 'func ' {{input}} | head -20"
+
+  - id: docs
+    executor: claude
+    model: claude-haiku-4-5-20251001
+    prompt: |
+      Functions in {{input}}:
+      {{steps.read.output}}
+
+      Write godoc comments for each exported function.
+      Follow standard Go doc conventions.`,
+  },
+  {
+    name: 'security-scan',
+    desc: 'scan code for common vulnerabilities',
+    yaml: `name: security-scan
+version: "1"
+
+steps:
+  - id: read
+    plugin: sh
+    vars:
+      cmd: "cat {{input}}"
+
+  - id: scan
+    executor: claude
+    model: claude-sonnet-4-6
+    prompt: |
+      Code:
+      {{steps.read.output}}
+
+      Check for: SQL injection, command injection, hardcoded secrets,
+      insecure deserialization, path traversal, missing auth checks.
+      Report findings with line references.`,
+  },
+  {
+    name: 'changelog-draft',
+    desc: 'draft a changelog entry from recent commits',
+    yaml: `name: changelog-draft
+version: "1"
+
+steps:
+  - id: log
+    plugin: sh
+    vars:
+      cmd: "git log --oneline v{{input}}..HEAD"
+
+  - id: draft
+    executor: claude
+    model: claude-haiku-4-5-20251001
+    prompt: |
+      Commits since last release:
+      {{steps.log.output}}
+
+      Draft a changelog entry in Keep a Changelog format.
+      Group into: Added, Changed, Fixed, Removed.`,
+  },
+];
+
+function showRandomPipeline() {
+  const pick = PIPELINES[Math.floor(Math.random() * PIPELINES.length)];
+  typewrite(`${pick.name}  —  ${pick.desc}\n\n${pick.yaml}\n\nrun it:  glitch pipeline run ${pick.name}.yaml\ntype /pipelines again for another example.`);
+}
+
+// ── Docs split panel ──────────────────────────────────────────
+
+function openDocs() {
+  const workspace = document.getElementById('terminal-workspace');
+  const panel     = document.getElementById('docs-panel');
+  if (!workspace || !panel) return;
+  workspace.classList.add('docs-open');
+  panel.removeAttribute('aria-hidden');
+  appendLine('output-dim', '>> docs panel open  ·  /docs to close  ·  × to dismiss');
+}
+
+function closeDocs() {
+  const workspace = document.getElementById('terminal-workspace');
+  const panel     = document.getElementById('docs-panel');
+  if (!workspace || !panel) return;
+  workspace.classList.remove('docs-open');
+  panel.setAttribute('aria-hidden', 'true');
+  inputEl.focus();
+}
+
 // ── Output ────────────────────────────────────────────────────────────────────
 
 function appendLine(cls: string, text: string) {
@@ -441,26 +648,12 @@ function typewrite(text: string): Promise<void> {
 // ── Intro sequence ────────────────────────────────────────────────────────────
 
 async function runIntro() {
-  await sleep(300);
-  appendLine('output-dim', '> scanning environment...');
+  await sleep(400);
+
+  await typewrite('hey. your AI workspace lives in your terminal. local models run by default — nothing leaves your machine, no bill unless you ask for cloud.');
   await sleep(350);
-  appendLine('output-dim', '> brain context loaded');
-  await sleep(250);
-  appendLine('output-dim', '> pipeline executor ready');
-  await sleep(250);
-  appendLine('output-dim', '> agent runner standing by');
-  await sleep(600);
 
-  await typewrite('You found the terminal. Good.');
-  await sleep(500);
-
-  await typewrite('GLITCH runs local AI models by default. Your code never leaves your machine. No API bill for the work that doesn\'t need one.');
-  await sleep(400);
-
-  await typewrite('When you need cloud reasoning, you choose it — one flag, one step. Everything else stays local.');
-  await sleep(400);
-
-  await typewrite('Type /install to get started. /pipelines to see what you can build. /screenshots to see it in action.');
+  await typewrite('type /install to get it running. /pipelines to see what it can do. /docs if you want the full picture.');
 }
 
 function clearTerminal() {
@@ -471,7 +664,7 @@ function clearTerminal() {
 function tabComplete() {
   if (!db || !inputEl.value.startsWith('/')) return;
   const partial = inputEl.value.slice(1).toLowerCase();
-  const allCmds = [...Object.keys(db.commands), 'screenshots', 'clear'];
+  const allCmds = [...Object.keys(db.commands), 'screenshots', 'clear', 'docs'];
   const matches = allCmds.filter(c => c.startsWith(partial));
   if (matches.length === 1) {
     inputEl.value = `/${matches[0]}`;

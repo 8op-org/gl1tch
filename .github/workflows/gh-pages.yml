@@ -1,4 +1,4 @@
-name: Deploy to powerglove.dev
+name: Deploy to 8op.org
 
 on:
   push:
@@ -43,7 +43,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site/dist
           publish_branch: gh-pages
-          cname: powerglove.dev
+          cname: 8op.org
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
           commit_message: 'deploy: ${{ env.SHA }}'
