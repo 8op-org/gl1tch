@@ -19,6 +19,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/busd/topics"
 	"github.com/8op-org/gl1tch/internal/clarify"
 	"github.com/8op-org/gl1tch/internal/executor"
+	"github.com/8op-org/gl1tch/internal/game"
 	"github.com/8op-org/gl1tch/internal/store"
 )
 
@@ -44,6 +45,13 @@ type runConfig struct {
 	resumePrompt    string
 	resumeFrom      *resumeFromConfig
 	stepWriter      io.Writer // when set, executor output is teed here in real time
+	statusWriter    io.Writer // destination for [step:*] status lines; defaults to os.Stdout
+
+	// Game scoring fields, protected by stepFailuresMu.
+	stepFailuresMu sync.Mutex
+	stepFailures   int
+	// lastUsage accumulates token usage across all steps (last non-zero wins).
+	lastUsage      game.TokenUsage
 }
 
 // WithRunStore attaches a result store to the run so results are persisted.
@@ -83,6 +91,13 @@ func WithBrainRAGInjector(inj *brainrag.BrainInjector) RunOption {
 // Has no effect on builtin steps.
 func WithStepWriter(w io.Writer) RunOption {
 	return func(c *runConfig) { c.stepWriter = w }
+}
+
+// WithSilentStatus suppresses the [step:*] status lines that the runner
+// normally prints to stdout. Use for internal pipelines (e.g. routing,
+// classification) where status noise should not reach the user's terminal.
+func WithSilentStatus() RunOption {
+	return func(c *runConfig) { c.statusWriter = io.Discard }
 }
 
 // WithResumeFrom instructs the runner to resume an existing run from a
@@ -140,6 +155,9 @@ func Run(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput stri
 	}
 	if cfg.publisher == nil {
 		cfg.publisher = NoopPublisher{}
+	}
+	if cfg.statusWriter == nil {
+		cfg.statusWriter = os.Stdout
 	}
 
 	cfg.pipeName = p.Name
@@ -247,6 +265,62 @@ func Run(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput stri
 		_ = activity.AppendEvent(activity.DefaultPath(), activity.Now(
 			"pipeline_finished", p.Name, p.Name, "done",
 		))
+	}
+
+	// Game scoring: check suppression flag, then compute XP and publish.
+	gameEnabled := true
+	if p.Game != nil && !*p.Game {
+		gameEnabled = false
+	}
+	if gameEnabled && cfg.store != nil && cfg.publisher != nil {
+		cfg.stepFailuresMu.Lock()
+		usage := cfg.lastUsage
+		failures := cfg.stepFailures
+		cfg.stepFailuresMu.Unlock()
+
+		xpResult := game.ComputeXP(usage, failures)
+		us, _ := cfg.store.GetUserScore(ctx)
+		prevLevel := us.Level
+		us = game.UpdateStreak(us, time.Now())
+		us.TotalXP += xpResult.Final
+		us.TotalRuns++
+		newLevel, levelTitle, nextLevelXP := game.LevelForXP(us.TotalXP)
+		us.Level = newLevel
+		_ = cfg.store.UpdateUserScore(ctx, us)
+		_ = cfg.store.RecordScoreEvent(ctx, store.ScoreEvent{
+			RunID:               cfg.runID,
+			XP:                  xpResult.Final,
+			InputTokens:         usage.InputTokens,
+			OutputTokens:        usage.OutputTokens,
+			CacheReadTokens:     usage.CacheReadTokens,
+			CacheCreationTokens: usage.CacheCreationTokens,
+			CostUSD:             usage.TotalCostUSD,
+			Provider:            usage.Provider,
+			Model:               usage.Model,
+			CreatedAt:           time.Now().UnixMilli(),
+		})
+
+		payload := game.GameRunScoredPayload{
+			XP: xpResult.Final,
+			XPBreakdown: game.XPBreakdown{
+				Base:         xpResult.Base,
+				CacheBonus:   xpResult.CacheBonus,
+				SpeedBonus:   xpResult.SpeedBonus,
+				RetryPenalty: xpResult.RetryPenalty,
+			},
+			TotalXP:      us.TotalXP,
+			Level:        newLevel,
+			LevelTitle:   levelTitle,
+			PrevLevel:    prevLevel,
+			NextLevelXP:  nextLevelXP,
+			StreakDays:   us.StreakDays,
+			StepFailures: failures,
+			Achievements: []string{},
+			Usage:        usage,
+		}
+		if payloadBytes, merr := json.Marshal(payload); merr == nil {
+			_ = cfg.publisher.Publish(ctx, topics.GameRunScored, payloadBytes)
+		}
 	}
 
 	return result, runErr
@@ -682,15 +756,15 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput s
 					cloneSnap["item"] = item
 					cloneArgs := map[string]any{"_item": item, "item": item}
 
-					fmt.Printf(StepStatusLineFormat+"\n", cloneID, "running")
-					cloneOut, cloneErr := dispatchStep(ctx, &clone, cloneArgs, cloneSnap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter)
+					fmt.Fprintf(cfg.statusWriter, StepStatusLineFormat+"\n", cloneID, "running")
+					cloneOut, cloneErr := dispatchStep(ctx, &clone, cloneArgs, cloneSnap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter, cfg)
 					if cloneErr != nil {
 						lastErr = cloneErr
-						fmt.Printf(StepStatusLineFormat+"\n", cloneID, "failed")
-						fmt.Printf("  error: %v\n", cloneErr)
+						fmt.Fprintf(cfg.statusWriter, StepStatusLineFormat+"\n", cloneID, "failed")
+						fmt.Fprintf(cfg.statusWriter, "  error: %v\n", cloneErr)
 						break
 					}
-					fmt.Printf(StepStatusLineFormat+"\n", cloneID, "done")
+					fmt.Fprintf(cfg.statusWriter, StepStatusLineFormat+"\n", cloneID, "done")
 
 					// Aggregate clone output under the parent placeholder ID.
 					if cloneOut != nil {
@@ -734,7 +808,7 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput s
 			}
 
 			stepStart := time.Now()
-			out, execErr := dispatchStep(ctx, step, args, snap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter)
+			out, execErr := dispatchStep(ctx, step, args, snap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter, cfg)
 			stepDurationMs := time.Since(stepStart).Milliseconds()
 
 			if execErr == nil {
@@ -1194,7 +1268,17 @@ func interpolateArgs(args map[string]any, vars map[string]any) map[string]any {
 
 // dispatchStep determines the executor for a step and runs it (with retries).
 // runID and pipeName are used to populate event payloads; pub receives the events.
-func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, runID int64, pipeName string, pub EventPublisher, p *Pipeline, st *store.Store, w io.Writer) (map[string]any, error) {
+func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, runID int64, pipeName string, pub EventPublisher, p *Pipeline, st *store.Store, w io.Writer, runCfg *runConfig) (map[string]any, error) {
+	// Wrap the step writer with a GameTeeWriter to capture token usage.
+	var teeW *game.GameTeeWriter
+	if w != nil && runCfg != nil {
+		category := step.Executor
+		if category == "" {
+			category = step.Type
+		}
+		teeW = game.NewGameTeeWriter(w, category)
+		w = teeW
+	}
 	executor, err := resolveExecutor(ctx, step, args, snap, ec, mgr, p, st, w)
 	if err != nil {
 		return nil, err
@@ -1230,7 +1314,7 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 		_ = pub.Publish(ctx, topics.StepStarted, payload)
 	}
 
-	fmt.Printf(StepStatusLineFormat+"\n", step.ID, "running")
+	fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "running")
 
 	stepStart := time.Now()
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -1307,6 +1391,32 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 done:
 	stepDurationMs := time.Since(stepStart).Milliseconds()
 	cleanupErr := executor.Cleanup(ctx)
+
+	// Accumulate token usage from the tee writer into runCfg.
+	if teeW != nil && runCfg != nil {
+		usage := teeW.Close()
+		runCfg.stepFailuresMu.Lock()
+		if usage.OutputTokens > 0 || usage.InputTokens > 0 {
+			// Merge: accumulate tokens across steps.
+			runCfg.lastUsage.InputTokens += usage.InputTokens
+			runCfg.lastUsage.OutputTokens += usage.OutputTokens
+			runCfg.lastUsage.CacheReadTokens += usage.CacheReadTokens
+			runCfg.lastUsage.CacheCreationTokens += usage.CacheCreationTokens
+			runCfg.lastUsage.TotalCostUSD += usage.TotalCostUSD
+			runCfg.lastUsage.DurationMS += usage.DurationMS
+			if usage.Provider != "" {
+				runCfg.lastUsage.Provider = usage.Provider
+			}
+			if usage.Model != "" {
+				runCfg.lastUsage.Model = usage.Model
+			}
+		}
+		if execErr != nil {
+			runCfg.stepFailures++
+		}
+		runCfg.stepFailuresMu.Unlock()
+	}
+
 	// Parse <brain> blocks from any output (including partial on failure).
 	// Best-effort: called regardless of step success/failure.
 	// Block-level opt-in: any step output containing a <brain> block is stored
@@ -1326,8 +1436,8 @@ done:
 				}
 			}
 		}
-		fmt.Printf(StepStatusLineFormat+"\n", step.ID, "failed")
-		fmt.Printf("  error: %v\n", execErr)
+		fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "failed")
+		fmt.Fprintf(runCfg.statusWriter, "  error: %v\n", execErr)
 		// Publish step.failed.
 		if payload, merr := json.Marshal(map[string]any{
 			"run_id":      runID,
@@ -1342,7 +1452,7 @@ done:
 		return nil, execErr
 	}
 	if cleanupErr != nil {
-		fmt.Printf(StepStatusLineFormat+"\n", step.ID, "failed")
+		fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "failed")
 		// Publish step.failed for cleanup error too.
 		if payload, merr := json.Marshal(map[string]any{
 			"run_id":      runID,
@@ -1355,7 +1465,7 @@ done:
 		}
 		return nil, cleanupErr
 	}
-	fmt.Printf(StepStatusLineFormat+"\n", step.ID, "done")
+	fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "done")
 
 	// Publish step.done.
 	if payload, merr := json.Marshal(map[string]any{
