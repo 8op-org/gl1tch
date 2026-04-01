@@ -2,7 +2,7 @@ function v(t){return Array.isArray?Array.isArray(t):ye(t)==="[object Array]"}fun
 
 Install from source:
 
-  go install github.com/powerglove-dev/gl1tch@latest
+  go install github.com/8op-org/gl1tch@latest
 
 Make sure $GOPATH/bin is on your $PATH.`);return}const n=`${e}_${s}`,r=t.assets[n]??"",i=t.version,o=e==="windows";let c=`GLITCH ${i}
 
