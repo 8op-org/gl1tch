@@ -1,0 +1,125 @@
+// Package router provides intent routing for gl1tch prompts to matching pipelines.
+// It implements a two-stage hybrid strategy:
+//   - Stage 1 (embedding fast path): cosine similarity against cached pipeline
+//     description vectors. If similarity >= ConfidentThreshold, dispatch immediately.
+//   - Stage 2 (LLM fallback): a single structured JSON LLM call returning
+//     {pipeline, confidence, input, cron}. Used when embeddings are ambiguous.
+package router
+
+import (
+	"context"
+
+	"github.com/8op-org/gl1tch/internal/executor"
+	"github.com/8op-org/gl1tch/internal/pipeline"
+)
+
+// DefaultConfidentThreshold is the cosine similarity above which a match is
+// treated as definitive and the LLM stage is skipped.
+const DefaultConfidentThreshold = 0.85
+
+// DefaultAmbiguousThreshold is the minimum cosine similarity (or LLM confidence)
+// below which a match is rejected.
+const DefaultAmbiguousThreshold = 0.65
+
+// DefaultEmbeddingModel is the local Ollama model used for fast-path routing.
+const DefaultEmbeddingModel = "nomic-embed-text"
+
+// RouteResult is the outcome of a routing decision.
+type RouteResult struct {
+	// Pipeline is the matched PipelineRef, or nil when no pipeline was found.
+	Pipeline *pipeline.PipelineRef
+	// Confidence is the similarity/confidence score in [0, 1].
+	Confidence float64
+	// Input is the extracted focus/topic for {{param.input}}, or "".
+	Input string
+	// CronExpr is a validated 5-field cron expression, or "".
+	CronExpr string
+	// Method records which stage produced the result: "embedding", "llm", or "none".
+	Method string
+}
+
+// Config controls routing behavior.
+type Config struct {
+	// Model is the Ollama model used for LLM classification.
+	Model string
+	// EmbeddingModel is the Ollama embedding model. Used by the OllamaEmbedder helper.
+	EmbeddingModel string
+	// OllamaBaseURL is the base URL for Ollama (defaults to http://localhost:11434).
+	OllamaBaseURL string
+	// ConfidentThreshold: >= this score → dispatch without LLM (default 0.85).
+	ConfidentThreshold float64
+	// AmbiguousThreshold: >= this score (but < ConfidentThreshold) → dispatch with confirm (default 0.65).
+	AmbiguousThreshold float64
+	// CacheDir is the directory for the on-disk embedding cache.
+	// If empty, the disk cache is disabled (in-memory only).
+	CacheDir string
+	// DisableEmbeddings skips the embedding fast-path entirely.
+	DisableEmbeddings bool
+}
+
+// Embedder abstracts embedding computation so tests can inject stubs.
+type Embedder interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
+}
+
+// Router routes prompts to pipelines.
+type Router interface {
+	Route(ctx context.Context, prompt string, pipelines []pipeline.PipelineRef) (*RouteResult, error)
+}
+
+// HybridRouter implements the two-stage embedding + LLM routing strategy.
+type HybridRouter struct {
+	embedRouter *EmbeddingRouter
+	classifier  *LLMClassifier
+	cfg         Config
+}
+
+// New creates a HybridRouter with the given executor manager, embedder, and config.
+// Thresholds are set to defaults if zero.
+func New(mgr *executor.Manager, embedder Embedder, cfg Config) *HybridRouter {
+	if cfg.ConfidentThreshold == 0 {
+		cfg.ConfidentThreshold = DefaultConfidentThreshold
+	}
+	if cfg.AmbiguousThreshold == 0 {
+		cfg.AmbiguousThreshold = DefaultAmbiguousThreshold
+	}
+	return &HybridRouter{
+		embedRouter: newEmbeddingRouter(embedder, cfg),
+		classifier:  NewLLMClassifier(mgr, cfg),
+		cfg:         cfg,
+	}
+}
+
+// Route routes prompt to the best matching pipeline.
+//
+// Algorithm:
+//  1. If DisableEmbeddings is false, try embedding fast path.
+//     If cosine similarity >= ConfidentThreshold → return result immediately.
+//  2. Fall through to LLM classifier.
+//  3. On LLM error, return safe no-match result (no error surfaced to caller).
+func (r *HybridRouter) Route(ctx context.Context, prompt string, pipelines []pipeline.PipelineRef) (*RouteResult, error) {
+	if len(pipelines) == 0 {
+		return &RouteResult{Method: "none"}, nil
+	}
+
+	// Stage 1: embedding fast path.
+	if !r.cfg.DisableEmbeddings {
+		embedResult, err := r.embedRouter.Route(ctx, prompt, pipelines)
+		if err == nil && embedResult != nil && embedResult.Pipeline != nil {
+			if embedResult.Confidence >= r.cfg.ConfidentThreshold {
+				embedResult.Method = "embedding"
+				return embedResult, nil
+			}
+		}
+		// If embedding returned a result above AmbiguousThreshold (but below
+		// ConfidentThreshold), we still fall through to LLM for confirmation.
+	}
+
+	// Stage 2: LLM classifier.
+	result, err := r.classifier.Classify(ctx, prompt, pipelines)
+	if err != nil {
+		// LLM errors are non-fatal — return safe no-match.
+		return &RouteResult{Method: "none"}, nil
+	}
+	return result, nil
+}
