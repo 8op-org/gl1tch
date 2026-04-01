@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/powerglove-dev/gl1tch/internal/modal"
@@ -39,6 +39,13 @@ type glitchStreamMsg struct {
 type glitchDoneMsg struct{}
 
 type glitchErrMsg struct{ err error }
+
+type glitchTickMsg struct{}
+
+// glitchTick fires every 120ms to drive the streaming animation.
+func glitchTick() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return glitchTickMsg{} })
+}
 
 // glitchRunEventMsg carries a completed or failed pipeline run to GLITCH for analysis.
 type glitchRunEventMsg struct {
@@ -530,6 +537,7 @@ type glitchPromptFlow struct {
 	phase       int
 	description string // user's description of what the prompt should do
 	generated   string // full generated prompt text from phase 1 stream
+	pendingName string // pre-seeded save name (from inline /prompt <name> <desc>)
 }
 
 // glitchPipelineFlow tracks state for the /pipeline guided wizard.
@@ -538,6 +546,7 @@ type glitchPipelineFlow struct {
 	phase       int
 	description string // user's description of what the pipeline should do
 	generated   string // full generated YAML from phase 1 stream
+	pendingName string // pre-seeded save name (from inline /pipeline <name> <desc>)
 }
 
 // glitchChatPanel is the GL1TCH AI assistant panel embedded in the switchboard
@@ -545,9 +554,10 @@ type glitchPipelineFlow struct {
 type glitchChatPanel struct {
 	messages     []glitchEntry
 	turns        []glitchTurn
-	input        textinput.Model
+	input        textarea.Model
 	streaming    bool
 	streamBuf    string
+	animFrame    int
 	backend      glitchBackend
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -579,10 +589,17 @@ type glitchChatPanel struct {
 
 // newGlitchPanel builds the panel using the best available provider.
 func newGlitchPanel(cfgDir string, providers []picker.ProviderDef, s *store.Store, launchCWD string, reg *themes.Registry) glitchChatPanel {
-	ti := textinput.New()
+	ti := textarea.New()
 	ti.Placeholder = "ask glitch anything…"
-	ti.Prompt = " >> "
+	ti.SetPromptFunc(4, func(lineIdx int) string {
+		if lineIdx == 0 {
+			return " >> "
+		}
+		return "    "
+	})
+	ti.ShowLineNumbers = false
 	ti.CharLimit = 4000
+	ti.SetHeight(3)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -663,7 +680,7 @@ func (p glitchChatPanel) initCmd() tea.Cmd {
 func (p glitchChatPanel) setFocused(v bool) glitchChatPanel {
 	p.focused = v
 	if v {
-		p.input.Focus()
+		_ = p.input.Focus() // textarea.Focus() returns tea.Cmd; discard it here
 	} else {
 		p.input.Blur()
 	}
@@ -674,23 +691,40 @@ func (p glitchChatPanel) setFocused(v bool) glitchChatPanel {
 func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 	switch msg := msg.(type) {
 
+	case glitchTickMsg:
+		if p.streaming {
+			p.animFrame++
+			return p, glitchTick()
+		}
+		return p, nil
+
 	case glitchStreamMsg:
 		p.streamBuf += msg.token
 		p.upsertStreamEntry()
-		return p, glitchNextToken(msg.ch)
+		cmds := []tea.Cmd{glitchNextToken(msg.ch)}
+		if p.animFrame == 0 {
+			// First token: kick off the animation ticker.
+			cmds = append(cmds, glitchTick())
+		}
+		return p, tea.Batch(cmds...)
 
 	case glitchDoneMsg:
 		p.streaming = false
+		p.animFrame = 0
 		if p.streamBuf != "" {
 			p.upsertStreamEntry()
 			response := p.streamBuf
 
-			// Prompt wizard phase 1 complete: capture generated prompt, ask for name.
+			// Prompt wizard phase 1 complete: capture generated prompt, ask for name (or auto-save).
 			if p.streamIsPromptFlow {
 				p.promptFlow.generated = response
 				p.promptFlow.phase = 2
 				p.streamIsPromptFlow = false
 				p.streamBuf = ""
+				if p.promptFlow.pendingName != "" {
+					// Name was provided inline — auto-save without asking.
+					return p.handlePromptFlowInput(p.promptFlow.pendingName)
+				}
 				p.messages = append(p.messages, glitchEntry{
 					who:  glitchSpeakerBot,
 					text: "save as what name? (written to ~/.config/glitch/prompts/<name>.md)",
@@ -698,12 +732,16 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 				return p, nil
 			}
 
-			// Pipeline wizard phase 1 complete: capture generated YAML, ask for name.
+			// Pipeline wizard phase 1 complete: capture generated YAML, ask for name (or auto-save).
 			if p.streamIsPipelineFlow {
 				p.pipelineFlow.generated = response
 				p.pipelineFlow.phase = 2
 				p.streamIsPipelineFlow = false
 				p.streamBuf = ""
+				if p.pipelineFlow.pendingName != "" {
+					// Name was provided inline — auto-save without asking.
+					return p.handlePipelineFlowInput(p.pipelineFlow.pendingName)
+				}
 				p.messages = append(p.messages, glitchEntry{
 					who:  glitchSpeakerBot,
 					text: "save as what name? (written to ~/.config/glitch/pipelines/<name>.pipeline.yaml)",
@@ -740,6 +778,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 
 	case glitchErrMsg:
 		p.streaming = false
+		p.animFrame = 0
 		p.streamBuf = ""
 		p.messages = append(p.messages, glitchEntry{
 			who:  glitchSpeakerBot,
@@ -837,7 +876,6 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 			case "enter":
 				if !p.streaming && len(p.acSuggestions) > 0 {
 					p.input.SetValue(p.acSuggestions[p.acCursor].cmd + " ")
-					p.input.CursorEnd()
 					p.acActive = false
 					p.acSuppressed = false
 					return p, nil
@@ -1049,7 +1087,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 					args := strings.Fields(userText)
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
 					if len(args) > 1 {
-						name := strings.Join(args[1:], " ")
+						name := args[1]
 						// Check if pipeline file exists — if so, run it.
 						home, _ := os.UserHomeDir()
 						pipelinePath := filepath.Join(home, ".config", "glitch", "pipelines", name+".pipeline.yaml")
@@ -1057,7 +1095,13 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "launching " + name + "..."})
 							return p, func() tea.Msg { return glitchRerunMsg{name: name} }
 						}
-						// Pipeline not found — seed description and start wizard.
+						if len(args) > 2 {
+							// Inline description — skip the question and go straight to generation.
+							desc := strings.Join(args[2:], " ")
+							p.pipelineFlow = glitchPipelineFlow{active: true, phase: 0, pendingName: name}
+							return p.handlePipelineFlowInput(desc)
+						}
+						// Name only, no description — ask the question.
 						p.pipelineFlow = glitchPipelineFlow{active: true, phase: 0, description: name}
 					} else {
 						p.pipelineFlow = glitchPipelineFlow{active: true, phase: 0}
@@ -1081,7 +1125,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 					args := strings.Fields(userText)
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
 					if len(args) > 1 {
-						name := strings.Join(args[1:], " ")
+						name := args[1]
 						home, _ := os.UserHomeDir()
 						promptPath := filepath.Join(home, ".config", "glitch", "prompts", name+".md")
 						if data, err := os.ReadFile(promptPath); err == nil {
@@ -1091,7 +1135,13 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 							})
 							return p, nil
 						}
-						// Not found — seed description and start wizard.
+						if len(args) > 2 {
+							// Inline description — skip the question and go straight to generation.
+							desc := strings.Join(args[2:], " ")
+							p.promptFlow = glitchPromptFlow{active: true, phase: 0, pendingName: name}
+							return p.handlePromptFlowInput(desc)
+						}
+						// Name only, no description — ask the question.
 						p.promptFlow = glitchPromptFlow{active: true, phase: 0, description: name}
 					} else {
 						p.promptFlow = glitchPromptFlow{active: true, phase: 0}
@@ -1370,7 +1420,7 @@ func (p glitchChatPanel) build(height, width int, pal styles.ANSIPalette) []stri
 	const hPad = 3 // horizontal padding (each side) for chat and send panel
 
 	// Fixed rows below messages:
-	//   1 scroll hint (reserved) + 1 blank + 1 subtitle + 4 send panel
+	//   1 scroll hint (reserved) + 1 blank + 1 subtitle + 6 send panel (╭ + 3 textarea rows + hint + ╰)
 	// Plus autocomplete rows when overlay is active (capped at 5).
 	sugRowCount := 0
 	if p.acActive && len(p.acSuggestions) > 0 {
@@ -1379,7 +1429,7 @@ func (p glitchChatPanel) build(height, width int, pal styles.ANSIPalette) []stri
 			sugRowCount = 5
 		}
 	}
-	fixedRows := 7 + sugRowCount
+	fixedRows := 9 + sugRowCount
 	msgAreaH := height - fixedRows
 	if msgAreaH < 1 {
 		msgAreaH = 1
@@ -1489,17 +1539,30 @@ func (p glitchChatPanel) build(height, width int, pal styles.ANSIPalette) []stri
 	}
 
 	// Curved send panel (sendW/dash already declared above for scroll hint box).
+	// Set textarea width to fill the inner send panel (minus 2 border chars and 2 padding chars).
+	p.input.SetWidth(sendW - 4)
 	lines = append(lines, padStr+borderColor+"╭"+dash+"╮"+aRst)
 
 	if p.backend == nil {
 		lines = append(lines, padStr+panelrender.BoxRow(pal.Error+"  no provider — install ollama or configure one"+aRst, sendW, borderColor))
+		lines = append(lines, padStr+panelrender.BoxRow("", sendW, borderColor))
+		lines = append(lines, padStr+panelrender.BoxRow("", sendW, borderColor))
 	} else {
-		lines = append(lines, padStr+panelrender.BoxRow(p.input.View(), sendW, borderColor))
+		// textarea renders 3 rows; split on newline and box each one.
+		inputLines := strings.SplitN(p.input.View(), "\n", 4)
+		for len(inputLines) < 3 {
+			inputLines = append(inputLines, "")
+		}
+		for i := 0; i < 3; i++ {
+			lines = append(lines, padStr+panelrender.BoxRow(inputLines[i], sendW, borderColor))
+		}
 	}
 
 	var hints []panelrender.Hint
 	if p.streaming {
-		hints = []panelrender.Hint{{Key: "streaming", Desc: "▋"}}
+		spinFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		spin := spinFrames[p.animFrame%len(spinFrames)]
+		hints = []panelrender.Hint{{Key: spin, Desc: "thinking"}}
 	} else if p.focused {
 		hints = []panelrender.Hint{
 			{Key: "enter", Desc: "send"},
