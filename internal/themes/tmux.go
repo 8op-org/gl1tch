@@ -16,7 +16,7 @@ func TmuxStatusCenterFormat(accent, dim string) string {
 		key("^spc j") + desc(" jump") + grp +
 		key("^spc d") + desc(" detach") + sp +
 		key("^spc r") + desc(" reload") + sp +
-		key("^spc q") + desc(" quit") + " "
+		key("/quit") + desc(" quit") + " "
 }
 
 // ApplyTmux pushes theme colors to the running tmux session via set-option.
