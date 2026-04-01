@@ -92,9 +92,9 @@ var integrationPipelines = []pipeline.PipelineRef{
 func integrationRouter(t *testing.T) *HybridRouter {
 	t.Helper()
 	return New(realManager(t), realEmbedder(), Config{
-		Model:          integrationModel(),
-		OllamaBaseURL:  integrationBaseURL(),
-		CacheDir:       t.TempDir(),
+		Model:         integrationModel(),
+		OllamaBaseURL: integrationBaseURL(),
+		CacheDir:      t.TempDir(),
 	})
 }
 
@@ -176,9 +176,9 @@ func TestIntegration_LLM_CronExtraction(t *testing.T) {
 		prompt   string
 		wantCron string // expected 5-field expression
 	}{
-		{"run the support digest every morning at 9am",  "0 9 * * *"},
-		{"run the support digest every weekday",         "0 9 * * 1-5"},
-		{"summarize support emails every 2 hours",       "0 */2 * * *"},
+		{"run the support digest every morning at 9am", "0 9 * * *"},
+		{"run the support digest every weekday", "0 9 * * 1-5"},
+		{"summarize support emails every 2 hours", "0 */2 * * *"},
 		{"run the support digest every day at midnight", "0 0 * * *"},
 	}
 
@@ -224,7 +224,7 @@ func TestIntegration_LLM_InputExtraction(t *testing.T) {
 		wantInput string // substring that should appear in result.Input
 	}{
 		{"run the support digest for acme", "acme"},
-		{"summarize support emails about billing",  "billing"},
+		{"summarize support emails about billing", "billing"},
 	}
 
 	for _, tc := range cases {
@@ -370,6 +370,49 @@ func TestIntegration_NoMatch_AmbiguousShort(t *testing.T) {
 	}
 }
 
+// ── PR review — no phantom routing ───────────────────────────────────────────
+
+func TestIntegration_NoMatch_PRReview(t *testing.T) {
+	// PR review prompts must not silently route to an unrelated pipeline.
+	// These contain pipeline-adjacent language ("run", "fix", "update") but
+	// are about reviewing/editing code, not running a registered data pipeline.
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	r := integrationRouter(t)
+
+	cases := []string{
+		"review the feedback on PR 1246 in elastic/ensemble",
+		"what does the reviewer want changed in my PR",
+		"fix the review comments on my ensemble pull request",
+		"address the code review feedback in ensemble",
+		"update scripts/cloud.py to use Command instead of subprocess",
+	}
+
+	for _, prompt := range cases {
+		t.Run(prompt, func(t *testing.T) {
+			result, err := r.Route(ctx, prompt, integrationPipelines)
+			if err != nil {
+				t.Fatalf("Route: %v", err)
+			}
+			t.Logf("method=%s pipeline=%v conf=%.3f",
+				result.Method,
+				func() string {
+					if result.Pipeline != nil {
+						return result.Pipeline.Name
+					}
+					return "nil"
+				}(),
+				result.Confidence,
+			)
+			if result.Pipeline != nil {
+				t.Errorf("PR review prompt %q must not route to pipeline %q (conf=%.2f) — no PR pipeline registered",
+					prompt, result.Pipeline.Name, result.Confidence)
+			}
+		})
+	}
+}
+
 // ── Confidence logging ────────────────────────────────────────────────────────
 
 func TestIntegration_ConfidenceReport(t *testing.T) {
@@ -381,23 +424,25 @@ func TestIntegration_ConfidenceReport(t *testing.T) {
 	r := integrationRouter(t)
 
 	type scenario struct {
-		prompt      string
-		wantMatch   bool
+		prompt       string
+		wantMatch    bool
 		wantPipeline string
 	}
 
 	scenarios := []scenario{
 		// strong matches
-		{"now re-run the support-digest pipeline",            true,  "support-digest-dryrun"},
-		{"run the support digest",                            true,  "support-digest-dryrun"},
-		{"summarize support emails",                          true,  "support-digest-dryrun"},
+		{"now re-run the support-digest pipeline", true, "support-digest-dryrun"},
+		{"run the support digest", true, "support-digest-dryrun"},
+		{"summarize support emails", true, "support-digest-dryrun"},
 		{"generate a multistep pipeline to send a get well card", true, "clarify-haiku-multistep"},
 
 		// should not match
-		{"commit and push",                                   false, ""},
-		{"switch to dracula theme",                           false, ""},
-		{"run it",                                            false, ""},
-		{"comit and push it all up",                          false, ""},
+		{"commit and push", false, ""},
+		{"switch to dracula theme", false, ""},
+		{"run it", false, ""},
+		{"comit and push it all up", false, ""},
+		{"review the feedback on PR 1246 in elastic/ensemble", false, ""},
+		{"fix the review comments on my ensemble pull request", false, ""},
 	}
 
 	t.Log("\n  prompt                                                    pipeline                  conf   method")
