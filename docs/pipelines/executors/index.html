@@ -1,0 +1,143 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Executors and Plugins — GLITCH</title><meta name="description" content="The workers that run your steps. AI models, tools, builtins."><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+INDEX
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link active" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Real-World Pipelines </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Executors and Plugins</h1> <p class="docs-page-desc">The workers that run your steps. AI models, tools, builtins.</p> <div class="docs-article"> <p>Every step in a pipeline has an <code>executor</code> field. That field tells the runner what does the work. There are three kinds of executors, and they all use the same field.</p>
+<h2 id="native-executors">Native executors</h2>
+<p>These are compiled into the gl1tch binary. No installation needed.</p>
+<h3 id="claude">claude</h3>
+<p>Runs Claude via the Claude CLI. Install and authenticate the CLI first — gl1tch delegates to it.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">review</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Review this code for bugs."</span></span></code></pre>
+<p>Supports all Claude models. Use the full model identifier in the <code>model</code> field: <code>claude-sonnet-4-6</code>, <code>claude-haiku-4-5-20251001</code>, and so on.</p>
+<h3 id="ollama">ollama</h3>
+<p>Uses a locally running <a href="https://ollama.ai">Ollama</a> instance. The runner connects to <code>localhost:11434</code> by default.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Explain what this function does."</span></span></code></pre>
+<p>You need to have the model pulled first: <code>ollama pull qwen2.5-coder:latest</code>. The <code>model</code> field is the exact Ollama model tag.</p>
+<h2 id="sidecar-executors-cli-wrappers">Sidecar executors (CLI wrappers)</h2>
+<p>Sidecar executors wrap any command-line tool. They’re defined in YAML files in <code>~/.config/glitch/wrappers/</code> and loaded at startup. The gl1tch binary discovers them automatically.</p>
+<p>A sidecar YAML file looks like this:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">description</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"GitHub CLI wrapper"</span></span>
+<span class="line"><span style="color:#85E89D">command</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">args</span><span style="color:#E1E4E8">: []</span></span>
+<span class="line"><span style="color:#85E89D">kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">tool</span></span></code></pre>
+<p>When you use <code>executor: gh</code> in a pipeline, the runner finds this sidecar, spawns the <code>gh</code> process, passes input via stdin, and captures stdout.</p>
+<h3 id="gh">gh</h3>
+<p>GitHub CLI wrapper. Pass the gh command as <code>vars.args</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">list-prs</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">  vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pr list --json number,title,author"</span></span></code></pre>
+<p>Requires the <a href="https://cli.github.com/">GitHub CLI</a> installed and authenticated via <code>gh auth login</code>.</p>
+<h3 id="jq">jq</h3>
+<p>Runs <a href="https://jqlang.github.io/jq/">jq</a> on the input. Useful for transforming JSON between steps:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">extract-names</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">jq</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">list-prs</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.list-prs.output}}"</span></span>
+<span class="line"><span style="color:#85E89D">  vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">".[].title"</span></span></code></pre>
+<h3 id="write">write</h3>
+<p>Writes the step input to a file:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">review</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./output.md"</span></span>
+<span class="line"><span style="color:#85E89D">  input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.review.output}}"</span></span></code></pre>
+<h3 id="custom-sidecars">Custom sidecars</h3>
+<p>You can wrap any CLI tool. Create a YAML file in <code>~/.config/glitch/wrappers/</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#6A737D"># ~/.config/glitch/wrappers/my-tool.yaml</span></span>
+<span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">my-tool</span></span>
+<span class="line"><span style="color:#85E89D">description</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Custom CLI integration"</span></span>
+<span class="line"><span style="color:#85E89D">command</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">/usr/local/bin/my-tool</span></span>
+<span class="line"><span style="color:#85E89D">args</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">"--format"</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">"json"</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">tool</span></span></code></pre>
+<p>Now use <code>executor: my-tool</code> in any pipeline. Input goes to stdin, output comes from stdout. Environment variables are set as <code>GLITCH_&#x3C;KEY>=&#x3C;value></code> from the step’s <code>vars</code> map.</p>
+<p>The <code>kind</code> field matters: <code>tool</code> executors receive only the step input. <code>agent</code> executors (the default) receive the full execution context.</p>
+<h2 id="builtins">Builtins</h2>
+<p>Builtins are lightweight functions compiled into the runner. They don’t spawn processes or call APIs. Use them for control flow, validation, and glue logic.</p>
+<h3 id="builtinassert">builtin.assert</h3>
+<p>Validates output. Fails the step if the assertion is false.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">check</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.assert</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    expected</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pass"</span></span>
+<span class="line"><span style="color:#85E89D">    actual</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.analyze.output}}"</span></span></code></pre>
+<h3 id="builtinset_data">builtin.set_data</h3>
+<p>Sets static data in the step output. Useful for injecting constants or seed values into the DAG.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">config</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.set_data</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    data</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
+<span class="line"><span style="color:#85E89D">      branch</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"main"</span></span></code></pre>
+<h3 id="builtinlog">builtin.log</h3>
+<p>Logs a message during pipeline execution. Does not produce output for downstream steps.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">checkpoint</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">fetch</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Fetch complete. Starting analysis."</span></span></code></pre>
+<h3 id="builtinsleep">builtin.sleep</h3>
+<p>Pauses execution for a duration. Useful for rate limiting or waiting on external processes.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">wait</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.sleep</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    duration</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"5s"</span></span></code></pre>
+<h3 id="builtinhttp_get">builtin.http_get</h3>
+<p>Makes a GET request to a URL and returns the response body.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">fetch-data</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.http_get</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    url</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"https://api.example.com/status"</span></span>
+<span class="line"><span style="color:#85E89D">    timeout</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"10s"</span></span></code></pre>
+<h3 id="builtinindex_code">builtin.index_code</h3>
+<p>Indexes a codebase directory for semantic search. Uses an Ollama model for embeddings. Useful as a first step before asking questions about code.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">index</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.index_code</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    root</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"."</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"qwen2.5-coder:latest"</span></span></code></pre>
+<h2 id="putting-it-together">Putting it together</h2>
+<p>Here’s a real pipeline that uses multiple executor types in one flow — a code review pipeline:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">code-review</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # Sidecar executor: fetch the PR diff</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">get-diff</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pr diff 42"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Native executor: AI reviews the diff</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">review</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">get-diff</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Review this pull request diff. Focus on correctness, edge cases,</span></span>
+<span class="line"><span style="color:#9ECBFF">      and security. Be specific.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.get-diff.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Builtin: log a checkpoint</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-done</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">review</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Review complete."</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Sidecar executor: write the review to disk</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">review</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">./review-pr42.md</span></span>
+<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.review.output}}"</span></span></code></pre>
+<p>Four steps, three different executor types, one pipeline. The runner handles the dependency graph, streams output, and stores everything in the local database.</p> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/yaml-reference"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">Pipeline YAML Reference</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/brain"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">The Brain System</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>

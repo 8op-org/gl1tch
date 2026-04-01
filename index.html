@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>GLITCH</title><meta name="description" content="A terminal workspace for AI-assisted development. Pipelines, agents, brain context — in your terminal."><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <main class="terminal-stage"> <div class="terminal-workspace" id="terminal-workspace"> <div class="mac-terminal" id="mac-terminal"> <div class="mac-titlebar"> <div class="mac-dots" aria-hidden="true"> <span class="mac-dot mac-dot-red"></span> <span class="mac-dot mac-dot-yellow"></span> <span class="mac-dot mac-dot-green"></span> </div> <span class="mac-title">GLITCH</span> </div> <div class="mac-body"> <div class="terminal-logo"> <pre class="ansi-logo">
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>GLITCH</title><meta name="description" content="A terminal workspace for AI-assisted development. Pipelines, agents, brain context — in your terminal."><link rel="stylesheet" href="/css/bbs.css"><link rel="stylesheet" href="/_astro/index@_@astro.CcZCbyXW.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <main class="terminal-stage"> <div class="terminal-workspace" id="terminal-workspace"> <div class="mac-terminal" id="mac-terminal"> <div class="mac-titlebar"> <div class="mac-dots" aria-hidden="true"> <span class="mac-dot mac-dot-red"></span> <span class="mac-dot mac-dot-yellow"></span> <span class="mac-dot mac-dot-green"></span> </div> <span class="mac-title">GLITCH</span> </div> <div class="mac-body"> <div class="terminal-logo"> <pre class="ansi-logo">
 
 <span class="fg-purple"> ██████╗ ██╗     ██╗████████╗ ██████╗██╗  ██╗</span>
 <span class="fg-cyan">██╔════╝ ██║     ██║╚══██╔══╝██╔════╝██║  ██║</span>
@@ -6,92 +6,896 @@
 <span class="fg-cyan">██║   ██║██║     ██║   ██║   ██║     ██╔══██║</span>
 <span class="fg-purple">╚██████╔╝███████╗██║   ██║   ╚██████╗██║  ██║</span>
 <span class="fg-cyan"> ╚═════╝ ╚══════╝╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝</span>
-  </pre> </div> <div class="terminal-output" id="terminal-output"> <div class="output-line output-system">your AI workspace</div> <div class="output-line output-dim">Type /help to see available commands.</div> </div> <div class="terminal-input-wrap"> <div class="terminal-input-row"> <span class="terminal-prompt">&gt;&gt;</span> <input type="text" id="terminal-input" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" aria-label="GLITCH terminal input"> </div> <div class="terminal-input-hint">enter send  ·  ↑↓ history  ·  tab complete  ·  /install /pipelines /docs</div> </div> </div> </div> <script type="module" src="/_astro/MacTerminal.astro_astro_type_script_index_0_lang.Ct4Nk-dr.js"></script> <div class="docs-splitbar" id="docs-splitbar" aria-hidden="true"></div> <div class="docs-panel" id="docs-panel" aria-hidden="true"> <div class="docs-panel-titlebar"> <div class="mac-dots" aria-hidden="true"> <span class="mac-dot mac-dot-red"></span> <span class="mac-dot mac-dot-yellow"></span> <span class="mac-dot mac-dot-green"></span> </div> <span class="mac-title">DOCS</span> <button class="docs-panel-close" id="docs-panel-close" aria-label="Close docs panel">×</button> </div> <div class="docs-panel-body"> <div class="term-pane-header"> <div class="tui-panel-header"><span>DOCS</span></div> </div> <div class="term-pane"> <h2 class="section-header fg-green">// the pipeline memory system //</h2> <!-- use_brain / write_brain definitions --> <div style="margin-bottom:24px"> <p style="font-size:13px;line-height:1.9;margin-bottom:16px;color:var(--fg)">
-Brain fields give your pipelines persistent, accumulated context across steps.
-      A step can <span class="fg-yellow">write</span> insights to the brain store and later steps can
-<span class="fg-yellow">read</span> from it &mdash; turning a linear pipeline into a knowledge-building loop.
-</p> <!-- use_brain --> <div class="tui-step-header"><span><span class="step-num">use_brain</span></span></div> <div style="background:var(--darkbg);border-left:3px solid var(--green);padding:14px 16px;margin:0 0 16px;font-size:13px;line-height:1.8"> <span class="fg-green" style="font-weight:bold">use_brain: true</span> <span class="fg-comment"> &mdash; type: bool &nbsp;|&nbsp; default: false</span><br> <span style="color:var(--fg)">
-When set on a pipeline or step, injects accumulated brain context into the
-        step&apos;s prompt preamble as a <span class="fg-cyan">&lt;brain&gt;</span> XML block.
-        The AI sees previous insights from earlier steps (or past runs if brain notes
-        were saved). Set at pipeline level to enable for all steps, or override per-step.
-</span> </div> <!-- write_brain --> <div class="tui-step-header"><span><span class="step-num">write_brain</span></span></div> <div style="background:var(--darkbg);border-left:3px solid var(--cyan);padding:14px 16px;margin:0 0 16px;font-size:13px;line-height:1.8"> <span class="fg-cyan" style="font-weight:bold">write_brain: true</span> <span class="fg-comment"> &mdash; type: bool &nbsp;|&nbsp; default: false</span><br> <span style="color:var(--fg)">
-When set on a step, the step&apos;s output is appended to the brain context store
-        for the current run. Subsequent steps with <span class="fg-green">use_brain: true</span> will see this
-        output in their preamble. Multiple <span class="fg-cyan">write_brain</span> steps accumulate &mdash;
-        context is concatenated in order.
-</span> </div> <!-- step-level override --> <div class="tui-step-header"><span><span class="step-num">step-level override</span></span></div> <div style="background:var(--darkbg);border-left:3px solid var(--yellow);padding:14px 16px;margin:0 0 4px;font-size:13px;line-height:1.8"> <span class="fg-yellow" style="font-weight:bold">use_brain: false</span> <span class="fg-comment"> &mdash; per-step suppression</span><br> <span style="color:var(--fg)">
-Even when <span class="fg-green">use_brain: true</span> is set at the pipeline level, you can suppress
-        injection for a specific step with <span class="fg-yellow">use_brain: false</span>.
-        Useful for data-fetch steps where brain context wastes tokens and adds noise.
-</span> </div> </div> <!-- ── SECTION 2: EXAMPLES ── --> <div class="tui-step-header" style="margin:24px 0 0"><span>EXAMPLES</span></div> <p class="fg-comment" style="font-size:11px;margin:4px 0 12px">// annotated YAML examples //</p> <p style="color:var(--fg);font-size:12px;margin-bottom:4px"> <span class="fg-yellow">&gt;&gt;</span> <span class="fg-cyan"> Example 1:</span> Brain Feedback Loop &mdash; two steps, first writes, second reads
-</p> <div class="code-wrap"> <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> brain-feedback-loop</span></span>
-<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+  </pre> </div> <div class="terminal-output" id="terminal-output"> <div class="output-line output-system">your AI workspace</div> <div class="output-line output-dim">Type /help to see available commands.</div> </div> <div class="terminal-input-wrap"> <div class="terminal-input-row"> <span class="terminal-prompt">&gt;&gt;</span> <input type="text" id="terminal-input" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" aria-label="GLITCH terminal input"> </div> <div class="terminal-input-hint">enter send  ·  ↑↓ history  ·  tab complete  ·  /install  /pipelines  /docs</div> </div> </div> </div> <script type="module" src="/_astro/MacTerminal.astro_astro_type_script_index_0_lang.BDKVA8Vp.js"></script> <div class="docs-splitbar" id="docs-splitbar" aria-hidden="true"></div> <div class="docs-panel" id="docs-panel" aria-hidden="true"> <div class="docs-panel-titlebar"> <div class="mac-dots" aria-hidden="true"> <span class="mac-dot mac-dot-red"></span> <span class="mac-dot mac-dot-yellow"></span> <span class="mac-dot mac-dot-green"></span> </div> <span class="mac-title">DOCS</span> <button class="docs-panel-close" id="docs-panel-close" aria-label="Close docs panel">×</button> </div> <div class="docs-panel-body"> <div class="dp-shell" data-astro-cid-vzobq5mo> <!-- sidebar nav --> <nav class="dp-nav" id="dp-nav" data-astro-cid-vzobq5mo> <div class="dp-nav-header" data-astro-cid-vzobq5mo> <span class="fg-purple" data-astro-cid-vzobq5mo>GL1TCH</span><span class="fg-comment" data-astro-cid-vzobq5mo> / docs</span> </div> <div class="dp-nav-section" data-astro-cid-vzobq5mo>PIPELINES</div> <button class="dp-nav-item active" data-target="dp-section-quickstart" onclick="DPNav.show(this)" data-astro-cid-vzobq5mo> <span class="dp-nav-num fg-comment" data-astro-cid-vzobq5mo>01</span> <span class="dp-nav-label" data-astro-cid-vzobq5mo>Your First Pipeline</span> </button><button class="dp-nav-item" data-target="dp-section-yaml-reference" onclick="DPNav.show(this)" data-astro-cid-vzobq5mo> <span class="dp-nav-num fg-comment" data-astro-cid-vzobq5mo>02</span> <span class="dp-nav-label" data-astro-cid-vzobq5mo>Pipeline YAML Reference</span> </button><button class="dp-nav-item" data-target="dp-section-executors" onclick="DPNav.show(this)" data-astro-cid-vzobq5mo> <span class="dp-nav-num fg-comment" data-astro-cid-vzobq5mo>03</span> <span class="dp-nav-label" data-astro-cid-vzobq5mo>Executors and Plugins</span> </button><button class="dp-nav-item" data-target="dp-section-brain" onclick="DPNav.show(this)" data-astro-cid-vzobq5mo> <span class="dp-nav-num fg-comment" data-astro-cid-vzobq5mo>04</span> <span class="dp-nav-label" data-astro-cid-vzobq5mo>The Brain System</span> </button><button class="dp-nav-item" data-target="dp-section-examples" onclick="DPNav.show(this)" data-astro-cid-vzobq5mo> <span class="dp-nav-num fg-comment" data-astro-cid-vzobq5mo>05</span> <span class="dp-nav-label" data-astro-cid-vzobq5mo>Real-World Pipelines</span> </button> </nav> <!-- content panes --> <div class="dp-content" id="dp-content" data-astro-cid-vzobq5mo> <article id="dp-section-quickstart" class="dp-article visible" aria-hidden="false" data-astro-cid-vzobq5mo> <div class="dp-article-header" data-astro-cid-vzobq5mo> <h1 class="dp-title fg-purple" data-astro-cid-vzobq5mo>Your First Pipeline</h1> <p class="dp-desc fg-comment" data-astro-cid-vzobq5mo>Install gl1tch, write a pipeline YAML, run it. Five minutes.</p> </div> <div class="dp-body" data-astro-cid-vzobq5mo> <h2 id="prerequisites">Prerequisites</h2>
+<p>You need two things:</p>
+<ul>
+<li><strong>Go 1.22+</strong> installed on your machine. Run <code>go version</code> to check.</li>
+<li><strong>An AI provider</strong>: either the <a href="https://claude.ai/download">Claude CLI</a> installed and authenticated, or <a href="https://ollama.ai">Ollama</a> running locally with a model pulled.</li>
+</ul>
+<p>That’s it. No Docker, no cloud account, no config ceremony.</p>
+<h2 id="install">Install</h2>
+<p>From source (recommended for now):</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">git</span><span style="color:#9ECBFF"> clone</span><span style="color:#9ECBFF"> https://github.com/8op-org/gl1tch.git</span></span>
+<span class="line"><span style="color:#79B8FF">cd</span><span style="color:#9ECBFF"> gl1tch</span></span>
+<span class="line"><span style="color:#B392F0">go</span><span style="color:#9ECBFF"> build</span><span style="color:#9ECBFF"> ./cmd/glitch</span></span></code></pre>
+<p>Or grab it directly:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">go</span><span style="color:#9ECBFF"> install</span><span style="color:#9ECBFF"> github.com/8op-org/gl1tch/cmd/glitch@latest</span></span></code></pre>
+<p>Either way you end up with a <code>glitch</code> binary. Put it somewhere on your <code>$PATH</code>.</p>
+<h2 id="your-first-pipeline">Your first pipeline</h2>
+<p>Create a file called <code>hello.pipeline.yaml</code>. Anywhere on disk is fine.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">hello</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">greet</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Say hello in the style of a 1990s BBS sysop. Keep it under 3 lines.</span></span></code></pre>
+<p>Run it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> hello.pipeline.yaml</span></span></code></pre>
+<p>The runner builds the executor, sends the prompt, and streams output to stdout. You should see something like a sysop greeting from 1994 appear in your terminal.</p>
+<p>If you’re using Ollama instead of Claude, swap the executor and model:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">greet</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">    Say hello in the style of a 1990s BBS sysop. Keep it under 3 lines.</span></span></code></pre>
+<h2 id="what-just-happened">What just happened</h2>
+<p>When you run <code>glitch pipeline run</code>, the runner:</p>
+<ol>
+<li>Parses the YAML and validates the step DAG</li>
+<li>Resolves each step’s executor (native like <code>claude</code>/<code>ollama</code>, or sidecar CLI wrappers loaded from <code>~/.config/glitch/wrappers/</code>)</li>
+<li>Runs steps in dependency order, streaming output as it goes</li>
+<li>Stores the run result in the local SQLite database</li>
+</ol>
+<p>Single-step pipelines are fine for testing, but the real power is chaining.</p>
+<h2 id="chaining-steps">Chaining steps</h2>
+<p>Here’s a two-step pipeline that fetches a repo description from GitHub and summarizes it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">git-summary</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">get-repo</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"repo view --json description"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
-<span class="line"><span style="color:#6272A4">  # Step 1: local model writes an insight to brain</span></span>
-<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> analyze</span></span>
-<span class="line"><span style="color:#8BE9FD">    plugin</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ollama</span></span>
-<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> qwen2.5-coder:latest</span></span>
-<span class="line"><span style="color:#8BE9FD">    write_brain</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> true</span><span style="color:#6272A4">          # &#x3C;- output saved to brain context</span></span>
-<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
-<span class="line"><span style="color:#F1FA8C">      Analyze the code in ./src and write one key insight</span></span>
-<span class="line"><span style="color:#F1FA8C">      about its architecture. Start with "INSIGHT:"</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">summarize</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">get-repo</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Summarize this repo description in one sentence:</span></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.get-repo.output}}</span></span></code></pre>
+<p>The <code>needs</code> field creates a dependency. <code>summarize</code> won’t run until <code>get-repo</code> finishes. The <code>{{steps.get-repo.output}}</code> template expression injects the previous step’s output into the prompt.</p>
+<p>To use the <code>gh</code> executor, you need the <a href="https://cli.github.com/">GitHub CLI</a> installed and authenticated. The <code>gh</code> executor is a sidecar wrapper — a YAML file in <code>~/.config/glitch/wrappers/</code> that tells gl1tch how to call the <code>gh</code> command.</p>
+<h2 id="where-pipelines-live">Where pipelines live</h2>
+<p>The <code>glitch pipeline run</code> command accepts:</p>
+<ul>
+<li>A <strong>file path</strong>: <code>glitch pipeline run ./my-pipeline.pipeline.yaml</code></li>
+<li>A <strong>pipeline name</strong>: <code>glitch pipeline run my-pipeline</code> — this looks in <code>~/.config/glitch/pipelines/my-pipeline.pipeline.yaml</code></li>
+</ul>
+<p>For development, use file paths. For pipelines you run often, drop them in the config directory.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li>Read the <a href="/docs/pipelines/yaml-reference">YAML Reference</a> for every field you can use</li>
+<li>Learn about <a href="/docs/pipelines/executors">Executors and Plugins</a> to understand what runs your steps</li>
+<li>Explore the <a href="/docs/pipelines/brain">Brain System</a> for persistent context across steps</li>
+<li>Copy a <a href="/docs/pipelines/examples">Real-World Pipeline</a> and adapt it</li>
+</ul> </div> </article><article id="dp-section-yaml-reference" class="dp-article" aria-hidden="true" data-astro-cid-vzobq5mo> <div class="dp-article-header" data-astro-cid-vzobq5mo> <h1 class="dp-title fg-purple" data-astro-cid-vzobq5mo>Pipeline YAML Reference</h1> <p class="dp-desc fg-comment" data-astro-cid-vzobq5mo>Every field, what it does, and when to use it.</p> </div> <div class="dp-body" data-astro-cid-vzobq5mo> <h2 id="pipeline-level-fields">Pipeline-level fields</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>name</code></td><td><code>string</code></td><td><em>required</em></td><td>Unique name for the pipeline. Used in logs, the store, and as a lookup key.</td></tr><tr><td><code>version</code></td><td><code>string</code></td><td><code>""</code></td><td>Schema version. Currently always <code>"1"</code>.</td></tr><tr><td><code>steps</code></td><td><code>Step[]</code></td><td><em>required</em></td><td>Ordered list of steps. Execution order is determined by <code>needs</code> dependencies, not array position.</td></tr><tr><td><code>vars</code></td><td><code>map[string]any</code></td><td><code>{}</code></td><td>Pipeline-level seed context. Available to all steps via template expressions.</td></tr><tr><td><code>max_parallel</code></td><td><code>int</code></td><td><code>8</code></td><td>Maximum number of steps that can run concurrently. Only matters for DAG pipelines with parallel branches.</td></tr></tbody></table>
+<h2 id="step-level-fields">Step-level fields</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>string</code></td><td><em>required</em></td><td>Unique identifier for the step. Referenced by <code>needs</code>, <code>on_failure</code>, and template expressions.</td></tr><tr><td><code>executor</code></td><td><code>string</code></td><td><code>""</code></td><td>The executor to run. Native executors: <code>claude</code>, <code>ollama</code>. Builtins: <code>builtin.assert</code>, <code>builtin.log</code>, etc. Sidecar wrappers: <code>gh</code>, <code>jq</code>, <code>write</code>, or any name registered in <code>~/.config/glitch/wrappers/</code>.</td></tr><tr><td><code>model</code></td><td><code>string</code></td><td><code>""</code></td><td>Model identifier passed to the executor. For <code>claude</code>: e.g. <code>claude-sonnet-4-6</code>, <code>claude-haiku-4-5-20251001</code>. For <code>ollama</code>: the local model name like <code>qwen2.5-coder:latest</code>.</td></tr><tr><td><code>prompt</code></td><td><code>string</code></td><td><code>""</code></td><td>The prompt text sent to AI executors. Supports <code>{{template}}</code> expressions for variable interpolation.</td></tr><tr><td><code>input</code></td><td><code>string</code></td><td><code>""</code></td><td>Raw input string. Used by non-AI executors or to override the default input. Supports template expressions.</td></tr><tr><td><code>publish_to</code></td><td><code>string</code></td><td><code>""</code></td><td>Topic name. When set, the step’s output is published to the event bus under this topic.</td></tr><tr><td><code>needs</code></td><td><code>string[]</code></td><td><code>[]</code></td><td>Step IDs that must complete before this step runs. Creates the DAG execution order.</td></tr><tr><td><code>vars</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Flat key-value pairs passed to the executor as environment/template variables. For the <code>gh</code> executor, use <code>vars.args</code> to pass CLI arguments.</td></tr><tr><td><code>args</code></td><td><code>map[string]any</code></td><td><code>{}</code></td><td>Structured data passed to the executor. Supersedes <code>vars</code> when set. Used by builtins that need typed input.</td></tr><tr><td><code>condition</code></td><td><code>Condition</code></td><td><code>{}</code></td><td>Conditional branching. See Conditions below.</td></tr><tr><td><code>for_each</code></td><td><code>string</code></td><td><code>""</code></td><td>Template expression or newline-separated list. When set, the step is cloned once per item. The current item is available as <code>{{item}}</code>.</td></tr><tr><td><code>retry</code></td><td><code>RetryPolicy</code></td><td><code>null</code></td><td>Retry policy for this step. See Retry below.</td></tr><tr><td><code>on_failure</code></td><td><code>string</code></td><td><code>""</code></td><td>Step ID to run if this step fails after all retry attempts.</td></tr><tr><td><code>prompt_id</code></td><td><code>string</code></td><td><code>""</code></td><td>Title of a saved prompt in the store. When set, the prompt body is prepended to the step’s input before execution. Case-insensitive title matching.</td></tr><tr><td><code>outputs</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Declares output keys produced by this step. After completion, the full output string is stored under each declared key.</td></tr><tr><td><code>inputs</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Maps input names to template expressions like <code>{{steps.&#x3C;id>.&#x3C;key>}}</code>. Resolved before execution using accumulated step outputs.</td></tr></tbody></table>
+<h2 id="conditions">Conditions</h2>
+<p>The <code>condition</code> field enables branching. It has three sub-fields:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>if</code></td><td><code>string</code></td><td>Expression to evaluate against the previous step’s output.</td></tr><tr><td><code>then</code></td><td><code>string</code></td><td>Step ID to jump to if the expression is true.</td></tr><tr><td><code>else</code></td><td><code>string</code></td><td>Step ID to jump to if the expression is false.</td></tr></tbody></table>
+<h3 id="condition-expressions">Condition expressions</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Expression</th><th>Matches when</th></tr></thead><tbody><tr><td><code>always</code></td><td>Always true.</td></tr><tr><td><code>not_empty</code></td><td>Output is not empty after trimming whitespace.</td></tr><tr><td><code>contains:&#x3C;str></code></td><td>Output contains the literal string <code>&#x3C;str></code>.</td></tr><tr><td><code>matches:&#x3C;regex></code></td><td>Output matches the Go regex pattern <code>&#x3C;regex></code>.</td></tr><tr><td><code>len > N</code></td><td>Output length (in bytes) exceeds <code>N</code>.</td></tr></tbody></table>
+<p>Example:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">classify</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Is this Go or Python code? Reply with one word."</span></span>
+<span class="line"><span style="color:#85E89D">  condition</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    if</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"contains:Go"</span></span>
+<span class="line"><span style="color:#85E89D">    then</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">go-handler</span></span>
+<span class="line"><span style="color:#85E89D">    else</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">python-handler</span></span></code></pre>
+<h2 id="retry-policy">Retry policy</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>max_attempts</code></td><td><code>int</code></td><td><code>0</code></td><td>Number of retry attempts. <code>0</code> means no retry.</td></tr><tr><td><code>interval</code></td><td><code>duration</code></td><td><code>"0s"</code></td><td>Time between retries. Supports Go duration strings: <code>"2s"</code>, <code>"500ms"</code>, <code>"1m"</code>.</td></tr><tr><td><code>on</code></td><td><code>string</code></td><td><code>"always"</code></td><td>When to retry: <code>"always"</code> retries on any completion, <code>"on_failure"</code> retries only on error.</td></tr></tbody></table>
+<p>Example:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">flaky-api</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.http_get</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    url</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"https://api.example.com/data"</span></span>
+<span class="line"><span style="color:#85E89D">  retry</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    max_attempts</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">3</span></span>
+<span class="line"><span style="color:#85E89D">    interval</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"2s"</span></span>
+<span class="line"><span style="color:#79B8FF">    on</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">on_failure</span></span></code></pre>
+<h2 id="template-expressions">Template expressions</h2>
+<p>Templates use <code>{{double braces}}</code> and are resolved before step execution.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Expression</th><th>Resolves to</th></tr></thead><tbody><tr><td><code>{{steps.&#x3C;id>.output}}</code></td><td>The string output of a completed step.</td></tr><tr><td><code>{{steps.&#x3C;id>.&#x3C;key>}}</code></td><td>A specific output key declared in the step’s <code>outputs</code> map.</td></tr><tr><td><code>{{vars.&#x3C;name>}}</code></td><td>A pipeline-level variable from the <code>vars</code> map.</td></tr><tr><td><code>{{item}}</code></td><td>The current iteration value inside a <code>for_each</code> step.</td></tr></tbody></table>
+<h2 id="complete-annotated-example">Complete annotated example</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#6A737D"># Every field in one file. You would never use all of these at once.</span></span>
+<span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">kitchen-sink</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6272A4">  # Step 2: cloud model uses that insight</span></span>
-<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> summarize</span></span>
-<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
-<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-haiku-4-5-20251001</span></span>
-<span class="line"><span style="color:#8BE9FD">    use_brain</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> true</span><span style="color:#6272A4">            # &#x3C;- receives step 1's INSIGHT in preamble</span></span>
-<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
-<span class="line"><span style="color:#F1FA8C">      Based on the architecture insight above, suggest</span></span>
-<span class="line"><span style="color:#F1FA8C">      one high-impact improvement.</span></span></code></pre> </div> <p style="color:var(--fg);font-size:12px;margin:16px 0 4px"> <span class="fg-yellow">&gt;&gt;</span> <span class="fg-cyan"> Example 2:</span> Selective brain injection &mdash; pipeline-level on, one step suppressed
-</p> <div class="code-wrap"> <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> selective-brain</span></span>
-<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
-<span class="line"><span style="color:#8BE9FD">use_brain</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> true</span><span style="color:#6272A4">               # &#x3C;- all steps receive brain context by default</span></span>
+<span class="line"><span style="color:#6A737D"># Pipeline-level settings</span></span>
+<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">  repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
+<span class="line"><span style="color:#85E89D">  max_lines</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"500"</span></span>
+<span class="line"><span style="color:#85E89D">max_parallel</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">4</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
-<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> fetch-data</span></span>
-<span class="line"><span style="color:#8BE9FD">    plugin</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
-<span class="line"><span style="color:#8BE9FD">    use_brain</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> false</span><span style="color:#6272A4">           # &#x3C;- suppressed: no brain context for data fetch</span></span>
-<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
-<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">issue list --json number,title --limit 10</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # Step 1: Fetch data with a sidecar executor</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">fetch-issues</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"issue list --repo {{vars.repo}} --json title,body --limit 10"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> analyze</span></span>
-<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
-<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-haiku-4-5-20251001</span></span>
-<span class="line"><span style="color:#6272A4">    # use_brain: true inherited from pipeline level</span></span>
-<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
-<span class="line"><span style="color:#F1FA8C">      Given the brain context above and these issues:</span></span>
-<span class="line"><span style="color:#F1FA8C">      {{steps.fetch-data.output}}</span></span>
-<span class="line"><span style="color:#F1FA8C">      What patterns do you see?</span></span></code></pre> </div> <!-- ── SECTION 3: BRAIN TIPS ── --> <div class="tui-step-header" style="margin:28px 0 0"><span>BRAIN TIPS</span></div> <p class="fg-comment" style="font-size:11px;margin:4px 0 16px">// making your AI workspace smarter //</p> <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:8px"> <div style="display:flex;gap:12px;align-items:flex-start"> <span class="fg-yellow" style="font-family:'JetBrains Mono',monospace;font-size:13px;min-width:32px;flex-shrink:0">[1]</span> <p style="color:var(--fg);font-size:13px;line-height:1.8;margin:0"> <span style="color:var(--fg);font-weight:bold">Start writes early, reads late</span> &mdash;
-        Put <span class="fg-cyan">write_brain: true</span> on early exploratory steps (local/fast models),
-        then use <span class="fg-green">use_brain: true</span> on later synthesis steps (cloud/expensive models).
-        You get deep context without burning tokens on every step.
-</p> </div> <div style="display:flex;gap:12px;align-items:flex-start"> <span class="fg-yellow" style="font-family:'JetBrains Mono',monospace;font-size:13px;min-width:32px;flex-shrink:0">[2]</span> <p style="color:var(--fg);font-size:13px;line-height:1.8;margin:0"> <span style="color:var(--fg);font-weight:bold">Suppress on pure data-fetch steps</span> &mdash;
-        If a step just fetches JSON from an API or runs <span class="fg-cyan">gh pr list</span>,
-        add <span class="fg-yellow">use_brain: false</span>. Brain context won&apos;t help and
-        wastes the context window.
-</p> </div> <div style="display:flex;gap:12px;align-items:flex-start"> <span class="fg-yellow" style="font-family:'JetBrains Mono',monospace;font-size:13px;min-width:32px;flex-shrink:0">[3]</span> <p style="color:var(--fg);font-size:13px;line-height:1.8;margin:0"> <span style="color:var(--fg);font-weight:bold">Name your insights explicitly</span> &mdash;
-        Prompt your <span class="fg-cyan">write_brain</span> steps to start their output with
-<span class="fg-yellow">&ldquo;INSIGHT:&rdquo;</span> or <span class="fg-yellow">&ldquo;FINDING:&rdquo;</span>
-so the brain context is scannable. The AI reading it later will extract the signal faster.
-</p> </div> <div style="display:flex;gap:12px;align-items:flex-start"> <span class="fg-yellow" style="font-family:'JetBrains Mono',monospace;font-size:13px;min-width:32px;flex-shrink:0">[4]</span> <p style="color:var(--fg);font-size:13px;line-height:1.8;margin:0"> <span style="color:var(--fg);font-weight:bold">Chain local &rarr; cloud for cost control</span> &mdash;
-        Use a cheap local Ollama model (<span class="fg-cyan">qwen2.5-coder</span>, <span class="fg-cyan">llama3.2</span>)
-        to write brain notes, then a cloud model to synthesize. You get the best of both worlds:
-        local privacy + cloud reasoning.
-</p> </div> <div style="display:flex;gap:12px;align-items:flex-start"> <span class="fg-yellow" style="font-family:'JetBrains Mono',monospace;font-size:13px;min-width:32px;flex-shrink:0">[5]</span> <p style="color:var(--fg);font-size:13px;line-height:1.8;margin:0"> <span style="color:var(--fg);font-weight:bold">Brain context accumulates within a run</span> &mdash;
-        Multiple <span class="fg-cyan">write_brain</span> steps in the same pipeline run all accumulate
-        into the same context block. Step 3 sees what steps 1 and 2 wrote. Design your pipeline
-        like a conversation that builds knowledge progressively.
-</p> </div> </div> <!-- ── SECTION 4: PIPELINE YAML QUICK REFERENCE ── --> <div class="tui-step-header" style="margin:28px 0 0"><span>PIPELINE YAML REFERENCE</span></div> <p class="fg-comment" style="font-size:11px;margin:4px 0 12px">// compact field reference //</p> <pre style="font-size:12px;line-height:1.8;background:var(--darkbg);padding:16px;margin-bottom:8px;overflow-x:auto"><span class="fg-cyan">  name</span>                             string  Pipeline name, used in <span class="fg-yellow">glitch pipeline run &lt;name&gt;</span>
-<span class="fg-cyan">  version</span>                          string  Schema version, currently <span class="fg-yellow">"1"</span>
-<span class="fg-green">  use_brain</span>                        bool    Inject brain context into all steps (default: false)
-<span class="fg-green">  write_brain</span>                      bool    Append pipeline output to brain store (default: false)
-<span class="fg-cyan">  steps[].id</span>                       string  Unique step identifier, used in <span class="fg-yellow">&#123;&#123;steps.&lt;id&gt;.output&#125;&#125;</span>
-<span class="fg-cyan">  steps[].executor</span> / <span class="fg-cyan">plugin</span>        string  Agent provider (<span class="fg-yellow">claude</span>, <span class="fg-yellow">ollama</span>, <span class="fg-yellow">gh</span>, <span class="fg-yellow">jq</span>, &hellip;)
-<span class="fg-cyan">  steps[].model</span>                    string  Model ID (<span class="fg-comment">e.g. claude-haiku-4-5-20251001, qwen2.5:latest</span>)
-<span class="fg-cyan">  steps[].prompt</span>                   string  Prompt text; supports <span class="fg-yellow">&#123;&#123;steps.&lt;id&gt;.output&#125;&#125;</span> interpolation
-<span class="fg-green">  steps[].use_brain</span>                bool    Per-step override of pipeline-level use_brain
-<span class="fg-green">  steps[].write_brain</span>              bool    Per-step: save this step&apos;s output to brain context</pre> </div> </div> </div> </div> </main> <footer class="terminal-attribution">
-made with AI &middot; guided by adam s<span class="fg-purple">&dagger;</span>okes &middot; <a href="https://8op.org" target="_blank" rel="noopener">contributions welcome</a> </footer>  </body></html>
+<span class="line"><span style="color:#6A737D">  # Step 2: AI analysis with dependency</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">fetch-issues</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Analyze these GitHub issues and categorize by priority:</span></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.fetch-issues.output}}</span></span>
+<span class="line"><span style="color:#85E89D">    outputs</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      summary</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">""</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Step 3: Conditional branching</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">check-urgency</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.assert</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      expected</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"critical"</span></span>
+<span class="line"><span style="color:#85E89D">      actual</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.analyze.output}}"</span></span>
+<span class="line"><span style="color:#85E89D">    condition</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      if</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"contains:critical"</span></span>
+<span class="line"><span style="color:#85E89D">      then</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">alert</span></span>
+<span class="line"><span style="color:#85E89D">      else</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-ok</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Step 4a: Alert path</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">alert</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Draft an urgent alert for: {{steps.analyze.summary}}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Step 4b: Quiet path</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-ok</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"No critical issues found."</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Step 5: Write output to file</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save-report</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./issue-report.md"</span></span>
+<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.analyze.output}}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Step 6: Retry on failure</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">post-webhook</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.http_get</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      url</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"https://hooks.example.com/notify"</span></span>
+<span class="line"><span style="color:#85E89D">    retry</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      max_attempts</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">3</span></span>
+<span class="line"><span style="color:#85E89D">      interval</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"5s"</span></span>
+<span class="line"><span style="color:#79B8FF">      on</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">on_failure</span></span>
+<span class="line"><span style="color:#85E89D">    on_failure</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-webhook-error</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Fallback step</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-webhook-error</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Webhook delivery failed after 3 attempts."</span></span></code></pre> </div> </article><article id="dp-section-executors" class="dp-article" aria-hidden="true" data-astro-cid-vzobq5mo> <div class="dp-article-header" data-astro-cid-vzobq5mo> <h1 class="dp-title fg-purple" data-astro-cid-vzobq5mo>Executors and Plugins</h1> <p class="dp-desc fg-comment" data-astro-cid-vzobq5mo>The workers that run your steps. AI models, tools, builtins.</p> </div> <div class="dp-body" data-astro-cid-vzobq5mo> <p>Every step in a pipeline has an <code>executor</code> field. That field tells the runner what does the work. There are three kinds of executors, and they all use the same field.</p>
+<h2 id="native-executors">Native executors</h2>
+<p>These are compiled into the gl1tch binary. No installation needed.</p>
+<h3 id="claude">claude</h3>
+<p>Runs Claude via the Claude CLI. Install and authenticate the CLI first — gl1tch delegates to it.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">review</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Review this code for bugs."</span></span></code></pre>
+<p>Supports all Claude models. Use the full model identifier in the <code>model</code> field: <code>claude-sonnet-4-6</code>, <code>claude-haiku-4-5-20251001</code>, and so on.</p>
+<h3 id="ollama">ollama</h3>
+<p>Uses a locally running <a href="https://ollama.ai">Ollama</a> instance. The runner connects to <code>localhost:11434</code> by default.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Explain what this function does."</span></span></code></pre>
+<p>You need to have the model pulled first: <code>ollama pull qwen2.5-coder:latest</code>. The <code>model</code> field is the exact Ollama model tag.</p>
+<h2 id="sidecar-executors-cli-wrappers">Sidecar executors (CLI wrappers)</h2>
+<p>Sidecar executors wrap any command-line tool. They’re defined in YAML files in <code>~/.config/glitch/wrappers/</code> and loaded at startup. The gl1tch binary discovers them automatically.</p>
+<p>A sidecar YAML file looks like this:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">description</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"GitHub CLI wrapper"</span></span>
+<span class="line"><span style="color:#85E89D">command</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">args</span><span style="color:#E1E4E8">: []</span></span>
+<span class="line"><span style="color:#85E89D">kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">tool</span></span></code></pre>
+<p>When you use <code>executor: gh</code> in a pipeline, the runner finds this sidecar, spawns the <code>gh</code> process, passes input via stdin, and captures stdout.</p>
+<h3 id="gh">gh</h3>
+<p>GitHub CLI wrapper. Pass the gh command as <code>vars.args</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">list-prs</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">  vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pr list --json number,title,author"</span></span></code></pre>
+<p>Requires the <a href="https://cli.github.com/">GitHub CLI</a> installed and authenticated via <code>gh auth login</code>.</p>
+<h3 id="jq">jq</h3>
+<p>Runs <a href="https://jqlang.github.io/jq/">jq</a> on the input. Useful for transforming JSON between steps:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">extract-names</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">jq</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">list-prs</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.list-prs.output}}"</span></span>
+<span class="line"><span style="color:#85E89D">  vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">".[].title"</span></span></code></pre>
+<h3 id="write">write</h3>
+<p>Writes the step input to a file:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">review</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./output.md"</span></span>
+<span class="line"><span style="color:#85E89D">  input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.review.output}}"</span></span></code></pre>
+<h3 id="custom-sidecars">Custom sidecars</h3>
+<p>You can wrap any CLI tool. Create a YAML file in <code>~/.config/glitch/wrappers/</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#6A737D"># ~/.config/glitch/wrappers/my-tool.yaml</span></span>
+<span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">my-tool</span></span>
+<span class="line"><span style="color:#85E89D">description</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Custom CLI integration"</span></span>
+<span class="line"><span style="color:#85E89D">command</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">/usr/local/bin/my-tool</span></span>
+<span class="line"><span style="color:#85E89D">args</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">"--format"</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">"json"</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">tool</span></span></code></pre>
+<p>Now use <code>executor: my-tool</code> in any pipeline. Input goes to stdin, output comes from stdout. Environment variables are set as <code>GLITCH_&#x3C;KEY>=&#x3C;value></code> from the step’s <code>vars</code> map.</p>
+<p>The <code>kind</code> field matters: <code>tool</code> executors receive only the step input. <code>agent</code> executors (the default) receive the full execution context.</p>
+<h2 id="builtins">Builtins</h2>
+<p>Builtins are lightweight functions compiled into the runner. They don’t spawn processes or call APIs. Use them for control flow, validation, and glue logic.</p>
+<h3 id="builtinassert">builtin.assert</h3>
+<p>Validates output. Fails the step if the assertion is false.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">check</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.assert</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    expected</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pass"</span></span>
+<span class="line"><span style="color:#85E89D">    actual</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.analyze.output}}"</span></span></code></pre>
+<h3 id="builtinset_data">builtin.set_data</h3>
+<p>Sets static data in the step output. Useful for injecting constants or seed values into the DAG.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">config</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.set_data</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    data</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
+<span class="line"><span style="color:#85E89D">      branch</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"main"</span></span></code></pre>
+<h3 id="builtinlog">builtin.log</h3>
+<p>Logs a message during pipeline execution. Does not produce output for downstream steps.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">checkpoint</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">  needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">fetch</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Fetch complete. Starting analysis."</span></span></code></pre>
+<h3 id="builtinsleep">builtin.sleep</h3>
+<p>Pauses execution for a duration. Useful for rate limiting or waiting on external processes.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">wait</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.sleep</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    duration</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"5s"</span></span></code></pre>
+<h3 id="builtinhttp_get">builtin.http_get</h3>
+<p>Makes a GET request to a URL and returns the response body.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">fetch-data</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.http_get</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    url</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"https://api.example.com/status"</span></span>
+<span class="line"><span style="color:#85E89D">    timeout</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"10s"</span></span></code></pre>
+<h3 id="builtinindex_code">builtin.index_code</h3>
+<p>Indexes a codebase directory for semantic search. Uses an Ollama model for embeddings. Useful as a first step before asking questions about code.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">index</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.index_code</span></span>
+<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">    root</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"."</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"qwen2.5-coder:latest"</span></span></code></pre>
+<h2 id="putting-it-together">Putting it together</h2>
+<p>Here’s a real pipeline that uses multiple executor types in one flow — a code review pipeline:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">code-review</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # Sidecar executor: fetch the PR diff</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">get-diff</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pr diff 42"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Native executor: AI reviews the diff</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">review</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">get-diff</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Review this pull request diff. Focus on correctness, edge cases,</span></span>
+<span class="line"><span style="color:#9ECBFF">      and security. Be specific.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.get-diff.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Builtin: log a checkpoint</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-done</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">review</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Review complete."</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Sidecar executor: write the review to disk</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">review</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">./review-pr42.md</span></span>
+<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.review.output}}"</span></span></code></pre>
+<p>Four steps, three different executor types, one pipeline. The runner handles the dependency graph, streams output, and stores everything in the local database.</p> </div> </article><article id="dp-section-brain" class="dp-article" aria-hidden="true" data-astro-cid-vzobq5mo> <div class="dp-article-header" data-astro-cid-vzobq5mo> <h1 class="dp-title fg-purple" data-astro-cid-vzobq5mo>The Brain System</h1> <p class="dp-desc fg-comment" data-astro-cid-vzobq5mo>Steps write what they learn. Later steps read it. The model decides what&#39;s worth remembering.</p> </div> <div class="dp-body" data-astro-cid-vzobq5mo> <h2 id="how-it-works">How it works</h2>
+<p>Every step’s output is scanned for <code>&#x3C;brain></code> blocks. If one is found and a store is available, it’s persisted for the current run. Every subsequent step receives accumulated brain notes in its prompt preamble — automatically, before your prompt text.</p>
+<p>There are no YAML flags that control this. Brain scanning and injection are always on when a store is configured (which is the default when running via <code>glitch pipeline run</code>). The model decides what’s worth remembering by whether it emits a <code>&#x3C;brain></code> block.</p>
+<h2 id="writing-to-the-brain">Writing to the brain</h2>
+<p>Your prompt instructs the model to emit a brain block. gl1tch finds it, extracts it, stores it.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">audit</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Audit this codebase for security issues. Be specific.</span></span>
+<span class="line"><span style="color:#9ECBFF">      Record your key findings in a &#x3C;brain> block at the end.</span></span></code></pre>
+<p>The model outputs its analysis, then appends:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>&#x3C;brain tags="security,sql-injection"></span></span>
+<span class="line"><span>SQL injection in user_search (line 42), admin_filter (line 89),</span></span>
+<span class="line"><span>report_query (line 156). All use string concatenation. No parameterized queries.</span></span>
+<span class="line"><span>&#x3C;/brain></span></span></code></pre>
+<p>gl1tch extracts the block, stores it, moves on. The full output — including the brain block — still goes to stdout.</p>
+<h2 id="reading-from-the-brain">Reading from the brain</h2>
+<p>If brain notes exist for the current run, they appear in the next step’s prompt preamble automatically. No opt-in needed. The model sees something like this before your prompt text:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>## Brain Notes (this run)</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>[audit] [tags: security, sql-injection]</span></span>
+<span class="line"><span>SQL injection in user_search (line 42), admin_filter (line 89),</span></span>
+<span class="line"><span>report_query (line 156). All use string concatenation. No parameterized queries.</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>---</span></span></code></pre>
+<p>Then your prompt follows. The model sees both.</p>
+<h2 id="the-brain-block-format">The brain block format</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="xml"><code><span class="line"><span style="color:#E1E4E8">&#x3C;</span><span style="color:#85E89D">brain</span><span style="color:#B392F0"> tags</span><span style="color:#E1E4E8">=</span><span style="color:#9ECBFF">"tag1,tag2"</span><span style="color:#B392F0"> type</span><span style="color:#E1E4E8">=</span><span style="color:#9ECBFF">"finding"</span><span style="color:#B392F0"> title</span><span style="color:#E1E4E8">=</span><span style="color:#9ECBFF">"Short Title"</span><span style="color:#E1E4E8">></span></span>
+<span class="line"><span style="color:#E1E4E8">  The insight. Specific. One or two sentences.</span></span>
+<span class="line"><span style="color:#E1E4E8">&#x3C;/</span><span style="color:#85E89D">brain</span><span style="color:#E1E4E8">></span></span></code></pre>
+<p>All attributes are optional:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Attribute</th><th>What it’s for</th></tr></thead><tbody><tr><td><code>tags</code></td><td>Comma-separated labels. Useful for filtering later.</td></tr><tr><td><code>type</code></td><td><code>research</code>, <code>finding</code>, <code>data</code>, or <code>code</code>.</td></tr><tr><td><code>title</code></td><td>Short label shown in the preamble header.</td></tr></tbody></table>
+<p>Keep brain notes short. A four-sentence insight is useful. Four paragraphs is noise.</p>
+<h2 id="a-real-example">A real example</h2>
+<p>This pipeline fetches open issues, has a local model find patterns, then has Claude synthesize recommendations. The brain carries the local model’s findings to Claude automatically.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">issue-triage</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">fetch</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"issue list --json title,body,labels --limit 20"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">fetch</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Find patterns in these issues. What areas of the codebase</span></span>
+<span class="line"><span style="color:#9ECBFF">      keep breaking? Record your top 3 findings in a &#x3C;brain> block.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.fetch.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">recommend</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Using the brain context from the pattern analysis above,</span></span>
+<span class="line"><span style="color:#9ECBFF">      suggest which issues to prioritize this sprint and why.</span></span></code></pre>
+<p>Step 3 never references <code>{{steps.analyze.output}}</code>. It doesn’t need to — the brain notes from step 2 are already in its preamble.</p>
+<h2 id="brain-vs-stepsidoutput">Brain vs. <code>{{steps.&#x3C;id>.output}}</code></h2>
+<p>Use <code>{{steps.&#x3C;id>.output}}</code> when you need the full, raw output of a step — JSON, a diff, a file list.</p>
+<p>Use the brain when you want a step to record what it <em>understood</em>, not what it <em>received</em>. The brain carries interpreted signal. Template expressions carry raw data.</p>
+<p>A good pipeline uses both.</p>
+<h2 id="tell-the-model-the-context-is-there">Tell the model the context is there</h2>
+<p>The preamble arrives before your prompt, but models respond better when you mention it explicitly:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>Using the brain context from earlier steps in this run,</span></span>
+<span class="line"><span>summarize the findings and recommend next actions.</span></span></code></pre>
+<p>Not required. Noticeably better when included.</p>
+<h2 id="how-long-brain-notes-live">How long brain notes live</h2>
+<p>Brain notes are written to the gl1tch SQLite store and stay there. They don’t get deleted between runs.</p>
+<p>Within a single run, notes written by earlier steps are injected into later steps automatically. That’s the primary use case.</p>
+<p>Across runs, all accumulated brain notes are indexed into the RAG store — the same vector store used by <code>builtin.index_code</code>. So a brain note written by a pipeline run last Tuesday is available for semantic retrieval in a pipeline you run today, as long as the RAG injector is configured.</p> </div> </article><article id="dp-section-examples" class="dp-article" aria-hidden="true" data-astro-cid-vzobq5mo> <div class="dp-article-header" data-astro-cid-vzobq5mo> <h1 class="dp-title fg-purple" data-astro-cid-vzobq5mo>Real-World Pipelines</h1> <p class="dp-desc fg-comment" data-astro-cid-vzobq5mo>Four complete pipelines you can copy and run today.</p> </div> <div class="dp-body" data-astro-cid-vzobq5mo> <p>These are working pipelines. Copy the YAML, adjust the variables, and run them. Each one demonstrates a different pattern.</p>
+<hr>
+<h2 id="1-daily-standup-generator">1. Daily standup generator</h2>
+<p>Reads your recent git commits from GitHub and drafts a standup update.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">standup</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">  repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # Fetch commits from the last 24 hours</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">recent-commits</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"api repos/{{vars.repo}}/commits?since=$(date -u -v-1d +%Y-%m-%dT%H:%M:%SZ) --jq '.[].commit.message'"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Generate a standup summary</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">draft-standup</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">recent-commits</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Here are my git commits from the last 24 hours:</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.recent-commits.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Write a brief daily standup update with three sections:</span></span>
+<span class="line"><span style="color:#9ECBFF">      - What I did yesterday</span></span>
+<span class="line"><span style="color:#9ECBFF">      - What I'm doing today (infer from commit trajectory)</span></span>
+<span class="line"><span style="color:#9ECBFF">      - Any blockers (say "none" if nothing obvious)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Keep it under 10 lines. No preamble.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Save to a file</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">draft-standup</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./standup.md"</span></span>
+<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.draft-standup.output}}"</span></span></code></pre>
+<p><strong>How to run:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> standup.pipeline.yaml</span></span></code></pre>
+<p><strong>Customize:</strong> Change <code>vars.repo</code> to your repository. Adjust the date math in the <code>gh api</code> call if you want a different time window.</p>
+<hr>
+<h2 id="2-codebase-health-check">2. Codebase health check</h2>
+<p>Indexes your codebase using Ollama embeddings, then asks Claude about the architecture using brain context.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">health-check</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # Index the codebase for semantic search</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">index</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.index_code</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      root</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"."</span></span>
+<span class="line"><span style="color:#85E89D">      model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"qwen2.5-coder:latest"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Local model analyzes patterns and writes brain notes</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze-structure</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">index</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Based on the codebase index provided, analyze:</span></span>
+<span class="line"><span style="color:#9ECBFF">      1. How many packages/modules exist</span></span>
+<span class="line"><span style="color:#9ECBFF">      2. Which areas have the most complexity</span></span>
+<span class="line"><span style="color:#9ECBFF">      3. Any circular dependencies or code smells</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Record your key findings in a &#x3C;brain tags="architecture"> block.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Claude synthesizes recommendations — brain notes from analyze-structure arrive automatically</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">recommendations</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze-structure</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      You have brain context from a codebase analysis.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Based on those findings, provide:</span></span>
+<span class="line"><span style="color:#9ECBFF">      1. A health score (1-10) with justification</span></span>
+<span class="line"><span style="color:#9ECBFF">      2. The top 3 areas that need refactoring</span></span>
+<span class="line"><span style="color:#9ECBFF">      3. Any architectural concerns</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Be specific. Reference file paths and package names.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Save the report</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save-report</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">recommendations</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./health-report.md"</span></span>
+<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.recommendations.output}}"</span></span></code></pre>
+<p><strong>How to run:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Make sure Ollama is running with the model pulled</span></span>
+<span class="line"><span style="color:#B392F0">ollama</span><span style="color:#9ECBFF"> pull</span><span style="color:#9ECBFF"> qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> health-check.pipeline.yaml</span></span></code></pre>
+<p><strong>Customize:</strong> Change <code>args.root</code> to target a specific directory. Swap the Ollama model for a larger one if you want deeper analysis.</p>
+<hr>
+<h2 id="3-github-pr-triage">3. GitHub PR triage</h2>
+<p>Lists open PRs, groups them by risk level, and posts a triage summary as an issue comment.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">pr-triage</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">  repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
+<span class="line"><span style="color:#85E89D">  triage_issue</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # Fetch open PRs with metadata</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">list-prs</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pr list --repo {{vars.repo}} --json number,title,author,additions,deletions,changedFiles,labels --limit 20"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Classify by risk</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">classify</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">list-prs</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Here are the open pull requests:</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.list-prs.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Triage each PR into one of three risk categories:</span></span>
+<span class="line"><span style="color:#9ECBFF">      - HIGH: large diffs (>500 lines), touches core/critical paths, or no tests</span></span>
+<span class="line"><span style="color:#9ECBFF">      - MEDIUM: moderate changes, single feature area</span></span>
+<span class="line"><span style="color:#9ECBFF">      - LOW: small fixes, docs, config changes</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Format your output as a markdown table with columns:</span></span>
+<span class="line"><span style="color:#9ECBFF">      PR# | Title | Author | Risk | Reason</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Then add a "Recommended Review Order" section listing PR numbers</span></span>
+<span class="line"><span style="color:#9ECBFF">      from highest to lowest priority.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Post the triage as a comment on the tracking issue</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">post-triage</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">classify</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"issue comment {{vars.triage_issue}} --repo {{vars.repo}} --body '{{steps.classify.output}}'"</span></span></code></pre>
+<p><strong>How to run:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> pr-triage.pipeline.yaml</span></span></code></pre>
+<p><strong>Customize:</strong> Set <code>vars.repo</code> to your repository and <code>vars.triage_issue</code> to the issue number where you want triage reports posted. You could also swap the <code>post-triage</code> step to use <code>executor: write</code> if you’d rather save locally instead of posting to GitHub.</p>
+<hr>
+<h2 id="4-parallel-model-comparison">4. Parallel model comparison</h2>
+<p>Sends the same prompt to Claude and Ollama simultaneously, then compares their outputs. Demonstrates parallel execution with no dependencies.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">model-compare</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">  test_prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">    Write a function in Go that reverses a linked list in place.</span></span>
+<span class="line"><span style="color:#9ECBFF">    Include the struct definition and a brief explanation.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#6A737D">  # These two steps have no `needs`, so they run in parallel</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-response</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{vars.test_prompt}}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama-response</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{vars.test_prompt}}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Wait for both, then compare</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">compare</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">claude-response</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">ollama-response</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      I sent the same coding prompt to two different AI models.</span></span>
+<span class="line"><span style="color:#9ECBFF">      Compare their responses on these criteria:</span></span>
+<span class="line"><span style="color:#9ECBFF">      1. Correctness (does the code actually work?)</span></span>
+<span class="line"><span style="color:#9ECBFF">      2. Clarity (is the explanation helpful?)</span></span>
+<span class="line"><span style="color:#9ECBFF">      3. Idiomatic Go (does it follow Go conventions?)</span></span>
+<span class="line"><span style="color:#9ECBFF">      4. Edge cases (does it handle nil, single element, etc?)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      Give a score out of 10 for each criterion, then declare a winner.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      --- CLAUDE RESPONSE ---</span></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.claude-response.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9ECBFF">      --- OLLAMA RESPONSE ---</span></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.ollama-response.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Log completion</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">done</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">compare</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Model comparison complete."</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">  # Save the comparison</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">compare</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">./model-comparison.md</span></span>
+<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.compare.output}}"</span></span></code></pre>
+<p><strong>How to run:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Both providers need to be available</span></span>
+<span class="line"><span style="color:#B392F0">ollama</span><span style="color:#9ECBFF"> pull</span><span style="color:#9ECBFF"> qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> model-compare.pipeline.yaml</span></span></code></pre>
+<p><strong>Customize:</strong> Change <code>vars.test_prompt</code> to any coding or writing task. Swap models to compare different Claude tiers (<code>haiku</code> vs <code>sonnet</code>) or different Ollama models. Add more parallel steps to compare three or four models at once — just add them to the <code>compare</code> step’s <code>needs</code> list.</p>
+<hr>
+<h2 id="patterns-to-steal">Patterns to steal</h2>
+<p>A few things these examples demonstrate that you can apply to your own pipelines:</p>
+<p><strong>Pipeline-level vars</strong> for configuration that might change between runs. Put repo names, file paths, and thresholds in <code>vars</code> instead of hardcoding them in prompts.</p>
+<p><strong>Brain blocks are opt-in by the model.</strong> Steps that fetch raw data (gh, http_get) won’t emit <code>&#x3C;brain></code> blocks — they return JSON, not prose. No configuration needed; the model simply won’t write one if you don’t prompt it to.</p>
+<p><strong>Parallel fan-out, serial fan-in.</strong> Steps without <code>needs</code> run in parallel. A downstream step that <code>needs</code> all of them waits for the slowest one. Use this for A/B testing, parallel data fetching, or redundant processing.</p>
+<p><strong>builtin.log for checkpoints.</strong> Drop <code>builtin.log</code> steps between expensive operations so you can see progress in the terminal output.</p>
+<p><strong>Write results to files.</strong> Every pipeline that produces useful output should end with an <code>executor: write</code> step. Terminal output scrolls away. Files persist.</p> </div> </article> </div> </div> <script type="module">const c={show(a){const i=a.dataset.target;if(!i)return;document.querySelectorAll(".dp-nav-item").forEach(e=>e.classList.remove("active")),a.classList.add("active"),document.querySelectorAll(".dp-article").forEach(e=>{e.classList.remove("visible"),e.setAttribute("aria-hidden","true")});const t=document.getElementById(i);if(t){t.classList.add("visible"),t.removeAttribute("aria-hidden");const e=document.getElementById("dp-content");e&&(e.scrollTop=0)}}};window.DPNav=c;</script> </div> </div> </div> </main> <footer class="terminal-attribution">
+made with AI <span class="fg-comment">(mostly correct.. probably)</span> &middot; guided by adam s<span class="fg-purple">&dagger;</span>okes &middot; <a href="https://8op.org" target="_blank" rel="noopener">contributions welcome</a> </footer>  </body></html>

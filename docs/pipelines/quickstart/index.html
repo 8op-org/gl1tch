@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your First Pipeline — GLITCH</title><meta name="description" content="Install gl1tch, write a pipeline YAML, run it. Five minutes."><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+INDEX
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link active" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Real-World Pipelines </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Your First Pipeline</h1> <p class="docs-page-desc">Install gl1tch, write a pipeline YAML, run it. Five minutes.</p> <div class="docs-article"> <h2 id="prerequisites">Prerequisites</h2>
+<p>You need two things:</p>
+<ul>
+<li><strong>Go 1.22+</strong> installed on your machine. Run <code>go version</code> to check.</li>
+<li><strong>An AI provider</strong>: either the <a href="https://claude.ai/download">Claude CLI</a> installed and authenticated, or <a href="https://ollama.ai">Ollama</a> running locally with a model pulled.</li>
+</ul>
+<p>That’s it. No Docker, no cloud account, no config ceremony.</p>
+<h2 id="install">Install</h2>
+<p>From source (recommended for now):</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">git</span><span style="color:#9ECBFF"> clone</span><span style="color:#9ECBFF"> https://github.com/8op-org/gl1tch.git</span></span>
+<span class="line"><span style="color:#79B8FF">cd</span><span style="color:#9ECBFF"> gl1tch</span></span>
+<span class="line"><span style="color:#B392F0">go</span><span style="color:#9ECBFF"> build</span><span style="color:#9ECBFF"> ./cmd/glitch</span></span></code></pre>
+<p>Or grab it directly:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">go</span><span style="color:#9ECBFF"> install</span><span style="color:#9ECBFF"> github.com/8op-org/gl1tch/cmd/glitch@latest</span></span></code></pre>
+<p>Either way you end up with a <code>glitch</code> binary. Put it somewhere on your <code>$PATH</code>.</p>
+<h2 id="your-first-pipeline">Your first pipeline</h2>
+<p>Create a file called <code>hello.pipeline.yaml</code>. Anywhere on disk is fine.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">hello</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">greet</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Say hello in the style of a 1990s BBS sysop. Keep it under 3 lines.</span></span></code></pre>
+<p>Run it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> hello.pipeline.yaml</span></span></code></pre>
+<p>The runner builds the executor, sends the prompt, and streams output to stdout. You should see something like a sysop greeting from 1994 appear in your terminal.</p>
+<p>If you’re using Ollama instead of Claude, swap the executor and model:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">greet</span></span>
+<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
+<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">    Say hello in the style of a 1990s BBS sysop. Keep it under 3 lines.</span></span></code></pre>
+<h2 id="what-just-happened">What just happened</h2>
+<p>When you run <code>glitch pipeline run</code>, the runner:</p>
+<ol>
+<li>Parses the YAML and validates the step DAG</li>
+<li>Resolves each step’s executor (native like <code>claude</code>/<code>ollama</code>, or sidecar CLI wrappers loaded from <code>~/.config/glitch/wrappers/</code>)</li>
+<li>Runs steps in dependency order, streaming output as it goes</li>
+<li>Stores the run result in the local SQLite database</li>
+</ol>
+<p>Single-step pipelines are fine for testing, but the real power is chaining.</p>
+<h2 id="chaining-steps">Chaining steps</h2>
+<p>Here’s a two-step pipeline that fetches a repo description from GitHub and summarizes it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">git-summary</span></span>
+<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">get-repo</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
+<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
+<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"repo view --json description"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">summarize</span></span>
+<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
+<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">get-repo</span><span style="color:#E1E4E8">]</span></span>
+<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
+<span class="line"><span style="color:#9ECBFF">      Summarize this repo description in one sentence:</span></span>
+<span class="line"><span style="color:#9ECBFF">      {{steps.get-repo.output}}</span></span></code></pre>
+<p>The <code>needs</code> field creates a dependency. <code>summarize</code> won’t run until <code>get-repo</code> finishes. The <code>{{steps.get-repo.output}}</code> template expression injects the previous step’s output into the prompt.</p>
+<p>To use the <code>gh</code> executor, you need the <a href="https://cli.github.com/">GitHub CLI</a> installed and authenticated. The <code>gh</code> executor is a sidecar wrapper — a YAML file in <code>~/.config/glitch/wrappers/</code> that tells gl1tch how to call the <code>gh</code> command.</p>
+<h2 id="where-pipelines-live">Where pipelines live</h2>
+<p>The <code>glitch pipeline run</code> command accepts:</p>
+<ul>
+<li>A <strong>file path</strong>: <code>glitch pipeline run ./my-pipeline.pipeline.yaml</code></li>
+<li>A <strong>pipeline name</strong>: <code>glitch pipeline run my-pipeline</code> — this looks in <code>~/.config/glitch/pipelines/my-pipeline.pipeline.yaml</code></li>
+</ul>
+<p>For development, use file paths. For pipelines you run often, drop them in the config directory.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li>Read the <a href="/docs/pipelines/yaml-reference">YAML Reference</a> for every field you can use</li>
+<li>Learn about <a href="/docs/pipelines/executors">Executors and Plugins</a> to understand what runs your steps</li>
+<li>Explore the <a href="/docs/pipelines/brain">Brain System</a> for persistent context across steps</li>
+<li>Copy a <a href="/docs/pipelines/examples">Real-World Pipeline</a> and adapt it</li>
+</ul> </div>  </article> <nav class="docs-prev-next"> <div></div> <a class="docs-prev-next-link next" href="/docs/pipelines/yaml-reference"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Pipeline YAML Reference</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>
