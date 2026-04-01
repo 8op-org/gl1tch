@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/discovery"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/providers"
+	"github.com/powerglove-dev/gl1tch/internal/discovery"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/providers"
 )
 
 // ModelOption is a selectable model within a provider.
@@ -35,7 +35,7 @@ type ProviderDef struct {
 }
 
 // Providers is the base list of built-in providers. All AI providers are
-// discovered at runtime via sidecar YAML files in ~/.config/orcai/wrappers/.
+// discovered at runtime via sidecar YAML files in ~/.config/glitch/wrappers/.
 var Providers = []ProviderDef{
 	{ID: "ollama", Label: "Ollama"},
 	{ID: "shell", Label: "Shell"},
@@ -156,11 +156,11 @@ func autodetectModels(cmd string) []ModelOption {
 // the plugin Manager/discovery layer:
 //   - only includes providers found via discovery (native plugins + CLI wrappers)
 //   - shell is always included
-//   - reads model metadata from ~/.config/orcai/wrappers/<name>.yaml sidecars
+//   - reads model metadata from ~/.config/glitch/wrappers/<name>.yaml sidecars
 //   - falls back to runtime Ollama query if the ollama sidecar declares no models
 //   - appends any discovered plugins not in the static Providers list
 func buildProviders() []ProviderDef {
-	configDir := orcaiConfigDir()
+	configDir := glitchConfigDir()
 	ollamaModels := queryOllamaModels()
 	sidecarData := loadSidecarMeta(configDir)
 
@@ -397,7 +397,7 @@ func GetOrCreateWorktreeFrom(basePath, sessionName string) (worktreePath, repoRo
 	}
 
 	// Try to create with a named branch so sessions are traceable.
-	branch := "orcai/" + sessionName
+	branch := "glitch/" + sessionName
 	if err := exec.Command("git", "-C", repoRoot, "worktree", "add", worktreePath, "-b", branch).Run(); err != nil {
 		// Branch already exists or some other issue — fall back to detached HEAD.
 		if err2 := exec.Command("git", "-C", repoRoot, "worktree", "add", "--detach", worktreePath).Run(); err2 != nil {
@@ -427,22 +427,22 @@ func CopyDotEnv(src, dst string) {
 
 // ── Session helpers ───────────────────────────────────────────────────────────
 
-// WindowEntry represents a running orcai tmux window.
+// WindowEntry represents a running glitch tmux window.
 type WindowEntry struct {
 	Index string
 	Name  string
 }
 
-// systemWindows are orcai UI windows that should not appear in the existing sessions list.
+// systemWindows are glitch UI windows that should not appear in the existing sessions list.
 var systemWindows = map[string]bool{
-	"ORCAI":    true,
+	"GL1TCH":    true,
 	"_sidebar": true,
 	"_welcome": true,
 }
 
 // ParseWindowList parses the output of:
 //
-//	tmux list-windows -t orcai -F "#{window_index} #{window_name}"
+//	tmux list-windows -t glitch -F "#{window_index} #{window_name}"
 //
 // and returns non-system windows.
 func ParseWindowList(output string) []WindowEntry {

@@ -12,14 +12,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 // smokeModel returns the model to use for smoke tests.
-// Override with ORCAI_SMOKE_MODEL (e.g. "llama3.2:1b" in CI).
+// Override with GLITCH_SMOKE_MODEL (e.g. "llama3.2:1b" in CI).
 func smokeModel() string {
-	if m := os.Getenv("ORCAI_SMOKE_MODEL"); m != "" {
+	if m := os.Getenv("GLITCH_SMOKE_MODEL"); m != "" {
 		return m
 	}
 	return "llama3.2"

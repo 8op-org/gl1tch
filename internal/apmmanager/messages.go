@@ -1,10 +1,10 @@
 // Package apmmanager provides a BubbleTea component for browsing, installing,
-// and activating APM (Agent Package Manager) agents within the orcai TUI.
-// It also exposes [AgentCapabilityProvider], an interface orcai plugins use to
+// and activating APM (Agent Package Manager) agents within the glitch TUI.
+// It also exposes [AgentCapabilityProvider], an interface glitch plugins use to
 // request and receive agent capabilities at runtime.
 package apmmanager
 
-import "github.com/adam-stokes/orcai/internal/plugin"
+import "github.com/powerglove-dev/gl1tch/internal/plugin"
 
 // ── Public tea.Msg types ────────────────────────────────────────────────────
 // These are exported because parent components and plugins need to handle them.

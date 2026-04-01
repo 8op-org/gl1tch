@@ -8,9 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "orcai",
-	Short: "AI workspace",
-	Long:  "orcai — AI CLI workspace powered by tmux",
+	Use:   "glitch",
+	Short: "Your AI workspace",
+	Long:  "glitch — your AI, your terminal, your rules",
 }
 
 func Execute() {

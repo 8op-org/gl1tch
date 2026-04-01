@@ -1,4 +1,4 @@
-// Package modal provides shared modal overlay rendering for ORCAI TUI components.
+// Package modal provides shared modal overlay rendering for GLITCH TUI components.
 // It extracts the common confirm/alert/scroll modal patterns used by switchboard,
 // crontui, and other packages into a single, reusable location.
 package modal
@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // Config holds all configuration for rendering a modal.
@@ -327,7 +327,7 @@ func renderMarkdown(md string, width int) string {
 	return out
 }
 
-const fallbackReadme = `# ORCAI — Getting Started
+const fallbackReadme = `# GLITCH — Getting Started
 
 Press **^spc** (ctrl+space) to access chord shortcuts.
 

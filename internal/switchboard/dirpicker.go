@@ -3,7 +3,7 @@ package switchboard
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/modal"
+	"github.com/powerglove-dev/gl1tch/internal/modal"
 )
 
 // DirPickerModel, DirSelectedMsg, DirCancelledMsg, dirWalkResultMsg are now

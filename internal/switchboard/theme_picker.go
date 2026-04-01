@@ -3,8 +3,8 @@ package switchboard
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // viewThemePicker renders the theme picker overlay.
@@ -31,6 +31,7 @@ func (m Model) handleThemePicker(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if close {
 		m.themePicker.Open = false
 		m.previewBundle = nil // restore registry-backed active bundle
+		m.refreshTDFHeader()
 	}
 	return m, cmd
 }

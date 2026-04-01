@@ -1,5 +1,5 @@
-# ORCAI Translations — customize every string in the UI.
-# Copy to ~/.config/orcai/translations.yaml and edit what you want.
+# GL1TCH Translations — customize every string in the UI.
+# Copy to ~/.config/glitch/translations.yaml and edit what you want.
 # Everything here is optional — missing keys fall back to the defaults.
 #
 # Values support raw ANSI escape sequences:
@@ -22,7 +22,7 @@ cron_panel_title: "▓▒░ SCHEDULED ░▒▓"
 
 # ── Header + modal titles ─────────────────────────────────────────────────────
 
-switchboard_header_title: "\e[38;2;189;147;249m✦ ORCAI — ABBS ✦\e[0m"
+switchboard_header_title: "\e[38;2;189;147;249m✦ GL1TCH ✦\e[0m"
 quit_modal_title: ">>> BAIL OUT <<<"
 help_modal_title: ">>> GETTING STARTED <<<"
 theme_picker_title: ">>> SELECT THEME <<<"
@@ -45,7 +45,7 @@ help_section_panels: "PANELS"
 
 # Key binding descriptions (the right-hand column in the help overlay)
 help_bind_help: "this help"
-help_bind_quit: "quit ORCAI"
+help_bind_quit: "quit GL1TCH"
 help_bind_detach: "detach  (session stays alive)"
 help_bind_reload: "reload  (hot-swap binary)"
 help_bind_themes: "theme picker"
@@ -85,19 +85,19 @@ rerun_cwd_label: "WORKING DIRECTORY"
 # prompts and not overridable here.
 
 welcome_phase_intro: |
-  -=[ SYSOP v0.1 - INITIATING HANDSHAKE ]=-
+  -=[ GL1TCH v0.1 - INITIATING HANDSHAKE ]=-
 
   yo. new blood detected on the BBS.
 
-  i'm SYSOP — your guide to ORCAI, the Agentic Bulletin Board System.
-  think of orcai as a tmux-powered AI workspace: you run agents, chain 'em into
+  i'm GL1TCH — your AI, your terminal, your rules.
+  think of glitch as a tmux-powered AI workspace: you run agents, chain 'em into
   pipelines, and everything they learn gets stored in the brain — a local vector db
   that makes your AI sessions smarter over time.
 
   what are you trying to build? tell me your use case and we'll get you dialed in.
 
 welcome_phase_use_case: |
-  solid. orcai was built for exactly that kind of operation.
+  solid. glitch was built for exactly that kind of operation.
 
   next up: pipelines. these are YAML files that define what your agents do,
   step by step. each step picks a provider (ollama, claude, whatever you've got),
@@ -106,7 +106,7 @@ welcome_phase_use_case: |
   ready to see the pipeline builder? say the word.
 
 welcome_phase_pipeline: |
-  pipelines live in ~/.config/orcai/pipelines/ — YAML configs, one per file.
+  pipelines live in ~/.config/glitch/pipelines/ — YAML configs, one per file.
 
   hit ^spc p to open the pipeline builder TUI. left column = your pipelines,
   right column = editor with YAML preview and a test runner. you can build,
@@ -122,19 +122,14 @@ welcome_phase_pipeline: |
 welcome_phase_nav: |
   -=[ NAVIGATION CHEATSHEET ]=-
 
-  ^spc j  →  jump window (switch jobs / open sysop tools)
+  ^spc j  →  jump window (switch jobs / open glitch tools)
   ^spc p  →  pipeline builder
   ^spc b  →  brain editor
   ^spc n  →  new agent from clipboard
   Esc     →  back / cancel
 
-  the switchboard (window 0) has three columns:
-    LEFT   = pipelines + signals
-    CENTER = agents, inbox, send panel
-    RIGHT  = activity feed / job logs
-
-  the jump window shows sysop tools (left) and active jobs (right).
-  you navigate between running agent jobs from there.
+  the switchboard (window 0) is GL1TCH — talk to me to run pipelines,
+  launch agents, check job status, or navigate the system.
 
   ready to hear about the brain?
 
@@ -144,7 +139,7 @@ welcome_phase_brain: |
   when agents run, they write <brain> tags in their output:
     <brain type="research" title="auth bug" tags="go,security">...</brain>
 
-  orcai extracts these, embeds them as vectors, stores in local SQLite.
+  glitch extracts these, embeds them as vectors, stores in local SQLite.
   on future runs? relevant brain notes are auto-injected as context.
 
   your AI learns your codebase. your preferences. your project.
@@ -163,10 +158,10 @@ welcome_phase_done: |
     ^spc p  →  build pipelines
     ^spc b  →  read the brain
 
-  window 0 is home. the feed on the right shows everything that's running.
+  window 0 is home. GL1TCH is here whenever you need it.
 
   good luck out there. the grid is waiting.
 
-    -- SYSOP, signing off --
+    -- GL1TCH, signing off --
 
   [ press q or Ctrl+C to close this window ]

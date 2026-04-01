@@ -147,7 +147,7 @@ command: /bin/true
 }
 
 func TestLoadSidecarMeta_MissingDirReturnsEmpty(t *testing.T) {
-	got := loadSidecarMeta("/tmp/orcai-nonexistent-dir-xyz")
+	got := loadSidecarMeta("/tmp/glitch-nonexistent-dir-xyz")
 	if len(got) != 0 {
 		t.Errorf("expected empty map for missing dir, got %d entries", len(got))
 	}

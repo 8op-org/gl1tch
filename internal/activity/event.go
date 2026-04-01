@@ -1,5 +1,5 @@
 // Package activity provides the append-only JSONL activity feed used by the
-// ORCAI activity-feed TUI component. All pipeline, schedule, and agent-run
+// GL1TCH activity-feed TUI component. All pipeline, schedule, and agent-run
 // lifecycle events are written here; the feed component tails the file via
 // fsnotify and renders a real-time social-style timeline.
 package activity
@@ -39,10 +39,10 @@ func Now(kind, agent, label, status string) ActivityEvent {
 	}
 }
 
-// DefaultPath returns ~/.orcai/activity.jsonl.
+// DefaultPath returns ~/.glitch/activity.jsonl.
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".orcai", "activity.jsonl")
+	return filepath.Join(home, ".glitch", "activity.jsonl")
 }
 
 // AppendEvent appends e as a single JSON line to path.

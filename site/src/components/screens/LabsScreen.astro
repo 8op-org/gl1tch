@@ -11,7 +11,7 @@ const labs = [
     id: "B",
     name: "brain-analyze-runs",
     title: "Analyze Pipeline Runs with Brain Context",
-    description: "Uses use_brain + write_brain to analyze recent ORCAI pipeline runs and record an insight for future reference.",
+    description: "Uses use_brain + write_brain to analyze recent GL1TCH pipeline runs and record an insight for future reference.",
     prereqs: ["claude CLI on PATH (`claude --version`)"],
   },
   {
@@ -75,14 +75,14 @@ steps:
       Reference the INSIGHT from the previous step.
       What did it say about itself?</code></pre>
     <pre class="fg-comment" style="font-size:11px;margin-bottom:0">// run</pre>
-    <pre class="code-block bash-block"><code class="copy-target">orcai pipeline run brain-ollama-e2e</code></pre>
+    <pre class="code-block bash-block"><code class="copy-target">glitch pipeline run brain-ollama-e2e</code></pre>
   </div>
 
   <!-- ─── LAB B: brain-analyze-runs ─────────────────────────── -->
   <div style="margin-bottom:32px">
     <div class="tui-step-header"><span><span class="step-num">LAB B</span> · ANALYZE PIPELINE RUNS WITH BRAIN CONTEXT</span></div>
     <p style="color:var(--fg);font-size:13px;line-height:1.8;margin:0 0 8px">
-      Uses <span class="fg-yellow">use_brain</span> + <span class="fg-yellow">write_brain</span> to analyze recent ORCAI pipeline runs
+      Uses <span class="fg-yellow">use_brain</span> + <span class="fg-yellow">write_brain</span> to analyze recent GL1TCH pipeline runs
       and record an insight for future reference.
     </p>
     <p class="fg-comment" style="font-size:11px;margin-bottom:4px">// prerequisites</p>
@@ -104,7 +104,7 @@ steps:
       Identify the most common failure patterns and record
       one actionable insight as a brain note.</code></pre>
     <pre class="fg-comment" style="font-size:11px;margin-bottom:0">// run</pre>
-    <pre class="code-block bash-block"><code class="copy-target">orcai pipeline run brain-analyze-runs</code></pre>
+    <pre class="code-block bash-block"><code class="copy-target">glitch pipeline run brain-analyze-runs</code></pre>
   </div>
 
   <!-- ─── LAB C: local-code-review ──────────────────────────── -->
@@ -149,7 +149,7 @@ steps:
       Focus on correctness, clarity, and potential bugs.
       Diff: &#123;&#123;steps.fetch-diff.output&#125;&#125;</code></pre>
     <pre class="fg-comment" style="font-size:11px;margin-bottom:0">// run</pre>
-    <pre class="code-block bash-block"><code class="copy-target">orcai pipeline run local-code-review</code></pre>
+    <pre class="code-block bash-block"><code class="copy-target">glitch pipeline run local-code-review</code></pre>
   </div>
 
   <!-- ─── LAB D: brain-feedback-loop-demo ───────────────────── -->
@@ -194,7 +194,7 @@ steps:
       Review and finalize the TypeScript calculator built so far.
       Add JSDoc comments and export all functions cleanly.</code></pre>
     <pre class="fg-comment" style="font-size:11px;margin-bottom:0">// run</pre>
-    <pre class="code-block bash-block"><code class="copy-target">orcai pipeline run brain-feedback-loop-demo</code></pre>
+    <pre class="code-block bash-block"><code class="copy-target">glitch pipeline run brain-feedback-loop-demo</code></pre>
   </div>
 
   <!-- ─── LAB E: github-activity-digest ─────────────────────── -->
@@ -242,7 +242,7 @@ steps:
       - total_issues, total_prs, action_items array
       Analysis: &#123;&#123;steps.local-analysis.output&#125;&#125;</code></pre>
     <pre class="fg-comment" style="font-size:11px;margin-bottom:0">// run</pre>
-    <pre class="code-block bash-block"><code class="copy-target">orcai pipeline run github-activity-digest</code></pre>
+    <pre class="code-block bash-block"><code class="copy-target">glitch pipeline run github-activity-digest</code></pre>
   </div>
 
   <!-- ─── STATUS LINE HINT ───────────────────────────────────── -->

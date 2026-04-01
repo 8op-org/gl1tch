@@ -1,16 +1,16 @@
 #!/usr/bin/env sh
-# install.sh — Install orcai and its core provider plugins from a release archive.
+# install.sh — Install glitch and its core provider plugins from a release archive.
 #
 # Run from the directory where the archive was extracted:
 #   ./install.sh
 #
 # Installs:
 #   Binaries → ~/.local/bin  (or /usr/local/bin if writable)
-#   Sidecar YAMLs → ~/.config/orcai/wrappers/
+#   Sidecar YAMLs → ~/.config/glitch/wrappers/
 
 set -e
 
-WRAPPERS_DIR="${HOME}/.config/orcai/wrappers"
+WRAPPERS_DIR="${HOME}/.config/glitch/wrappers"
 
 # Determine binary install destination.
 if [ -w /usr/local/bin ]; then
@@ -25,13 +25,13 @@ mkdir -p "${BIN_DIR}" "${WRAPPERS_DIR}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 for binary in \
-    orcai \
-    orcai-claude \
-    orcai-github-copilot \
-    orcai-codex \
-    orcai-gemini \
-    orcai-opencode \
-    orcai-ollama
+    glitch \
+    glitch-claude \
+    glitch-github-copilot \
+    glitch-codex \
+    glitch-gemini \
+    glitch-opencode \
+    glitch-ollama
 do
     src="${SCRIPT_DIR}/${binary}"
     # On Windows the binary has a .exe extension; skip gracefully if absent.

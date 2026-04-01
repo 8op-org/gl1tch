@@ -9,7 +9,7 @@ import (
 )
 
 // TestResolveWidget_NoOverride verifies that when no orcai-testwidget is in
-// PATH the fallback binary is "orcai" (or os.Executable) with args ["testwidget"].
+// PATH the fallback binary is "glitch" (or os.Executable) with args ["testwidget"].
 func TestResolveWidget_NoOverride(t *testing.T) {
 	// Ensure orcai-testwidget is NOT resolvable from PATH.
 	origPath := os.Getenv("PATH")

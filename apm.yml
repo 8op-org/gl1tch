@@ -1,4 +1,4 @@
-# apm.yml — ORCAI Agent Package Manager manifest
+# apm.yml — GLITCH Agent Package Manager manifest
 #
 # Declare all AI agent, skill, prompt, and instruction dependencies here.
 # APM resolves and deploys these to .claude/agents/, .claude/commands/, etc.
@@ -11,10 +11,10 @@
 # Commit: apm.yml, apm.lock.yaml, .claude/agents/, .apm/
 # Ignore: apm_modules/
 
-name: orcai
+name: glitch
 version: 1.0.0
 description: >
-  ORCAI — the Agentic Bulletin Board System.
+  GLITCH — your AI, your terminal, your rules.
   AI workspace orchestrator backed by tmux and BubbleTea TUI.
 
 dependencies:
@@ -31,7 +31,7 @@ dependencies:
     # Local agent definitions live in .apm/agents/ and are included here
     # so APM tracks them in the lockfile and deploys to .claude/agents/.
     # Uncomment when a local agent is added:
-    # - ./apm/agents/orcai-sysop.agent.md
+    # - ./apm/agents/glitch-sysop.agent.md
 
     # ── glab sidecar wrappers ─────────────────────────────────────────────────
     - ./.apm/agents/glab-mr.agent.md

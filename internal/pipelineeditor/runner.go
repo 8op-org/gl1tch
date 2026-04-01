@@ -10,12 +10,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/buildershared"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/systemprompts"
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/buildershared"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/systemprompts"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 
@@ -169,8 +169,8 @@ func buildPluginManager(providers []picker.ProviderDef) (*plugin.Manager, error)
 		}
 	}
 
-	// Load sidecar plugins from ~/.config/orcai/wrappers/.
-	configDir := picker.OrcaiConfigDir()
+	// Load sidecar plugins from ~/.config/glitch/wrappers/.
+	configDir := picker.GlitchConfigDir()
 	if configDir != "" {
 		wrappersDir := filepath.Join(configDir, "wrappers")
 		_ = mgr.LoadWrappersFromDir(wrappersDir) // non-fatal

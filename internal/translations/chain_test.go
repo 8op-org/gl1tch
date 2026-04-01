@@ -3,7 +3,7 @@ package translations_test
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/translations"
+	"github.com/powerglove-dev/gl1tch/internal/translations"
 )
 
 // ── ChainProvider ─────────────────────────────────────────────────────────────

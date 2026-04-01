@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 func makeWritePlugin(name, output string) *plugin.StubPlugin {

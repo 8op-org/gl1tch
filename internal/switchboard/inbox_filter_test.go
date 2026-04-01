@@ -3,7 +3,7 @@ package switchboard
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 func makeRun(id int64, name string) store.Run {

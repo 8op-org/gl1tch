@@ -1,6 +1,6 @@
-// Package keybindings manages the orcai tmux keybinding configuration.
+// Package keybindings manages the glitch tmux keybinding configuration.
 //
-// A keybindings.yaml file maps key sequences to orcai action names. Apply
+// A keybindings.yaml file maps key sequences to glitch action names. Apply
 // binds each key to the resolved tmux command for that action.
 package keybindings
 
@@ -37,7 +37,7 @@ var actionMap = map[string][]string{
 	"resize-pane-down":  {"resize-pane", "-D", "5"},
 }
 
-// Binding pairs a tmux key with an orcai action name.
+// Binding pairs a tmux key with a glitch action name.
 type Binding struct {
 	Key    string `yaml:"key"`
 	Action string `yaml:"action"`

@@ -21,9 +21,9 @@ type Window struct {
 
 // ParseWindows parses output of:
 //
-//	tmux list-windows -t orcai -F "#{window_index} #{window_name} #{window_active}"
+//	tmux list-windows -t glitch -F "#{window_index} #{window_name} #{window_active}"
 //
-// Skips window 0 (the ORCAI home window).
+// Skips window 0 (the GLITCH home window).
 func ParseWindows(output string) []Window {
 	var windows []Window
 	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
@@ -48,7 +48,7 @@ func ParseWindows(output string) []Window {
 }
 
 func listWindows() []Window {
-	out, err := exec.Command("tmux", "list-windows", "-t", "orcai",
+	out, err := exec.Command("tmux", "list-windows", "-t", "glitch",
 		"-F", "#{window_index} #{window_name} #{window_active}").Output()
 	if err != nil {
 		return nil
@@ -202,7 +202,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if len(m.windows) > 0 {
 				w := m.windows[m.cursor]
-				target := fmt.Sprintf("orcai:%d", w.Index)
+				target := fmt.Sprintf("glitch:%d", w.Index)
 				exec.Command("tmux", "select-window", "-t", target).Run()    //nolint:errcheck
 				exec.Command("tmux", "select-pane", "-t", target+".1").Run() //nolint:errcheck
 			}
@@ -211,7 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.windows) > 0 {
 				w := m.windows[m.cursor]
 				exec.Command("tmux", "kill-window", "-t",
-					fmt.Sprintf("orcai:%d", w.Index)).Run() //nolint:errcheck
+					fmt.Sprintf("glitch:%d", w.Index)).Run() //nolint:errcheck
 				m.windows = listWindows()
 				if m.cursor >= len(m.windows) && m.cursor > 0 {
 					m.cursor = len(m.windows) - 1
@@ -531,17 +531,17 @@ func Run() {
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
 
-// resolveSysopBin returns the path to the orcai-sysop binary.
+// resolveSysopBin returns the path to the glitch-sysop binary.
 // It checks PATH first, then falls back to the same directory as the caller.
 func resolveSysopBin() string {
-	if bin, err := exec.LookPath("orcai-sysop"); err == nil {
+	if bin, err := exec.LookPath("glitch-sysop"); err == nil {
 		return bin
 	}
 	self, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
-	return filepath.Join(filepath.Dir(self), "orcai-sysop")
+	return filepath.Join(filepath.Dir(self), "glitch-sysop")
 }
 
 // RunToggle opens the sysop panel as a tmux popup.

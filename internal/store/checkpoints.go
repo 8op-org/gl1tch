@@ -8,7 +8,7 @@ import (
 
 // StepCheckpoint is the persisted write-ahead record for a single pipeline step.
 // It captures the step's lifecycle state so that a pipeline can be resumed with
-// full ExecutionContext re-hydration after orcai is restarted.
+// full ExecutionContext re-hydration after glitch is restarted.
 type StepCheckpoint struct {
 	ID         int64
 	RunID      int64

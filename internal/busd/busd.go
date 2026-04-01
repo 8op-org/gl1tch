@@ -1,4 +1,4 @@
-// Package busd implements orcai's Unix socket event bus daemon.
+// Package busd implements glitch's Unix socket event bus daemon.
 //
 // Widget binaries connect to the socket, send a registration JSON frame, and
 // then receive newline-delimited JSON event frames for topics they subscribed
@@ -32,17 +32,17 @@ import (
 )
 
 // SocketPath returns the path to the Unix domain socket.
-// Primary:  $XDG_RUNTIME_DIR/orcai/bus.sock
-// Fallback: $XDG_CACHE_HOME/orcai/bus.sock  (via os.UserCacheDir)
+// Primary:  $XDG_RUNTIME_DIR/glitch/bus.sock
+// Fallback: $XDG_CACHE_HOME/glitch/bus.sock  (via os.UserCacheDir)
 func SocketPath() (string, error) {
 	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
-		return filepath.Join(xdg, "orcai", "bus.sock"), nil
+		return filepath.Join(xdg, "glitch", "bus.sock"), nil
 	}
 	cache, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("busd: cannot determine socket path: %w", err)
 	}
-	return filepath.Join(cache, "orcai", "bus.sock"), nil
+	return filepath.Join(cache, "glitch", "bus.sock"), nil
 }
 
 // Event is the decoded form of a server-to-client wire frame. It is exported

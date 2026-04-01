@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 func TestCliAdapter_Name(t *testing.T) {
@@ -136,14 +136,14 @@ func TestCliAdapter_Execute_VarsAsEnv(t *testing.T) {
 }
 
 func TestCliAdapter_Execute_FilterViaEnv(t *testing.T) {
-	// Simulate the jq-sidecar pattern: sh -c 'jq "$ORCAI_FILTER"' with JSON on stdin.
-	a := plugin.NewCliAdapter("jq-sidecar", "jq via env", "sh", "-c", `jq "$ORCAI_FILTER"`)
+	// Simulate the jq-sidecar pattern: sh -c 'jq "$GLITCH_FILTER"' with JSON on stdin.
+	a := plugin.NewCliAdapter("jq-sidecar", "jq via env", "sh", "-c", `jq "$GLITCH_FILTER"`)
 	var buf bytes.Buffer
-	err := a.Execute(context.Background(), `{"name":"orcai"}`, map[string]string{"filter": ".name"}, &buf)
+	err := a.Execute(context.Background(), `{"name":"glitch"}`, map[string]string{"filter": ".name"}, &buf)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(buf.String(), "orcai") {
+	if !strings.Contains(buf.String(), "glitch") {
 		t.Errorf("expected jq output to contain 'orcai', got %q", buf.String())
 	}
 }

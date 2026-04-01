@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
 )
 
 // busPublisher wraps busd.PublishEvent as a pipeline.EventPublisher.

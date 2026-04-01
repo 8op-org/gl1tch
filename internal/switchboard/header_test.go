@@ -3,7 +3,7 @@ package switchboard
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // TestDynamicHeader_FullWidth verifies that every line returned by DynamicHeader

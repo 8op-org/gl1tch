@@ -1,8 +1,8 @@
 package promptbuilder
 
 import (
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 // argsRow is one key/value pair in the args editor.

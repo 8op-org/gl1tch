@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/widgetdispatch"
+	"github.com/powerglove-dev/gl1tch/internal/widgetdispatch"
 )
 
 // mockDispatcher records which widgets were dispatched.
@@ -22,7 +22,7 @@ func (m *mockDispatcher) Dispatch(_ context.Context, name string, _ widgetdispat
 // TestLoadConfig_FileAbsent verifies that a missing file returns an empty
 // config and nil error.
 func TestLoadConfig_FileAbsent(t *testing.T) {
-	cfg, err := LoadConfig("/tmp/orcai-layout-does-not-exist-xyz.yaml")
+	cfg, err := LoadConfig("/tmp/glitch-layout-does-not-exist-xyz.yaml")
 	if err != nil {
 		t.Fatalf("LoadConfig absent: unexpected error: %v", err)
 	}

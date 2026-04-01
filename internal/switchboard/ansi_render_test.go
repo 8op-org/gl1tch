@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/switchboard"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/switchboard"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // ── RenderHeader (plain-text fallback) ───────────────────────────────────────

@@ -1,0 +1,104 @@
+# glitch-seed.yaml
+# Source of truth for GLITCH website terminal responses.
+# Run `task site:glitch-db` to regenerate public/glitch-db.json via the GLITCH pipeline.
+
+system_prompt: |
+  You are GLITCH. Respond as someone who has been building tools for a long time and
+  has stopped caring about hype. Precise language. No filler. No exclamation points.
+  No corporate softness. Short sentences. If something is worth saying, say it plainly.
+  Use backticks for commands and code. Max 4 sentences per response unless showing code.
+
+topics:
+  - id: about
+    command: /about
+    prompt: |
+      Describe GLITCH to a developer encountering it for the first time.
+      What is it, what does it do, why does it exist. 3-4 sentences.
+
+  - id: install
+    command: /install
+    prompt: |
+      Give the install command and one sentence on what to do next.
+      Terminal voice. No enthusiasm.
+
+  - id: why
+    command: /why
+    prompt: |
+      Explain the philosophy behind GLITCH. Why terminal? Why local AI?
+      What's wrong with the current tools. 3 sentences.
+
+  - id: pipelines
+    command: /pipelines
+    prompt: |
+      Describe the pipeline system. What it is, how steps chain together.
+      Include a small 3-step YAML example. Keep the example tight.
+
+  - id: brain
+    command: /brain
+    prompt: |
+      Explain brain context injection. What problem it solves.
+      How a pipeline step writes to it, how another reads from it.
+      3 sentences.
+
+  - id: plugins
+    command: /plugins
+    prompt: |
+      Describe the plugin system. Tier 1 native Go, Tier 2 YAML sidecar.
+      One sentence each. Then one sentence on how to write a Tier 2 plugin.
+
+  - id: themes
+    command: /themes
+    prompt: |
+      Describe the GLITCH theme system. TDF fonts, ANSI splash screens,
+      palette configuration. How to install a theme. 3 sentences.
+
+  - id: agents
+    command: /agents
+    prompt: |
+      Describe the agent runner. What you can orchestrate with it.
+      How it relates to tmux and the inbox. 3 sentences.
+
+  - id: ollama
+    command: /ollama
+    prompt: |
+      Explain local AI with Ollama in GLITCH.
+      Give the pull command and the pipeline executor field.
+      Why it matters. 3 sentences.
+
+  - id: cost
+    command: /cost
+    prompt: |
+      Make the case for GLITCH's cost model vs SaaS AI tools.
+      No hyperbole. Facts and reasoning. 3 sentences.
+
+qa:
+  - question: "what is glitch"
+    keywords: [glitch, what, product, tool, workspace, is]
+    topic_ref: about
+  - question: "how to install"
+    keywords: [install, setup, brew, download, get, start]
+    topic_ref: install
+  - question: "why use glitch"
+    keywords: [why, different, better, reason, philosophy]
+    topic_ref: why
+  - question: "how do pipelines work"
+    keywords: [pipeline, pipelines, yaml, steps, chain, how, work]
+    topic_ref: pipelines
+  - question: "what is brain context"
+    keywords: [brain, context, memory, inject, rag, store, inject]
+    topic_ref: brain
+  - question: "how do plugins work"
+    keywords: [plugin, plugins, extend, add, custom, tier, sidecar]
+    topic_ref: plugins
+  - question: "how do I use local AI"
+    keywords: [local, ollama, offline, model, free, qwen, llama]
+    topic_ref: ollama
+  - question: "how much does it cost"
+    keywords: [cost, price, pricing, money, free, pay, bill]
+    topic_ref: cost
+  - question: "how does the theme system work"
+    keywords: [theme, themes, customize, color, appearance, palette, tdf]
+    topic_ref: themes
+  - question: "how does the agent runner work"
+    keywords: [agent, agents, run, orchestrate, tmux, inbox]
+    topic_ref: agents

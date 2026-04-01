@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 // noopBusClientForTest satisfies plugin.BusClient without importing busd,

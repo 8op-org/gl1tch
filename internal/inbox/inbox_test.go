@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // openTestStore creates a Store backed by a temporary directory.

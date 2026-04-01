@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/activity"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/activity"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
 	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"
 	robfigcron "github.com/robfig/cron/v3"
@@ -66,7 +66,7 @@ func New(logger *log.Logger, opts ...Option) *Scheduler {
 
 // Start begins the cron daemon. It loads the config, registers all entries,
 // starts the underlying cron runner, and launches a goroutine that watches
-// ~/.config/orcai/cron.yaml for changes and hot-reloads on write/create.
+// ~/.config/glitch/cron.yaml for changes and hot-reloads on write/create.
 func (s *Scheduler) Start(ctx context.Context) error {
 	if err := s.loadAndRegister(); err != nil {
 		return err
@@ -188,10 +188,10 @@ func (s *Scheduler) runEntry(entry Entry) {
 		"schedule_fired", entry.Name, entry.Target, "scheduled",
 	))
 
-	// Resolve the orcai binary (same binary as current process).
+	// Resolve the glitch binary (same binary as current process).
 	self, err := os.Executable()
 	if err != nil {
-		self = "orcai"
+		self = "glitch"
 	}
 
 	cmd := exec.CommandContext(ctx, self, args...)
@@ -233,7 +233,7 @@ func (s *Scheduler) watchConfig(ctx context.Context) {
 		s.logError("cron: watchConfig: cannot determine home dir", "err", err)
 		return
 	}
-	configFile := filepath.Join(home, ".config", "orcai", "cron.yaml")
+	configFile := filepath.Join(home, ".config", "glitch", "cron.yaml")
 	configDir := filepath.Dir(configFile)
 
 	watcher, err := fsnotify.NewWatcher()

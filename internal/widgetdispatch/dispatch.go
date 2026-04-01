@@ -1,5 +1,5 @@
-// Package widgetdispatch launches orcai widgets, checking for orcai-<name>
-// override binaries in PATH before falling back to `orcai <name>`.
+// Package widgetdispatch launches glitch widgets, checking for glitch-<name>
+// override binaries in PATH before falling back to `glitch <name>`.
 package widgetdispatch
 
 import (
@@ -29,8 +29,8 @@ func (DefaultDispatcher) Dispatch(ctx context.Context, name string, opts Options
 	return Dispatch(ctx, name, opts)
 }
 
-// Dispatch launches widget `name`, checking for an orcai-<name> override binary
-// in PATH before falling back to `orcai <name>`.
+// Dispatch launches widget `name`, checking for an glitch-<name> override binary
+// in PATH before falling back to `glitch <name>`.
 func Dispatch(ctx context.Context, name string, opts Options) error {
 	bin, args := resolveWidget(name)
 	if opts.BusSocket != "" {
@@ -49,27 +49,27 @@ func Dispatch(ctx context.Context, name string, opts Options) error {
 }
 
 // resolveWidget returns the binary and args to use for the given widget name.
-// Checks for orcai-<name> override in PATH, with self-referential detection.
-// Falls back to ("orcai", []string{name}).
+// Checks for glitch-<name> override in PATH, with self-referential detection.
+// Falls back to ("glitch", []string{name}).
 func resolveWidget(name string) (string, []string) {
-	overrideName := "orcai-" + name
+	overrideName := "glitch-" + name
 	if overridePath, err := exec.LookPath(overrideName); err == nil {
 		if !isSelfReferential(overridePath) {
 			return overridePath, nil
 		}
-		log.Printf("widgetdispatch: %s resolves to current orcai binary, using built-in", overrideName)
+		log.Printf("widgetdispatch: %s resolves to current glitch binary, using built-in", overrideName)
 	}
-	// Fall back to orcai <name>
-	orcaiBin, err := exec.LookPath("orcai")
+	// Fall back to glitch <name>
+	glitchBin, err := exec.LookPath("glitch")
 	if err != nil {
 		// Last resort: use os.Executable
 		if self, err2 := os.Executable(); err2 == nil {
-			orcaiBin = self
+			glitchBin = self
 		} else {
-			orcaiBin = "orcai"
+			glitchBin = "glitch"
 		}
 	}
-	return orcaiBin, []string{name}
+	return glitchBin, []string{name}
 }
 
 // isSelfReferential returns true if path resolves to the same executable as

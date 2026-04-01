@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/sidebar"
+	"github.com/powerglove-dev/gl1tch/internal/sidebar"
 )
 
 func TestParseWindows(t *testing.T) {

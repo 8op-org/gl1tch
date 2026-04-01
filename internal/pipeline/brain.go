@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/systemprompts"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/systemprompts"
 )
 
 // injectBrainContext applies brain pre-context modifications to a prompt string.
@@ -137,7 +137,7 @@ type BrainInjector interface {
 	ReadContext(ctx context.Context, runID int64) (string, error)
 }
 
-// StoreBrainInjector is the default BrainInjector backed by the ORCAI SQLite store.
+// StoreBrainInjector is the default BrainInjector backed by the GLITCH SQLite store.
 type StoreBrainInjector struct {
 	store *store.Store
 }
@@ -164,7 +164,7 @@ This table is READ-ONLY. Do not issue INSERT, UPDATE, or DELETE against it.`
 func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (string, error) {
 	var sb strings.Builder
 
-	sb.WriteString("## ORCAI Database Context\n\n")
+	sb.WriteString("## GLITCH Database Context\n\n")
 	sb.WriteString(schemaDescription)
 	sb.WriteString("\n")
 

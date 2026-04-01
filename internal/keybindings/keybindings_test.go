@@ -9,7 +9,7 @@ import (
 // TestLoadConfig_FileAbsent verifies that a missing file returns an empty
 // config and nil error.
 func TestLoadConfig_FileAbsent(t *testing.T) {
-	cfg, err := LoadConfig("/tmp/orcai-keybindings-does-not-exist-xyz.yaml")
+	cfg, err := LoadConfig("/tmp/glitch-keybindings-does-not-exist-xyz.yaml")
 	if err != nil {
 		t.Fatalf("LoadConfig absent: unexpected error: %v", err)
 	}

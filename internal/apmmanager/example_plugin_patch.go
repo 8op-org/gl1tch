@@ -2,7 +2,7 @@
 
 // Package apmmanager — example_plugin_patch.go
 //
-// This file is a living example showing how an existing orcai plugin (or pipeline
+// This file is a living example showing how an existing glitch plugin (or pipeline
 // builtin step) calls RequireAgent to unlock a capability it needs at runtime.
 // Build tag "ignore" keeps it out of the normal build; it is documentation-as-code.
 //
@@ -23,7 +23,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 // ── Example 1: a pipeline builtin step ──────────────────────────────────────
@@ -49,7 +49,7 @@ type AgentStepArgs struct {
 //
 // Patch in pipeline/builtin.go:
 //
-//	import "github.com/adam-stokes/orcai/internal/apmmanager"
+//	import "github.com/powerglove-dev/gl1tch/internal/apmmanager"
 //
 //	func NewBuiltinRegistry(provider apmmanager.AgentCapabilityProvider) map[string]BuiltinFunc {
 //	    return map[string]BuiltinFunc{

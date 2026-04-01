@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 // FeedLineParser processes a raw output line and returns zero or more display lines.

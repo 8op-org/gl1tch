@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/braincontext"
-	"github.com/adam-stokes/orcai/internal/brainrag"
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/braincontext"
+	"github.com/powerglove-dev/gl1tch/internal/brainrag"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // TestBrainE2E_CodebaseUpdate_HighConfidence demonstrates brain-guided codebase

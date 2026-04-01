@@ -17,7 +17,7 @@ type SidecarModel struct {
 	Label string `yaml:"label"`
 }
 
-// SidecarSchema is the structure of a ~/.config/orcai/wrappers/<name>.yaml file.
+// SidecarSchema is the structure of a ~/.config/glitch/wrappers/<name>.yaml file.
 type SidecarSchema struct {
 	Name         string         `yaml:"name"`
 	Description  string         `yaml:"description"`
@@ -107,7 +107,7 @@ func (c *CliAdapter) Kind() string { return c.kind }
 func (c *CliAdapter) Models() []SidecarModel { return c.models }
 
 // Execute spawns the subprocess, writes input to stdin, and streams stdout to w.
-// All entries in vars are passed as ORCAI_<KEY>=<value> environment variables so
+// All entries in vars are passed as GLITCH_<KEY>=<value> environment variables so
 // that any sidecar binary or shell command can read them without special-casing.
 // Additionally, if vars contains a non-empty "model" key, "--model <value>" is
 // appended to the command arguments for backwards compatibility with AI provider
@@ -127,10 +127,10 @@ func (c *CliAdapter) Execute(ctx context.Context, input string, vars map[string]
 		cmd.Dir = cwd
 	}
 
-	// Inherit the current environment then overlay ORCAI_* vars.
+	// Inherit the current environment then overlay GLITCH_* vars.
 	env := os.Environ()
 	for k, v := range vars {
-		key := "ORCAI_" + strings.ToUpper(k)
+		key := "GLITCH_" + strings.ToUpper(k)
 		env = append(env, key+"="+v)
 	}
 	cmd.Env = env

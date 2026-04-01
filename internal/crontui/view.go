@@ -6,12 +6,12 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/modal"
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/modal"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // ansiPal returns the ANSI-escape palette for the current bundle.
@@ -342,7 +342,7 @@ func (m Model) viewThemePicker() string {
 
 // viewQuitConfirm renders the quit confirmation overlay.
 func (m Model) viewQuitConfirm() string {
-	return panelrender.QuitConfirmBox(m.ansiPal(), "Quit ORCAI", "Quit ORCAI?", m.width)
+	return panelrender.QuitConfirmBox(m.ansiPal(), "Quit GLITCH", "Quit GLITCH?", m.width)
 }
 
 // viewDeleteConfirm renders the delete confirmation overlay.

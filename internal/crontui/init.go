@@ -8,10 +8,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/log"
 
-	"github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // New creates the cron TUI model, wiring up the scheduler with a LogSink so
@@ -30,7 +30,7 @@ func New(bundle *themes.Bundle) (Model, error) {
 	sink := NewLogSink(logCh)
 	logger := log.NewWithOptions(sink, log.Options{
 		ReportTimestamp: true,
-		Prefix:          "orcai-cron",
+		Prefix:          "glitch-cron",
 	})
 	// Open the result store so cron runs appear in the switchboard inbox.
 	// A failure is non-fatal — the scheduler runs without persistence.

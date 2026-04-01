@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// AgentCapabilityProvider lets orcai plugins request agent capabilities at
+// AgentCapabilityProvider lets glitch plugins request agent capabilities at
 // runtime without knowing whether the required agent is already installed.
 //
 // GetAgent returns the Agent immediately from the in-memory registry (or false).

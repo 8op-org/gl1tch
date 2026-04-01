@@ -1,4 +1,4 @@
-// Package inbox implements the ORCAI inbox panel — a BubbleTea component that
+// Package inbox implements the GLITCH inbox panel — a BubbleTea component that
 // displays a scrollable list of recorded pipeline and agent run results with
 // polling refresh and a full-screen detail modal.
 package inbox
@@ -14,9 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // pollIntervalFast is the fallback poll interval when the bus is unavailable.

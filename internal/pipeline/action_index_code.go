@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/adam-stokes/orcai/internal/brainrag"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/brainrag"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 func init() {
@@ -38,7 +38,7 @@ var skipDirs = map[string]bool{
 	"Pods":             true, // Swift/ObjC CocoaPods
 	"Carthage":         true, // Swift/ObjC Carthage
 	"deps":             true, // Elixir mix deps
-	"apm_modules":      true, // orcai Agent Package Manager
+	"apm_modules":      true, // glitch Agent Package Manager
 
 	// ── Build / compiled output ──────────────────────────────────────────────
 	"build":   true, // Go, Java, C/C++, JS
@@ -137,12 +137,12 @@ var skipDirs = map[string]bool{
 	"log":    true,
 	"logs":   true,
 
-	// ── orcai-specific non-source dirs ────────────────────────────────────────
+	// ── glitch-specific non-source dirs ────────────────────────────────────────
 	".worktrees": true, // git worktrees
 }
 
 // builtinIndexCode walks a path, chunks source files, embeds them with Ollama,
-// and stores the results in the RAG vector store (brain_vectors table in orcai.db).
+// and stores the results in the RAG vector store (brain_vectors table in glitch.db).
 //
 // Args:
 //   - "path":       directory to walk (default ".")

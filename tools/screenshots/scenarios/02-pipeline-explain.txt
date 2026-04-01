@@ -1,0 +1,2 @@
+Pipeline overview — write a code review pipeline
+write me a glitch pipeline yaml that does a code review. step 1: use ollama/qwen2.5-coder to summarize what changed in my git diff. step 2: use claude haiku to flag bugs, security issues, and anything that looks wrong. save the result to review.md.

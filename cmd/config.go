@@ -17,7 +17,7 @@ func init() {
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage orcai configuration",
+	Short: "Manage glitch configuration",
 }
 
 var configInitCmd = &cobra.Command{
@@ -26,7 +26,7 @@ var configInitCmd = &cobra.Command{
 	RunE:  runConfigInit,
 }
 
-const defaultLayoutYAML = `# orcai layout configuration
+const defaultLayoutYAML = `# glitch layout configuration
 # Panes are created at session attach time. Remove this file to disable layout init.
 # Available widgets: welcome, sysop, pipeline-builder
 panes:
@@ -40,7 +40,7 @@ panes:
     size: 40%
 `
 
-const defaultKeybindingsYAML = `# orcai keybinding configuration
+const defaultKeybindingsYAML = `# glitch keybinding configuration
 # Only keys listed here are bound. Remove entries to preserve your tmux bindings.
 bindings:
   - key: "M-n"
@@ -61,7 +61,7 @@ bindings:
 `
 
 func runConfigInit(cmd *cobra.Command, args []string) error {
-	cfgDir, err := orcaiConfigDir()
+	cfgDir, err := glitchConfigDir()
 	if err != nil {
 		return err
 	}

@@ -12,9 +12,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // Dracula palette constants for color-coded status indicators.
@@ -747,7 +747,7 @@ func findDeployedAgentMD(projectRoot, agentID string) (string, error) {
 // uninstallAgent removes the deployed .agent.md from disk.
 // plugin.Manager has no Remove method; the plugin stays registered for the
 // current session (safe — it won't accept new work once removed from the
-// filesystem). Full deregistration takes effect on the next orcai restart.
+// filesystem). Full deregistration takes effect on the next glitch restart.
 func uninstallAgent(projectRoot, agentID string, mgr *plugin.Manager) error {
 	_ = mgr // reserved for when plugin.Manager gains a Remove method
 	agentsDir := filepath.Join(projectRoot, ".claude", "agents")

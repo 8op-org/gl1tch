@@ -11,9 +11,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/adam-stokes/orcai/internal/cron"
-	crontui "github.com/adam-stokes/orcai/internal/crontui"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
+	crontui "github.com/powerglove-dev/gl1tch/internal/crontui"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 	robfigcron "github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +37,7 @@ var cronCmd = &cobra.Command{
 }
 
 // cronStartCmd starts the cron daemon in a detached tmux session named
-// "orcai-cron". Use --force to replace an existing session.
+// "glitch-cron". Use --force to replace an existing session.
 var cronStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the cron daemon in a background tmux session",
@@ -45,22 +45,22 @@ var cronStartCmd = &cobra.Command{
 		force, _ := cmd.Flags().GetBool("force")
 
 		// Check whether the session already exists.
-		checkCmd := exec.Command("tmux", "has-session", "-t", "orcai-cron")
+		checkCmd := exec.Command("tmux", "has-session", "-t", "glitch-cron")
 		sessionExists := checkCmd.Run() == nil
 
 		if sessionExists {
 			if !force {
-				fmt.Fprintln(os.Stderr, "cron: session 'orcai-cron' is already running. Use --force to restart.")
+				fmt.Fprintln(os.Stderr, "cron: session 'glitch-cron' is already running. Use --force to restart.")
 				os.Exit(1)
 			}
 			// Kill the existing session.
-			if err := exec.Command("tmux", "kill-session", "-t", "orcai-cron").Run(); err != nil {
+			if err := exec.Command("tmux", "kill-session", "-t", "glitch-cron").Run(); err != nil {
 				return fmt.Errorf("cron: kill existing session: %w", err)
 			}
 		}
 
 		// Resolve absolute path of the running binary so the tmux session
-		// can invoke it even when orcai is not in PATH.
+		// can invoke it even when glitch is not in PATH.
 		self, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("cron: resolve executable: %w", err)
@@ -70,27 +70,27 @@ var cronStartCmd = &cobra.Command{
 		// Create the new session running the TUI (falls back to bare daemon
 		// if invoked in a non-interactive/CI context via "cron run").
 		newArgs := []string{
-			"new-session", "-d", "-s", "orcai-cron",
+			"new-session", "-d", "-s", "glitch-cron",
 			"-x", "220", "-y", "50",
 			self + " cron tui",
 		}
 		if err := exec.Command("tmux", newArgs...).Run(); err != nil {
 			return fmt.Errorf("cron: start session: %w", err)
 		}
-		// Label the window so the jump window popup shows "orcai-cron".
-		exec.Command("tmux", "set-window-option", "-t", "orcai-cron:0", "@orcai-label", "orcai-cron").Run() //nolint:errcheck
-		fmt.Println("cron: daemon started in tmux session 'orcai-cron'")
+		// Label the window so the jump window popup shows "glitch-cron".
+		exec.Command("tmux", "set-window-option", "-t", "glitch-cron:0", "@glitch-label", "glitch-cron").Run() //nolint:errcheck
+		fmt.Println("cron: daemon started in tmux session 'glitch-cron'")
 		return nil
 	},
 }
 
-// cronStopCmd kills the orcai-cron tmux session.
+// cronStopCmd kills the glitch-cron tmux session.
 var cronStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the cron daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := exec.Command("tmux", "kill-session", "-t", "orcai-cron").Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "cron: daemon is not running (no 'orcai-cron' session found)")
+		if err := exec.Command("tmux", "kill-session", "-t", "glitch-cron").Run(); err != nil {
+			fmt.Fprintln(os.Stderr, "cron: daemon is not running (no 'glitch-cron' session found)")
 			return nil
 		}
 		fmt.Println("cron: daemon stopped")
@@ -108,7 +108,7 @@ var cronListCmd = &cobra.Command{
 			return fmt.Errorf("cron: load config: %w", err)
 		}
 		if len(entries) == 0 {
-			fmt.Println("cron: no entries configured in ~/.config/orcai/cron.yaml")
+			fmt.Println("cron: no entries configured in ~/.config/glitch/cron.yaml")
 			return nil
 		}
 
@@ -139,7 +139,7 @@ var cronLogsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		logPath := filepath.Join(home, ".local", "share", "orcai", "cron.log")
+		logPath := filepath.Join(home, ".local", "share", "glitch", "cron.log")
 
 		tail := exec.Command("tail", "-f", logPath)
 		tail.Stdout = os.Stdout
@@ -151,7 +151,7 @@ var cronLogsCmd = &cobra.Command{
 	},
 }
 
-// cronTuiCmd runs the interactive BubbleTea TUI for orcai-cron.
+// cronTuiCmd runs the interactive BubbleTea TUI for glitch-cron.
 var cronTuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive cron job manager TUI",
@@ -168,7 +168,7 @@ var cronTuiCmd = &cobra.Command{
 		// accessible so busd theme-change events can look up bundles by name.
 		var bundle *themes.Bundle
 		home, _ := os.UserHomeDir()
-		userThemesDir := filepath.Join(home, ".config", "orcai", "themes")
+		userThemesDir := filepath.Join(home, ".config", "glitch", "themes")
 		if reg, err := themes.NewRegistry(userThemesDir); err == nil {
 			bundle = reg.Active()
 			themes.SetGlobalRegistry(reg)

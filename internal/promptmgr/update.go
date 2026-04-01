@@ -10,11 +10,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sahilm/fuzzy"
 
-	"github.com/adam-stokes/orcai/internal/modal"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/systemprompts"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/modal"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/systemprompts"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // Message types

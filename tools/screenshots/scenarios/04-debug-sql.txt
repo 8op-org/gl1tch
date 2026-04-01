@@ -1,0 +1,7 @@
+SQL query debugging — N+1 problem
+i'm seeing slow page loads. this is the ORM code hitting the database. what's the problem and how do i fix it?
+
+for _, user := range users {
+    posts, _ := db.Query("SELECT * FROM posts WHERE user_id = ?", user.ID)
+    user.Posts = posts
+}

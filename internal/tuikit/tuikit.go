@@ -1,4 +1,4 @@
-// Package tuikit provides shared BubbleTea helpers for orcai sub-TUIs.
+// Package tuikit provides shared BubbleTea helpers for glitch sub-TUIs.
 //
 // The primary export is [ThemeState], which any BubbleTea model can embed to
 // get correct theme initialisation, live cross-process updates via busd, and
@@ -37,8 +37,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // ── Public message types ──────────────────────────────────────────────────────

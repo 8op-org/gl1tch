@@ -1,4 +1,4 @@
-# Taskfile.yml — ORCAI task runner
+# Taskfile.yml — GLITCH task runner
 #
 # Prerequisites:
 #   Task v3:      go install github.com/go-task/task/v3/cmd/task@latest
@@ -7,18 +7,18 @@
 #
 # Usage:
 #   task --list          show all available tasks
-#   task build           compile binary to bin/orcai
+#   task build           compile binary to bin/glitch
 #   task install         build and install to GOPATH/bin + ~/.local/bin symlink
 #   task dev             clean-slate build from source (wipes config/data, run manually)
 #   task prod            install fresh build from source to GOPATH/bin (run manually)
-#   task run             start orcai (non-destructive, assumes already installed)
+#   task run             start glitch (non-destructive, assumes already installed)
 #   task run:clean       wipe db/config, kill tmux sessions, then start orcai
 #   task release:tag VERSION=v1.2.3   create signed git tag for release
 
 version: "3"
 
 vars:
-  BINARY: orcai
+  BINARY: glitch
 
 tasks:
   # ---------------------------------------------------------------------------
@@ -26,15 +26,15 @@ tasks:
   # ---------------------------------------------------------------------------
 
   build:
-    desc: "Compile the orcai binary to bin/orcai"
+    desc: "Compile the glitch binary to bin/glitch"
     cmds:
       - go build -o bin/{{.BINARY}} .
 
   install:
-    desc: "Build and install orcai to GOPATH/bin; symlink into ~/.local/bin"
+    desc: "Build and install glitch to GOPATH/bin; symlink into ~/.local/bin"
     deps: [build]
     cmds:
-      - go install .
+      - cp bin/{{.BINARY}} $(go env GOPATH)/bin/{{.BINARY}}
       - ln -sf $(go env GOPATH)/bin/{{.BINARY}} ~/.local/bin/{{.BINARY}}
 
   test:
@@ -52,7 +52,7 @@ tasks:
   # ---------------------------------------------------------------------------
 
   run:
-    desc: "Start orcai (non-destructive — does NOT wipe db or config)"
+    desc: "Start glitch (non-destructive — does NOT wipe db or config)"
     cmds:
       - "{{.BINARY}}"
 
@@ -82,38 +82,38 @@ tasks:
       - "{{.BINARY}} widget jump-window"
 
   run:clean:
-    desc: "Wipe db/config, kill tmux sessions (orcai, orcai-cron), then start orcai (mirrors old 'make run')"
+    desc: "Wipe db/config, kill tmux sessions (glitch, glitch-cron), then start glitch (mirrors old 'make run')"
     cmds:
-      - tmux detach-client -s orcai 2>/dev/null || true
-      - tmux kill-session -t orcai 2>/dev/null || true
-      - tmux kill-session -t orcai-cron 2>/dev/null || true
-      - rm -f ~/.config/orcai/layout.yaml ~/.config/orcai/keybindings.yaml
+      - tmux detach-client -s glitch 2>/dev/null || true
+      - tmux kill-session -t glitch 2>/dev/null || true
+      - tmux kill-session -t glitch-cron 2>/dev/null || true
+      - rm -f ~/.config/glitch/layout.yaml ~/.config/glitch/keybindings.yaml
       - |
-        if [ -f ~/.local/share/orcai/orcai.db ]; then
-          cp ~/.local/share/orcai/orcai.db ~/.local/share/orcai/orcai.db.bak.$(date +%Y%m%d%H%M%S)
-          ls -t ~/.local/share/orcai/orcai.db.bak.* 2>/dev/null | tail -n +6 | xargs rm -f
+        if [ -f ~/.local/share/glitch/glitch.db ]; then
+          cp ~/.local/share/glitch/glitch.db ~/.local/share/glitch/glitch.db.bak.$(date +%Y%m%d%H%M%S)
+          ls -t ~/.local/share/glitch/glitch.db.bak.* 2>/dev/null | tail -n +6 | xargs rm -f
         fi
-      - rm -f ~/.local/share/orcai/orcai.db
-      - rm -f ~/.config/orcai/inbox-read.json
+      - rm -f ~/.local/share/glitch/glitch.db
+      - rm -f ~/.config/glitch/inbox-read.json
       - "{{.BINARY}}"
 
   dev:
     desc: "New-user clean build: backup+wipe config/data/binaries, rebuild from source, fetch APM agents (run manually)"
     cmds:
-      - tmux detach-client -s orcai 2>/dev/null || true
-      - tmux kill-session -t orcai 2>/dev/null || true
-      - tmux kill-session -t orcai-cron 2>/dev/null || true
+      - tmux detach-client -s glitch 2>/dev/null || true
+      - tmux kill-session -t glitch 2>/dev/null || true
+      - tmux kill-session -t glitch-cron 2>/dev/null || true
       - |
-        if [ -d ~/.config/orcai ]; then
-          cp -r ~/.config/orcai ~/.config/orcai.bak.$(date +%Y%m%d%H%M%S)
-          ls -dt ~/.config/orcai.bak.* 2>/dev/null | tail -n +6 | while IFS= read -r f; do rm -rf "$f"; done
+        if [ -d ~/.config/glitch ]; then
+          cp -r ~/.config/glitch ~/.config/glitch.bak.$(date +%Y%m%d%H%M%S)
+          ls -dt ~/.config/glitch.bak.* 2>/dev/null | tail -n +6 | while IFS= read -r f; do rm -rf "$f"; done
         fi
       - |
-        if [ -d ~/.local/share/orcai ]; then
-          cp -r ~/.local/share/orcai ~/.local/share/orcai.bak.$(date +%Y%m%d%H%M%S)
-          ls -dt ~/.local/share/orcai.bak.* 2>/dev/null | tail -n +6 | while IFS= read -r f; do rm -rf "$f"; done
+        if [ -d ~/.local/share/glitch ]; then
+          cp -r ~/.local/share/glitch ~/.local/share/glitch.bak.$(date +%Y%m%d%H%M%S)
+          ls -dt ~/.local/share/glitch.bak.* 2>/dev/null | tail -n +6 | while IFS= read -r f; do rm -rf "$f"; done
         fi
-      - rm -rf ~/.config/orcai ~/.local/share/orcai
+      - rm -rf ~/.config/glitch ~/.local/share/glitch
       - rm -f bin/{{.BINARY}} bin/{{.BINARY}}-debug
       - mkdir -p bin
       - go build -o bin/{{.BINARY}} .
@@ -128,7 +128,8 @@ tasks:
   prod:
     desc: "Daily driver: install fresh build from source to GOPATH/bin and ~/.local/bin (run manually)"
     cmds:
-      - go install .
+      - go build -o bin/{{.BINARY}} .
+      - cp bin/{{.BINARY}} $(go env GOPATH)/bin/{{.BINARY}}
       - ln -sf $(go env GOPATH)/bin/{{.BINARY}} ~/.local/bin/{{.BINARY}}
 
   # ---------------------------------------------------------------------------
@@ -136,7 +137,7 @@ tasks:
   # ---------------------------------------------------------------------------
 
   debug-build:
-    desc: "Compile orcai with debug symbols (no optimisation) to bin/orcai-debug"
+    desc: "Compile glitch with debug symbols (no optimisation) to bin/glitch-debug"
     cmds:
       - go build -gcflags="all=-N -l" -o bin/{{.BINARY}}-debug .
 
@@ -197,6 +198,50 @@ tasks:
   # ---------------------------------------------------------------------------
   # Release tasks
   # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # Site — powerglove.dev
+  # ---------------------------------------------------------------------------
+
+  site:dev:
+    desc: "Start Astro dev server for powerglove.dev"
+    dir: site
+    cmds:
+      - npm run dev
+
+  site:build:
+    desc: "Full site build: tdf logo + Astro static build"
+    cmds:
+      - task: site:tdf-logo
+      - task: site:astro-build
+
+  site:astro-build:
+    desc: "Build Astro static site (powerglove.dev)"
+    dir: site
+    cmds:
+      - npm run build
+
+  site:tdf-logo:
+    desc: "Generate GL1TCH ANSI→HTML logo from embedded inertia TDF font"
+    cmds:
+      - mkdir -p site/src/generated
+      - go run ./tools/tdfrender | go run ./tools/ansi2html > site/src/generated/glitch-logo.html
+
+  site:logo-gif:
+    desc: "Generate GL1TCH logo GIF using embedded inertia TDF font"
+    cmds:
+      - go run ./tools/tdf2gif > site/public/glitch-logo.gif
+
+  site:glitch-db:
+    desc: "Regenerate GLITCH website response DB via glitch pipeline"
+    cmds:
+      - glitch pipeline run glitch-db.pipeline.yaml
+
+  site:install:
+    desc: "Install site npm dependencies"
+    dir: site
+    cmds:
+      - npm install
 
   release:snapshot:
     desc: "Build a local snapshot release with GoReleaser (no git tag required)"

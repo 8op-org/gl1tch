@@ -16,7 +16,7 @@ import (
 func TestPipelineRunIntegration(t *testing.T) {
 	// Build the orcai binary
 	tmpDir := t.TempDir()
-	binary := filepath.Join(tmpDir, "orcai")
+	binary := filepath.Join(tmpDir, "glitch")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}

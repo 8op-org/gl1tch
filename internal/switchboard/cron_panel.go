@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	orcaicron "github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/panelrender"
+	orcaicron "github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
 )
 
 // CronPanel holds display state for the CRON JOBS panel.

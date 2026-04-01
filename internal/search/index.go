@@ -3,7 +3,7 @@ package search
 import (
 	"strings"
 
-	"github.com/adam-stokes/orcai/internal/chatui"
+	"github.com/powerglove-dev/gl1tch/internal/chatui"
 	"github.com/blevesearch/bleve/v2"
 )
 

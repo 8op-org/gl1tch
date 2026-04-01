@@ -12,8 +12,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/switchboard"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/switchboard"
 )
 
 // ── scanPipelines ─────────────────────────────────────────────────────────────
@@ -1207,7 +1207,7 @@ func TestFeedLineCount_MatchesViewActivityFeed(t *testing.T) {
 // written to YAML (brain is always on; use_brain is no longer a pipeline field).
 func TestWriteSingleStepPipeline_BrainAlwaysOn(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	// useBrain=true is passed but should have no effect on YAML output.
 	path, err := switchboard.WriteSingleStepPipeline("test-brain", "opencode", "", "do a thing", true)
@@ -1225,7 +1225,7 @@ func TestWriteSingleStepPipeline_BrainAlwaysOn(t *testing.T) {
 
 func TestWriteSingleStepPipeline_NoBrain(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	path, err := switchboard.WriteSingleStepPipeline("test-no-brain", "opencode", "", "do a thing", false)
 	if err != nil {

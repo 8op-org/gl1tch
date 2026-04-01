@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // testSockCounter generates unique short socket paths under /tmp to stay well
@@ -23,7 +23,7 @@ func setupDaemonAtXDG(t *testing.T) (*busd.Daemon, string) {
 	t.Helper()
 	n := testSockCounter.Add(1)
 	// Use short paths under /tmp — macOS limits Unix socket paths to 104 bytes.
-	orcaiDir := filepath.Join("/tmp", fmt.Sprintf("tuikit%d", n), "orcai")
+	orcaiDir := filepath.Join("/tmp", fmt.Sprintf("tuikit%d", n), "glitch")
 	if err := os.MkdirAll(orcaiDir, 0o700); err != nil {
 		t.Fatal(err)
 	}

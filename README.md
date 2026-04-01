@@ -1,27 +1,29 @@
-# ORCAI — the Agentic Bulletin Board System
+# GL1TCH — your AI, your terminal, your rules
 
-ORCAI is a tmux-native AI workspace. It runs pipelines, coordinates AI agents, and keeps everything visible in one terminal session.
+```
+  _____ _     __ _______ _____ _    _
+ / ____| |   /_ |__   __/ ____| |  | |
+| |  __| |    | |  | | | |    | |__| |
+| | |_ | |    | |  | | | |    |  __  |
+| |__| | |____| |  | | | |____| |  | |
+ \_____|______|_|  |_|  \_____|_|  |_|
+```
+
+GL1TCH is a tmux-native AI workspace. It runs pipelines, coordinates AI agents, and keeps everything visible in one terminal session. Your GL1TCH is your own.
 
 ## Getting Started
 
 ### Launch
 
 ```
-orcai
+glitch
 ```
 
-This creates (or reattaches to) your ORCAI session. Everything runs inside tmux — you can detach and reconnect anytime.
+This creates (or reattaches to) your GL1TCH session. Everything runs inside tmux — you can detach and reconnect anytime.
 
 ### The Switchboard
 
-The **Switchboard** (window 0) is your control panel. It has four panels:
-
-| Panel | What it shows |
-|---|---|
-| **Pipelines** | YAML pipelines you can launch |
-| **Agent Runner** | AI agents you can start |
-| **Signal Board** | Live status of running jobs |
-| **Activity Feed** | Full output of every job |
+The **Switchboard** (window 0) is your control panel. GL1TCH takes the full screen — talk to it to run pipelines, launch agents, check job status, or just get help.
 
 ### Navigation
 
@@ -30,11 +32,7 @@ The **Switchboard** (window 0) is your control panel. It has four panels:
 | `tab` | Cycle focus between panels |
 | `j` / `k` | Move selection up/down |
 | `enter` | Launch / open selected item |
-| `f` | Cycle Signal Board filter (all/running/done/failed) |
-| `/` | Fuzzy search in Signal Board |
-| `s` | Focus Signal Board |
-| `p` | Focus Pipelines |
-| `a` | Focus Agent Runner |
+| `esc` | Back / close overlay |
 | `T` | Open theme picker |
 
 ### Chord Shortcuts
@@ -49,25 +47,26 @@ Press `^spc` (ctrl+space) then a key:
 | `^spc j` | Jump to any window |
 | `^spc c` | New window |
 | `^spc d` | Detach session |
-| `^spc r` | Reload ORCAI (picks up new binary) |
+| `^spc r` | Reload GL1TCH (picks up new binary) |
 | `^spc q` | Quit |
 | `^spc [` / `]` | Previous / next window |
 | `^spc x` / `X` | Kill pane / window |
+| `^spc a` | Jump to GL1TCH assistant |
 
 ### Pipelines
 
-Pipelines live in `~/.config/orcai/pipelines/`. Each is a `.pipeline.yaml` file. Select one in the Pipelines panel and press `enter` to run it.
+Pipelines live in `~/.config/glitch/pipelines/`. Each is a `.pipeline.yaml` file. Ask GL1TCH to run one, or use the pipeline launcher overlay.
 
 ### Themes
 
-Press `T` in the Switchboard or `^spc m` to open the theme picker. Themes live in `~/.config/orcai/themes/`.
+Press `T` in the Switchboard or `^spc m` to open the theme picker. Themes live in `~/.config/glitch/themes/`.
 
 Built-in themes: **Dracula**, **Nord**, **Catppuccin Mocha**, **Tokyo Night**, **Rose Piné**, **Solarized Dark**, **Kanagawa**.
 
 ### Reconnecting
 
 ```
-orcai
+glitch
 ```
 
 If a session is already running, this reattaches. Your jobs keep running while detached.

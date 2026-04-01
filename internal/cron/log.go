@@ -16,7 +16,7 @@ const (
 )
 
 // NewLogger creates a charmbracelet/log Logger that writes to both stderr and
-// the cron log file at ~/.local/share/orcai/cron.log. If the log file exceeds
+// the cron log file at ~/.local/share/glitch/cron.log. If the log file exceeds
 // 10 MB it is truncated before opening. Returns the logger and any error
 // encountered while setting up the log file (stderr-only logging is still
 // returned on file errors).
@@ -43,7 +43,7 @@ func NewLogger() (*log.Logger, error) {
 	w := io.MultiWriter(os.Stderr, f)
 	logger := log.NewWithOptions(w, log.Options{
 		ReportTimestamp: true,
-		Prefix:          "orcai-cron",
+		Prefix:          "glitch-cron",
 	})
 	return logger, nil
 }
@@ -55,7 +55,7 @@ func cronLogPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dataDir := filepath.Join(home, ".local", "share", "orcai")
+	dataDir := filepath.Join(home, ".local", "share", "glitch")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return "", err
 	}

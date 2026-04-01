@@ -15,10 +15,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/activity"
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/activity"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // ── orphan recovery ───────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ import (
 // runs that were marked interrupted on startup.
 type orphanRecoveryMsg struct{ recoveredIDs []int64 }
 
-// recoverOrphanedRunsCmd marks any runs that were left in-flight when orcai
+// recoverOrphanedRunsCmd marks any runs that were left in-flight when glitch
 // last closed (finished_at=NULL, exit_status=NULL, no pending clarification)
 // as interrupted. Safe to call with a nil store.
 func recoverOrphanedRunsCmd(st *store.Store) tea.Cmd {

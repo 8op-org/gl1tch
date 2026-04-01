@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 // ANSI escape constants used by the dir picker box renderer.

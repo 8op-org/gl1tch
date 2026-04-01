@@ -1,4 +1,4 @@
-// Package layout manages the orcai pane layout configuration.
+// Package layout manages the glitch pane layout configuration.
 //
 // A layout.yaml file describes panes that should be created when a session
 // is attached. Apply creates any missing panes and launches their widgets.
@@ -14,7 +14,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/adam-stokes/orcai/internal/widgetdispatch"
+	"github.com/powerglove-dev/gl1tch/internal/widgetdispatch"
 	"gopkg.in/yaml.v3"
 )
 

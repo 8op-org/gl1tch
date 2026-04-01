@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 // ansiPal returns the ANSI palette from the current theme bundle,

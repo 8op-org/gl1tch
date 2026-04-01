@@ -1,4 +1,4 @@
-// Package opsx provides the OpenSpec workflow integration for orcai.
+// Package opsx provides the OpenSpec workflow integration for glitch.
 // It exposes a Bubble Tea prompt for entering a feature name and helpers
 // for sending the /opsx:propose command to the active tmux window.
 package opsx
@@ -14,10 +14,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
-// providerDef holds OpenSpec configuration for a single orcai provider.
+// providerDef holds OpenSpec configuration for a single glitch provider.
 // slashCmd is the slash command string to send (e.g. "/opsx:propose"); if
 // empty the fallback prompt-injection path is used instead.
 type providerDef struct {
@@ -25,7 +25,7 @@ type providerDef struct {
 	slashCmd string // empty → no slash command support
 }
 
-// providerOpsx maps orcai provider IDs to OpenSpec configuration.
+// providerOpsx maps glitch provider IDs to OpenSpec configuration.
 // Only providers that support the full OpenSpec workflow are listed here;
 // unknown providers are silently skipped by ProviderSend.
 var providerOpsx = map[string]providerDef{
@@ -93,7 +93,7 @@ func ProviderSend(feature, providerID, workdir string) {
 
 	if info.slashCmd != "" {
 		// Provider supports slash commands — send directly.
-		exec.Command("tmux", "send-keys", "-t", "orcai",
+		exec.Command("tmux", "send-keys", "-t", "glitch",
 			info.slashCmd+" "+feature, "Enter").Run() //nolint:errcheck
 		return
 	}
@@ -110,14 +110,14 @@ func ProviderSend(feature, providerID, workdir string) {
 		"populate proposal.md (problem, solution, approach, success criteria), " +
 		"design.md (technical design), and tasks.md (implementation checklist) " +
 		"for the feature: " + feature
-	exec.Command("tmux", "send-keys", "-t", "orcai", prompt, "Enter").Run() //nolint:errcheck
+	exec.Command("tmux", "send-keys", "-t", "glitch", prompt, "Enter").Run() //nolint:errcheck
 }
 
-// DetectActiveProvider returns the orcai provider ID of the currently active
-// window in the orcai tmux session (e.g. "claude" from window name "claude-1").
+// DetectActiveProvider returns the glitch provider ID of the currently active
+// window in the glitch tmux session (e.g. "claude" from window name "claude-1").
 // Returns "" if the window name does not match a known provider.
 func DetectActiveProvider() string {
-	out, err := exec.Command("tmux", "display-message", "-t", "orcai", "-p", "#{window_name}").Output()
+	out, err := exec.Command("tmux", "display-message", "-t", "glitch", "-p", "#{window_name}").Output()
 	if err != nil {
 		return ""
 	}
@@ -131,9 +131,9 @@ func DetectActiveProvider() string {
 }
 
 // ActivePanePath returns the working directory of the active pane in the
-// orcai tmux session.
+// glitch tmux session.
 func ActivePanePath() string {
-	out, err := exec.Command("tmux", "display-message", "-t", "orcai", "-p", "#{pane_current_path}").Output()
+	out, err := exec.Command("tmux", "display-message", "-t", "glitch", "-p", "#{pane_current_path}").Output()
 	if err != nil {
 		return ""
 	}
@@ -217,7 +217,7 @@ func (m promptModel) View() string {
 	)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		headerStyle.Render("ORCAI  OpenSpec"),
+		headerStyle.Render("GLITCH  OpenSpec"),
 		bodyStyle.Render(body),
 		footerStyle.Render("enter confirm  esc cancel"),
 	)

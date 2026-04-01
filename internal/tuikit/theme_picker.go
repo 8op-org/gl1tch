@@ -7,11 +7,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/translations"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/translations"
 )
 
 // ThemePicker holds the state for the tabbed 2-column theme picker overlay.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/tdf"
+	"github.com/powerglove-dev/gl1tch/internal/tdf"
 )
 
 func TestRenderString_LineCount(t *testing.T) {
@@ -12,7 +12,7 @@ func TestRenderString_LineCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	lines := tdf.RenderString("ORCAI", f)
+	lines := tdf.RenderString("GL1TCH", f)
 	if len(lines) != int(f.Height) {
 		t.Errorf("expected %d lines, got %d", f.Height, len(lines))
 	}

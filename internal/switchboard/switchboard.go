@@ -1,4 +1,4 @@
-// Package switchboard implements the ORCAI Switchboard — a full-screen BubbleTea
+// Package switchboard implements the GL1TCH Switchboard — a full-screen BubbleTea
 // TUI that merges the sysop panel and welcome dashboard into a single control
 // surface with a Pipeline Launcher, Agent Runner, and Activity Feed.
 package switchboard
@@ -24,22 +24,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	robfigcron "github.com/robfig/cron/v3"
 
-	"github.com/adam-stokes/orcai/internal/activity"
-	"github.com/adam-stokes/orcai/internal/tdf"
-	orcaicron "github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/inbox"
-	"github.com/adam-stokes/orcai/internal/modal"
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/braineditor"
-	"github.com/adam-stokes/orcai/internal/buildershared"
-	"github.com/adam-stokes/orcai/internal/pipelineeditor"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/translations"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/activity"
+	"github.com/powerglove-dev/gl1tch/internal/tdf"
+	orcaicron "github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/inbox"
+	"github.com/powerglove-dev/gl1tch/internal/modal"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/braineditor"
+	"github.com/powerglove-dev/gl1tch/internal/buildershared"
+	"github.com/powerglove-dev/gl1tch/internal/pipelineeditor"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/translations"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // ── ANSI palette — Dracula BBS aesthetic ─────────────────────────────────────
@@ -115,8 +115,8 @@ type feedEntry struct {
 	lines      []string
 	steps      []StepInfo
 	cwd        string // working directory the job runs in, shown in feed and signal board
-	tmuxWindow string // fully-qualified target "session:orcai-<feedID>", empty if no window
-	logFile    string // /tmp/orcai-<feedID>.log
+	tmuxWindow string // fully-qualified target "session:glitch-<feedID>", empty if no window
+	logFile    string // /tmp/glitch-<feedID>.log
 	doneFile   string // non-empty for window-mode jobs; written by the shell when the command exits
 	archived   bool   // true when the user has dismissed this entry from the board
 }
@@ -139,7 +139,7 @@ type jobHandle struct {
 	cancel       context.CancelFunc
 	ch           chan tea.Msg
 	tmuxWindow   string
-	logFile      string // /tmp/orcai-<feedID>.log — tailed in the tmux window
+	logFile      string // /tmp/glitch-<feedID>.log — tailed in the tmux window
 	storeRunID   int64  // non-zero when run was recorded in the result store
 	pipelineName string // non-empty for pipeline jobs; matched against busd RunStarted payload
 	actAgent     string // activity feed agent name; empty for non-agent jobs
@@ -211,9 +211,9 @@ type Window struct {
 
 // ParseWindows parses output of:
 //
-//	tmux list-windows -t orcai -F "#{window_index} #{window_name} #{window_active}"
+//	tmux list-windows -t glitch -F "#{window_index} #{window_name} #{window_active}"
 //
-// Skips window 0 (the ORCAI home window).
+// Skips window 0 (the GLITCH home window).
 func ParseWindows(output string) []Window {
 	var windows []Window
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
@@ -287,7 +287,7 @@ type Model struct {
 	feedScrollOffset      int
 	feedCursor            int // absolute line index within all visible feed content
 	feedFocused           bool
-	glitchChat            glitchChatPanel // GLITCH AI assistant (replaces agents grid)
+	glitchChat            glitchChatPanel // GL1TCH AI assistant (replaces agents grid)
 	signalBoard           SignalBoard
 	signalBoardFocused    bool
 	agentsGridRow         int  // selected row in the agents grid (center panel)
@@ -297,19 +297,18 @@ type Model struct {
 	pendingDeletePipeline string
 	agentPrompts          []store.Prompt // loaded from store; used for body lookup in submitAgentJob
 	sendPanel             buildershared.SendPanel
-	helpOpen              bool
 	registry              *themes.Registry
 	themeState            tuikit.ThemeState
 	themePicker           tuikit.ThemePicker
 	previewBundle         *themes.Bundle // non-nil while theme picker is open (live preview)
 	// CWD / dir picker
-	launchCWD           string         // CWD at orcai startup (immutable after New())
+	launchCWD           string         // CWD at glitch startup (immutable after New())
 	dirPicker           DirPickerModel // reusable dir picker overlay
 	dirPickerOpen       bool           // whether the dir picker overlay is visible
 	dirPickerCtx        string         // "agent" or "pipeline"
 	pendingPipelineName  string         // pipeline waiting for CWD selection
 	pendingPipelineYAML  string         // YAML path for pendingPipelineName
-	pendingPipelineInput string         // --input value forwarded to orcai pipeline run
+	pendingPipelineInput string         // --input value forwarded to glitch pipeline run
 	pendingActAgent      string         // activity feed agent name for the next launch
 	pendingActLabel      string         // activity feed label for the next launch
 	pendingExecutorID    string         // executor ID for the next launch (for clarification wiring)
@@ -382,7 +381,7 @@ func NewWithStore(s *store.Store) Model {
 
 	agentProviders := picker.BuildProviders()
 	pipelines := ScanPipelines(pipelinesDir())
-	cfgDir := filepath.Join(os.Getenv("HOME"), ".config", "orcai")
+	cfgDir := filepath.Join(os.Getenv("HOME"), ".config", "glitch")
 	m := Model{
 		launcher: launcherSection{
 			pipelines: pipelines,
@@ -390,7 +389,7 @@ func NewWithStore(s *store.Store) Model {
 		agent: agentSection{
 			providers: agentProviders,
 		},
-		glitchChat:            newGlitchPanel(cfgDir, agentProviders, s),
+		glitchChat:            newGlitchPanel(cfgDir, agentProviders, s, cwd, nil),
 		sendPanel:             buildershared.NewSendPanel(agentProviders).SetSavedPipelineTitles(pipelines),
 		pipelineEditor:        pipelineeditor.New(agentProviders, pipelinesDir(), s),
 		brainEditor:           braineditor.New(s, agentProviders),
@@ -406,9 +405,10 @@ func NewWithStore(s *store.Store) Model {
 	}
 
 	// Initialize theme registry from user themes dir.
-	userThemesDir := filepath.Join(os.Getenv("HOME"), ".config", "orcai", "themes")
+	userThemesDir := filepath.Join(os.Getenv("HOME"), ".config", "glitch", "themes")
 	if reg, err := themes.NewRegistry(userThemesDir); err == nil {
 		m.registry = reg
+		m.glitchChat.registry = reg
 		m.inboxModel.SetTheme(reg.Active())
 		themes.SetGlobalRegistry(reg)
 	}
@@ -425,15 +425,8 @@ func NewWithStore(s *store.Store) Model {
 
 	m.inboxReadIDs = LoadReadSet(m.readStateFile())
 
-	// Pre-render the TDF header art once at startup.
-	if f, err := tdf.LoadEmbedded("amnesiax"); err == nil {
-		m.tdfHeader = tdf.RenderString("ORCAI", f)
-		for _, line := range m.tdfHeader {
-			if w := len([]rune(tdf.StripANSI(line))); w > m.tdfHeaderW {
-				m.tdfHeaderW = w
-			}
-		}
-	}
+	// Pre-render the TDF header art once at startup (theme-tinted).
+	m.refreshTDFHeader()
 
 	return m
 }
@@ -471,7 +464,7 @@ func NewWithTestProviders() Model {
 
 // readStateFile returns the path to the inbox read-state persistence file.
 func (m Model) readStateFile() string {
-	return filepath.Join(os.Getenv("HOME"), ".config", "orcai", "inbox-read.json")
+	return filepath.Join(os.Getenv("HOME"), ".config", "glitch", "inbox-read.json")
 }
 
 // Cursor returns the launcher cursor position — used in tests.
@@ -778,6 +771,21 @@ func looksLikeMarkdown(s string) bool {
 		strings.Contains(s, "```")
 }
 
+// refreshTDFHeader re-renders the TDF header using the current theme palette.
+// Called at startup and whenever the active theme changes.
+func (m *Model) refreshTDFHeader() {
+	if f, err := tdf.LoadEmbedded("inertia"); err == nil {
+		pal := m.ansiPalette()
+		m.tdfHeader = tdf.RenderStringThemed("GL1TCH", f, pal.Accent, pal.Dim)
+		m.tdfHeaderW = 0
+		for _, line := range m.tdfHeader {
+			if w := len([]rune(tdf.StripANSI(line))); w > m.tdfHeaderW {
+				m.tdfHeaderW = w
+			}
+		}
+	}
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 // Init starts the tick command and the inbox poll.
@@ -806,14 +814,14 @@ func tickCmd() tea.Cmd {
 // ── Pipeline helpers ──────────────────────────────────────────────────────────
 
 func pipelinesDir() string {
-	if d := os.Getenv("ORCAI_PIPELINES_DIR"); d != "" {
+	if d := os.Getenv("GLITCH_PIPELINES_DIR"); d != "" {
 		return d
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "orcai", "pipelines")
+	return filepath.Join(home, ".config", "glitch", "pipelines")
 }
 
 // WriteSingleStepPipeline generates a minimal single-step pipeline YAML for a
@@ -958,11 +966,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.glitchChat = newPanel
 		return m, cmd
 	}
-	if m.glitchChat.focused {
+	if m.glitchChat.focused || m.glitchChat.scrollFocused {
 		if km, ok := msg.(tea.KeyMsg); ok && km.String() != "ctrl+c" && km.String() != "ctrl+q" {
-			newPanel, cmd := m.glitchChat.update(msg)
-			m.glitchChat = newPanel
-			return m, cmd
+			// Global overlays (quit modal, help, theme picker, etc.) take priority
+			// over the focused chat panel so ESC/y/n reach the overlay handler.
+			overlayActive := m.confirmQuit || m.themePicker.Open ||
+				m.dirPickerOpen || m.confirmDelete ||
+				m.pipelineLaunchMode != plModeNone || m.showRerun ||
+				m.pipelineEditorOpen || m.brainEditorOpen
+			if !overlayActive {
+				newPanel, cmd := m.glitchChat.update(msg)
+				m.glitchChat = newPanel
+				return m, cmd
+			}
 		}
 	}
 
@@ -1252,6 +1268,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pendingPipelineYAML = yamlPath
 		return m.launchPendingPipeline(m.launchCWD)
 
+	case glitchCWDMsg:
+		m.launchCWD = msg.path
+		m.glitchChat.launchCWD = msg.path
+		return m, nil
+
+	case glitchQuitMsg:
+		m.confirmQuit = true
+		return m, nil
+
+	case glitchOpenThemesMsg:
+		if m.registry != nil {
+			m.themePicker.Open = true
+			m.themePicker.OriginalTheme = m.registry.Active()
+			if active := m.registry.Active(); active != nil && active.Mode == "light" {
+				m.themePicker.Tab = 1
+			} else {
+				m.themePicker.Tab = 0
+			}
+		}
+		return m, nil
+
 	case jobDoneMsg:
 		// Drain any remaining lines buffered in the channel before marking done.
 		if jh, ok := m.activeJobs[msg.id]; ok {
@@ -1409,7 +1446,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.helpOpen || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen || m.brainEditorOpen {
+		if m.confirmQuit || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen || m.brainEditorOpen {
 			return m.handleKey(msg)
 		}
 		// Inbox captures all other keys when focused, but the detail overlay
@@ -1420,7 +1457,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Global overlay keys pass through even when inbox is focused.
 			switch msg.String() {
-			case "ctrl+h", "T":
+			case "T":
 				return m.handleKey(msg)
 			}
 			return m.handleKey(msg)
@@ -1560,13 +1597,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	// Help modal.
-	if m.helpOpen {
-		switch key {
-		case "esc", "ctrl+c", "ctrl+h", "q":
-			m.helpOpen = false
-		}
-		return m, nil
-	}
 
 	// Inbox detail overlay — capture all keys when open.
 	if m.inboxDetailOpen {
@@ -1680,7 +1710,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				run := runs[idx]
 				pal := m.ansiPalette()
 				plain := stripANSI(buildRunContent(run, pal, false, 80))
-				tmp, err := os.CreateTemp("", "orcai-inbox-*.txt")
+				tmp, err := os.CreateTemp("", "glitch-inbox-*.txt")
 				if err == nil {
 					_, _ = tmp.WriteString(plain)
 					_ = tmp.Close()
@@ -1729,8 +1759,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			for _, jh := range m.activeJobs {
 				jh.cancel()
 			}
-			exec.Command("tmux", "kill-session", "-t", "orcai-cron").Run() //nolint:errcheck
-			exec.Command("tmux", "kill-session", "-t", "orcai").Run()      //nolint:errcheck
+			exec.Command("tmux", "kill-session", "-t", "glitch-cron").Run() //nolint:errcheck
+			exec.Command("tmux", "kill-session", "-t", "glitch").Run()      //nolint:errcheck
 			return m, tea.Quit
 		default:
 			m.confirmQuit = false
@@ -1860,7 +1890,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, nil
 		case "m":
 			go ensureCronDaemon()
-			exec.Command("tmux", "switch-client", "-t", "orcai-cron").Run() //nolint:errcheck
+			exec.Command("tmux", "switch-client", "-t", "glitch-cron").Run() //nolint:errcheck
 			return m, nil
 		case "esc":
 			m.cronPanel.focused = false
@@ -2001,10 +2031,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	switch key {
-	case "ctrl+h":
-		m.helpOpen = true
-		return m, nil
-
 	case "ctrl+c", "ctrl+q":
 		m.confirmQuit = true
 		return m, nil
@@ -2130,6 +2156,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "A":
 		// Toggle GLITCH chat panel focus (sent by ^spc a chord).
 		if !m.glitchChat.focused {
+			m.glitchChat.scrollFocused = false
 			m.glitchChat = m.glitchChat.setFocused(true)
 			// Unfocus other panels.
 			m.feedFocused = false
@@ -2212,10 +2239,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.inboxModel.SetFocused(true)
 		}
 		return m, nil
-
-	// Brain editor — open with 'b'.
-	case "b":
-		return m.handleOpenBrainEditor()
 
 	// Pipeline CRUD keys (launcher focused).
 	case "n":
@@ -2637,7 +2660,7 @@ func openEditorInWindow(path string) {
 		return
 	}
 	cmd := editor + " " + path
-	out, err := exec.Command("tmux", "new-window", "-d", "-P", "-F", "#{window_id}", "-t", session+":", "-n", "orcai-edit", cmd).Output()
+	out, err := exec.Command("tmux", "new-window", "-d", "-P", "-F", "#{window_id}", "-t", session+":", "-n", "glitch-edit", cmd).Output()
 	if err != nil {
 		return
 	}
@@ -2754,8 +2777,8 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 
 	feedID := fmt.Sprintf("pipe-%d", time.Now().UnixNano())
 
-	orcaiBin := orcaiBinaryPath()
-	shellCmd := orcaiBin + " pipeline run " + yamlPath
+	glitchBin := glitchBinaryPath()
+	shellCmd := glitchBin + " pipeline run " + yamlPath
 	if m.pendingPipelineInput != "" {
 		shellCmd += " --input " + shellescape(m.pendingPipelineInput)
 		m.pendingPipelineInput = ""
@@ -2989,12 +3012,12 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		feedID := fmt.Sprintf("pipe-%d", time.Now().UnixNano())
-		orcaiBin := orcaiBinaryPath()
-		shellCmd := orcaiBin + " pipeline run " + yamlPath
+		glitchBin := glitchBinaryPath()
+		shellCmd := glitchBin + " pipeline run " + yamlPath
 		if additionalContext != "" {
 			// Pass additional context as an env var the pipeline can reference.
 			escaped := strings.ReplaceAll(additionalContext, "'", `'\''`)
-			shellCmd = "ORCAI_CONTEXT='" + escaped + "' " + shellCmd
+			shellCmd = "GLITCH_CONTEXT='" + escaped + "' " + shellCmd
 		}
 		windowName, logFile, doneFile := createJobWindow(feedID, shellCmd, run.Name, cwd)
 		ch := make(chan tea.Msg, 256)
@@ -3033,16 +3056,16 @@ func agentRunModelSlug(runName string) string {
 	return executor + "/" + model
 }
 
-// orcaiBinaryPath returns the path to the running orcai binary, falling back
+// glitchBinaryPath returns the path to the running glitch binary, falling back
 // to a PATH lookup and finally the bare name.
-func orcaiBinaryPath() string {
+func glitchBinaryPath() string {
 	if exe, err := os.Executable(); err == nil {
 		return exe
 	}
-	if p, err := exec.LookPath("orcai"); err == nil {
+	if p, err := exec.LookPath("glitch"); err == nil {
 		return p
 	}
-	return "orcai"
+	return "glitch"
 }
 
 // shellescape wraps s in single quotes, escaping any embedded single quotes,
@@ -3189,28 +3212,19 @@ func (m Model) View() string {
 	// Dir picker overlay — used for pipeline context only.
 	// The agent CWD picker is rendered inline within the agent popup modal.
 	if m.dirPickerOpen {
-		base := header +body
-		return overlayCenter(base, m.dirPicker.ViewDirPickerBox(w, m.ansiPalette()), w, h)
-	}
-
-	if m.helpOpen {
-		base := header +body
-		return overlayCenter(base, m.viewHelpModal(w, h), w, h)
+		return overlayCenter(blankCanvas(w, h), m.dirPicker.ViewDirPickerBox(w, m.ansiPalette()), w, h)
 	}
 
 	if m.confirmQuit {
-		base := header +body
-		return overlayCenter(base, m.viewQuitModalBox(w), w, h)
+		return overlayCenter(blankCanvas(w, h), m.viewQuitModalBox(w), w, h)
 	}
 
 	// Pipeline mode-select / schedule-input overlay.
 	if m.pipelineLaunchMode == plModeSelect {
-		base := header +body
-		return overlayCenter(base, m.viewPipelineModeSelect(w), w, h)
+		return overlayCenter(blankCanvas(w, h), m.viewPipelineModeSelect(w), w, h)
 	}
 	if m.pipelineLaunchMode == plScheduleInput {
-		base := header +body
-		return overlayCenter(base, m.viewPipelineScheduleInput(w), w, h)
+		return overlayCenter(blankCanvas(w, h), m.viewPipelineScheduleInput(w), w, h)
 	}
 
 	// Pipeline editor — full-screen two-column panel.
@@ -3224,22 +3238,24 @@ func (m Model) View() string {
 		return m.brainEditor.View()
 	}
 
+	// GLITCH model/provider picker — overlay when /models is active.
+	if m.glitchChat.modelPickerOpen {
+		return overlayCenter(blankCanvas(w, h), m.glitchChat.modelPickerBox(w, m.ansiPalette()), w, h)
+	}
+
 	// Agent picker popup — overlay on the normal 3-col view.
 	if m.agent.focused && m.sendPanel.AgentOpen() {
-		base := header +body
-		return overlayCenter(base, m.sendPanel.OverlayView(w, m.ansiPalette()), w, h)
+		return overlayCenter(blankCanvas(w, h), m.sendPanel.OverlayView(w, m.ansiPalette()), w, h)
 	}
 
 	// Saved prompts picker popup — overlay on the normal 3-col view.
 	if m.agent.focused && m.sendPanel.SavedPromptsOpen() {
-		base := header +body
-		return overlayCenter(base, m.sendPanel.SavedPromptOverlayView(w, m.ansiPalette()), w, h)
+		return overlayCenter(blankCanvas(w, h), m.sendPanel.SavedPromptOverlayView(w, m.ansiPalette()), w, h)
 	}
 
 	// Saved pipeline picker popup — overlay on the normal 3-col view.
 	if m.agent.focused && m.sendPanel.SavedPipelineOpen() {
-		base := header +body
-		return overlayCenter(base, m.sendPanel.SavedPipelineOverlayView(w, m.ansiPalette()), w, h)
+		return overlayCenter(blankCanvas(w, h), m.sendPanel.SavedPipelineOverlayView(w, m.ansiPalette()), w, h)
 	}
 
 	// Re-run modal — full-screen panel like inbox detail.
@@ -3249,15 +3265,12 @@ func (m Model) View() string {
 
 	// Delete confirmation — floating overlay on top of the switchboard.
 	if m.confirmDelete {
-		base := header +body
-		return overlayCenter(base, m.viewDeleteModalBox(w), w, h)
+		return overlayCenter(blankCanvas(w, h), m.viewDeleteModalBox(w), w, h)
 	}
 
 	// Theme picker overlay.
 	if m.themePicker.Open && m.registry != nil {
-		base := header +body
-		content := viewThemePicker(m)
-		return overlayCenter(base, content, w, h)
+		return overlayCenter(blankCanvas(w, h), viewThemePicker(m), w, h)
 	}
 
 	// Inbox detail overlay — full-screen ANSI box panel for a run result.
@@ -3273,7 +3286,7 @@ func (m Model) viewQuitModalBox(w int) string {
 	pal := m.ansiPalette()
 	jobs := len(m.activeJobs)
 
-	message := "Quit ORCAI?"
+	message := "Quit GLITCH?"
 	if jobs > 0 {
 		jobWord := "job"
 		if jobs != 1 {
@@ -3282,7 +3295,7 @@ func (m Model) viewQuitModalBox(w int) string {
 		message = pal.Error + fmt.Sprintf("%d %s still running.", jobs, jobWord) + panelrender.RST
 	}
 
-	title := translations.Safe(translations.GlobalProvider(), translations.KeyQuitModalTitle, "ORCAI  Quit?")
+	title := translations.Safe(translations.GlobalProvider(), translations.KeyQuitModalTitle, "GL1TCH  Quit?")
 	return panelrender.QuitConfirmBox(pal, title, message, w)
 }
 
@@ -3699,26 +3712,26 @@ func (m Model) buildAgentsGrid(height, width int) []string {
 // BuildAgentsGrid is an exported wrapper for tests.
 func (m Model) BuildAgentsGrid(height, width int) []string { return m.buildAgentsGrid(height, width) }
 
-// buildBanner renders the ORCAI BBS header banner as a single line.
+// buildBanner renders the GL1TCH BBS header banner as a single line.
 func (m Model) buildBanner(w int) string {
 	pal := m.ansiPalette()
 	rst := aRst
 
 	// Single line: logo + separator + subtitle
-	logo := pal.Accent + aBld + " ░▒▓ ORCAI ▓▒░" + rst
+	logo := pal.Accent + aBld + " ░▒▓ GL1TCH ▓▒░" + rst
 	sep := pal.Border + "  │  " + rst
-	sub := pal.FG + "ABBS Switchboard" + rst
+	sub := pal.FG + "GLITCH Switchboard" + rst
 
 	return logo + sep + sub
 }
 
 // headerHeight returns the number of terminal lines consumed by the TDF header
-// (art lines + 1 padding row above). Returns 0 when no TDF art was loaded.
+// (art lines + 1 padding row above + 1 padding row below). Returns 0 when no TDF art was loaded.
 func (m Model) headerHeight() int {
 	if len(m.tdfHeader) == 0 {
 		return 0
 	}
-	return len(m.tdfHeader) + 1 // +1 for the blank padding row
+	return len(m.tdfHeader) + 2 // +1 above, +1 below
 }
 
 // viewTDFHeader renders the TDF block-art header centered to width w,
@@ -3738,6 +3751,7 @@ func (m Model) viewTDFHeader(w int) string {
 	for _, line := range m.tdfHeader {
 		sb.WriteString(prefix + line + "\n")
 	}
+	sb.WriteByte('\n') // padding row below logo
 	return sb.String()
 }
 
@@ -4478,6 +4492,17 @@ func statusBadge(s FeedStatus, pal styles.ANSIPalette) (string, string) {
 	}
 }
 
+// blankCanvas returns a w×h string of spaces for use as an overlay base,
+// ensuring no background content bleeds through around floating modals.
+func blankCanvas(w, h int) string {
+	line := strings.Repeat(" ", w)
+	lines := make([]string, h)
+	for i := range lines {
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
+}
+
 // padToVis right-pads s with spaces until its visible length equals w.
 func padToVis(s string, w int) string {
 	vl := lipgloss.Width(s)
@@ -4530,27 +4555,27 @@ func RunToggle() {
 }
 
 func resolveSwitchboardBin() string {
-	if bin, err := exec.LookPath("orcai-sysop"); err == nil {
+	if bin, err := exec.LookPath("glitch-sysop"); err == nil {
 		return bin
 	}
 	self, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
-	return filepath.Join(filepath.Dir(self), "orcai-sysop")
+	return filepath.Join(filepath.Dir(self), "glitch-sysop")
 }
 
-// ensureCronDaemon starts the orcai-cron tmux session if it does not already exist.
+// ensureCronDaemon starts the glitch-cron tmux session if it does not already exist.
 func ensureCronDaemon() {
-	// Check if orcai-cron session exists.
-	err := exec.Command("tmux", "has-session", "-t", "orcai-cron").Run()
+	// Check if glitch-cron session exists.
+	err := exec.Command("tmux", "has-session", "-t", "glitch-cron").Run()
 	if err == nil {
 		return // already running
 	}
-	// Find the orcai binary next to the running binary.
+	// Find the glitch binary next to the running binary.
 	self, _ := os.Executable()
 	bin := self
-	if altBin, err := exec.LookPath("orcai"); err == nil {
+	if altBin, err := exec.LookPath("glitch"); err == nil {
 		bin = altBin
 	}
 	exec.Command(bin, "cron", "start").Run() //nolint:errcheck

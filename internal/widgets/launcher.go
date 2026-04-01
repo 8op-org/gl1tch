@@ -25,16 +25,16 @@ func Launch(m Manifest, tmuxSession string) error {
 }
 
 // ResolveOverride returns the binary to use for the given widget manifest.
-// If an orcai-<name> override binary is found in PATH, it is returned.
+// If an glitch-<name> override binary is found in PATH, it is returned.
 // Otherwise, the manifest's own Binary field is returned.
 func ResolveOverride(m Manifest) string {
-	if override, err := exec.LookPath("orcai-" + m.Name); err == nil {
+	if override, err := exec.LookPath("glitch-" + m.Name); err == nil {
 		return override
 	}
 	return m.Binary
 }
 
-// LaunchWithOverride is like Launch but checks for an orcai-<name> PATH
+// LaunchWithOverride is like Launch but checks for an glitch-<name> PATH
 // override before using the binary declared in the manifest.
 func LaunchWithOverride(m Manifest, tmuxSession string) error {
 	binary := ResolveOverride(m)

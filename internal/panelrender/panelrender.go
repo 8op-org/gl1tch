@@ -15,9 +15,9 @@ import (
 	"github.com/muesli/ansi"
 	"github.com/muesli/reflow/truncate"
 
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/translations"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/translations"
 )
 
 // RST is the ANSI reset escape sequence.
@@ -265,7 +265,7 @@ func HintBar(hints []Hint, width int, pal styles.ANSIPalette) string {
 }
 
 // QuitConfirmBox renders a reusable ANSI box-style quit confirmation modal.
-// title is the box header, message is the body line (e.g. "Quit ORCAI?" or
+// title is the box header, message is the body line (e.g. "Quit GLITCH?" or
 // a running-jobs warning). An empty message defaults to "Are you sure?".
 func QuitConfirmBox(pal styles.ANSIPalette, title, message string, screenW int) string {
 	boxW := 52

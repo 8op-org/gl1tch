@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
 )
 
 // ---- helpers ----------------------------------------------------------------

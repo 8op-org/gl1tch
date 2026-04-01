@@ -11,7 +11,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // VectorEntry is a stored embedding for a brain note.

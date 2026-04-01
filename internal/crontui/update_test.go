@@ -3,7 +3,7 @@ package crontui
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
 )
 
 func TestBuildUpdatedEntry(t *testing.T) {

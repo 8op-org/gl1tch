@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // openTestStore creates a Store backed by a temporary directory.

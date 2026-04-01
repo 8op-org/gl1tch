@@ -55,14 +55,14 @@ type Store struct {
 	cfg    RetentionConfig
 }
 
-// Open opens or creates the store at ~/.local/share/orcai/orcai.db.
+// Open opens or creates the store at ~/.local/share/glitch/glitch.db.
 // It enables WAL mode and applies the schema migration.
 func Open() (*Store, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("store: resolve home dir: %w", err)
 	}
-	path := filepath.Join(home, ".local", "share", "orcai", "orcai.db")
+	path := filepath.Join(home, ".local", "share", "glitch", "glitch.db")
 	return OpenAt(path)
 }
 
@@ -198,14 +198,14 @@ func (s *Store) UpdateBrainNote(ctx context.Context, id int64, body, tags string
 
 // RecoverOrphanedRuns finds runs with finished_at=NULL and exit_status=NULL
 // that do NOT have a pending (unanswered) clarification — those are legitimately
-// paused. It marks them as interrupted: exit_status=2, stderr="interrupted: orcai
+// paused. It marks them as interrupted: exit_status=2, stderr="interrupted: glitch
 // closed while running". Returns the IDs of the rows that were updated.
 func (s *Store) RecoverOrphanedRuns() ([]int64, error) {
 	now := time.Now().UnixMilli()
 	_, err := s.db.Exec(`
 		UPDATE runs
 		SET finished_at = ?, exit_status = 2,
-		    stderr = 'interrupted: orcai closed while running'
+		    stderr = 'interrupted: glitch closed while running'
 		WHERE finished_at IS NULL
 		  AND exit_status IS NULL
 		  AND id NOT IN (
@@ -217,7 +217,7 @@ func (s *Store) RecoverOrphanedRuns() ([]int64, error) {
 	rows, err := s.db.Query(`
 		SELECT id FROM runs
 		WHERE exit_status = 2
-		  AND stderr = 'interrupted: orcai closed while running'
+		  AND stderr = 'interrupted: glitch closed while running'
 		  AND finished_at = ?`, now)
 	if err != nil {
 		return nil, err

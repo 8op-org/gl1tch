@@ -7,8 +7,8 @@ import (
 
 	"github.com/sahilm/fuzzy"
 
-	"github.com/adam-stokes/orcai/internal/chatui"
-	"github.com/adam-stokes/orcai/internal/discovery"
+	"github.com/powerglove-dev/gl1tch/internal/chatui"
+	"github.com/powerglove-dev/gl1tch/internal/discovery"
 )
 
 // PickerItem is a single selectable row in the fuzzy picker.
@@ -68,19 +68,19 @@ func ApplyFuzzy(query string, items []PickerItem) []PickerItem {
 	return out
 }
 
-// OrcaiConfigDir returns ~/.config/orcai, or "" on error.
-func OrcaiConfigDir() string { return orcaiConfigDir() }
+// GlitchConfigDir returns ~/.config/glitch, or "" on error.
+func GlitchConfigDir() string { return glitchConfigDir() }
 
-// orcaiConfigDir returns ~/.config/orcai, or "" on error.
-func orcaiConfigDir() string {
+// glitchConfigDir returns ~/.config/glitch, or "" on error.
+func glitchConfigDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "orcai")
+	return filepath.Join(home, ".config", "glitch")
 }
 
-// MarshalPickerItem serialises item to JSON bytes for use in ORCAI_PICKER_SELECTION.
+// MarshalPickerItem serialises item to JSON bytes for use in GLITCH_PICKER_SELECTION.
 func MarshalPickerItem(item PickerItem) ([]byte, error) {
 	return json.Marshal(item)
 }
@@ -109,7 +109,7 @@ func BuildPickerItems(sessions []WindowEntry, providers []ProviderDef, cwd, home
 	}
 
 	// ── pipelines ── (TypePipeline only — native/CLI-wrapper entries overlap providers)
-	if configDir := orcaiConfigDir(); configDir != "" {
+	if configDir := glitchConfigDir(); configDir != "" {
 		if plugins, err := discovery.Discover(configDir); err == nil {
 			for _, p := range plugins {
 				if p.Type != discovery.TypePipeline {

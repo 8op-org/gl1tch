@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/widgets"
+	"github.com/powerglove-dev/gl1tch/internal/widgets"
 )
 
 // writeManifest writes a widget.yaml file into dir/subdir/widget.yaml.
@@ -40,7 +40,7 @@ name: weather
 binary: /usr/local/bin/orcai-weather
 description: "Weather widget"
 subscribe:
-  - orcai.telemetry
+  - glitch.telemetry
 `)
 
 	got, err := widgets.Discover(dir)
@@ -92,7 +92,7 @@ func TestDiscover_MalformedYAML(t *testing.T) {
 // TestDiscover_MissingDir verifies that a non-existent directory returns an
 // empty slice and nil error.
 func TestDiscover_MissingDir(t *testing.T) {
-	got, err := widgets.Discover("/tmp/orcai-widgets-does-not-exist-xyzzy")
+	got, err := widgets.Discover("/tmp/glitch-widgets-does-not-exist-xyzzy")
 	if err != nil {
 		t.Fatalf("Discover on missing dir: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestDiscover_SkipsFiles(t *testing.T) {
 	}
 }
 
-// TestResolveOverride_UsesOverrideBinary verifies that when an orcai-<name>
+// TestResolveOverride_UsesOverrideBinary verifies that when an glitch-<name>
 // binary is present on PATH, ResolveOverride returns it instead of the
 // manifest binary.
 func TestResolveOverride_UsesOverrideBinary(t *testing.T) {
@@ -157,7 +157,7 @@ func TestResolveOverride_UsesOverrideBinary(t *testing.T) {
 	}
 }
 
-// TestResolveOverride_FallsBackToManifest verifies that when no orcai-<name>
+// TestResolveOverride_FallsBackToManifest verifies that when no glitch-<name>
 // override exists in PATH, ResolveOverride returns the manifest's Binary.
 func TestResolveOverride_FallsBackToManifest(t *testing.T) {
 	origPath := os.Getenv("PATH")

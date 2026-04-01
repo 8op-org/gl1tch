@@ -3,7 +3,7 @@ package tdf_test
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/tdf"
+	"github.com/powerglove-dev/gl1tch/internal/tdf"
 )
 
 func TestLoadFont_Amnesiax(t *testing.T) {
@@ -15,7 +15,7 @@ func TestLoadFont_Amnesiax(t *testing.T) {
 		t.Error("font height is 0")
 	}
 	// amnesiax should have most printable ASCII chars
-	for _, c := range "ORCAI" {
+	for _, c := range "GL1TCH" {
 		if !f.HasGlyph(byte(c)) {
 			t.Errorf("glyph missing for %c", c)
 		}

@@ -32,14 +32,14 @@ type cronConfig struct {
 	Entries []Entry `yaml:"entries"`
 }
 
-// LoadConfig reads ~/.config/orcai/cron.yaml and returns the configured entries.
+// LoadConfig reads ~/.config/glitch/cron.yaml and returns the configured entries.
 // It returns an empty slice (and no error) if the file does not exist.
 func LoadConfig() ([]Entry, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-	return LoadConfigFrom(filepath.Join(home, ".config", "orcai", "cron.yaml"))
+	return LoadConfigFrom(filepath.Join(home, ".config", "glitch", "cron.yaml"))
 }
 
 // LoadConfigFrom reads a cron config from the specified path and returns the

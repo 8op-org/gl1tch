@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// YAMLProvider loads translations from ~/.config/orcai/translations.yaml.
+// YAMLProvider loads translations from ~/.config/glitch/translations.yaml.
 // The file is parsed as a flat map[string]string. Values may use the escape
 // shorthand \e[, \033[, or \x1b[ which are expanded to raw ANSI bytes at
 // load time.
@@ -16,18 +16,18 @@ type YAMLProvider struct {
 	data map[string]string
 }
 
-// NewYAMLProvider loads ~/.config/orcai/translations.yaml and returns a
+// NewYAMLProvider loads ~/.config/glitch/translations.yaml and returns a
 // Provider. If the file does not exist or cannot be parsed, it returns a
 // NopProvider so callers always receive a valid non-nil Provider.
 //
 // The config directory is resolved as $HOME/.config to match the rest of
-// the ORCAI tooling (themes, pipelines, etc.).
+// the GL1TCH tooling (themes, pipelines, etc.).
 func NewYAMLProvider() Provider {
 	home := os.Getenv("HOME")
 	if home == "" {
 		return NopProvider{}
 	}
-	path := filepath.Join(home, ".config", "orcai", "translations.yaml")
+	path := filepath.Join(home, ".config", "glitch", "translations.yaml")
 	return NewYAMLProviderFromPath(path)
 }
 

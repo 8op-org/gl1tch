@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // SentinelFile is the path (relative to cfgDir) that marks welcome as completed.
@@ -119,7 +119,7 @@ func New(cfgDir string) Model {
 
 	// Load palette
 	home, _ := os.UserHomeDir()
-	if reg, err := themes.NewRegistry(filepath.Join(home, ".config", "orcai", "themes")); err == nil {
+	if reg, err := themes.NewRegistry(filepath.Join(home, ".config", "glitch", "themes")); err == nil {
 		if bundle := reg.Active(); bundle != nil {
 			m.pal = styles.BundleANSI(bundle)
 		}
@@ -393,7 +393,7 @@ func (m *Model) renderConversation() string {
 		accent = lipgloss.Color(m.pal.Accent)
 	}
 
-	glitchLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("GLITCH")
+	glitchLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("GL1TCH")
 	userLabel := lipgloss.NewStyle().Foreground(userColor).Bold(true).Render("YOU   ")
 	textStyle := lipgloss.NewStyle().Foreground(textColor)
 	dimStyle := lipgloss.NewStyle().Foreground(dimColor)
@@ -456,7 +456,7 @@ func (m Model) View() string {
 	}
 
 	// Centered subtitle.
-	subtitle := ">> the agentic bulletin board system  //  first-run setup"
+	subtitle := ">> your AI, your terminal, your rules  //  first-run setup"
 	sb.WriteString(padCenter(dimStyle.Render(subtitle), len(subtitle), m.width) + "\n")
 
 	// Full-width divider.

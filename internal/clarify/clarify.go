@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/adam-stokes/orcai/internal/systemprompts"
+	"github.com/powerglove-dev/gl1tch/internal/systemprompts"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 )
 
 // Instruction returns the clarify system prompt, loaded from
-// ~/.config/orcai/prompts/clarify.md with embedded fallback.
+// ~/.config/glitch/prompts/clarify.md with embedded fallback.
 // The result is cached after the first call.
 func Instruction() string {
 	instructionOnce.Do(func() {
@@ -38,12 +38,12 @@ type NoOp struct{}
 
 func (NoOp) Detect(string) (string, bool) { return "", false }
 
-// StructuredDetector matches "ORCAI_CLARIFY: <question>" anywhere in a line,
+// StructuredDetector matches "GLITCH_CLARIFY: <question>" anywhere in a line,
 // after stripping ANSI escape sequences. This is the standard convention for
 // all AI executor types (claude, opencode, ollama, gemini, etc.).
 type StructuredDetector struct{}
 
-const marker = "ORCAI_CLARIFY:"
+const marker = "GLITCH_CLARIFY:"
 
 func (StructuredDetector) Detect(line string) (string, bool) {
 	clean := stripANSI(line)
@@ -99,7 +99,7 @@ func IsReactive(executorID string) bool {
 }
 
 func init() {
-	// All standard AI executor types use the ORCAI_CLARIFY: structured protocol.
+	// All standard AI executor types use the GLITCH_CLARIFY: structured protocol.
 	for _, id := range []string{"claude", "opencode", "ollama", "gemini", "github-copilot"} {
 		Register(id, StructuredDetector{})
 	}

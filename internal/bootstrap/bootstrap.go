@@ -9,13 +9,13 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/adam-stokes/orcai/internal/assistant"
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/keybindings"
-	"github.com/adam-stokes/orcai/internal/layout"
-	"github.com/adam-stokes/orcai/internal/systemprompts"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/widgetdispatch"
+	"github.com/powerglove-dev/gl1tch/internal/assistant"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/keybindings"
+	"github.com/powerglove-dev/gl1tch/internal/layout"
+	"github.com/powerglove-dev/gl1tch/internal/systemprompts"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/widgetdispatch"
 )
 
 // ErrReload is returned by Run when a reload was requested (marker file present).
@@ -23,8 +23,8 @@ import (
 var ErrReload = errors.New("reload requested")
 
 const (
-	SessionName  = "orcai"
-	configSubdir = ".config/orcai"
+	SessionName  = "glitch"
+	configSubdir = ".config/glitch"
 )
 
 // tmuxPalette holds the hex color strings used for tmux status bar styling.
@@ -76,56 +76,56 @@ func buildTmuxConf(self string) string {
 	pal := loadTmuxPalette()
 	// Base tmux settings.
 	base := "set -g status-position bottom\n" +
-		fmt.Sprintf("set -g status-style \"fg=%s,bg=%s\"\n", pal.accent, pal.bg) +
+		fmt.Sprintf("set -g status-style \"fg=%s,bg=default\"\n", pal.accent) +
+		"set -g status-left \"\"\n" +
+		"set -g status-left-length 0\n" +
+		"set -g status-right \"\"\n" +
+		"set -g status-right-length 0\n" +
+		"set -g status-justify centre\n" +
 		"set -g window-status-format \"\"\n" +
-		"set -g window-status-current-format \"\"\n" +
-		fmt.Sprintf("set -g status-left \"#[fg=%s,bold] ORCAI #[default]\"\n", pal.accent) +
-		"set -g status-left-length 20\n" +
-		"set -g status-right \"" + themes.TmuxStatusRight(pal.accent, pal.dim) + "\"\n" +
-		"set -g status-right-length 200\n" +
+		"set -g window-status-current-format \"" + themes.TmuxStatusCenterFormat(pal.accent, pal.dim) + "\"\n" +
 		"set -g mouse on\n" +
 		"set -g default-terminal \"screen-256color\"\n" +
 		"set -g base-index 0\n" +
 		fmt.Sprintf("set -g pane-border-style \"fg=%s\"\n", pal.border) +
 		fmt.Sprintf("set -g pane-active-border-style \"fg=%s\"\n", pal.accent)
 
-	// ctrl+space enters the orcai-chord key table.
+	// ctrl+space enters the glitch-chord key table.
 	// Press ctrl+space again to open the help popup; press a chord key to act directly.
-	leaderBinding := "bind-key -n C-Space switch-client -T orcai-chord\n"
+	leaderBinding := "bind-key -n C-Space switch-client -T glitch-chord\n"
 
-	// Chord bindings inside the orcai-chord key table.
-	chords := "bind-key -T orcai-chord q     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys C-q } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 C-q } }\n" +
-		"bind-key -T orcai-chord d     { switch-client -T root ; detach-client }\n" +
-		"bind-key -T orcai-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
-		"bind-key -T orcai-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
-		"bind-key -T orcai-chord t     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys T } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 T } }\n" +
-		"bind-key -T orcai-chord j     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys J } { if-shell -F '#{||:#{||:#{==:#{window_name},orcai-prompt-builder},#{==:#{window_name},orcai-pipeline-builder}},#{==:#{window_name},orcai-brain}}' { send-keys J } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 J } } }\n" +
+	// Chord bindings inside the glitch-chord key table.
+	chords := "bind-key -T glitch-chord d     { switch-client -T root ; detach-client }\n" +
+		"bind-key -T glitch-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
+		"bind-key -T glitch-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
+		"bind-key -T glitch-chord j     { switch-client -T root ; switch-client -t glitch ; select-window -t glitch:0 ; send-keys -t glitch:0 J }\n" +
 		// Window management
-		"bind-key -T orcai-chord c     { switch-client -T root ; new-window }\n" +
-		"bind-key -T orcai-chord [     { switch-client -T root ; previous-window }\n" +
-		"bind-key -T orcai-chord ]     { switch-client -T root ; next-window }\n" +
+		"bind-key -T glitch-chord c     { switch-client -T root ; new-window }\n" +
+		"bind-key -T glitch-chord [     { switch-client -T root ; previous-window }\n" +
+		"bind-key -T glitch-chord ]     { switch-client -T root ; next-window }\n" +
 		// Pane splitting
-		"bind-key -T orcai-chord |     { switch-client -T root ; split-window -h }\n" +
-		"bind-key -T orcai-chord -     { switch-client -T root ; split-window -v }\n" +
+		"bind-key -T glitch-chord |     { switch-client -T root ; split-window -h }\n" +
+		"bind-key -T glitch-chord -     { switch-client -T root ; split-window -v }\n" +
 		// Pane navigation
-		"bind-key -T orcai-chord Left  { switch-client -T root ; select-pane -L }\n" +
-		"bind-key -T orcai-chord Right { switch-client -T root ; select-pane -R }\n" +
-		"bind-key -T orcai-chord Up    { switch-client -T root ; select-pane -U }\n" +
-		"bind-key -T orcai-chord Down  { switch-client -T root ; select-pane -D }\n" +
+		"bind-key -T glitch-chord Left  { switch-client -T root ; select-pane -L }\n" +
+		"bind-key -T glitch-chord Right { switch-client -T root ; select-pane -R }\n" +
+		"bind-key -T glitch-chord Up    { switch-client -T root ; select-pane -U }\n" +
+		"bind-key -T glitch-chord Down  { switch-client -T root ; select-pane -D }\n" +
 		// Kill pane / window
-		"bind-key -T orcai-chord x     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-pane } }\n" +
-		"bind-key -T orcai-chord X     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the Switchboard (window 0)\" } { kill-window } }\n" +
-		"bind-key -T orcai-chord Escape switch-client -T root\n" +
-		// h opens the help overlay: locally in orcai-cron (sends ?), switchboard otherwise.
-		"bind-key -T orcai-chord h     { switch-client -T root ; if-shell -F '#{==:#{session_name},orcai-cron}' { send-keys ? } { switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 C-h } }\n" +
+		"bind-key -T glitch-chord x     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the GL1TCH window (window 0)\" } { kill-pane } }\n" +
+		"bind-key -T glitch-chord X     { switch-client -T root ; if -F \"#{==:#{window_index},0}\" { display-message \"Cannot kill the GL1TCH window (window 0)\" } { kill-window } }\n" +
+		"bind-key -T glitch-chord Escape switch-client -T root\n" +
 		// Pressing ctrl+space again exits the chord table without action.
-		"bind-key -T orcai-chord C-Space switch-client -T root\n" +
-		// GLITCH AI assistant — focus panel in switchboard (window 0), send A key.
-		"bind-key -T orcai-chord a     { switch-client -T root ; switch-client -t orcai ; select-window -t orcai:0 ; send-keys -t orcai:0 A }\n" +
+		"bind-key -T glitch-chord C-Space switch-client -T root\n" +
+		// GL1TCH AI assistant — focus panel in switchboard (window 0), send A key.
+		"bind-key -T glitch-chord a     { switch-client -T root ; switch-client -t glitch ; select-window -t glitch:0 ; send-keys -t glitch:0 A }\n" +
 		// Explicitly unbind removed chords so stale sessions don't keep them.
-		"unbind-key -T orcai-chord n\n" +
-		"unbind-key -T orcai-chord m\n" +
-		"unbind-key -T orcai-chord o\n"
+		"unbind-key -T glitch-chord n\n" +
+		"unbind-key -T glitch-chord m\n" +
+		"unbind-key -T glitch-chord o\n" +
+		"unbind-key -T glitch-chord t\n" +
+		"unbind-key -T glitch-chord h\n" +
+		"unbind-key -T glitch-chord q\n"
 
 	return base + leaderBinding + chords
 }
@@ -192,10 +192,10 @@ func WriteTmuxConf(cfgDir, self string) (string, error) {
 func applyKeybindings(cfgDir string) {
 	kbCfg, err := keybindings.LoadConfig(filepath.Join(cfgDir, "keybindings.yaml"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "orcai: warning: load keybindings config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "glitch: warning: load keybindings config: %v\n", err)
 	} else if len(kbCfg.Bindings) > 0 {
 		if err := keybindings.Apply(kbCfg); err != nil {
-			fmt.Fprintf(os.Stderr, "orcai: warning: apply keybindings: %v\n", err)
+			fmt.Fprintf(os.Stderr, "glitch: warning: apply keybindings: %v\n", err)
 		}
 	}
 }
@@ -207,11 +207,11 @@ func applyKeybindings(cfgDir string) {
 func applyConfigs(cfgDir string) {
 	layoutCfg, err := layout.LoadConfig(filepath.Join(cfgDir, "layout.yaml"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "orcai: warning: load layout config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "glitch: warning: load layout config: %v\n", err)
 	} else if len(layoutCfg.Panes) > 0 {
 		d := widgetdispatch.DefaultDispatcher{}
 		if err := layout.Apply(context.Background(), layoutCfg, d); err != nil {
-			fmt.Fprintf(os.Stderr, "orcai: warning: apply layout: %v\n", err)
+			fmt.Fprintf(os.Stderr, "glitch: warning: apply layout: %v\n", err)
 		}
 	}
 	applyKeybindings(cfgDir)
@@ -246,14 +246,14 @@ func Run() error {
 	// Note: plugins/ and pipelines/ are created on-demand by discovery.
 	for _, sub := range []string{"providers", "widgets", "themes"} {
 		if err := os.MkdirAll(filepath.Join(cfgDir, sub), 0o755); err != nil {
-			fmt.Fprintf(os.Stderr, "orcai: warning: could not create %s dir: %v\n", sub, err)
+			fmt.Fprintf(os.Stderr, "glitch: warning: could not create %s dir: %v\n", sub, err)
 		}
 	}
 
-	// Install system prompt defaults to ~/.config/orcai/prompts/ on first run.
+	// Install system prompt defaults to ~/.config/glitch/prompts/ on first run.
 	// Existing files are never overwritten, so user customizations are preserved.
 	if err := systemprompts.EnsureInstalled(cfgDir); err != nil {
-		fmt.Fprintf(os.Stderr, "orcai: warning: install system prompts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "glitch: warning: install system prompts: %v\n", err)
 	}
 
 	// Fast path: session already running (e.g. after detach) — just reattach.
@@ -273,7 +273,7 @@ func Run() error {
 	// binaries are launched so they can connect on startup.
 	busdSrv := busd.New()
 	if err := busdSrv.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "orcai: warning: could not start busd: %v\n", err)
+		fmt.Fprintf(os.Stderr, "glitch: warning: could not start busd: %v\n", err)
 	} else {
 		defer busdSrv.Stop()
 	}
@@ -284,28 +284,28 @@ func Run() error {
 		return c.Run()
 	}
 
-	// Create session running the switchboard directly in the ORCAI window.
-	if err := run("-f", confPath, "new-session", "-d", "-s", SessionName, "-n", "ORCAI", self); err != nil {
+	// Create session running the switchboard directly in the GLITCH window.
+	if err := run("-f", confPath, "new-session", "-d", "-s", SessionName, "-n", "GL1TCH", self); err != nil {
 		return fmt.Errorf("creating session: %w", err)
 	}
 	run("source-file", confPath) //nolint:errcheck
 	// Only apply keybindings on fresh session; layout.yaml is for re-attach customisation.
 	applyKeybindings(cfgDir)
 
-	// Kill any stale orcai-cron session so the fresh binary is always used,
-	// then start a new orcai-cron session alongside the switchboard.
-	exec.Command("tmux", "kill-session", "-t", "orcai-cron").Run() //nolint:errcheck
-	if err := exec.Command("tmux", "new-session", "-d", "-s", "orcai-cron",
+	// Kill any stale glitch-cron session so the fresh binary is always used,
+	// then start a new glitch-cron session alongside the switchboard.
+	exec.Command("tmux", "kill-session", "-t", "glitch-cron").Run() //nolint:errcheck
+	if err := exec.Command("tmux", "new-session", "-d", "-s", "glitch-cron",
 		"-x", "220", "-y", "50", self+" cron tui").Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "orcai: warning: could not start cron session: %v\n", err)
+		fmt.Fprintf(os.Stderr, "glitch: warning: could not start cron session: %v\n", err)
 	} else {
-		exec.Command("tmux", "set-window-option", "-t", "orcai-cron:0", //nolint:errcheck
-			"@orcai-label", "orcai-cron").Run()
+		exec.Command("tmux", "set-window-option", "-t", "glitch-cron:0", //nolint:errcheck
+			"@glitch-label", "glitch-cron").Run()
 	}
 
-	// First-run: open the GLITCH assistant TUI in a new window before attaching.
+	// First-run: open the GL1TCH assistant TUI in a new window before attaching.
 	if assistant.IsFirstRun(cfgDir) {
-		exec.Command("tmux", "new-window", "-t", SessionName+":", "-n", "orcai-assistant", //nolint:errcheck
+		exec.Command("tmux", "new-window", "-t", SessionName+":", "-n", "glitch-assistant", //nolint:errcheck
 			self+" assistant").Run()
 	}
 

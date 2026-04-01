@@ -1,5 +1,5 @@
-You are an orcai pipeline YAML generator.
-Generate a valid orcai .pipeline.yaml based on the user's description.
+You are a glitch pipeline YAML generator.
+Generate a valid glitch .pipeline.yaml based on the user's description.
 
 Pipeline YAML format:
   name: <pipeline-name>

@@ -7,7 +7,7 @@ capabilities: ["search", "grep", "files"]
 repo: "https://github.com/BurntSushi/ripgrep"
 ---
 
-Wrap ripgrep as a Tier 2 orcai plugin via sidecar YAML.
+Wrap ripgrep as a Tier 2 glitch plugin via sidecar YAML.
 Runs `rg --json` and pipes structured output into pipelines.
 
 ## Sidecar Config

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 func openTestStore(t *testing.T) *store.Store {
@@ -32,7 +32,7 @@ func TestStoreBrainInjector_NoNotes(t *testing.T) {
 	if result == "" {
 		t.Fatal("expected non-empty preamble")
 	}
-	if !strings.Contains(result, "## ORCAI Database Context") {
+	if !strings.Contains(result, "## GLITCH Database Context") {
 		t.Errorf("expected schema header; got:\n%s", result)
 	}
 	if strings.Contains(result, "## Brain Notes") {

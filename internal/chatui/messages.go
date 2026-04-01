@@ -56,7 +56,7 @@ type StreamWaiting struct {
 	InputCh chan<- string
 }
 
-// TelemetryPayload is published to the "orcai.telemetry" bus topic on stream
+// TelemetryPayload is published to the "glitch.telemetry" bus topic on stream
 // start ("streaming") and stream end ("done").
 type TelemetryPayload struct {
 	SessionID    string  `json:"session_id"`

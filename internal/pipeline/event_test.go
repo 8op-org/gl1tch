@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
 )
 
 func TestNoopPublisher_Publish(t *testing.T) {

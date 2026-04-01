@@ -1,5 +1,5 @@
 // Package braineditor provides a full-screen BubbleTea TUI for browsing,
-// editing, and refining brain notes stored in the ORCAI result store.
+// editing, and refining brain notes stored in the GLITCH result store.
 package braineditor
 
 import (
@@ -12,11 +12,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/buildershared"
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/buildershared"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 // focus slot constants for Model.

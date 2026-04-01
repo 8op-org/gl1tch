@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 func testPalette() styles.ANSIPalette {

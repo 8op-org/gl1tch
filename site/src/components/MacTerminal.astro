@@ -1,0 +1,435 @@
+---
+import GlitchLogo from './GlitchLogo.astro';
+---
+<div class="mac-terminal" id="mac-terminal">
+  <div class="mac-titlebar">
+    <div class="mac-dots" aria-hidden="true">
+      <span class="mac-dot mac-dot-red"></span>
+      <span class="mac-dot mac-dot-yellow"></span>
+      <span class="mac-dot mac-dot-green"></span>
+    </div>
+    <span class="mac-title">GLITCH</span>
+  </div>
+
+  <div class="mac-body">
+    <div class="terminal-logo">
+      <GlitchLogo />
+    </div>
+
+    <div class="terminal-output" id="terminal-output">
+      <div class="output-line output-system">your AI workspace</div>
+      <div class="output-line output-dim">Type /help to see available commands.</div>
+    </div>
+
+    <div class="terminal-input-wrap">
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">&gt;&gt;</span>
+        <input
+          type="text"
+          id="terminal-input"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="none"
+          spellcheck="false"
+          aria-label="GLITCH terminal input"
+        />
+      </div>
+      <div class="terminal-input-hint">enter send  ·  ↑↓ history  ·  tab complete  ·  /install /prompts /pipelines</div>
+    </div>
+  </div>
+</div>
+
+<script>
+import Fuse from 'fuse.js';
+
+interface QAEntry {
+  question: string;
+  keywords: string[];
+  response: string;
+}
+
+interface GlitchDB {
+  commands: Record<string, string>;
+  qa: QAEntry[];
+}
+
+let db: GlitchDB | null = null;
+let fuse: Fuse<QAEntry> | null = null;
+const history: string[] = [];
+let historyIdx = -1;
+
+const inputEl  = document.getElementById('terminal-input') as HTMLInputElement;
+const outputEl = document.getElementById('terminal-output') as HTMLDivElement;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+async function init() {
+  try {
+    const res = await fetch('/glitch-db.json');
+    db = await res.json() as GlitchDB;
+    fuse = new Fuse(db.qa, {
+      keys: [
+        { name: 'question', weight: 0.7 },
+        { name: 'keywords', weight: 0.3 },
+      ],
+      threshold: 0.4,
+      includeScore: true,
+    });
+  } catch {
+    appendLine('output-error', 'Could not load response database. Refresh to retry.');
+  }
+
+  // Re-focus on terminal click
+  document.getElementById('mac-terminal')?.addEventListener('click', () => {
+    inputEl.focus();
+  });
+
+  // Run intro, then enable input
+  inputEl.disabled = true;
+  await runIntro();
+  inputEl.disabled = false;
+  inputEl.addEventListener('keydown', handleKey);
+  inputEl.focus();
+}
+
+// ── Input handling ─────────────────────────────────────────────────────────────
+
+function handleKey(e: KeyboardEvent) {
+  switch (e.key) {
+    case 'Enter': {
+      const cmd = inputEl.value.trim();
+      inputEl.value = '';
+      if (!cmd) return;
+      history.unshift(cmd);
+      historyIdx = -1;
+      appendLine('output-cmd', `>> ${cmd}`);
+      processCommand(cmd);
+      break;
+    }
+    case 'ArrowUp':
+      e.preventDefault();
+      if (historyIdx < history.length - 1) {
+        historyIdx++;
+        inputEl.value = history[historyIdx];
+      }
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (historyIdx > 0) {
+        historyIdx--;
+        inputEl.value = history[historyIdx];
+      } else {
+        historyIdx = -1;
+        inputEl.value = '';
+      }
+      break;
+    case 'Tab':
+      e.preventDefault();
+      tabComplete();
+      break;
+    case 'l':
+      if (e.ctrlKey) { e.preventDefault(); clearTerminal(); }
+      break;
+  }
+}
+
+// ── Command dispatch ──────────────────────────────────────────────────────────
+
+function processCommand(raw: string) {
+  if (!db) {
+    appendLine('output-error', 'Database not loaded. Refresh to retry.');
+    return;
+  }
+
+  if (raw.startsWith('/')) {
+    const name = raw.slice(1).toLowerCase().trim();
+
+    if (name === 'clear' || name === 'c') {
+      clearTerminal();
+      return;
+    }
+
+    if (name === 'help' || name === 'h' || name === '?') {
+      typewrite(db.commands['help'] ?? 'Type /install, /pipelines, or /brain to get started.');
+      return;
+    }
+
+    if (name === 'screenshots' || name === 'ss') {
+      openScreenshots();
+      return;
+    }
+
+    if (db.commands[name]) {
+      typewrite(db.commands[name]);
+      return;
+    }
+
+    appendLine('output-error', `/${name}: command not found. Type /help for a list.`);
+    return;
+  }
+
+  // Freeform fuzzy search
+  if (fuse) {
+    const results = fuse.search(raw);
+    if (results.length > 0 && (results[0].score ?? 1) < 0.5) {
+      typewrite(results[0].item.response);
+      return;
+    }
+  }
+
+  appendLine('output-dim', `No response found for that. Try /help.`);
+}
+
+// ── Screenshots gallery ───────────────────────────────────────────────────────
+
+interface Screenshot {
+  name: string;
+  file: string;
+  caption: string;
+}
+
+let galleryEl: HTMLDivElement | null = null;
+let galleryIdx = 0;
+let galleryShots: Screenshot[] = [];
+
+async function openScreenshots() {
+  let shots: Screenshot[] = [];
+  try {
+    const res = await fetch('/screenshots/index.json');
+    shots = await res.json() as Screenshot[];
+  } catch {
+    appendLine('output-error', 'Could not load screenshots. Run tools/screenshots/take.sh first.');
+    return;
+  }
+  if (shots.length === 0) {
+    appendLine('output-dim', 'No screenshots yet. Run: tools/screenshots/take.sh');
+    return;
+  }
+  galleryShots = shots;
+  galleryIdx = 0;
+  if (galleryEl) galleryEl.remove();
+  galleryEl = document.createElement('div');
+  galleryEl.className = 'output-line screenshot-gallery';
+  galleryEl.setAttribute('tabindex', '0');
+  outputEl.appendChild(galleryEl);
+  scrollBottom();
+  renderGallery();
+  galleryEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'ArrowRight' || e.key === 'l') {
+      e.preventDefault();
+      galleryIdx = (galleryIdx + 1) % galleryShots.length;
+      renderGallery();
+    } else if (e.key === 'ArrowLeft' || e.key === 'h') {
+      e.preventDefault();
+      galleryIdx = (galleryIdx - 1 + galleryShots.length) % galleryShots.length;
+      renderGallery();
+    } else if (e.key === 'Escape' || e.key === 'q') {
+      e.preventDefault();
+      closeGallery();
+      inputEl.focus();
+    }
+  });
+  galleryEl.focus();
+}
+
+function renderGallery() {
+  if (!galleryEl || galleryShots.length === 0) return;
+  const shot = galleryShots[galleryIdx];
+  // Clear previous content
+  while (galleryEl.firstChild) galleryEl.removeChild(galleryEl.firstChild);
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'sg-header';
+  const counter = document.createElement('span');
+  counter.className = 'sg-counter';
+  counter.textContent = `[${galleryIdx + 1}/${galleryShots.length}]`;
+  const caption = document.createElement('span');
+  caption.className = 'sg-caption';
+  caption.textContent = shot.caption;
+  const keys = document.createElement('span');
+  keys.className = 'sg-keys';
+  keys.textContent = '← → navigate · esc close';
+  header.appendChild(counter);
+  header.appendChild(caption);
+  header.appendChild(keys);
+
+  // Image — sanitize filename to prevent path traversal
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'sg-img-wrap';
+  const img = document.createElement('img');
+  img.className = 'sg-img';
+  img.setAttribute('loading', 'lazy');
+  img.src = `/screenshots/${shot.file.replace(/[^a-zA-Z0-9._-]/g, '')}`;
+  img.alt = shot.caption;
+  imgWrap.appendChild(img);
+
+  // Dots
+  const dots = document.createElement('div');
+  dots.className = 'sg-dots';
+  galleryShots.forEach((_, i) => {
+    const dot = document.createElement('span');
+    dot.className = i === galleryIdx ? 'sg-dot sg-dot-active' : 'sg-dot';
+    dots.appendChild(dot);
+  });
+
+  galleryEl.appendChild(header);
+  galleryEl.appendChild(imgWrap);
+  galleryEl.appendChild(dots);
+}
+
+function closeGallery() {
+  if (galleryEl) { galleryEl.remove(); galleryEl = null; }
+}
+
+// ── Output ────────────────────────────────────────────────────────────────────
+
+function appendLine(cls: string, text: string) {
+  const div = document.createElement('div');
+  div.className = `output-line ${cls}`;
+  div.textContent = text;
+  outputEl.appendChild(div);
+  scrollBottom();
+}
+
+let twTimer: ReturnType<typeof setTimeout> | null = null;
+
+function sleep(ms: number) {
+  return new Promise<void>(r => setTimeout(r, ms));
+}
+
+function typewrite(text: string): Promise<void> {
+  if (twTimer) { clearTimeout(twTimer); twTimer = null; }
+
+  const div = document.createElement('div');
+  div.className = 'output-line output-response';
+  outputEl.appendChild(div);
+  scrollBottom();
+
+  return new Promise<void>(resolve => {
+    let i = 0;
+    function tick() {
+      if (i < text.length) {
+        div.textContent = text.slice(0, i + 1);
+        i++;
+        const ch = text[i - 1];
+        const delay = ch === '\n' ? 25 : ch === '.' || ch === ':' ? 30 : 10;
+        twTimer = setTimeout(tick, delay);
+        scrollBottom();
+      } else {
+        resolve();
+      }
+    }
+    tick();
+  });
+}
+
+// ── Intro sequence ────────────────────────────────────────────────────────────
+
+async function runIntro() {
+  await sleep(300);
+  appendLine('output-dim', '> scanning environment...');
+  await sleep(350);
+  appendLine('output-dim', '> brain context loaded');
+  await sleep(250);
+  appendLine('output-dim', '> pipeline executor ready');
+  await sleep(250);
+  appendLine('output-dim', '> agent runner standing by');
+  await sleep(600);
+
+  await typewrite('You found the terminal. Good.');
+  await sleep(500);
+
+  await typewrite('GLITCH runs local AI models by default. Your code never leaves your machine. No API bill for the work that doesn\'t need one.');
+  await sleep(400);
+
+  await typewrite('When you need cloud reasoning, you choose it — one flag, one step. Everything else stays local.');
+  await sleep(400);
+
+  await typewrite('Type /install to get started. /prompts to run a session. /pipelines to see what you can build.');
+}
+
+function clearTerminal() {
+  // Keep only the two static boot lines
+  Array.from(outputEl.children).slice(2).forEach(el => el.remove());
+}
+
+function tabComplete() {
+  if (!db || !inputEl.value.startsWith('/')) return;
+  const partial = inputEl.value.slice(1).toLowerCase();
+  const matches = Object.keys(db.commands).filter(c => c.startsWith(partial));
+  if (matches.length === 1) {
+    inputEl.value = `/${matches[0]}`;
+  } else if (matches.length > 1) {
+    appendLine('output-dim', matches.map(m => `/${m}`).join('  '));
+  }
+}
+
+function scrollBottom() {
+  outputEl.scrollTop = outputEl.scrollHeight;
+}
+
+// ── Hex canvas background ─────────────────────────────────────────────────────
+
+function initHexCanvas() {
+  const canvas = document.getElementById('hexbg') as HTMLCanvasElement;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d')!;
+
+  const COL_W = 28;
+  const ROW_H = 18;
+  let COLS: number, ROWS: number;
+  let offsets: number[], speeds: number[], grid: string[][];
+  let animId: number;
+
+  function hexByte() {
+    return Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+  }
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function setup() {
+    COLS = Math.ceil(canvas.width  / COL_W) + 2;
+    ROWS = Math.ceil(canvas.height / ROW_H) + 3;
+    offsets = Array.from({ length: COLS }, () => Math.random() * ROWS * ROW_H);
+    speeds  = Array.from({ length: COLS }, () => 0.25 + Math.random() * 0.45);
+    const GRID_H = ROWS * 4;
+    grid = Array.from({ length: GRID_H }, () =>
+      Array.from({ length: COLS }, hexByte)
+    );
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font      = '12px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(135, 135, 175, 0.07)';
+
+    for (let col = 0; col < COLS; col++) {
+      offsets[col] = (offsets[col] + speeds[col]) % (grid.length * ROW_H);
+      const startRow = Math.floor(offsets[col] / ROW_H);
+      const subPx    = offsets[col] % ROW_H;
+      for (let row = 0; row <= ROWS + 1; row++) {
+        const y       = row * ROW_H - subPx;
+        const gridRow = (startRow + row) % grid.length;
+        ctx.fillText(grid[gridRow][col], col * COL_W, y);
+      }
+    }
+    animId = requestAnimationFrame(draw);
+  }
+
+  resize();
+  setup();
+  window.addEventListener('resize', () => { resize(); setup(); });
+  draw();
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initHexCanvas();
+  init();
+});
+</script>

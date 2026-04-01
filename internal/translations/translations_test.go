@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/assets"
-	"github.com/adam-stokes/orcai/internal/translations"
+	"github.com/powerglove-dev/gl1tch/internal/assets"
+	"github.com/powerglove-dev/gl1tch/internal/translations"
 )
 
 // writeYAML writes content to a temporary translations.yaml and returns the

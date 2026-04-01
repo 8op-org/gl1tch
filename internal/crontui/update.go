@@ -9,12 +9,12 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"gopkg.in/yaml.v3"
 
-	"github.com/adam-stokes/orcai/internal/busd"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/jumpwindow"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/busd"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/jumpwindow"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 
@@ -148,8 +148,8 @@ func (m Model) handleThemePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleQuitConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
-		// Kill the main ORCAI session so quitting from cron exits everything.
-		_ = exec.Command("tmux", "kill-session", "-t", "orcai").Run()
+		// Kill the main GLITCH session so quitting from cron exits everything.
+		_ = exec.Command("tmux", "kill-session", "-t", "glitch").Run()
 		return m, tea.Quit
 	case "n", "N", "esc":
 		m.quitConfirm = false
@@ -254,15 +254,15 @@ func (m Model) handleJobPaneKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // resolvePipelinePath returns the filesystem path for a pipeline target name.
-// It tries ~/.config/orcai/pipelines/<target>.yaml and <target>.pipeline.yaml
+// It tries ~/.config/glitch/pipelines/<target>.yaml and <target>.pipeline.yaml
 // variants, falling back to the raw target string if nothing resolves.
 func resolvePipelinePath(target string) string {
 	home, err := os.UserHomeDir()
 	if err == nil {
 		candidates := []string{
-			filepath.Join(home, ".config", "orcai", "pipelines", target+".yaml"),
-			filepath.Join(home, ".config", "orcai", "pipelines", target+".pipeline.yaml"),
-			filepath.Join(home, ".config", "orcai", "pipelines", target),
+			filepath.Join(home, ".config", "glitch", "pipelines", target+".yaml"),
+			filepath.Join(home, ".config", "glitch", "pipelines", target+".pipeline.yaml"),
+			filepath.Join(home, ".config", "glitch", "pipelines", target),
 		}
 		for _, c := range candidates {
 			if _, err := os.Stat(c); err == nil {

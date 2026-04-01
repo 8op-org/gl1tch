@@ -7,11 +7,11 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/log"
 
-	"github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/jumpwindow"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/tuikit"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/jumpwindow"
+	"github.com/powerglove-dev/gl1tch/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/tuikit"
 )
 
 // Dracula palette
@@ -74,7 +74,7 @@ type DeleteConfirm struct {
 
 const logBufMax = 500
 
-// Model is the BubbleTea model for the orcai-cron TUI.
+// Model is the BubbleTea model for the glitch-cron TUI.
 type Model struct {
 	scheduler  *cron.Scheduler
 	runStore   *store.Store   // result store for recording run history; may be nil

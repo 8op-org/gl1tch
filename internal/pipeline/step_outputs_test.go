@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 // TestStepOutputs_HappyPath verifies that step A's declared output is accessible

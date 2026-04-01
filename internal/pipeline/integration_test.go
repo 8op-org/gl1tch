@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
 )
 
 // checkModelAvailable skips the test if the named ollama model is not present.

@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/adam-stokes/orcai/internal/assets"
+	"github.com/powerglove-dev/gl1tch/internal/assets"
 )
 
 // LoadBundled reads all theme bundles embedded in assets.ThemeFS.

@@ -3,7 +3,7 @@
 # Demonstrates use_brain and write_brain pipeline flags.
 #
 # use_brain: true  — the runner prepends a context preamble describing the
-#                    ORCAI database schema and recent brain notes to the agent's
+#                    GL1TCH database schema and recent brain notes to the agent's
 #                    prompt. The agent can use this to reason about past runs.
 #
 # write_brain: true — after the agent responds, the runner scans the output for
@@ -25,13 +25,13 @@ write_brain: true
 
 steps:
   # Step 1: Analyze recent pipeline runs and record an insight.
-  # The agent receives the ORCAI DB schema preamble and is instructed to
+  # The agent receives the GL1TCH DB schema preamble and is instructed to
   # embed a <brain> note in its response.
   - id: analyze-runs
     executor: claude
     model: claude-sonnet-4-6
     prompt: |
-      You have access to the ORCAI result database (read-only).
+      You have access to the GL1TCH result database (read-only).
       Review the recent pipeline run history provided in your context.
 
       Write a brief analysis of:
@@ -51,5 +51,5 @@ steps:
     write_brain: false
     prompt: |
       Based on the brain notes from earlier steps in this run,
-      suggest one concrete improvement to the ORCAI pipeline configuration.
+      suggest one concrete improvement to the GL1TCH pipeline configuration.
       Be specific and actionable.

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // resetGlobal clears the global singleton between tests using SetGlobalRegistry(nil).

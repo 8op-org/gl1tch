@@ -3,7 +3,7 @@ package picker_test
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
 )
 
 func TestApplyFuzzy_EmptyQuery(t *testing.T) {

@@ -3,7 +3,7 @@ package pipeline_test
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
 )
 
 func TestExecutionContext_SetGet(t *testing.T) {

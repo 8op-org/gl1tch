@@ -1,6 +1,6 @@
 package translations
 
-// Canonical translation key constants for all labeled strings in the ORCAI UI.
+// Canonical translation key constants for all labeled strings in the GLITCH UI.
 // Use these constants when looking up translations to avoid typo-prone raw
 // string literals scattered across the codebase.
 const (

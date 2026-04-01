@@ -61,7 +61,7 @@ type Model struct {
 }
 
 // New returns an activity feed model backed by path. If path is empty the
-// default path (~/.orcai/activity.jsonl) is used.
+// default path (~/.glitch/activity.jsonl) is used.
 func New(path string) Model {
 	if path == "" {
 		path = DefaultPath()

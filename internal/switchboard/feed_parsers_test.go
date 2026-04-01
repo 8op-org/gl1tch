@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 var testPal = styles.ANSIPalette{

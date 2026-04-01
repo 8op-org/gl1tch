@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 func TestFuzzyScore_EmptyQuery(t *testing.T) {
@@ -20,16 +20,16 @@ func TestFuzzyScore_NoMatch(t *testing.T) {
 }
 
 func TestFuzzyScore_ContiguousBaseNameMatch(t *testing.T) {
-	score := fuzzyScore("/Users/stokes/Projects/orcai", "orcai")
+	score := fuzzyScore("/Users/stokes/Projects/orcai", "glitch")
 	if score < 1000 {
 		t.Errorf("contiguous base name match should score ≥1000, got %d", score)
 	}
 }
 
 func TestFuzzyScore_BaseNameBeatsFull(t *testing.T) {
-	// "orcai" in base name should score higher than "orcai" buried in a long path.
-	scoreBase := fuzzyScore("/Users/stokes/Projects/orcai", "orcai")
-	scoreFull := fuzzyScore("/orcai/deep/nested/something-else", "orcai")
+	// "glitch" in base name should score higher than "glitch" buried in a long path.
+	scoreBase := fuzzyScore("/Users/stokes/Projects/orcai", "glitch")
+	scoreFull := fuzzyScore("/orcai/deep/nested/something-else", "glitch")
 	if scoreBase <= scoreFull {
 		t.Errorf("basename match (%d) should beat full-path early match (%d)", scoreBase, scoreFull)
 	}
@@ -75,7 +75,7 @@ func TestDirPickerModel_ApplyFilter_FiltersCorrectly(t *testing.T) {
 		"/home/user/go",
 	}
 	m.walking = false
-	m.input.SetValue("orcai")
+	m.input.SetValue("glitch")
 	m.applyFilter()
 	if len(m.shown) != 1 || m.shown[0] != "/home/user/orcai" {
 		t.Errorf("filter 'orcai' should match only orcai, got %v", m.shown)

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/discovery"
+	"github.com/powerglove-dev/gl1tch/internal/discovery"
 )
 
 func TestScanNative_Empty(t *testing.T) {

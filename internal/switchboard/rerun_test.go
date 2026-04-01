@@ -7,15 +7,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/modal"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/modal"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // ── agentRunModelSlug ─────────────────────────────────────────────────────────
 
 func TestAgentRunModelSlug_ReturnsSlug(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	agentsDir := filepath.Join(dir, ".agents")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
@@ -33,7 +33,7 @@ func TestAgentRunModelSlug_ReturnsSlug(t *testing.T) {
 
 func TestAgentRunModelSlug_NoModel_ReturnsExecutorOnly(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	agentsDir := filepath.Join(dir, ".agents")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
@@ -51,7 +51,7 @@ func TestAgentRunModelSlug_NoModel_ReturnsExecutorOnly(t *testing.T) {
 
 func TestAgentRunModelSlug_MissingFile_ReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	if got := agentRunModelSlug("nonexistent-run"); got != "" {
 		t.Errorf("expected empty string for missing file, got %q", got)
@@ -60,7 +60,7 @@ func TestAgentRunModelSlug_MissingFile_ReturnsEmpty(t *testing.T) {
 
 func TestAgentRunModelSlug_RegularPipeline_ReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	// Regular pipeline lives in root, not .agents/ — slug helper should return "".
 	content := "name: my-pipeline\nversion: \"1\"\nsteps:\n  - id: run\n    executor: shell\n    prompt: hello\n"
@@ -79,7 +79,7 @@ func TestAgentRunModelSlug_RegularPipeline_ReturnsEmpty(t *testing.T) {
 // does not produce a "file not found" feed entry when rerun is confirmed.
 func TestSubmitRerun_FindsYAMLInAgentsDir(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	// Write the YAML into .agents/.
 	agentsDir := filepath.Join(dir, ".agents")
@@ -112,7 +112,7 @@ func TestSubmitRerun_FindsYAMLInAgentsDir(t *testing.T) {
 
 func TestSubmitRerun_MissingYAML_ProducesFeedError(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ORCAI_PIPELINES_DIR", dir)
+	t.Setenv("GLITCH_PIPELINES_DIR", dir)
 
 	run := store.Run{ID: 2, Kind: "pipeline", Name: "does-not-exist", Steps: []store.StepRecord{}}
 

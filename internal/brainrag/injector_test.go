@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/braincontext"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/braincontext"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // openTestStore opens a fresh SQLite store in a temp directory.

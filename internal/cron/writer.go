@@ -7,13 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// cronFilePath returns the path to ~/.config/orcai/cron.yaml.
+// cronFilePath returns the path to ~/.config/glitch/cron.yaml.
 func cronFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "orcai", "cron.yaml"), nil
+	return filepath.Join(home, ".config", "glitch", "cron.yaml"), nil
 }
 
 // WriteEntry atomically adds or replaces a named entry in cron.yaml.

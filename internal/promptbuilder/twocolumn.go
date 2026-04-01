@@ -17,13 +17,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/buildershared"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/buildershared"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
 )
 
 // tcFocus constants for TwoColumnModel outer focus.
@@ -448,7 +448,7 @@ func buildPromptPluginManager(providers []picker.ProviderDef) (*plugin.Manager, 
 		}
 		_ = mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", binary, prov.PipelineArgs...))
 	}
-	configDir := picker.OrcaiConfigDir()
+	configDir := picker.GlitchConfigDir()
 	if configDir != "" {
 		_ = mgr.LoadWrappersFromDir(filepath.Join(configDir, "wrappers"))
 	}

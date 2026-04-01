@@ -13,7 +13,7 @@ type RetentionConfig struct {
 	MaxRows    int `yaml:"max_rows"`
 }
 
-// configFile mirrors the structure of ~/.config/orcai/config.yaml.
+// configFile mirrors the structure of ~/.config/glitch/config.yaml.
 type configFile struct {
 	Store struct {
 		Retention RetentionConfig `yaml:"retention"`
@@ -26,7 +26,7 @@ var defaultRetention = RetentionConfig{
 	MaxRows:    1000,
 }
 
-// loadRetentionConfig reads ~/.config/orcai/config.yaml and extracts store.retention.
+// loadRetentionConfig reads ~/.config/glitch/config.yaml and extracts store.retention.
 // Returns defaults (30 days, 1000 rows) if the file is missing or the key is absent.
 func loadRetentionConfig() RetentionConfig {
 	home, err := os.UserHomeDir()
@@ -34,7 +34,7 @@ func loadRetentionConfig() RetentionConfig {
 		return defaultRetention
 	}
 
-	cfgPath := filepath.Join(home, ".config", "orcai", "config.yaml")
+	cfgPath := filepath.Join(home, ".config", "glitch", "config.yaml")
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		// File missing or unreadable — use defaults.

@@ -30,7 +30,7 @@ func SetGlobalProvider(p Provider) {
 // as the global provider. Call this at startup and whenever the active theme
 // changes (passing the new theme's Strings map).
 //
-// Priority: user ~/.config/orcai/translations.yaml > themeStrings > defaults.
+// Priority: user ~/.config/glitch/translations.yaml > themeStrings > defaults.
 func RebuildChain(themeStrings map[string]string) {
 	SetGlobalProvider(NewChain(
 		NewYAMLProvider(),

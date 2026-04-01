@@ -18,7 +18,7 @@ The <tags> attribute is optional. The <title> attribute is recommended.
 
 Example:
   <brain type="finding" tags="auth,security" title="Session token stored in plain text">
-  Found that session tokens are written to ~/.orcai/session without encryption.
+  Found that session tokens are written to ~/.glitch/session without encryption.
   File: internal/auth/session.go line 42.
   </brain>
 

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // openTestStore creates a fresh SQLite store in a temp directory.
@@ -65,10 +65,10 @@ func TestBrainReadInjection_PreamblePresent(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if !strings.Contains(captured, "## ORCAI Database Context") {
+	if !strings.Contains(captured, "## GLITCH Database Context") {
 		t.Errorf("expected brain preamble in prompt, got: %q", captured)
 	}
-	if !strings.HasPrefix(strings.TrimSpace(captured), "## ORCAI Database Context") {
+	if !strings.HasPrefix(strings.TrimSpace(captured), "## GLITCH Database Context") {
 		t.Errorf("expected preamble at start, got: %q", captured[:min(len(captured), 100)])
 	}
 }
@@ -94,7 +94,7 @@ func TestBrainReadInjection_AbsentWithoutInjector(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if strings.Contains(captured, "## ORCAI Database Context") {
+	if strings.Contains(captured, "## GLITCH Database Context") {
 		t.Errorf("unexpected brain preamble in prompt: %q", captured)
 	}
 	if !strings.HasPrefix(captured, "just the prompt") {
@@ -212,7 +212,7 @@ func TestBrainFeedbackLoop(t *testing.T) {
 	if !strings.Contains(capturedB, "Loop insight from step A") {
 		t.Errorf("expected brain note in step-b preamble, got: %q", capturedB)
 	}
-	if !strings.Contains(capturedB, "## ORCAI Database Context") {
+	if !strings.Contains(capturedB, "## GLITCH Database Context") {
 		t.Errorf("expected preamble header in step-b prompt, got: %q", capturedB)
 	}
 }
@@ -258,7 +258,7 @@ func TestBrainRunIsolation(t *testing.T) {
 		t.Errorf("brain note from other run leaked into current run's preamble: %q", captured)
 	}
 	// Should still have the preamble header (schema only, no notes from this run).
-	if !strings.Contains(captured, "## ORCAI Database Context") {
+	if !strings.Contains(captured, "## GLITCH Database Context") {
 		t.Errorf("expected preamble header, got: %q", captured)
 	}
 }
@@ -476,7 +476,7 @@ func TestBrainLegacyPath(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if !strings.Contains(captured, "## ORCAI Database Context") {
+	if !strings.Contains(captured, "## GLITCH Database Context") {
 		t.Errorf("expected brain preamble in legacy path prompt, got: %q", captured)
 	}
 }

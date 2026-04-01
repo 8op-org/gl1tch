@@ -1,5 +1,5 @@
 // Package assets provides embedded provider profiles and theme bundles for the
-// orcai plugin system. Files are embedded at compile time using //go:embed so
+// glitch plugin system. Files are embedded at compile time using //go:embed so
 // no filesystem reads are required at runtime.
 package assets
 

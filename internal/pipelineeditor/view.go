@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
 )
 
 

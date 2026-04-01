@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
 )
 
 const sampleYAML = `
@@ -237,9 +237,9 @@ func TestInterpolateTemplateFunctions(t *testing.T) {
 	})
 
 	t.Run("env function", func(t *testing.T) {
-		t.Setenv("ORCAI_TEST_VAR", "testvalue")
+		t.Setenv("GLITCH_TEST_VAR", "testvalue")
 		vars := map[string]any{}
-		result := pipeline.Interpolate(`{{env "ORCAI_TEST_VAR"}}`, vars)
+		result := pipeline.Interpolate(`{{env "GLITCH_TEST_VAR"}}`, vars)
 		if result != "testvalue" {
 			t.Errorf("got %q", result)
 		}

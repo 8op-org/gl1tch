@@ -1,8 +1,8 @@
 package switchboard
 
 import (
-	"github.com/adam-stokes/orcai/internal/panelrender"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/panelrender"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // visibleWidth returns the printable character count of s, stripping ANSI escapes.

@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadReadSet_MissingFile(t *testing.T) {
-	set := LoadReadSet("/tmp/orcai-nonexistent-readstate-test.json")
+	set := LoadReadSet("/tmp/glitch-nonexistent-readstate-test.json")
 	if len(set) != 0 {
 		t.Errorf("expected empty set for missing file, got %v", set)
 	}

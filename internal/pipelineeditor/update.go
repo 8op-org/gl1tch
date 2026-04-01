@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/buildershared"
+	"github.com/powerglove-dev/gl1tch/internal/buildershared"
 )
 
 // HandleKey routes keyboard events to the correct panel/widget.
@@ -322,5 +322,5 @@ func openEditorInWindow(path string) {
 		return
 	}
 	cmdStr := editor + " " + path
-	runCmdIgnore("tmux", "new-window", "-d", "-t", session+":", "-n", "orcai-edit", cmdStr)
+	runCmdIgnore("tmux", "new-window", "-d", "-t", session+":", "-n", "glitch-edit", cmdStr)
 }

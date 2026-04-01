@@ -1,8 +1,8 @@
-// Package widgets implements discovery and launching of orcai widget binaries.
+// Package widgets implements discovery and launching of glitch widget binaries.
 //
-// Widgets are standalone binaries (any language) that orcai discovers from a
+// Widgets are standalone binaries (any language) that glitch discovers from a
 // directory of subdirectories, each containing a widget.yaml manifest. Once
-// launched, a widget runs in its own tmux window and communicates with orcai
+// launched, a widget runs in its own tmux window and communicates with glitch
 // via the Unix socket bus daemon (internal/busd).
 package widgets
 

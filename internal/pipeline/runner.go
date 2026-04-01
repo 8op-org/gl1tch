@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/adam-stokes/orcai/internal/activity"
-	"github.com/adam-stokes/orcai/internal/brainaudit"
-	"github.com/adam-stokes/orcai/internal/brainrag"
-	"github.com/adam-stokes/orcai/internal/busd/topics"
-	"github.com/adam-stokes/orcai/internal/clarify"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/store"
+	"github.com/powerglove-dev/gl1tch/internal/activity"
+	"github.com/powerglove-dev/gl1tch/internal/brainaudit"
+	"github.com/powerglove-dev/gl1tch/internal/brainrag"
+	"github.com/powerglove-dev/gl1tch/internal/busd/topics"
+	"github.com/powerglove-dev/gl1tch/internal/clarify"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 // RunOption configures a pipeline Run call.
@@ -1196,7 +1196,7 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 		}
 	}
 
-	// Clarification: if the executor output contains ORCAI_CLARIFY: and the executor
+	// Clarification: if the executor output contains GLITCH_CLARIFY: and the executor
 	// type is reactive, publish a ClarificationRequest via busd and block until the
 	// user answers via the TUI. Then re-run with the full conversation context.
 	if execErr == nil {
@@ -1414,7 +1414,7 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 		})
 	}()
 
-	// Append the ORCAI_CLARIFY instruction for executors that support reactive
+	// Append the GLITCH_CLARIFY instruction for executors that support reactive
 	// clarification. Pipelines using unregistered executors are unaffected.
 	if clarify.IsReactive(typeName) {
 		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction()
@@ -1423,7 +1423,7 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 	// Build stepVars for the plugin.
 	// For tool-kind plugins (kind: tool in sidecar YAML), only pass the
 	// interpolated step.Vars plus cwd and model. This prevents large step
-	// outputs from being dumped as ORCAI_* env vars into every subprocess.
+	// outputs from being dumped as GLITCH_* env vars into every subprocess.
 	// Agent plugins still get the full EC so they have full context.
 	var stepVars map[string]string
 	type kinder interface{ Kind() string }
@@ -1524,7 +1524,7 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 		})
 	}()
 
-	// Append ORCAI_CLARIFY instruction for reactive executors so the model
+	// Append GLITCH_CLARIFY instruction for reactive executors so the model
 	// knows the protocol for requesting user input.
 	if clarify.IsReactive(pluginName) {
 		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction()
@@ -1540,7 +1540,7 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 	execErr := pl.Execute(ctx, promptOrInput, stepVars, &buf)
 	output := buf.String()
 
-	// Clarification: if the executor output contains ORCAI_CLARIFY:, surface it
+	// Clarification: if the executor output contains GLITCH_CLARIFY:, surface it
 	// via AskClarification (busd), then re-execute with the full conversation context.
 	if execErr == nil && clarify.IsReactive(pluginName) {
 		detector := clarify.Get(pluginName)

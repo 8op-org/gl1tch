@@ -1,0 +1,13 @@
+Go goroutine leak — diagnosis and fix
+Switch to haiku first: /model claude/claude-haiku-4-5-20251001
+
+i have a goroutine leak in my Go service. here's the pattern i keep seeing — what's wrong and show me the fixed version:
+
+func processJobs(jobs []Job) {
+    for _, job := range jobs {
+        go func() {
+            result := process(job)
+            results = append(results, result)
+        }()
+    }
+}

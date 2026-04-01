@@ -1,6 +1,6 @@
-// Package translations provides a UI string overrides layer for ORCAI.
+// Package translations provides a UI string overrides layer for GL1TCH.
 // Operators can override any labeled string in the UI via a YAML file at
-// ~/.config/orcai/translations.yaml. Values may contain raw ANSI escape
+// ~/.config/glitch/translations.yaml. Values may contain raw ANSI escape
 // sequences or the shorthand notations \e[, \033[, and \x1b[.
 package translations
 

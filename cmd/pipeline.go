@@ -4,66 +4,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/pipeline"
-	"github.com/adam-stokes/orcai/internal/pipelineeditor"
-	"github.com/adam-stokes/orcai/internal/plugin"
-	"github.com/adam-stokes/orcai/internal/promptbuilder"
-	"github.com/adam-stokes/orcai/internal/store"
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/plugin"
+	"github.com/powerglove-dev/gl1tch/internal/store"
 )
 
 func init() {
 	rootCmd.AddCommand(pipelineCmd)
-	pipelineCmd.AddCommand(pipelineBuildCmd)
 	pipelineCmd.AddCommand(pipelineRunCmd)
 	pipelineRunCmd.Flags().StringVar(&pipelineRunInput, "input", "", "user input passed to the pipeline as {{param.input}}")
 	pipelineCmd.AddCommand(pipelineResumeCmd)
 	pipelineResumeCmd.Flags().Int64Var(&pipelineResumeRunID, "run-id", 0, "Store run ID to resume")
 	_ = pipelineResumeCmd.MarkFlagRequired("run-id")
-
-	rootCmd.AddCommand(pipelineBuilderCmd)
-	pipelineBuilderCmd.AddCommand(pipelineBuilderStartCmd)
 }
 
 var pipelineCmd = &cobra.Command{
 	Use:   "pipeline",
 	Short: "Manage and run AI pipelines",
-}
-
-var pipelineBuildCmd = &cobra.Command{
-	Use:   "build",
-	Short: "Open the interactive pipeline builder",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		providers := picker.BuildProviders()
-
-		mgr := plugin.NewManager()
-		for _, prov := range providers {
-			mgr.Register(plugin.NewCliAdapter(prov.ID, prov.Label+" CLI adapter", prov.ID, prov.PipelineArgs...))
-		}
-
-		m := promptbuilder.New(mgr)
-		m.SetName("new-pipeline")
-		m.AddStep(pipeline.Step{ID: "input", Type: "input", Prompt: "Enter your prompt:"})
-		m.AddStep(pipeline.Step{ID: "step1", Executor: "claude", Model: "claude-sonnet-4-6"})
-		m.AddStep(pipeline.Step{ID: "output", Type: "output"})
-
-		bubble := promptbuilder.NewBubble(m, providers)
-		prog := tea.NewProgram(bubble, tea.WithAltScreen())
-		if _, err := prog.Run(); err != nil {
-			return fmt.Errorf("pipeline builder: %w", err)
-		}
-		return nil
-	},
 }
 
 var pipelineRunCmd = &cobra.Command{
@@ -79,7 +43,7 @@ var pipelineRunCmd = &cobra.Command{
 		if strings.Contains(arg, string(filepath.Separator)) || strings.HasSuffix(arg, ".yaml") {
 			yamlPath = arg
 		} else {
-			configDir, err := orcaiConfigDir()
+			configDir, err := glitchConfigDir()
 			if err != nil {
 				return err
 			}
@@ -115,8 +79,8 @@ var pipelineRunCmd = &cobra.Command{
 			}
 		}
 
-		// Load sidecar plugins from ~/.config/orcai/wrappers/.
-		wrappersConfigDir, _ := orcaiConfigDir()
+		// Load sidecar plugins from ~/.config/glitch/wrappers/.
+		wrappersConfigDir, _ := glitchConfigDir()
 		if wrappersConfigDir != "" {
 			wrappersDir := filepath.Join(wrappersConfigDir, "wrappers")
 			if errs := mgr.LoadWrappersFromDir(wrappersDir); len(errs) > 0 {
@@ -153,12 +117,12 @@ var pipelineRunCmd = &cobra.Command{
 	},
 }
 
-func orcaiConfigDir() (string, error) {
+func glitchConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "orcai"), nil
+	return filepath.Join(home, ".config", "glitch"), nil
 }
 
 var pipelineRunInput string
@@ -229,7 +193,7 @@ var pipelineResumeCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "resume: register provider %q: %v\n", prov.ID, err)
 			}
 		}
-		wrappersConfigDir, _ := orcaiConfigDir()
+		wrappersConfigDir, _ := glitchConfigDir()
 		if wrappersConfigDir != "" {
 			if errs := mgr.LoadWrappersFromDir(filepath.Join(wrappersConfigDir, "wrappers")); len(errs) > 0 {
 				for _, e := range errs {
@@ -257,120 +221,6 @@ var pipelineResumeCmd = &cobra.Command{
 		}
 
 		fmt.Println(result)
-		return nil
-	},
-}
-
-// pipelineBuilderCmd opens the two-column pipeline builder TUI.
-var pipelineBuilderCmd = &cobra.Command{
-	Use:   "pipeline-builder",
-	Short: "Open the pipeline builder TUI (two-column layout)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// If inside tmux and not already in the pipeline-builder window, open a new window.
-		if os.Getenv("TMUX") != "" {
-			out, _ := exec.Command("tmux", "display-message", "-p", "#W").Output()
-			if strings.TrimSpace(string(out)) != "orcai-pipeline-builder" {
-				self, err := os.Executable()
-				if err != nil {
-					return fmt.Errorf("pipeline-builder: resolve executable: %w", err)
-				}
-				return exec.Command("tmux", "new-window", "-n", "orcai-pipeline-builder",
-					filepath.Clean(self)+" pipeline-builder").Run()
-			}
-		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "pipeline-builder: panic: %v\n", r)
-				os.Exit(2)
-			}
-		}()
-
-		home, _ := os.UserHomeDir()
-		userThemesDir := filepath.Join(home, ".config", "orcai", "themes")
-
-		var pal styles.ANSIPalette
-		if reg, err := themes.NewRegistry(userThemesDir); err == nil {
-			themes.SetGlobalRegistry(reg)
-			if bundle := reg.Active(); bundle != nil {
-				pal = styles.BundleANSI(bundle)
-			}
-		}
-
-		providers := picker.BuildProviders()
-
-		st, err := store.Open()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "pipeline-builder: store unavailable: %v\n", err)
-			st = nil
-		} else {
-			defer st.Close()
-		}
-
-		configDir, _ := orcaiConfigDir()
-		pipelinesDir := filepath.Join(configDir, "pipelines")
-
-		m := pipelineeditor.New(providers, pipelinesDir, st)
-		if pal.Accent != "" {
-			m.SetPalette(pal)
-		}
-
-		prog := tea.NewProgram(pipelineBuilderTeaModel{m: m}, tea.WithAltScreen())
-		_, err = prog.Run()
-		return err
-	},
-}
-
-// pipelineBuilderTeaModel wraps pipelineeditor.Model to satisfy tea.Model.
-type pipelineBuilderTeaModel struct {
-	m      pipelineeditor.Model
-	width  int
-	height int
-}
-
-func (t pipelineBuilderTeaModel) Init() tea.Cmd { return t.m.Init() }
-
-func (t pipelineBuilderTeaModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		t.width, t.height = msg.Width, msg.Height
-		t.m.SetSize(msg.Width, msg.Height)
-		return t, nil
-	case pipelineeditor.CloseMsg:
-		// Editor requested close — quit the program.
-		return t, tea.Quit
-	case tea.KeyMsg:
-		updated, cmd := t.m.HandleKey(msg)
-		t.m = updated
-		return t, cmd
-	default:
-		updated, cmd := t.m.HandleMsg(msg)
-		t.m = updated
-		return t, cmd
-	}
-}
-
-func (t pipelineBuilderTeaModel) View() string {
-	return t.m.View(t.width, t.height)
-}
-
-// pipelineBuilderStartCmd opens pipeline-builder in a new tmux window.
-var pipelineBuilderStartCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Open pipeline-builder in a new tmux window",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		self, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("pipeline-builder: resolve executable: %w", err)
-		}
-		self = filepath.Clean(self)
-		newArgs := []string{
-			"new-window", "-n", "orcai-pipeline-builder",
-			self + " pipeline-builder",
-		}
-		if err := exec.Command("tmux", newArgs...).Run(); err != nil {
-			return fmt.Errorf("pipeline-builder: open window: %w", err)
-		}
 		return nil
 	},
 }

@@ -102,22 +102,22 @@ func getNestedPath(m map[string]any, parts []string) any {
 	return getNestedPath(nested, parts[1:])
 }
 
-// protectStepInputs replaces {{ steps.x.y }} matches with __ORCAI_STEP_N__
+// protectStepInputs replaces {{ steps.x.y }} matches with __GLITCH_STEP_N__
 // placeholders so the template engine doesn't evaluate them.
 func protectStepInputs(s string) (string, []string) {
 	var originals []string
 	protected := stepInputPattern.ReplaceAllStringFunc(s, func(match string) string {
-		placeholder := fmt.Sprintf("__ORCAI_STEP_%d__", len(originals))
+		placeholder := fmt.Sprintf("__GLITCH_STEP_%d__", len(originals))
 		originals = append(originals, match)
 		return placeholder
 	})
 	return protected, originals
 }
 
-// restoreStepInputs replaces __ORCAI_STEP_N__ placeholders with the originals.
+// restoreStepInputs replaces __GLITCH_STEP_N__ placeholders with the originals.
 func restoreStepInputs(s string, originals []string) string {
 	for i, orig := range originals {
-		s = strings.ReplaceAll(s, fmt.Sprintf("__ORCAI_STEP_%d__", i), orig)
+		s = strings.ReplaceAll(s, fmt.Sprintf("__GLITCH_STEP_%d__", i), orig)
 	}
 	return s
 }

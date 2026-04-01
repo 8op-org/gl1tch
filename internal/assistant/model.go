@@ -12,9 +12,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/adam-stokes/orcai/internal/styles"
-	"github.com/adam-stokes/orcai/internal/themes"
-	"github.com/adam-stokes/orcai/internal/welcome"
+	"github.com/powerglove-dev/gl1tch/internal/styles"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/welcome"
 )
 
 // SentinelFile is the path (relative to cfgDir) that marks assistant intro as completed.
@@ -74,7 +74,7 @@ type entry struct {
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 
-// Model is the GLITCH assistant BubbleTea model.
+// Model is the GL1TCH assistant BubbleTea model.
 type Model struct {
 	width, height int
 	pal           styles.ANSIPalette
@@ -116,7 +116,7 @@ func New(cfgDir string, backend Backend) Model {
 
 	// Load palette from active theme.
 	home, _ := os.UserHomeDir()
-	if reg, err := themes.NewRegistry(filepath.Join(home, ".config", "orcai", "themes")); err == nil {
+	if reg, err := themes.NewRegistry(filepath.Join(home, ".config", "glitch", "themes")); err == nil {
 		if bundle := reg.Active(); bundle != nil {
 			m.pal = styles.BundleANSI(bundle)
 		}
@@ -161,7 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case offlineMsg:
 		m.messages = append(m.messages, entry{
 			who:  speakerSystem,
-			text: "-=[ GLITCH OFFLINE ]=-\n\nno AI provider available.\ninstall ollama (ollama.ai) or configure a provider in ~/.config/orcai/wrappers/\n\npress Esc to close",
+			text: "-=[ GLITCH OFFLINE ]=-\n\nno AI provider available.\ninstall ollama (ollama.ai) or configure a provider in ~/.config/glitch/wrappers/\n\npress Esc to close",
 		})
 		m.updateViewport()
 
@@ -317,7 +317,7 @@ func (m *Model) renderConversation() string {
 		accent = lipgloss.Color(m.pal.Accent)
 	}
 
-	glitchLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("GLITCH")
+	glitchLabel := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("GL1TCH")
 	userLabel := lipgloss.NewStyle().Foreground(userColor).Bold(true).Render("YOU   ")
 	textStyle := lipgloss.NewStyle().Foreground(textColor)
 	dimStyle := lipgloss.NewStyle().Foreground(dimColor)
@@ -427,7 +427,7 @@ func (m Model) View() string {
 	} else {
 		providerName = "no provider"
 	}
-	subtitle := ">> GLITCH AI assistant  //  " + providerName
+	subtitle := ">> GL1TCH AI assistant  //  " + providerName
 	sb.WriteString(padCenter(dimStyle.Render(subtitle), len(subtitle), m.width) + "\n")
 
 	// Divider.

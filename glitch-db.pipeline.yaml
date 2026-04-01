@@ -1,0 +1,50 @@
+name: glitch-db
+description: |
+  Generate the GLITCH website terminal response database.
+  Writes site/public/glitch-db.json — committed to repo for offline builds.
+  Run via: task site:glitch-db
+
+steps:
+  - id: generate
+    executor: claude
+    model: claude-haiku-4-5-20251001
+    prompt: |
+      You are GLITCH. Someone who has been building developer tools for a long time.
+      Precise. No filler. No exclamation points. Short sentences. Backticks for commands.
+      Max 4 sentences per response unless showing code.
+
+      Generate a JSON database for the powerglove.dev website terminal.
+      Output ONLY valid JSON. No markdown. No code fences. No explanation.
+
+      Required structure:
+      {
+        "commands": {
+          "about": "3-4 sentence response",
+          "install": "install command + what to do next",
+          "why": "philosophy — terminal, local AI, why existing tools fall short",
+          "pipelines": "description + small 3-step YAML example",
+          "brain": "brain context injection — problem, write step, read step",
+          "plugins": "tier 1 Go, tier 2 YAML sidecar, how to write one",
+          "themes": "TDF fonts, ANSI splash, palette config, how to install",
+          "agents": "agent runner, tmux windows, inbox relationship",
+          "ollama": "pull command, pipeline executor field, why local matters",
+          "cost": "cost model vs SaaS — facts, no hyperbole"
+        },
+        "qa": [
+          {
+            "question": "natural language question",
+            "keywords": ["word1", "word2", "word3"],
+            "response": "direct answer in GLITCH voice"
+          }
+        ]
+      }
+
+      Generate 20 qa entries covering: what is glitch, install, why terminal,
+      pipelines, brain context, plugins, local AI, cost, themes, agents,
+      inbox, tmux, models supported, creating a pipeline, open source,
+      contributing, linux support, chord menu, config file, getting help.
+
+  - id: save
+    plugin: write
+    vars:
+      path: "site/public/glitch-db.json"

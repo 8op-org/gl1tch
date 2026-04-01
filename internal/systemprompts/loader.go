@@ -1,5 +1,5 @@
 // Package systemprompts loads user-customizable system prompt files from
-// ~/.config/orcai/prompts/, falling back to embedded defaults when absent.
+// ~/.config/glitch/prompts/, falling back to embedded defaults when absent.
 // All four core prompts (brain-write, pipeline-generator, prompt-builder,
 // clarify) are installed on first run so users can edit them in place.
 package systemprompts
@@ -18,7 +18,7 @@ var (
 )
 
 // Load returns the system prompt named name (without the .md extension).
-// It checks ~/.config/orcai/prompts/<name>.md first; if absent or unreadable,
+// It checks ~/.config/glitch/prompts/<name>.md first; if absent or unreadable,
 // the embedded default is returned. The result is cached after first load.
 func Load(name string) string {
 	if v, ok := cache.Load(name); ok {
@@ -32,7 +32,7 @@ func Load(name string) string {
 func load(name string) string {
 	home, err := os.UserHomeDir()
 	if err == nil {
-		userPath := filepath.Join(home, ".config", "orcai", "prompts", name+".md")
+		userPath := filepath.Join(home, ".config", "glitch", "prompts", name+".md")
 		if data, err := os.ReadFile(userPath); err == nil {
 			return string(data)
 		}
@@ -75,12 +75,12 @@ func EnsureInstalled(cfgDir string) error {
 			if os.IsExist(err) {
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "orcai: warning: install prompt %s: %v\n", e.Name(), err)
+			fmt.Fprintf(os.Stderr, "glitch: warning: install prompt %s: %v\n", e.Name(), err)
 			continue
 		}
 		data, _ := defaultFS.ReadFile("defaults/" + e.Name())
 		if _, err := f.Write(data); err != nil {
-			fmt.Fprintf(os.Stderr, "orcai: warning: write prompt %s: %v\n", e.Name(), err)
+			fmt.Fprintf(os.Stderr, "glitch: warning: write prompt %s: %v\n", e.Name(), err)
 		}
 		f.Close()
 	}

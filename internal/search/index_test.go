@@ -3,8 +3,8 @@ package search_test
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/chatui"
-	"github.com/adam-stokes/orcai/internal/search"
+	"github.com/powerglove-dev/gl1tch/internal/chatui"
+	"github.com/powerglove-dev/gl1tch/internal/search"
 )
 
 func TestQueryFindsExactName(t *testing.T) {

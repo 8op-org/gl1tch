@@ -8,10 +8,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/adam-stokes/orcai/cmd"
-	"github.com/adam-stokes/orcai/internal/bootstrap"
-	"github.com/adam-stokes/orcai/internal/promptbuilder"
-	"github.com/adam-stokes/orcai/internal/switchboard"
+	"github.com/powerglove-dev/gl1tch/cmd"
+	"github.com/powerglove-dev/gl1tch/internal/bootstrap"
+	"github.com/powerglove-dev/gl1tch/internal/switchboard"
 )
 
 // Build-time variables injected by GoReleaser via -ldflags.
@@ -27,16 +26,11 @@ func main() {
 		case "--version", "-v":
 			fmt.Printf("orcai %s (commit %s, built %s)\n", version, commit, date)
 			return
-		case "_promptbuilder":
-			promptbuilder.Run()
-			return
 		case "_reload":
 			bootstrap.WriteReloadMarker() //nolint:errcheck
 			exec.Command("tmux", "detach-client").Run() //nolint:errcheck
 			return
-		case "agent", "assistant", "brain", "bridge", "help", "pipeline", "_opsx", "completion",
-			"config", "cron", "prompts", "welcome",
-			"prompt-builder", "pipeline-builder", "widget":
+		case "help", "pipeline", "_opsx", "completion", "config", "cron", "widget":
 			cmd.Execute()
 			return
 		default:

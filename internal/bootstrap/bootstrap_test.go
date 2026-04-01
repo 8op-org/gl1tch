@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/bootstrap"
+	"github.com/powerglove-dev/gl1tch/internal/bootstrap"
 )
 
 func TestWriteTmuxConf(t *testing.T) {
@@ -59,26 +59,19 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 	if strings.Contains(conf, "bind-key -n Escape select-pane") {
 		t.Error("tmux.conf still contains global ESC intercept")
 	}
-	// Status bar must contain new hints; old ^spc n new hint must be gone.
-	if strings.Contains(plain, "^spc n new") {
-		t.Error("tmux.conf status-right still contains removed '^spc n new' hint")
-	}
-	if !strings.Contains(plain, "^spc c win") {
-		t.Error("tmux.conf status-right missing '^spc c win' hint")
-	}
+	// Status bar hints: ^spc j jump must be present; ^spc h help must be gone.
 	if !strings.Contains(plain, "^spc j jump") {
-		t.Error("tmux.conf status-right missing '^spc j jump' hint")
+		t.Error("tmux.conf window-status-current-format missing '^spc j jump' hint")
 	}
-	// ^spc t switchboard hint must be gone.
-	if strings.Contains(plain, "^spc t switchboard") {
-		t.Error("tmux.conf status-right still contains removed '^spc t switchboard' hint")
+	if strings.Contains(plain, "^spc h help") {
+		t.Error("tmux.conf window-status-current-format still contains removed '^spc h help' hint")
 	}
-	if !strings.Contains(plain, "^spc t themes") {
-		t.Error("tmux.conf status-right missing '^spc t themes' hint")
+	// Status bar must be centred with empty left/right.
+	if !strings.Contains(conf, `status-justify centre`) {
+		t.Error("tmux.conf missing 'status-justify centre'")
 	}
-	// ^spc t must send T (theme picker), not navigate to switchboard window.
-	if strings.Contains(conf, "bind-key -T orcai-chord t     { switch-client -T root ; switch-client -t orcai") {
-		t.Error("tmux.conf ^spc t binding still navigates to switchboard")
+	if strings.Contains(conf, "GLITCH") {
+		t.Error("tmux.conf status-left still contains 'GLITCH' name")
 	}
 }
 
@@ -98,17 +91,17 @@ func TestBuildTmuxConf_WindowPaneChords(t *testing.T) {
 		key  string
 		desc string
 	}{
-		{"orcai-chord c", "new window (c)"},
-		{"orcai-chord [", "previous window ([)"},
-		{"orcai-chord ]", "next window (])"},
-		{"orcai-chord |", "split pane right (|)"},
-		{"orcai-chord -", "split pane down (-)"},
-		{"orcai-chord Left", "select pane left"},
-		{"orcai-chord Right", "select pane right"},
-		{"orcai-chord Up", "select pane up"},
-		{"orcai-chord Down", "select pane down"},
-		{"orcai-chord x", "kill pane (x)"},
-		{"orcai-chord j", "session/window jump (j)"},
+		{"glitch-chord c", "new window (c)"},
+		{"glitch-chord [", "previous window ([)"},
+		{"glitch-chord ]", "next window (])"},
+		{"glitch-chord |", "split pane right (|)"},
+		{"glitch-chord -", "split pane down (-)"},
+		{"glitch-chord Left", "select pane left"},
+		{"glitch-chord Right", "select pane right"},
+		{"glitch-chord Up", "select pane up"},
+		{"glitch-chord Down", "select pane down"},
+		{"glitch-chord x", "kill pane (x)"},
+		{"glitch-chord j", "session/window jump (j)"},
 	}
 	for _, c := range chords {
 		if !strings.Contains(conf, c.key) {
@@ -129,12 +122,13 @@ func TestBuildTmuxConf_WindowStatusFormats(t *testing.T) {
 	}
 	conf := string(data)
 
-	// Window list must be suppressed (blank format strings hide all windows).
+	// window-status-format must be blank (suppresses raw window list).
 	if !strings.Contains(conf, `window-status-format ""`) {
 		t.Error("window-status-format must be blank to suppress window list")
 	}
-	if !strings.Contains(conf, `window-status-current-format ""`) {
-		t.Error("window-status-current-format must be blank to suppress window list")
+	// window-status-current-format carries the centred hint bar (not blank).
+	if strings.Contains(conf, `window-status-current-format ""`) {
+		t.Error("window-status-current-format should not be blank — it carries the hint bar")
 	}
 }
 

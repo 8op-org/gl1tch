@@ -28,10 +28,10 @@ func currentTmuxSession() string {
 	return ""
 }
 
-// createJobWindow creates a detached tmux window named "orcai-<feedID>".
+// createJobWindow creates a detached tmux window named "glitch-<feedID>".
 //
 // label is the human-readable pipeline/agent name stored as the tmux user
-// option @orcai-label so the jump-window popup can display it instead of the
+// option @glitch-label so the jump-window popup can display it instead of the
 // raw window name. Pass an empty string to skip setting the option.
 //
 // startDir, when non-empty, sets the working directory for the new tmux window
@@ -58,9 +58,9 @@ func createJobWindow(feedID, shellCmd, label, startDir string) (target, logFile,
 	if session == "" {
 		return "", "", ""
 	}
-	windowName := "orcai-" + feedID
-	logFile = fmt.Sprintf("%s/orcai-%s.log", os.TempDir(), feedID)
-	doneFile = fmt.Sprintf("%s/orcai-%s.done", os.TempDir(), feedID)
+	windowName := "glitch-" + feedID
+	logFile = fmt.Sprintf("%s/glitch-%s.log", os.TempDir(), feedID)
+	doneFile = fmt.Sprintf("%s/glitch-%s.done", os.TempDir(), feedID)
 	target = session + ":" + windowName
 
 	// Pre-create empty log so the watcher can open it immediately.
@@ -97,7 +97,7 @@ func createJobWindow(feedID, shellCmd, label, startDir string) (target, logFile,
 	exec.Command("tmux", "set-window-option", "-t", target, "remain-on-exit", "on").Run()    //nolint:errcheck
 	exec.Command("tmux", "set-window-option", "-t", target, "automatic-rename", "off").Run() //nolint:errcheck
 	if label != "" {
-		exec.Command("tmux", "set-window-option", "-t", target, "@orcai-label", label).Run() //nolint:errcheck
+		exec.Command("tmux", "set-window-option", "-t", target, "@glitch-label", label).Run() //nolint:errcheck
 	}
 
 	return target, logFile, doneFile

@@ -1,5 +1,5 @@
 // Package providers manages bundled and user-defined AI provider profiles for
-// the orcai plugin system. Profiles describe how to launch an AI CLI tool as a
+// the glitch plugin system. Profiles describe how to launch an AI CLI tool as a
 // tmux session, which models it supports, and how billing is tracked.
 package providers
 

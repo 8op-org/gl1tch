@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/picker"
-	"github.com/adam-stokes/orcai/internal/pipeline"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/pipeline"
 )
 
 // ── palette ──────────────────────────────────────────────────────────────────
@@ -1012,7 +1012,7 @@ func (b *BubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Save):
 			home, err := os.UserHomeDir()
 			if err == nil {
-				dir := filepath.Join(home, ".config", "orcai", "pipelines")
+				dir := filepath.Join(home, ".config", "glitch", "pipelines")
 				os.MkdirAll(dir, 0o755) //nolint:errcheck
 				path := filepath.Join(dir, b.inner.Name()+".pipeline.yaml")
 				b.applyToStep()

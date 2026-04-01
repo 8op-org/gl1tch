@@ -3,7 +3,7 @@ package crontui
 import (
 	"github.com/sahilm/fuzzy"
 
-	"github.com/adam-stokes/orcai/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/cron"
 )
 
 // applyFilter updates m.filtered based on the current filter input value.

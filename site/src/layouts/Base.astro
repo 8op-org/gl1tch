@@ -1,23 +1,27 @@
 ---
 interface Props {
-  title: string;
+  title?: string;
   description?: string;
 }
 
-const { title, description = 'orcai: Go BubbleTea TUI, tmux session manager, AI workspace with plugin support and prompt pipeline builder.' } = Astro.props;
+const {
+  title = 'GLITCH',
+  description = 'A terminal workspace for AI-assisted development. Pipelines, agents, brain context — in your terminal.',
+} = Astro.props;
+
+const pageTitle = title === 'GLITCH' ? title : `${title} — GLITCH`;
 ---
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title === 'Home' ? 'ORCAI ABBS — Agentic Bulletin Board System' : `${title} — ORCAI ABBS`}</title>
+  <title>{pageTitle}</title>
   <meta name="description" content={description} />
-  <link rel="stylesheet" href="/orcai/css/bbs.css" />
+  <link rel="stylesheet" href="/css/bbs.css" />
 </head>
 <body>
-  <canvas id="hexbg"></canvas>
+  <canvas id="hexbg" aria-hidden="true"></canvas>
   <slot />
-  <script src="/orcai/js/bbs.js" is:inline></script>
 </body>
 </html>

@@ -3,7 +3,7 @@ package jumpwindow
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // EmbeddedModel wraps the jump window for use as an in-process modal overlay

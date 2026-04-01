@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/adam-stokes/orcai/internal/switchboard"
+	"github.com/powerglove-dev/gl1tch/internal/switchboard"
 )
 
 // TestThemePicker_OpenOnT verifies that pressing 'T' sets themePickerOpen.

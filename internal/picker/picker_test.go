@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/picker"
+	"github.com/powerglove-dev/gl1tch/internal/picker"
 )
 
 func TestProviders_NotEmpty(t *testing.T) {
@@ -156,7 +156,7 @@ func TestBuildPickerItems_PipelineCarriesFileField(t *testing.T) {
 }
 
 // TestPickerItem_JSONRoundTrip ensures PickerItem marshals and unmarshals cleanly
-// so that ORCAI_PICKER_SELECTION encoding works correctly.
+// so that GLITCH_PICKER_SELECTION encoding works correctly.
 func TestPickerItem_JSONRoundTrip(t *testing.T) {
 	original := picker.PickerItem{
 		Kind:         "provider",
@@ -204,8 +204,8 @@ func TestPickerItem_PipelineJSONRoundTrip(t *testing.T) {
 func TestBuildProviders_OllamaSidecarPathSet(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Set up ~/.config/orcai/wrappers/ollama.yaml pointing to a real binary.
-	wrappersDir := filepath.Join(tmpDir, ".config", "orcai", "wrappers")
+	// Set up ~/.config/glitch/wrappers/ollama.yaml pointing to a real binary.
+	wrappersDir := filepath.Join(tmpDir, ".config", "glitch", "wrappers")
 	if err := os.MkdirAll(wrappersDir, 0o755); err != nil {
 		t.Fatalf("mkdir wrappers: %v", err)
 	}
@@ -218,12 +218,12 @@ func TestBuildProviders_OllamaSidecarPathSet(t *testing.T) {
 
 	// Also create the required sub-directories so discovery.Discover doesn't fail.
 	for _, sub := range []string{"plugins", "pipelines"} {
-		if err := os.MkdirAll(filepath.Join(tmpDir, ".config", "orcai", sub), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(tmpDir, ".config", "glitch", sub), 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
 	}
 
-	// Point orcaiConfigDir() at our temp dir.
+	// Point glitchConfigDir() at our temp dir.
 	t.Setenv("HOME", tmpDir)
 
 	providers := picker.BuildProviders()

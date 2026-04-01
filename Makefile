@@ -3,10 +3,10 @@ PLUGINS_DIR := ../orcai-plugins
 .PHONY: build run plugins debug debug-tmux
 
 build:
-	go build -o orcai .
+	go build -o glitch .
 
 run: build
-	./orcai
+	./glitch
 
 # Build and install all core provider plugins from ../orcai-plugins.
 # Run this during development whenever plugin code changes.
@@ -17,5 +17,5 @@ debug:
 	dlv debug . -- server
 
 debug-tmux:
-	tmux new-session -d -s orcai-debug 2>/dev/null || true
-	tmux send-keys -t orcai-debug "dlv debug . -- server" Enter
+	tmux new-session -d -s glitch-debug 2>/dev/null || true
+	tmux send-keys -t glitch-debug "dlv debug . -- server" Enter

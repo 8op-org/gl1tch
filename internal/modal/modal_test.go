@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/themes"
+	"github.com/powerglove-dev/gl1tch/internal/themes"
 )
 
 // TestRenderConfirm_WithNilBundle verifies that a nil bundle doesn't panic and

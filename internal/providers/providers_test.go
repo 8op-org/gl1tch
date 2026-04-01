@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/providers"
+	"github.com/powerglove-dev/gl1tch/internal/providers"
 )
 
 // bundledNames is the expected set of names shipped with the binary.

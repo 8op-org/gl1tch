@@ -13,9 +13,9 @@ import (
 func DefaultAuditPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".orcai", "brain_audit.jsonl")
+		return filepath.Join(".glitch", "brain_audit.jsonl")
 	}
-	return filepath.Join(home, ".orcai", "brain_audit.jsonl")
+	return filepath.Join(home, ".glitch", "brain_audit.jsonl")
 }
 
 // AuditEntry records a single brain injection event for an agent step.

@@ -9,13 +9,13 @@ import (
 )
 
 // activeThemeFile returns the path used to persist the active theme name.
-// Uses os.UserConfigDir() + "/orcai/active_theme".
+// Uses os.UserConfigDir() + "/glitch/active_theme".
 func activeThemeFile() (string, error) {
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cfgDir, "orcai", "active_theme"), nil
+	return filepath.Join(cfgDir, "glitch", "active_theme"), nil
 }
 
 // Registry holds all available theme bundles and tracks the active theme.

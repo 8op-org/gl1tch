@@ -1,4 +1,4 @@
-// Package themes provides theme bundle loading and registry for orcai.
+// Package themes provides theme bundle loading and registry for glitch.
 // Theme bundles contain color palettes, border styles, status bar configuration,
 // and optional ANSI splash art.
 //

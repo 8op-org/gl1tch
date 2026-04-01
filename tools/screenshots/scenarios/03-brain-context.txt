@@ -1,0 +1,2 @@
+Brain context — persistent memory across pipeline runs
+explain how glitch brain context works. i have a large codebase and i want to avoid re-indexing it every run. show me the pipeline yaml pattern for write_brain and use_brain.

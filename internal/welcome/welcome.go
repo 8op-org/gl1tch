@@ -5,9 +5,9 @@
 // internal/welcome directly; all paths now call switchboard.Run().
 package welcome
 
-import "github.com/adam-stokes/orcai/internal/switchboard"
+import "github.com/powerglove-dev/gl1tch/internal/switchboard"
 
-// Run starts the ABBS Switchboard. The busSocket parameter is accepted but
+// Run starts the GLITCH Switchboard. The busSocket parameter is accepted but
 // ignored — bus connectivity is handled inside the switchboard.
 func Run(_ string) error {
 	switchboard.Run()

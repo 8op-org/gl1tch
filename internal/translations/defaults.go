@@ -1,6 +1,6 @@
 package translations
 
-// NewDefaultProvider returns a MapProvider pre-loaded with the ORCAI default
+// NewDefaultProvider returns a MapProvider pre-loaded with the GL1TCH default
 // UI strings. These are the shipped personality baseline — zer0c00l voice,
 // dry wit, hacker confidence. Users and themes can override any key; this
 // layer sits at the bottom of the ChainProvider stack.
@@ -21,7 +21,7 @@ var defaultStrings = map[string]string{
 	KeyCronTitle:         "CRON JOBS",
 
 	// ── Header / modal titles ─────────────────────────────────────────────────
-	KeySwitchboardHeader: "ORCAI — ABBS",
+	KeySwitchboardHeader: "GL1TCH",
 	KeyQuitModalTitle:    "BAIL OUT",
 	KeyHelpModalTitle:    "GETTING STARTED",
 	KeyThemePickerTitle:  "SELECT THEME",
@@ -39,7 +39,7 @@ var defaultStrings = map[string]string{
 
 	// Help binding descriptions
 	KeyHelpBindHelp:    "this help",
-	KeyHelpBindQuit:    "quit ORCAI",
+	KeyHelpBindQuit:    "quit GLITCH",
 	KeyHelpBindDetach:  "detach  (session stays alive)",
 	KeyHelpBindReload:  "reload  (hot-swap binary)",
 	KeyHelpBindThemes:  "theme picker",
@@ -75,8 +75,8 @@ var defaultStrings = map[string]string{
 
 yo. new blood detected on the BBS.
 
-i'm GLITCH — your guide to ORCAI, the Agentic Bulletin Board System.
-orcai is a tmux-powered AI workspace: you build pipelines, run agents,
+i'm GL1TCH — your guide to GL1TCH, your AI, your terminal, your rules.
+glitch is a tmux-powered AI workspace: you build pipelines, run agents,
 and everything they learn gets stored in the brain — a local vector db
 that makes your sessions smarter over time.
 
@@ -86,7 +86,7 @@ up better than coffee.
 
 what are you trying to build? tell me your use case.`,
 
-	KeyWelcomePhaseUseCase: `solid. orcai was built for exactly that kind of operation.
+	KeyWelcomePhaseUseCase: `solid. glitch was built for exactly that kind of operation.
 
 before we talk pipelines — what's your setup? are you running ollama
 locally (llama3.2, mistral, codestral etc) or going cloud with claude?
@@ -95,7 +95,7 @@ what your provider fields look like.
 
 local? cloud? both? talk to me.`,
 
-	KeyWelcomePhaseProviders: `got it. here's how providers work in orcai pipelines:
+	KeyWelcomePhaseProviders: `got it. here's how providers work in glitch pipelines:
 
 local ollama: provider: ollama/llama3.2  (or mistral, codestral, whatever you've got)
 cloud claude: provider: claude/claude-sonnet-4-6
@@ -105,7 +105,7 @@ claude for the hard analysis steps. power move.
 
 alright. pipelines. let's build.`,
 
-	KeyWelcomePhasePipeline: `pipelines live in ~/.config/orcai/pipelines/ — one YAML file per pipeline.
+	KeyWelcomePhasePipeline: `pipelines live in ~/.config/glitch/pipelines/ — one YAML file per pipeline.
 
 each step: name, provider, system_prompt, optional brain tags. example:
 
@@ -146,7 +146,7 @@ ready to hear about the brain?`,
 agents write <brain> tags in their output:
   <brain type="research" title="auth bug" tags="go,security">...</brain>
 
-orcai extracts these, embeds as vectors, stores in local SQLite —
+glitch extracts these, embeds as vectors, stores in local SQLite —
 scoped per working directory. project A's brain doesn't bleed into project B.
 
 on future pipeline runs? relevant notes are auto-injected as context.

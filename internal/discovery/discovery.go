@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/adam-stokes/orcai/internal/providers"
+	"github.com/powerglove-dev/gl1tch/internal/providers"
 )
 
 // PluginType distinguishes native gRPC plugins from auto-detected CLI wrappers.

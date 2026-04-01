@@ -3,7 +3,7 @@ package opsx_test
 import (
 	"testing"
 
-	"github.com/adam-stokes/orcai/internal/opsx"
+	"github.com/powerglove-dev/gl1tch/internal/opsx"
 )
 
 func TestFeatureSlug_Simple(t *testing.T) {

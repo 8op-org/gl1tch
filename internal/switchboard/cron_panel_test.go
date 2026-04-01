@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	orcaicron "github.com/adam-stokes/orcai/internal/cron"
-	"github.com/adam-stokes/orcai/internal/switchboard"
+	orcaicron "github.com/powerglove-dev/gl1tch/internal/cron"
+	"github.com/powerglove-dev/gl1tch/internal/switchboard"
 )
 
 // TestBuildCronSection_Empty verifies that buildCronSection renders the
@@ -38,7 +38,7 @@ func TestBuildCronSection_Empty(t *testing.T) {
 func TestBuildCronSection_EmptyViaFakeHome(t *testing.T) {
 	// Redirect HOME so that LoadConfig reads from an empty temp dir.
 	tmp := t.TempDir()
-	cfgDir := filepath.Join(tmp, ".config", "orcai")
+	cfgDir := filepath.Join(tmp, ".config", "glitch")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

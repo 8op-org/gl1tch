@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	appcontext "github.com/adam-stokes/orcai/internal/context"
+	appcontext "github.com/powerglove-dev/gl1tch/internal/context"
 )
 
 func TestGetRecentContextEmptyDir(t *testing.T) {

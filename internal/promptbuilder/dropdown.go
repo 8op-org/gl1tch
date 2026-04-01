@@ -7,7 +7,7 @@ import (
 )
 
 // Dropdown is an inline overlay dropdown component for the BubbleTea TUI.
-// Uses ABBS Dracula palette; renders as a bordered overlay below the field label.
+// Uses Dracula palette; renders as a bordered overlay below the field label.
 type Dropdown struct {
 	items      []string
 	separators map[int]bool
