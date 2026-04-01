@@ -124,11 +124,14 @@ func (s *Store) InsertBrainNote(ctx context.Context, note BrainNote) (int64, err
 
 // RecentBrainNotes returns up to limit brain notes for runID, ordered by
 // created_at descending (most recent first).
+// Capability notes (tags LIKE 'type:capability%') are excluded — they live in
+// a separate query path via CapabilityNotes to avoid count interference.
 func (s *Store) RecentBrainNotes(ctx context.Context, runID int64, limit int) ([]BrainNote, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, run_id, step_id, created_at, tags, body
 		   FROM brain_notes
 		  WHERE run_id = ?
+		    AND tags NOT LIKE 'type:capability%'
 		  ORDER BY created_at DESC
 		  LIMIT ?`,
 		runID, limit,

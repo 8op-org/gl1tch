@@ -157,8 +157,10 @@ stdout (TEXT), stderr (TEXT), metadata (TEXT JSON), steps (TEXT JSON array).
 This table is READ-ONLY. Do not issue INSERT, UPDATE, or DELETE against it.`
 
 // ReadContext assembles a brain context preamble for the given runID.
-// It always includes a schema summary. If brain notes exist for the run,
-// they are appended (capped at 10, individual bodies truncated to 4000 chars).
+// It always includes a schema summary. Capability notes (system-wide, run_id=0)
+// are included first in a separate section and do NOT count against the 10-note
+// per-run cap. If brain notes exist for the run, they are appended (capped at 10,
+// individual bodies truncated to 4000 chars).
 // If fetching notes fails the error is silently dropped and the schema-only
 // preamble is returned.
 func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (string, error) {
@@ -167,6 +169,20 @@ func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (stri
 	sb.WriteString("## GLITCH Database Context\n\n")
 	sb.WriteString(schemaDescription)
 	sb.WriteString("\n")
+
+	// Include capability notes (system-level, run_id=0) before per-run notes.
+	// These do NOT count against the per-run note cap.
+	if capNotes, err := s.store.CapabilityNotes(ctx); err == nil && len(capNotes) > 0 {
+		sb.WriteString("\n## gl1tch Capabilities\n\n")
+		for _, n := range capNotes {
+			body := n.Body
+			runes := []rune(body)
+			if len(runes) > 4000 {
+				body = string(runes[:4000]) + "...[truncated]"
+			}
+			fmt.Fprintf(&sb, "%s\n", body)
+		}
+	}
 
 	notes, err := s.store.RecentBrainNotes(ctx, runID, 10)
 	if err != nil {
@@ -188,7 +204,7 @@ func (s *StoreBrainInjector) ReadContext(ctx context.Context, runID int64) (stri
 			if n.Tags != "" {
 				meta = " [" + n.Tags + "]"
 			}
-			sb.WriteString(fmt.Sprintf("[%s]%s %s\n", n.StepID, meta, body))
+			fmt.Fprintf(&sb, "[%s]%s %s\n", n.StepID, meta, body)
 		}
 	}
 
