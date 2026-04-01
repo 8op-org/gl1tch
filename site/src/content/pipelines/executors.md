@@ -52,9 +52,24 @@ kind: tool
 
 When you use `executor: gh` in a pipeline, the runner finds this sidecar, spawns the `gh` process, passes input via stdin, and captures stdout.
 
+### Passing flags to sidecar executors
+
+Sidecar executors receive arguments through the step's `vars` map. Each key in `vars` is uppercased and prefixed with `GLITCH_` to form an environment variable. The sidecar's wrapper script reads these variables and forwards them to the underlying command.
+
+For the built-in `gh` sidecar, use `vars.args` to pass the full subcommand and flags:
+
+```yaml
+- id: list-prs
+  executor: gh
+  vars:
+    args: "pr list --json number,title,author"
+```
+
+This sets `GLITCH_ARGS="pr list --json number,title,author"` in the sidecar's environment, which the `gh` wrapper expands as `gh pr list --json number,title,author`. The same `vars.args` convention applies to the `jq` sidecar and any custom sidecar that reads `GLITCH_ARGS`.
+
 ### gh
 
-GitHub CLI wrapper. Pass the gh command as `vars.args`:
+GitHub CLI wrapper. Pass the gh command and all flags as `vars.args`:
 
 ```yaml
 - id: list-prs
@@ -104,7 +119,7 @@ args: ["--format", "json"]
 kind: tool
 ```
 
-Now use `executor: my-tool` in any pipeline. Input goes to stdin, output comes from stdout. Environment variables are set as `GLITCH_<KEY>=<value>` from the step's `vars` map.
+Now use `executor: my-tool` in any pipeline. Input goes to stdin, output comes from stdout. Each key in the step's `vars` map is passed to the process as `GLITCH_<KEY>=<value>`.
 
 The `kind` field matters: `tool` executors receive only the step input. `agent` executors (the default) receive the full execution context.
 
