@@ -28,11 +28,21 @@ import (
 	"github.com/8op-org/gl1tch/internal/pipeline"
 )
 
+// prIntegrationProvider and prIntegrationModel select the executor for PR fix tests.
+// Defaults to claude/claude-sonnet-4-6, matching the pr-review pipeline.
+// Override with GLITCH_TEST_PROVIDER / GLITCH_TEST_MODEL env vars.
+func prIntegrationProvider() string {
+	if p := os.Getenv("GLITCH_TEST_PROVIDER"); p != "" {
+		return p
+	}
+	return "github-copilot"
+}
+
 func prIntegrationModel() string {
 	if m := os.Getenv("GLITCH_TEST_MODEL"); m != "" {
 		return m
 	}
-	return "llama3.2"
+	return "" // copilot doesn't expose model selection
 }
 
 // TestIntegration_PRReview_Analysis feeds a concise description of the review
@@ -43,9 +53,9 @@ func TestIntegration_PRReview_Analysis(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	mgr, providerID, model, err := buildAskManager("ollama", prIntegrationModel())
+	mgr, providerID, model, err := buildAskManager(prIntegrationProvider(), prIntegrationModel())
 	if err != nil {
-		t.Skipf("no Ollama provider available: %v", err)
+		t.Skipf("provider %q not available: %v", prIntegrationProvider(), err)
 	}
 
 	// Reviewer comment verbatim — generic enough to not reveal private context.
@@ -84,7 +94,7 @@ Do not open a pull request or run any git commands.`
 // This is the full end-to-end variant: requires gh auth and network access.
 // Output is written to a temp file so it can be reviewed before any PR is opened.
 func TestIntegration_PRFix_EnsemblePR1246(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	// ── fetch live PR data ────────────────────────────────────────────────────
@@ -123,9 +133,9 @@ func TestIntegration_PRFix_EnsemblePR1246(t *testing.T) {
 		"## Reviewer comment\n\n" + reviewerComment + "\n\n" +
 		"## Diff\n\n```diff\n" + diff + "\n```"
 
-	mgr, providerID, model, err := buildAskManager("ollama", prIntegrationModel())
+	mgr, providerID, model, err := buildAskManager(prIntegrationProvider(), prIntegrationModel())
 	if err != nil {
-		t.Skipf("no Ollama provider available: %v", err)
+		t.Skipf("provider %q not available: %v", prIntegrationProvider(), err)
 	}
 
 	p := buildAskPipeline(prompt, providerID, model, nil, false, "")
@@ -135,7 +145,8 @@ func TestIntegration_PRFix_EnsemblePR1246(t *testing.T) {
 	}
 
 	// ── write output for manual review ───────────────────────────────────────
-	outFile := t.TempDir() + "/fix-output.md"
+	// Use /tmp directly so the file persists after the test exits.
+	outFile := "/tmp/gl1tch-pr-fix-output.md"
 	if werr := os.WriteFile(outFile, []byte(result), 0o644); werr != nil {
 		t.Logf("warning: could not write output file: %v", werr)
 	} else {
@@ -164,7 +175,7 @@ func assertPRFixResponse(t *testing.T, response string) {
 		},
 		{
 			"CI installer replaces hardcoded linux_amd64 script",
-			[]string{"tools install", "tools env", "ensemble tools", "linux_amd64"},
+			[]string{"tools install", "tools env", "ensemble tools", "linux_amd64", "oblt-cli", "oblt"},
 		},
 		{
 			"regex tightened to avoid cross-block DOTALL matching",

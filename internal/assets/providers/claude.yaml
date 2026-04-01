@@ -19,3 +19,8 @@ session:
   window_name: "{{.name}}:{{.model}}"
   launch_args: []
   env: {}
+pipeline:
+  args:
+    - "--print"
+    - "--output-format"
+    - "stream-json"

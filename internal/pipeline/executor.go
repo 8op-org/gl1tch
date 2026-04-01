@@ -35,16 +35,18 @@ func (re *registeredExecutor) Init(_ context.Context) error { return nil }
 
 func (re *registeredExecutor) Execute(ctx context.Context, _ map[string]any) (map[string]any, error) {
 	var buf bytes.Buffer
-	err := re.exec.Execute(ctx, re.input, re.vars, &buf)
+	// When a step writer is set, tee bytes to it in real time so the caller
+	// sees output as it arrives rather than only after the subprocess exits.
+	var w io.Writer = &buf
+	if re.w != nil {
+		w = io.MultiWriter(&buf, re.w)
+	}
+	err := re.exec.Execute(ctx, re.input, re.vars, w)
 	out := map[string]any{"value": buf.String()}
 	if err != nil {
 		// Return partial output alongside the error so callers (e.g. brain note
 		// parsing) can inspect whatever was written before the failure.
 		return out, err
-	}
-	// Mirror output to the pipeline writer if provided.
-	if re.w != nil {
-		_, _ = re.w.Write(buf.Bytes())
 	}
 	return out, nil
 }

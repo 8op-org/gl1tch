@@ -4,6 +4,13 @@
 #   Task v3:      go install github.com/go-task/task/v3/cmd/task@latest
 #   GoReleaser:   go install github.com/goreleaser/goreleaser/v2@latest
 #                 (or: brew install goreleaser)
+#   tmux:         brew install tmux
+#                 (required — glitch manages sessions and uses tmux for agent execution)
+#   ollama:       https://ollama.com  (brew install ollama)
+#                 (required — local model used for internal intelligence: manifest section
+#                  relevance scoring, capability summarization, brain context retrieval.
+#                  glitch pulls a model automatically if none is available.
+#                  ensures a free, private, always-available model for internal ops)
 #
 # Usage:
 #   task --list          show all available tasks

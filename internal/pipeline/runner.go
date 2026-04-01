@@ -37,12 +37,13 @@ type runConfig struct {
 	publisher       EventPublisher
 	runID           int64
 	pipeName        string
-	injector        BrainInjector     // optional brain context injector
-	ragStore        *brainrag.RAGStore // optional RAG vector store for refresh
+	injector        BrainInjector           // optional brain context injector
+	ragStore        *brainrag.RAGStore       // optional RAG vector store for refresh
 	ragInjector     *brainrag.BrainInjector // optional RAG-based brain injector
 	resumeStepID    string
 	resumePrompt    string
 	resumeFrom      *resumeFromConfig
+	stepWriter      io.Writer // when set, executor output is teed here in real time
 }
 
 // WithRunStore attaches a result store to the run so results are persisted.
@@ -75,6 +76,13 @@ func WithRAGStore(rag *brainrag.RAGStore) RunOption {
 // to the prompt. On error, the original prompt is used.
 func WithBrainRAGInjector(inj *brainrag.BrainInjector) RunOption {
 	return func(c *runConfig) { c.ragInjector = inj }
+}
+
+// WithStepWriter tees each executor's stdout to w in real time, so callers
+// see output as tokens arrive rather than after the subprocess exits.
+// Has no effect on builtin steps.
+func WithStepWriter(w io.Writer) RunOption {
+	return func(c *runConfig) { c.stepWriter = w }
 }
 
 // WithResumeFrom instructs the runner to resume an existing run from a
@@ -675,7 +683,7 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput s
 					cloneArgs := map[string]any{"_item": item, "item": item}
 
 					fmt.Printf(StepStatusLineFormat+"\n", cloneID, "running")
-					cloneOut, cloneErr := dispatchStep(ctx, &clone, cloneArgs, cloneSnap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store)
+					cloneOut, cloneErr := dispatchStep(ctx, &clone, cloneArgs, cloneSnap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter)
 					if cloneErr != nil {
 						lastErr = cloneErr
 						fmt.Printf(StepStatusLineFormat+"\n", cloneID, "failed")
@@ -726,7 +734,7 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput s
 			}
 
 			stepStart := time.Now()
-			out, execErr := dispatchStep(ctx, step, args, snap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store)
+			out, execErr := dispatchStep(ctx, step, args, snap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter)
 			stepDurationMs := time.Since(stepStart).Milliseconds()
 
 			if execErr == nil {
@@ -1186,8 +1194,8 @@ func interpolateArgs(args map[string]any, vars map[string]any) map[string]any {
 
 // dispatchStep determines the executor for a step and runs it (with retries).
 // runID and pipeName are used to populate event payloads; pub receives the events.
-func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, runID int64, pipeName string, pub EventPublisher, p *Pipeline, st *store.Store) (map[string]any, error) {
-	executor, err := resolveExecutor(ctx, step, args, snap, ec, mgr, p, st)
+func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, runID int64, pipeName string, pub EventPublisher, p *Pipeline, st *store.Store, w io.Writer) (map[string]any, error) {
+	executor, err := resolveExecutor(ctx, step, args, snap, ec, mgr, p, st, w)
 	if err != nil {
 		return nil, err
 	}
@@ -1284,7 +1292,7 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 							for k, v := range step.Vars {
 								stepVars[k] = Interpolate(v, snap)
 							}
-							fe := newRegisteredExecutor(pl, followUp, stepVars, nil)
+							fe := newRegisteredExecutor(pl, followUp, stepVars, w)
 							if err2 := fe.Init(ctx); err2 == nil {
 								out, execErr = fe.Execute(ctx, args)
 							}
@@ -1372,7 +1380,7 @@ done:
 }
 
 // resolveExecutor builds the appropriate StepExecutor for a step.
-func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, p *Pipeline, st *store.Store) (StepExecutor, error) {
+func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, p *Pipeline, st *store.Store, w io.Writer) (StepExecutor, error) {
 	// Determine the executor name: Executor takes precedence over Type.
 	typeName := step.Executor
 	if typeName == "" {
@@ -1483,7 +1491,7 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 		stepVars[k] = Interpolate(v, snap)
 	}
 
-	return newRegisteredExecutor(pl, promptOrInput, stepVars, nil), nil
+	return newRegisteredExecutor(pl, promptOrInput, stepVars, w), nil
 }
 
 // builtinExecutor adapts a BuiltinFunc to StepExecutor.

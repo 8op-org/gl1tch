@@ -314,6 +314,10 @@ func runOneShot(cmd *cobra.Command, prompt, providerID, model string, mgr *execu
 		}
 	}
 
+	if !askJSON {
+		runOpts = append(runOpts, pipeline.WithStepWriter(os.Stdout))
+	}
+
 	result, err := pipeline.Run(cmd.Context(), p, mgr, "", runOpts...)
 	if err != nil {
 		return err
@@ -336,7 +340,11 @@ func runOneShot(cmd *cobra.Command, prompt, providerID, model string, mgr *execu
 	if askJSON {
 		return printJSON(result, providerID, model, brainEntryID)
 	}
-	fmt.Println(result)
+	// Response was already streamed to stdout via WithStepWriter; just ensure
+	// the terminal prompt starts on a fresh line.
+	if !strings.HasSuffix(result, "\n") {
+		fmt.Println()
+	}
 	return nil
 }
 

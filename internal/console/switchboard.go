@@ -1246,6 +1246,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		yamlPath := filepath.Join(pipelinesDir(), match+".pipeline.yaml")
 		m.pendingPipelineName = match
 		m.pendingPipelineYAML = yamlPath
+		if msg.input != "" {
+			m.pendingPipelineInput = msg.input
+		}
 		return m.launchPendingPipeline(m.launchCWD)
 
 	case glitchCWDMsg:

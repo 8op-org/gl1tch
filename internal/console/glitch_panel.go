@@ -20,9 +20,12 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/8op-org/gl1tch/internal/executor"
 	"github.com/8op-org/gl1tch/internal/modal"
 	"github.com/8op-org/gl1tch/internal/panelrender"
 	"github.com/8op-org/gl1tch/internal/picker"
+	"github.com/8op-org/gl1tch/internal/pipeline"
+	"github.com/8op-org/gl1tch/internal/router"
 	"github.com/8op-org/gl1tch/internal/store"
 	"github.com/8op-org/gl1tch/internal/styles"
 	"github.com/8op-org/gl1tch/internal/systemprompts"
@@ -54,7 +57,18 @@ type glitchRunEventMsg struct {
 }
 
 // glitchRerunMsg is returned to the switchboard to trigger a pipeline rerun.
-type glitchRerunMsg struct{ name string }
+// input, if non-empty, is forwarded as --input to the pipeline.
+type glitchRerunMsg struct {
+	name  string
+	input string
+}
+
+// glitchIntentMsg carries the result of an async intent-routing check.
+type glitchIntentMsg struct {
+	result *router.RouteResult
+	prompt string
+	turns  []glitchTurn
+}
 
 // glitchCWDMsg is returned to the switchboard to update the working directory.
 type glitchCWDMsg struct{ path string }
@@ -453,6 +467,16 @@ func (b *glitchCLIBackend) streamIntro(ctx context.Context, cwd string) (<-chan 
 	return b.stream(ctx, nil, cue, "", "")
 }
 
+// isStreamJSON reports whether the backend is configured to emit stream-json output.
+func (b *glitchCLIBackend) isStreamJSON() bool {
+	for i, arg := range b.args {
+		if arg == "--output-format" && i+1 < len(b.args) && b.args[i+1] == "stream-json" {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *glitchCLIBackend) stream(ctx context.Context, turns []glitchTurn, userMsg, brainCtx, systemPrompt string) (<-chan string, error) {
 	var sb strings.Builder
 	sp := glitchSystemPrompt
@@ -493,28 +517,76 @@ func (b *glitchCLIBackend) stream(ctx context.Context, turns []glitchTurn, userM
 	}
 
 	ch := make(chan string, 64)
-	go func() {
-		defer close(ch)
-		defer pr.Close()
+	if b.isStreamJSON() {
 		go func() {
-			cmd.Wait() //nolint:errcheck
-			pw.Close()
+			defer close(ch)
+			defer pr.Close()
+			go func() {
+				cmd.Wait() //nolint:errcheck
+				pw.Close()
+			}()
+			// Parse Claude Code stream-json NDJSON: each line is a JSON event.
+			// assistant events carry accumulated text; we send only the delta.
+			var lastTextLen int
+			scanner := bufio.NewScanner(pr)
+			scanner.Buffer(make([]byte, 64*1024), 64*1024)
+			for scanner.Scan() {
+				line := scanner.Bytes()
+				if len(line) == 0 {
+					continue
+				}
+				var evt struct {
+					Type    string `json:"type"`
+					Message *struct {
+						Content []struct {
+							Type string `json:"type"`
+							Text string `json:"text"`
+						} `json:"content"`
+					} `json:"message"`
+				}
+				if err := json.Unmarshal(line, &evt); err != nil {
+					continue
+				}
+				if evt.Type != "assistant" || evt.Message == nil {
+					continue
+				}
+				for _, c := range evt.Message.Content {
+					if c.Type == "text" && len(c.Text) > lastTextLen {
+						delta := c.Text[lastTextLen:]
+						lastTextLen = len(c.Text)
+						select {
+						case ch <- delta:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}
+			}
 		}()
-		buf := make([]byte, 512)
-		for {
-			n, err := pr.Read(buf)
-			if n > 0 {
-				select {
-				case ch <- string(buf[:n]):
-				case <-ctx.Done():
+	} else {
+		go func() {
+			defer close(ch)
+			defer pr.Close()
+			go func() {
+				cmd.Wait() //nolint:errcheck
+				pw.Close()
+			}()
+			buf := make([]byte, 512)
+			for {
+				n, err := pr.Read(buf)
+				if n > 0 {
+					select {
+					case ch <- string(buf[:n]):
+					case <-ctx.Done():
+						return
+					}
+				}
+				if err != nil {
 					return
 				}
 			}
-			if err != nil {
-				return
-			}
-		}
-	}()
+		}()
+	}
 	return ch, nil
 }
 
@@ -621,6 +693,34 @@ type glitchChatPanel struct {
 	batchWindow           time.Time                    // time of first item in current batch window
 	batchAccum            []store.ClarificationRequest // accumulated within 3s batch window
 	clarificationUrgent   bool                         // true when any pending item has gone urgent
+
+	// Intent routing — async pipeline dispatch before falling back to LLM chat.
+	routing bool // true while the router goroutine is running
+}
+
+// buildPanelRouter constructs a HybridRouter using the config dir's wrappers and
+// the default Ollama embedder. Called once per intent-check goroutine.
+func buildPanelRouter(cfgDir string) *router.HybridRouter {
+	mgr := executor.NewManager()
+	if cfgDir != "" {
+		mgr.LoadWrappersFromDir(filepath.Join(cfgDir, "wrappers")) //nolint:errcheck
+	}
+	for _, prov := range picker.BuildProviders() {
+		if prov.SidecarPath != "" {
+			continue
+		}
+		binary := prov.Command
+		if binary == "" {
+			binary = prov.ID
+		}
+		mgr.Register(executor.NewCliAdapter(prov.ID, prov.Label, binary, prov.PipelineArgs...)) //nolint:errcheck
+	}
+	embedder := &router.OllamaEmbedder{Model: router.DefaultEmbeddingModel}
+	cacheDir := ""
+	if cfgDir != "" {
+		cacheDir = filepath.Join(cfgDir, "cache")
+	}
+	return router.New(mgr, embedder, router.Config{CacheDir: cacheDir})
 }
 
 // newGlitchPanel builds the panel using the best available provider.
@@ -825,6 +925,41 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 	case glitchRunEventMsg:
 		return p.handleRunEvent(msg)
 
+	case glitchIntentMsg:
+		p.routing = false
+		if msg.result != nil && msg.result.Pipeline != nil {
+			name := msg.result.Pipeline.Name
+			input := msg.result.Input
+			p.messages = append(p.messages, glitchEntry{
+				who:  glitchSpeakerBot,
+				text: fmt.Sprintf("→ running pipeline: %s", name),
+			})
+			return p, func() tea.Msg {
+				return glitchRerunMsg{name: name, input: input}
+			}
+		}
+		// No pipeline match — fall through to LLM chat stream.
+		if p.backend == nil {
+			p.messages = append(p.messages, glitchEntry{
+				who:  glitchSpeakerBot,
+				text: "no provider available. run /models to pick one, or check your config.",
+			})
+			return p, nil
+		}
+		p.streaming = true
+		backend := p.backend
+		ctx := p.ctx
+		st := p.store
+		turns := msg.turns
+		prompt := msg.prompt
+		return p, tea.Batch(glitchTick(), func() tea.Msg {
+			ch, err := backend.stream(ctx, turns, prompt, glitchLoadBrainContext(st), "")
+			if err != nil {
+				return glitchErrMsg{err: err}
+			}
+			return glitchNextToken(ch)()
+		})
+
 	case ClarificationInjectMsg:
 		return p.injectClarification(msg.Req)
 
@@ -931,7 +1066,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 			p = p.setFocused(false)
 			return p, nil
 		case tea.KeyEnter:
-			if p.streaming {
+			if p.streaming || p.routing {
 				return p, nil
 			}
 			userText := strings.TrimSpace(p.input.Value())
@@ -1286,20 +1421,27 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 				})
 				return p, nil
 			}
-			p.streaming = true
+			// Try intent routing before falling back to LLM chat.
+			// The router check runs async; glitchIntentMsg handles the result.
+			p.routing = true
 			p.streamBuf = ""
 			p.streamIsRunAnalysis = false
-			turns := p.turns[:len(p.turns)-1] // exclude the just-added user turn from history
-			backend := p.backend
-			ctx := p.ctx
-			st := p.store
-			return p, tea.Batch(glitchTick(), func() tea.Msg {
-				ch, err := backend.stream(ctx, turns, userText, glitchLoadBrainContext(st), "")
-				if err != nil {
-					return glitchErrMsg{err: err}
+			turns := p.turns[:len(p.turns)-1]
+			userTextCopy := userText
+			cfgDir := p.cfgDir
+			return p, func() tea.Msg {
+				r := buildPanelRouter(cfgDir)
+				refs, _ := pipeline.DiscoverPipelines(filepath.Join(cfgDir, "pipelines"))
+				if len(refs) > 0 {
+					rctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					result, err := r.Route(rctx, userTextCopy, refs)
+					if err == nil && result != nil && result.Pipeline != nil {
+						return glitchIntentMsg{result: result, prompt: userTextCopy, turns: turns}
+					}
 				}
-				return glitchNextToken(ch)()
-			})
+				return glitchIntentMsg{result: nil, prompt: userTextCopy, turns: turns}
+			}
 		}
 	}
 

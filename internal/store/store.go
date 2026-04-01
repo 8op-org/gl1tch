@@ -212,6 +212,74 @@ func (s *Store) UpsertPrompt(ctx context.Context, p Prompt) error {
 	})
 }
 
+// CapabilityNotes returns all brain notes that are system-level capability entries
+// (run_id=0 AND tags LIKE 'type:capability%'), ordered by created_at ascending.
+// Returns an empty non-nil slice when none exist.
+func (s *Store) CapabilityNotes(ctx context.Context) ([]BrainNote, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, run_id, step_id, created_at, tags, body
+		   FROM brain_notes
+		  WHERE run_id = 0
+		    AND tags LIKE 'type:capability%'
+		  ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: capability notes: %w", err)
+	}
+	defer rows.Close()
+
+	notes := []BrainNote{}
+	for rows.Next() {
+		var n BrainNote
+		if err := rows.Scan(&n.ID, &n.RunID, &n.StepID, &n.CreatedAt, &n.Tags, &n.Body); err != nil {
+			return nil, fmt.Errorf("store: capability notes scan: %w", err)
+		}
+		notes = append(notes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: capability notes rows: %w", err)
+	}
+	return notes, nil
+}
+
+// UpsertCapabilityNote inserts or updates a system-level capability brain note
+// keyed by (run_id=0, step_id). On conflict, updates body, tags, and created_at.
+// Idempotent: calling with the same step_id twice will update, not duplicate.
+// Implemented at the application layer (SELECT then INSERT or UPDATE) to avoid
+// requiring a unique constraint on brain_notes(run_id, step_id).
+func (s *Store) UpsertCapabilityNote(ctx context.Context, note BrainNote) error {
+	// Check for an existing capability note with run_id=0 and same step_id.
+	var existingID int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM brain_notes WHERE run_id = 0 AND step_id = ? LIMIT 1`,
+		note.StepID,
+	).Scan(&existingID)
+
+	switch {
+	case err == sql.ErrNoRows:
+		// No existing row — insert.
+		_, err = s.db.ExecContext(ctx,
+			`INSERT INTO brain_notes (run_id, step_id, created_at, tags, body) VALUES (0, ?, ?, ?, ?)`,
+			note.StepID, note.CreatedAt, note.Tags, note.Body,
+		)
+		if err != nil {
+			return fmt.Errorf("store: upsert capability note insert: %w", err)
+		}
+	case err != nil:
+		return fmt.Errorf("store: upsert capability note lookup: %w", err)
+	default:
+		// Existing row found — update it.
+		_, err = s.db.ExecContext(ctx,
+			`UPDATE brain_notes SET body = ?, tags = ?, created_at = ? WHERE id = ?`,
+			note.Body, note.Tags, note.CreatedAt, existingID,
+		)
+		if err != nil {
+			return fmt.Errorf("store: upsert capability note update: %w", err)
+		}
+	}
+	return nil
+}
+
 // UpdateBrainNote updates the body and tags of an existing brain note by ID.
 func (s *Store) UpdateBrainNote(ctx context.Context, id int64, body, tags string) error {
 	_, err := s.db.ExecContext(ctx,
