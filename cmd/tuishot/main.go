@@ -21,17 +21,52 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/font/gofont/gomono"
+	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
 
-// Character cell dimensions for basicfont.Face7x13.
-const (
-	charW = 7
-	charH = 13
-	padX  = 32
-	padY  = 24
+// Font metrics — set in init() from the Go Mono face.
+var (
+	monoFace font.Face
+	charW    int // cell width in pixels
+	charH    int // cell height in pixels
+	baseline int // offset from cell top to text baseline
 )
+
+const (
+	fontPt = 13.0
+	fontDPI = 96.0
+	padX   = 32
+	padY   = 24
+)
+
+func init() {
+	f, err := opentype.Parse(gomono.TTF)
+	if err != nil {
+		panic("tuishot: parse gomono: " + err.Error())
+	}
+	face, err := opentype.NewFace(f, &opentype.FaceOptions{
+		Size:    fontPt,
+		DPI:     fontDPI,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		panic("tuishot: create face: " + err.Error())
+	}
+	monoFace = face
+
+	m := face.Metrics()
+	charH = (m.Ascent + m.Descent).Ceil()
+	baseline = m.Ascent.Ceil()
+
+	// Go Mono is monospace — all glyphs share the same advance. Measure 'M'.
+	adv, ok := face.GlyphAdvance('M')
+	if !ok {
+		panic("tuishot: cannot measure glyph advance")
+	}
+	charW = adv.Ceil()
+}
 
 // Dracula palette defaults — matches gl1tch theme.
 var (
@@ -173,7 +208,6 @@ func parseLine(line string, s *renderState) []cell {
 		// ESC [ — CSI sequence
 		if b == 0x1b && i+1 < len(line) && line[i+1] == '[' {
 			i += 2
-			// Consume until a final byte (0x40–0x7e)
 			start := i
 			for i < len(line) && (line[i] < 0x40 || line[i] > 0x7e) {
 				i++
@@ -185,19 +219,16 @@ func parseLine(line string, s *renderState) []cell {
 				if final == 'm' {
 					applySGR(params, s)
 				}
-				// All other CSI sequences (cursor movement etc.) are silently dropped.
 			}
 			continue
 		}
-		// ESC alone or other ESC sequences — skip
 		if b == 0x1b {
 			i++
 			if i < len(line) {
-				i++ // consume one more byte
+				i++
 			}
 			continue
 		}
-		// Control characters (except tab) — skip
 		if b < 0x20 && b != '\t' {
 			i++
 			continue
@@ -225,166 +256,104 @@ func parse(r io.Reader) [][]cell {
 	return grid
 }
 
-// fillRect draws a filled rectangle [x,y,x+w,y+h) in colour c, clipped to [px,py,px+charW,py+charH).
+// fillRect draws a clipped filled rectangle.
 func fillRect(img *image.RGBA, x, y, w, h, px, py int, c color.RGBA) {
 	x0, y0 := x, y
 	x1, y1 := x+w, y+h
-	if x0 < px {
-		x0 = px
-	}
-	if y0 < py {
-		y0 = py
-	}
-	if x1 > px+charW {
-		x1 = px + charW
-	}
-	if y1 > py+charH {
-		y1 = py + charH
-	}
+	if x0 < px { x0 = px }
+	if y0 < py { y0 = py }
+	if x1 > px+charW { x1 = px + charW }
+	if y1 > py+charH { y1 = py + charH }
+	if x0 >= x1 || y0 >= y1 { return }
 	draw.Draw(img, image.Rect(x0, y0, x1, y1), &image.Uniform{c}, image.Point{}, draw.Src)
 }
 
-// drawHLine draws a 1-px horizontal line at row y from x=x0 to x=x1 (inclusive).
 func drawHLine(img *image.RGBA, x0, x1, y int, c color.RGBA) {
 	for x := x0; x <= x1; x++ {
 		img.SetRGBA(x, y, c)
 	}
 }
 
-// drawVLine draws a 1-px vertical line at col x from y=y0 to y=y1 (inclusive).
 func drawVLine(img *image.RGBA, y0, y1, x int, c color.RGBA) {
 	for y := y0; y <= y1; y++ {
 		img.SetRGBA(x, y, c)
 	}
 }
 
-// drawSpecialChar renders Unicode block elements (U+2580–U+259F), box drawing
-// (U+2500–U+257F), and a handful of other common TUI glyphs geometrically.
-// Returns true if the rune was handled (caller should skip basicfont).
+// drawSpecialChar renders Unicode block elements, box drawing, and common TUI
+// glyphs as filled geometry. Returns true if handled.
 func drawSpecialChar(img *image.RGBA, r rune, fg color.RGBA, px, py int) bool {
 	w, h := charW, charH
 	mx := px + w/2
 	my := py + h/2
 
-	// ── Block elements U+2580–U+259F ─────────────────────────────────────────
 	switch r {
-	case 0x2580: // ▀ UPPER HALF BLOCK
-		fillRect(img, px, py, w, h/2, px, py, fg)
-		return true
-	case 0x2581: // ▁ LOWER ONE EIGHTH BLOCK
-		fillRect(img, px, py+h*7/8, w, h-h*7/8, px, py, fg)
-		return true
-	case 0x2582: // ▂ LOWER ONE QUARTER BLOCK
-		fillRect(img, px, py+h*3/4, w, h-h*3/4, px, py, fg)
-		return true
-	case 0x2583: // ▃ LOWER THREE EIGHTHS BLOCK
-		fillRect(img, px, py+h*5/8, w, h-h*5/8, px, py, fg)
-		return true
-	case 0x2584: // ▄ LOWER HALF BLOCK
-		fillRect(img, px, py+(h+1)/2, w, h-(h+1)/2, px, py, fg)
-		return true
-	case 0x2585: // ▅ LOWER FIVE EIGHTHS BLOCK
-		fillRect(img, px, py+h*3/8, w, h-h*3/8, px, py, fg)
-		return true
-	case 0x2586: // ▆ LOWER THREE QUARTERS BLOCK
-		fillRect(img, px, py+h/4, w, h-h/4, px, py, fg)
-		return true
-	case 0x2587: // ▇ LOWER SEVEN EIGHTHS BLOCK
-		fillRect(img, px, py+h/8, w, h-h/8, px, py, fg)
-		return true
-	case 0x2588: // █ FULL BLOCK
-		fillRect(img, px, py, w, h, px, py, fg)
-		return true
-	case 0x2589: // ▉ LEFT SEVEN EIGHTHS BLOCK
-		fillRect(img, px, py, w*7/8, h, px, py, fg)
-		return true
-	case 0x258A: // ▊ LEFT THREE QUARTERS BLOCK
-		fillRect(img, px, py, w*3/4, h, px, py, fg)
-		return true
-	case 0x258B: // ▋ LEFT FIVE EIGHTHS BLOCK
-		fillRect(img, px, py, w*5/8, h, px, py, fg)
-		return true
-	case 0x258C: // ▌ LEFT HALF BLOCK
-		fillRect(img, px, py, (w+1)/2, h, px, py, fg)
-		return true
-	case 0x258D: // ▍ LEFT THREE EIGHTHS BLOCK
-		fillRect(img, px, py, w*3/8, h, px, py, fg)
-		return true
-	case 0x258E: // ▎ LEFT ONE QUARTER BLOCK
-		fillRect(img, px, py, w/4, h, px, py, fg)
-		return true
-	case 0x258F: // ▏ LEFT ONE EIGHTH BLOCK
-		fillRect(img, px, py, max1(w/8, 1), h, px, py, fg)
-		return true
-	case 0x2590: // ▐ RIGHT HALF BLOCK
-		fillRect(img, px+w/2, py, w-w/2, h, px, py, fg)
-		return true
-	case 0x2591: // ░ LIGHT SHADE (~25%)
+	// ── Block elements U+2580–U+259F ─────────────────────────────────────────
+	case 0x2580: fillRect(img, px, py, w, h/2, px, py, fg);                     return true // ▀
+	case 0x2581: fillRect(img, px, py+h*7/8, w, h-h*7/8, px, py, fg);           return true // ▁
+	case 0x2582: fillRect(img, px, py+h*3/4, w, h-h*3/4, px, py, fg);           return true // ▂
+	case 0x2583: fillRect(img, px, py+h*5/8, w, h-h*5/8, px, py, fg);           return true // ▃
+	case 0x2584: fillRect(img, px, py+(h+1)/2, w, h-(h+1)/2, px, py, fg);       return true // ▄
+	case 0x2585: fillRect(img, px, py+h*3/8, w, h-h*3/8, px, py, fg);           return true // ▅
+	case 0x2586: fillRect(img, px, py+h/4, w, h-h/4, px, py, fg);               return true // ▆
+	case 0x2587: fillRect(img, px, py+h/8, w, h-h/8, px, py, fg);               return true // ▇
+	case 0x2588: fillRect(img, px, py, w, h, px, py, fg);                        return true // █
+	case 0x2589: fillRect(img, px, py, w*7/8, h, px, py, fg);                   return true // ▉
+	case 0x258A: fillRect(img, px, py, w*3/4, h, px, py, fg);                   return true // ▊
+	case 0x258B: fillRect(img, px, py, w*5/8, h, px, py, fg);                   return true // ▋
+	case 0x258C: fillRect(img, px, py, (w+1)/2, h, px, py, fg);                 return true // ▌
+	case 0x258D: fillRect(img, px, py, w*3/8, h, px, py, fg);                   return true // ▍
+	case 0x258E: fillRect(img, px, py, w/4, h, px, py, fg);                     return true // ▎
+	case 0x258F: fillRect(img, px, py, imax(w/8, 1), h, px, py, fg);            return true // ▏
+	case 0x2590: fillRect(img, px+w/2, py, w-w/2, h, px, py, fg);               return true // ▐
+	case 0x2591: // ░ Light shade
 		for dy := py; dy < py+h; dy++ {
 			for dx := px; dx < px+w; dx++ {
-				if (dx%2 == 0) == (dy%2 == 0) {
-					img.SetRGBA(dx, dy, fg)
-				}
+				if (dx%2 == 0) == (dy%2 == 0) { img.SetRGBA(dx, dy, fg) }
 			}
 		}
 		return true
-	case 0x2592: // ▒ MEDIUM SHADE (~50%)
+	case 0x2592: // ▒ Medium shade
 		for dy := py; dy < py+h; dy++ {
 			for dx := px; dx < px+w; dx++ {
-				if (dx+dy)%2 == 0 {
-					img.SetRGBA(dx, dy, fg)
-				}
+				if (dx+dy)%2 == 0 { img.SetRGBA(dx, dy, fg) }
 			}
 		}
 		return true
-	case 0x2593: // ▓ DARK SHADE (~75%)
+	case 0x2593: // ▓ Dark shade
 		for dy := py; dy < py+h; dy++ {
 			for dx := px; dx < px+w; dx++ {
-				if (dx%2 != 0) || (dy%2 != 0) {
-					img.SetRGBA(dx, dy, fg)
-				}
+				if (dx%2 != 0) || (dy%2 != 0) { img.SetRGBA(dx, dy, fg) }
 			}
 		}
 		return true
-	case 0x2594: // ▔ UPPER ONE EIGHTH BLOCK
-		fillRect(img, px, py, w, max1(h/8, 1), px, py, fg)
-		return true
-	case 0x2595: // ▕ RIGHT ONE EIGHTH BLOCK
-		fillRect(img, px+w*7/8, py, w-w*7/8, h, px, py, fg)
-		return true
-	case 0x2596: // ▖ LOWER LEFT QUADRANT
-		fillRect(img, px, py+(h+1)/2, (w+1)/2, h-(h+1)/2, px, py, fg)
-		return true
-	case 0x2597: // ▗ LOWER RIGHT QUADRANT
-		fillRect(img, px+w/2, py+(h+1)/2, w-w/2, h-(h+1)/2, px, py, fg)
-		return true
-	case 0x2598: // ▘ UPPER LEFT QUADRANT
-		fillRect(img, px, py, (w+1)/2, h/2, px, py, fg)
-		return true
-	case 0x2599: // ▙ UPPER LEFT AND LOWER HALF
+	case 0x2594: fillRect(img, px, py, w, imax(h/8, 1), px, py, fg);            return true // ▔
+	case 0x2595: fillRect(img, px+w*7/8, py, w-w*7/8, h, px, py, fg);           return true // ▕
+	case 0x2596: fillRect(img, px, py+(h+1)/2, (w+1)/2, h-(h+1)/2, px, py, fg); return true // ▖
+	case 0x2597: fillRect(img, px+w/2, py+(h+1)/2, w-w/2, h-(h+1)/2, px, py, fg); return true // ▗
+	case 0x2598: fillRect(img, px, py, (w+1)/2, h/2, px, py, fg);               return true // ▘
+	case 0x2599: // ▙
 		fillRect(img, px, py, (w+1)/2, h/2, px, py, fg)
 		fillRect(img, px, py+(h+1)/2, w, h-(h+1)/2, px, py, fg)
 		return true
-	case 0x259A: // ▚ UPPER LEFT AND LOWER RIGHT QUADRANT
+	case 0x259A: // ▚
 		fillRect(img, px, py, (w+1)/2, h/2, px, py, fg)
 		fillRect(img, px+w/2, py+(h+1)/2, w-w/2, h-(h+1)/2, px, py, fg)
 		return true
-	case 0x259B: // ▛ UPPER HALF AND LOWER LEFT QUADRANT
+	case 0x259B: // ▛
 		fillRect(img, px, py, w, h/2, px, py, fg)
 		fillRect(img, px, py+(h+1)/2, (w+1)/2, h-(h+1)/2, px, py, fg)
 		return true
-	case 0x259C: // ▜ UPPER HALF AND LOWER RIGHT QUADRANT
+	case 0x259C: // ▜
 		fillRect(img, px, py, w, h/2, px, py, fg)
 		fillRect(img, px+w/2, py+(h+1)/2, w-w/2, h-(h+1)/2, px, py, fg)
 		return true
-	case 0x259D: // ▝ UPPER RIGHT QUADRANT
-		fillRect(img, px+w/2, py, w-w/2, h/2, px, py, fg)
-		return true
-	case 0x259E: // ▞ UPPER RIGHT AND LOWER LEFT QUADRANT
+	case 0x259D: fillRect(img, px+w/2, py, w-w/2, h/2, px, py, fg);             return true // ▝
+	case 0x259E: // ▞
 		fillRect(img, px+w/2, py, w-w/2, h/2, px, py, fg)
 		fillRect(img, px, py+(h+1)/2, (w+1)/2, h-(h+1)/2, px, py, fg)
 		return true
-	case 0x259F: // ▟ LOWER HALF AND UPPER RIGHT QUADRANT
+	case 0x259F: // ▟
 		fillRect(img, px+w/2, py, w-w/2, h/2, px, py, fg)
 		fillRect(img, px, py+(h+1)/2, w, h-(h+1)/2, px, py, fg)
 		return true
@@ -392,64 +361,40 @@ func drawSpecialChar(img *image.RGBA, r rune, fg color.RGBA, px, py int) bool {
 
 	// ── Box drawing U+2500–U+257F ─────────────────────────────────────────────
 	if r >= 0x2500 && r <= 0x257F {
-		// Classify into H / V / corner / T / cross groups.
 		switch {
-		case r == 0x2500 || r == 0x2501 || r == 0x254C || r == 0x254D: // ─ ━ ╌ ╍
+		case r == 0x2500 || r == 0x2501 || r == 0x254C || r == 0x254D:
 			drawHLine(img, px, px+w-1, my, fg)
-		case r == 0x2502 || r == 0x2503 || r == 0x254E || r == 0x254F: // │ ┃ ╎ ╏
+		case r == 0x2502 || r == 0x2503 || r == 0x254E || r == 0x254F:
 			drawVLine(img, py, py+h-1, mx, fg)
-		case r >= 0x250C && r <= 0x250F: // ┌ ┍ ┎ ┏ — top-left corner
-			drawHLine(img, mx, px+w-1, my, fg)
-			drawVLine(img, my, py+h-1, mx, fg)
-		case r >= 0x2510 && r <= 0x2513: // ┐ ┑ ┒ ┓ — top-right corner
-			drawHLine(img, px, mx, my, fg)
-			drawVLine(img, my, py+h-1, mx, fg)
-		case r >= 0x2514 && r <= 0x2517: // └ ┕ ┖ ┗ — bottom-left corner
-			drawHLine(img, mx, px+w-1, my, fg)
-			drawVLine(img, py, my, mx, fg)
-		case r >= 0x2518 && r <= 0x251B: // ┘ ┙ ┚ ┛ — bottom-right corner
-			drawHLine(img, px, mx, my, fg)
-			drawVLine(img, py, my, mx, fg)
-		case r >= 0x251C && r <= 0x2523: // ├ — left T
-			drawHLine(img, mx, px+w-1, my, fg)
-			drawVLine(img, py, py+h-1, mx, fg)
-		case r >= 0x2524 && r <= 0x252B: // ┤ — right T
-			drawHLine(img, px, mx, my, fg)
-			drawVLine(img, py, py+h-1, mx, fg)
-		case r >= 0x252C && r <= 0x2533: // ┬ — top T
-			drawHLine(img, px, px+w-1, my, fg)
-			drawVLine(img, my, py+h-1, mx, fg)
-		case r >= 0x2534 && r <= 0x253B: // ┴ — bottom T
-			drawHLine(img, px, px+w-1, my, fg)
-			drawVLine(img, py, my, mx, fg)
-		case r >= 0x253C && r <= 0x254B: // ┼ — cross
-			drawHLine(img, px, px+w-1, my, fg)
-			drawVLine(img, py, py+h-1, mx, fg)
-		// Double-line variants U+2550–U+256C
-		case r == 0x2550: // ═ DOUBLE HORIZONTAL
-			drawHLine(img, px, px+w-1, my-1, fg)
-			drawHLine(img, px, px+w-1, my+1, fg)
-		case r == 0x2551: // ║ DOUBLE VERTICAL
-			drawVLine(img, py, py+h-1, mx-1, fg)
-			drawVLine(img, py, py+h-1, mx+1, fg)
-		case r >= 0x2552 && r <= 0x2561: // mixed double/single corners & T pieces
-			drawHLine(img, px, px+w-1, my, fg)
-			drawVLine(img, py, py+h-1, mx, fg)
-		case r >= 0x2562 && r <= 0x256C: // more double variants
-			drawHLine(img, px, px+w-1, my, fg)
-			drawVLine(img, py, py+h-1, mx, fg)
-		// Diagonal U+2571–U+2573
-		case r == 0x2571: // ╱
-			for i := 0; i < h; i++ {
-				x := px + (w-1)*(h-1-i)/(h-1)
-				img.SetRGBA(x, py+i, fg)
-			}
-		case r == 0x2572: // ╲
-			for i := 0; i < h; i++ {
-				x := px + (w-1)*i/(h-1)
-				img.SetRGBA(x, py+i, fg)
-			}
-		case r == 0x2573: // ╳
+		case r >= 0x250C && r <= 0x250F: // ┌ top-left
+			drawHLine(img, mx, px+w-1, my, fg); drawVLine(img, my, py+h-1, mx, fg)
+		case r >= 0x2510 && r <= 0x2513: // ┐ top-right
+			drawHLine(img, px, mx, my, fg); drawVLine(img, my, py+h-1, mx, fg)
+		case r >= 0x2514 && r <= 0x2517: // └ bottom-left
+			drawHLine(img, mx, px+w-1, my, fg); drawVLine(img, py, my, mx, fg)
+		case r >= 0x2518 && r <= 0x251B: // ┘ bottom-right
+			drawHLine(img, px, mx, my, fg); drawVLine(img, py, my, mx, fg)
+		case r >= 0x251C && r <= 0x2523: // ├
+			drawHLine(img, mx, px+w-1, my, fg); drawVLine(img, py, py+h-1, mx, fg)
+		case r >= 0x2524 && r <= 0x252B: // ┤
+			drawHLine(img, px, mx, my, fg); drawVLine(img, py, py+h-1, mx, fg)
+		case r >= 0x252C && r <= 0x2533: // ┬
+			drawHLine(img, px, px+w-1, my, fg); drawVLine(img, my, py+h-1, mx, fg)
+		case r >= 0x2534 && r <= 0x253B: // ┴
+			drawHLine(img, px, px+w-1, my, fg); drawVLine(img, py, my, mx, fg)
+		case r >= 0x253C && r <= 0x254B: // ┼
+			drawHLine(img, px, px+w-1, my, fg); drawVLine(img, py, py+h-1, mx, fg)
+		case r == 0x2550: // ═
+			drawHLine(img, px, px+w-1, my-1, fg); drawHLine(img, px, px+w-1, my+1, fg)
+		case r == 0x2551: // ║
+			drawVLine(img, py, py+h-1, mx-1, fg); drawVLine(img, py, py+h-1, mx+1, fg)
+		case r >= 0x2552 && r <= 0x256C:
+			drawHLine(img, px, px+w-1, my, fg); drawVLine(img, py, py+h-1, mx, fg)
+		case r == 0x2571:
+			for i := 0; i < h; i++ { img.SetRGBA(px+(w-1)*(h-1-i)/(h-1), py+i, fg) }
+		case r == 0x2572:
+			for i := 0; i < h; i++ { img.SetRGBA(px+(w-1)*i/(h-1), py+i, fg) }
+		case r == 0x2573:
 			for i := 0; i < h; i++ {
 				img.SetRGBA(px+(w-1)*i/(h-1), py+i, fg)
 				img.SetRGBA(px+(w-1)*(h-1-i)/(h-1), py+i, fg)
@@ -458,59 +403,44 @@ func drawSpecialChar(img *image.RGBA, r rune, fg color.RGBA, px, py int) bool {
 		return true
 	}
 
-	// ── Misc common TUI glyphs ────────────────────────────────────────────────
+	// ── Misc TUI glyphs ───────────────────────────────────────────────────────
 	switch r {
-	case 0x2022, 0x25CF, 0x25C9, 0x2219: // ● • ◉ ∙ — bullet / circle
-		// Filled circle approximation: 3×5 in a 7×13 cell.
-		cx, cy := mx, my
+	case 0x2022, 0x25CF, 0x2219: // ● • ∙ — bullet
 		for dy := -2; dy <= 2; dy++ {
 			for dx := -2; dx <= 2; dx++ {
-				if dx*dx+dy*dy <= 5 {
-					img.SetRGBA(cx+dx, cy+dy, fg)
-				}
+				if dx*dx+dy*dy <= 5 { img.SetRGBA(mx+dx, my+dy, fg) }
 			}
 		}
 		return true
-	case 0x25CB, 0x25CC: // ○ ◌ — open circle
-		cx, cy := mx, my
+	case 0x25CB, 0x25CC: // ○ ◌ open circle
 		for dy := -2; dy <= 2; dy++ {
 			for dx := -2; dx <= 2; dx++ {
 				d := dx*dx + dy*dy
-				if d >= 4 && d <= 6 {
-					img.SetRGBA(cx+dx, cy+dy, fg)
-				}
+				if d >= 4 && d <= 6 { img.SetRGBA(mx+dx, my+dy, fg) }
 			}
 		}
 		return true
-	case 0x2026: // … HORIZONTAL ELLIPSIS — three dots
+	case 0x2026: // … horizontal ellipsis
 		for _, dx := range []int{-2, 0, 2} {
-			img.SetRGBA(mx+dx, my, fg)
-			img.SetRGBA(mx+dx, my+1, fg)
+			img.SetRGBA(mx+dx, my, fg); img.SetRGBA(mx+dx, my+1, fg)
 		}
 		return true
-	case 0x00B7, 0x2027: // · ‧ middle dot
-		img.SetRGBA(mx, my, fg)
-		img.SetRGBA(mx+1, my, fg)
+	case 0x00B7, 0x2027: // · middle dot
+		img.SetRGBA(mx, my, fg); img.SetRGBA(mx+1, my, fg)
 		return true
-	case 0x25B6, 0x25BA: // ▶ ► right-pointing triangle
-		for i := 0; i < w/2; i++ {
-			drawVLine(img, my-i, my+i, px+i, fg)
-		}
+	case 0x25B6, 0x25BA: // ▶ ► right triangle
+		for i := 0; i < w/2; i++ { drawVLine(img, my-i, my+i, px+i, fg) }
 		return true
-	case 0x25C0, 0x25C4: // ◀ ◄ left-pointing triangle
-		for i := 0; i < w/2; i++ {
-			drawVLine(img, my-i, my+i, px+w-1-i, fg)
-		}
+	case 0x25C0, 0x25C4: // ◀ ◄ left triangle
+		for i := 0; i < w/2; i++ { drawVLine(img, my-i, my+i, px+w-1-i, fg) }
 		return true
 	}
 
 	return false
 }
 
-func max1(a, b int) int {
-	if a > b {
-		return a
-	}
+func imax(a, b int) int {
+	if a > b { return a }
 	return b
 }
 
@@ -531,41 +461,33 @@ func render(grid [][]cell) *image.RGBA {
 	h := rows*charH + 2*padY
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 
-	// Fill default background.
 	draw.Draw(img, img.Bounds(), &image.Uniform{defaultBg}, image.Point{}, draw.Src)
-
-	face := basicfont.Face7x13
 
 	for y, row := range grid {
 		for x, c := range row {
 			px := padX + x*charW
 			py := padY + y*charH
 
-			// Non-default cell background.
 			if c.bg != defaultBg {
-				bgRect := image.Rect(px, py, px+charW, py+charH)
-				draw.Draw(img, bgRect, &image.Uniform{c.bg}, image.Point{}, draw.Src)
+				draw.Draw(img,
+					image.Rect(px, py, px+charW, py+charH),
+					&image.Uniform{c.bg}, image.Point{}, draw.Src)
 			}
 
 			if c.ch == ' ' || c.ch == 0 || c.ch == utf8.RuneError {
 				continue
 			}
 
-			// Geometric rendering for block/box/special Unicode chars.
 			if drawSpecialChar(img, c.ch, c.fg, px, py) {
 				continue
 			}
 
-			// ASCII fallback via basicfont.
-			if c.ch < 0x20 || c.ch > 0x7e {
-				continue // outside basicfont range — skip rather than render garbage
-			}
-
+			// Go Mono for everything else (covers full Latin + most Unicode).
 			d := &font.Drawer{
 				Dst:  img,
 				Src:  &image.Uniform{c.fg},
-				Face: face,
-				Dot:  fixed.P(px, py+charH-2),
+				Face: monoFace,
+				Dot:  fixed.P(px, py+baseline),
 			}
 			d.DrawString(string(c.ch))
 		}

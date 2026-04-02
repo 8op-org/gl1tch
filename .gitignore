@@ -37,3 +37,4 @@ traces.jsonl
 .claude/worktrees/
 .claude/*.log
 .claude/screenshots/
+tuishot
