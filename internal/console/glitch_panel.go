@@ -1452,7 +1452,13 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 			return p, nil
 		case tea.KeyEnter:
 			if p.streaming || p.routing {
-				return p, nil
+				// Allow non-LLM slash commands through even while busy — /session,
+				// /clear, /cwd, /quit, /exit, /trace don't need the LLM and should
+				// never be blocked by an in-flight stream or routing goroutine.
+				candidate := strings.TrimSpace(p.input.Value())
+				if !isNonBlockingCmd(candidate) {
+					return p, nil
+				}
 			}
 			userText := strings.TrimSpace(p.input.Value())
 			if userText == "" {
@@ -2640,6 +2646,22 @@ func (p *glitchChatPanel) upsertStreamEntry() {
 // so the intent router's LLM classifier can extract the right input (e.g. a PR URL
 // mentioned two turns ago). Only applied when the current message is a short follow-up
 // without an explicit URL or target.
+// isNonBlockingCmd reports whether s is a slash command that does not invoke
+// the LLM and should be allowed through even while the panel is streaming or
+// routing. These commands manage UI state only and must never be queued behind
+// an active stream.
+func isNonBlockingCmd(s string) bool {
+	if !strings.HasPrefix(s, "/") {
+		return false
+	}
+	cmd := strings.ToLower(strings.Fields(s)[0])
+	switch cmd {
+	case "/session", "/clear", "/cwd", "/quit", "/exit", "/trace", "/themes", "/model", "/models":
+		return true
+	}
+	return false
+}
+
 func enrichRoutingPrompt(msg string, turns []glitchTurn) string {
 	// If the message already contains a URL or is long enough to be self-contained, skip.
 	if strings.Contains(msg, "://") || len(msg) > 80 {
