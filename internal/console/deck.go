@@ -330,6 +330,10 @@ type Model struct {
 	pipelineBusCh chan pipelineBusEventMsg
 	// narrationCh receives game narration strings from background goroutines.
 	narrationCh chan string
+	// Conversation suppression + narration rate-limiting state.
+	lastUserMsgAt    time.Time // set when user submits to the glitch panel
+	recentRunCount   int       // completions in current 60s window
+	runWindowStart   time.Time // start of the current run-count window
 	// widgetRegistry holds all widget-capable sidecars loaded at startup.
 	widgetRegistry *WidgetRegistry
 	// signalHandlers maps handler names to dispatch functions.
@@ -476,6 +480,24 @@ func (m Model) WithAgentPrompts(prompts []store.Prompt) Model {
 
 // SendPanelFocused returns whether the send panel has focus — used in tests.
 func (m Model) SendPanelFocused() bool { return m.sendPanel.Focused() }
+
+// conversationActive returns true when the glitch panel is streaming or
+// routing, or the user sent a message less than 30 seconds ago.
+func (m Model) conversationActive() bool {
+	return m.glitchChat.IsActive() || time.Since(m.lastUserMsgAt) < 30*time.Second
+}
+
+// narrationAllowed returns false when unsolicited narration should be dropped:
+// during an active conversation, or in busy mode (≥2 run completions in 60s).
+func (m Model) narrationAllowed() bool {
+	if m.conversationActive() {
+		return false
+	}
+	if m.recentRunCount >= 2 && time.Since(m.runWindowStart) < 60*time.Second {
+		return false
+	}
+	return true
+}
 
 // SendPanelAgentOpen returns whether the send panel agent picker popup is open — used in tests.
 func (m Model) SendPanelAgentOpen() bool { return m.sendPanel.AgentOpen() }
@@ -938,7 +960,14 @@ var _ io.Writer = (*lineWriter)(nil)
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── GLITCH chat panel: always forward stream messages; route keys when focused ──
 	switch msg.(type) {
-	case glitchStreamMsg, glitchDoneMsg, glitchErrMsg, glitchRunEventMsg, glitchIntentMsg:
+	case glitchRunEventMsg:
+		if !m.narrationAllowed() {
+			return m, nil
+		}
+		newPanel, cmd := m.glitchChat.update(msg)
+		m.glitchChat = newPanel
+		return m, cmd
+	case glitchStreamMsg, glitchDoneMsg, glitchErrMsg, glitchIntentMsg:
 		newPanel, cmd := m.glitchChat.update(msg)
 		m.glitchChat = newPanel
 		return m, cmd
@@ -952,6 +981,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pipelineLaunchMode != plModeNone || m.showRerun ||
 				m.pipelineEditorOpen || m.brainEditorOpen
 			if !overlayActive {
+				if km.String() == "enter" {
+					m.lastUserMsgAt = time.Now()
+				}
 				newPanel, cmd := m.glitchChat.update(msg)
 				m.glitchChat = newPanel
 				return m, cmd
@@ -1282,12 +1314,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Pipeline string `json:"pipeline"`
 			}
 			if json.Unmarshal(msg.payload, &rsp) == nil && rsp.Pipeline != "" {
-				if !m.glitchChat.recentlyMentionedPipeline(rsp.Pipeline) {
+				if !m.glitchChat.recentlyMentionedPipeline(rsp.Pipeline) && m.narrationAllowed() {
 					newPanel, glitchCmd := m.glitchChat.update(glitchNarrationMsg{text: "→ " + rsp.Pipeline + " started"})
 					m.glitchChat = newPanel
 					cmds = append(cmds, glitchCmd)
 				}
 			}
+		}
+		// Track run completions for busy-mode narration suppression.
+		if msg.topic == topics.RunCompleted || msg.topic == topics.RunFailed {
+			if time.Since(m.runWindowStart) >= 60*time.Second {
+				m.recentRunCount = 0
+				m.runWindowStart = time.Now()
+			}
+			m.recentRunCount++
 		}
 		// Route pipeline run completions/failures to GLITCH for analysis.
 		if (msg.topic == topics.RunCompleted || msg.topic == topics.RunFailed) && m.store != nil {
@@ -1309,6 +1349,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case glitchNarrationMsg:
+		if !m.narrationAllowed() {
+			return m, nil
+		}
 		newPanel, cmd := m.glitchChat.update(msg)
 		m.glitchChat = newPanel
 		return m, cmd

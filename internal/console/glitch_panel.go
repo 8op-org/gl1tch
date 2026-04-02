@@ -864,6 +864,12 @@ func (p glitchChatPanel) initCmd() tea.Cmd {
 	}
 }
 
+// IsActive returns true when the panel is mid-stream or routing an intent.
+// Used by the deck to gate unsolicited narration delivery.
+func (p glitchChatPanel) IsActive() bool {
+	return p.streaming || p.routing
+}
+
 // setFocused toggles input focus and updates the focused flag.
 func (p glitchChatPanel) setFocused(v bool) glitchChatPanel {
 	p.focused = v
