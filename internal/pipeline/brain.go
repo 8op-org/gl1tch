@@ -3,7 +3,6 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -25,7 +24,7 @@ func injectBrainContext(ctx context.Context, prompt string, _ *Pipeline, step *S
 		if preamble, err := inj.ReadContext(ctx, ec.RunID()); err == nil && preamble != "" {
 			prompt = preamble + "\n\n" + prompt
 		} else if err != nil {
-			fmt.Fprintf(os.Stderr, "[debug] brain read context error for step %q: %v\n", step.ID, err)
+			writeDebug("[debug] brain read context error for step %q: %v\n", step.ID, err)
 		}
 		// BrainInjector preamble already includes the write instruction.
 		return prompt
@@ -110,7 +109,7 @@ func buildTagsColumn(b parsedBrainBlock) string {
 func parseBrainBlock(ctx context.Context, output, stepID string, ec *ExecutionContext) {
 	block, ok := extractBrainBlock(output)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "[debug] brain step %q: no <brain> block found in output\n", stepID)
+		writeDebug("[debug] brain step %q: no <brain> block found in output\n", stepID)
 		return
 	}
 	if block.body == "" {
@@ -118,7 +117,7 @@ func parseBrainBlock(ctx context.Context, output, stepID string, ec *ExecutionCo
 	}
 	s := ec.DB()
 	if s == nil {
-		fmt.Fprintf(os.Stderr, "[debug] brain: no store configured, cannot persist brain note for step %q\n", stepID)
+		writeDebug("[debug] brain: no store configured, cannot persist brain note for step %q\n", stepID)
 		return
 	}
 	note := store.BrainNote{
@@ -129,7 +128,7 @@ func parseBrainBlock(ctx context.Context, output, stepID string, ec *ExecutionCo
 		Body:      block.body,
 	}
 	if _, err := s.InsertBrainNote(ctx, note); err != nil {
-		fmt.Fprintf(os.Stderr, "[debug] brain: failed to insert brain note for step %q: %v\n", stepID, err)
+		writeDebug("[debug] brain: failed to insert brain note for step %q: %v\n", stepID, err)
 	}
 }
 

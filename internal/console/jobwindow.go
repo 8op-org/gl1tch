@@ -127,7 +127,7 @@ func startLogWatcher(feedID, logFile, doneFile string, ch chan<- tea.Msg) {
 					offset += int64(len(data))
 					for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
 						if line != "" {
-							if stepID, status, ok := parseStepStatus(line); ok {
+							if stepID, status, ok := parseStepStatus(stripANSI(line)); ok {
 								ch <- StepStatusMsg{FeedID: feedID, StepID: stepID, Status: status}
 							} else {
 								ch <- FeedLineMsg{ID: feedID, Line: line}
@@ -168,9 +168,12 @@ func currentTmuxPane() string {
 // pane at 50 % (side-by-side). Subsequent pipelines are split vertically
 // below lastPaneID so they stack evenly on the right side of the screen.
 //
+// extraEnv, if non-empty, is prepended to the shell command as environment
+// variable assignments (e.g. "FORCE_COLOR=1 GLITCH_COL_ACCENT=bd93f9 ...").
+//
 // Returns (paneID, logFile, doneFile). All empty strings if tmux is
 // unavailable or no TMUX_PANE is set for the first split.
-func createJobPane(feedID, shellCmd, label, startDir, lastPaneID string) (paneID, logFile, doneFile string) {
+func createJobPane(feedID, shellCmd, label, startDir, lastPaneID, extraEnv string) (paneID, logFile, doneFile string) {
 	if strings.HasSuffix(os.Args[0], ".test") {
 		return "", "", ""
 	}
@@ -186,7 +189,15 @@ func createJobPane(feedID, shellCmd, label, startDir, lastPaneID string) (paneID
 	doneFile = fmt.Sprintf("%s/glitch-%s.done", os.TempDir(), feedID)
 	os.WriteFile(logFile, nil, 0o600) //nolint:errcheck
 
-	windowCmd := fmt.Sprintf("{ %s ; } 2>&1 | tee %s ; echo $? > %s ; exec $SHELL", shellCmd, logFile, doneFile)
+	envPrefix := ""
+	if extraEnv != "" {
+		envPrefix = extraEnv + " "
+	}
+	cdPrefix := ""
+	if startDir != "" {
+		cdPrefix = fmt.Sprintf("cd %q && ", startDir)
+	}
+	windowCmd := fmt.Sprintf("%s%s{ %s ; } 2>&1 | tee %s ; echo $? > %s ; exec $SHELL", envPrefix, cdPrefix, shellCmd, logFile, doneFile)
 
 	var args []string
 	if lastPaneID == "" {

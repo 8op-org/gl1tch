@@ -785,6 +785,21 @@ func (m Model) activeBundle() *themes.Bundle {
 	return m.registry.Active()
 }
 
+// paneThemeEnv returns a shell env-var prefix string that encodes the active theme
+// palette as GLITCH_COL_* variables plus FORCE_COLOR=1. Injected into pipeline pane
+// commands so the subprocess can colorize its output to match the current theme.
+// Hex values are passed without the leading "#" for clean shell embedding.
+func (m Model) paneThemeEnv() string {
+	b := m.activeBundle()
+	if b == nil {
+		return "FORCE_COLOR=1"
+	}
+	p := b.Palette
+	trim := func(s string) string { return strings.TrimPrefix(s, "#") }
+	return fmt.Sprintf("FORCE_COLOR=1 GLITCH_COL_ACCENT=%s GLITCH_COL_DIM=%s GLITCH_COL_SUCCESS=%s GLITCH_COL_ERROR=%s GLITCH_COL_FG=%s",
+		trim(p.Accent), trim(p.Dim), trim(p.Success), trim(p.Error), trim(p.FG))
+}
+
 // ansiPalette returns an ANSI escape sequence palette derived from the active bundle.
 // Falls back to Dracula hardcoded defaults when no bundle is active.
 func (m Model) ansiPalette() styles.ANSIPalette {
@@ -1523,7 +1538,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.input != "" {
 				shellCmd += " --input " + shellescape(msg.input)
 			}
-			windowName, logFile, doneFile := createJobPane(feedID, shellCmd, name, m.launchCWD, m.lastPipelinePane)
+			windowName, logFile, doneFile := createJobPane(feedID, shellCmd, name, m.launchCWD, m.lastPipelinePane, m.paneThemeEnv())
 			if windowName != "" {
 				m.lastPipelinePane = windowName
 			}
@@ -2862,7 +2877,7 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 		shellCmd += " --input " + shellescape(m.pendingPipelineInput)
 		m.pendingPipelineInput = ""
 	}
-	windowName, logFile, doneFile := createJobPane(feedID, shellCmd, name, cwd, m.lastPipelinePane)
+	windowName, logFile, doneFile := createJobPane(feedID, shellCmd, name, cwd, m.lastPipelinePane, m.paneThemeEnv())
 	if windowName != "" {
 		m.lastPipelinePane = windowName
 	}
@@ -3101,7 +3116,7 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 			escaped := strings.ReplaceAll(additionalContext, "'", `'\''`)
 			shellCmd = "GLITCH_CONTEXT='" + escaped + "' " + shellCmd
 		}
-		windowName, logFile, doneFile := createJobPane(feedID, shellCmd, run.Name, cwd, m.lastPipelinePane)
+		windowName, logFile, doneFile := createJobPane(feedID, shellCmd, run.Name, cwd, m.lastPipelinePane, m.paneThemeEnv())
 		if windowName != "" {
 			m.lastPipelinePane = windowName
 		}

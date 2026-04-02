@@ -61,7 +61,25 @@ var pipelineRunCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("[pipeline] starting: %s\n", p.Name)
+		if os.Getenv("FORCE_COLOR") == "1" {
+			toANSI := func(envKey, fallback string) string {
+				hex := os.Getenv(envKey)
+				if len(hex) != 6 {
+					hex = fallback
+				}
+				var r, g, b uint64
+				fmt.Sscanf(hex[0:2], "%x", &r)
+				fmt.Sscanf(hex[2:4], "%x", &g)
+				fmt.Sscanf(hex[4:6], "%x", &b)
+				return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
+			}
+			dim := toANSI("GLITCH_COL_DIM", "6272a4")
+			accent := toANSI("GLITCH_COL_ACCENT", "bd93f9")
+			reset := "\033[0m"
+			fmt.Printf("%s[pipeline]%s starting: %s%s%s\n", dim, reset, accent, p.Name, reset)
+		} else {
+			fmt.Printf("[pipeline] starting: %s\n", p.Name)
+		}
 
 		runProviders := picker.BuildProviders()
 		mgr := executor.NewManager()

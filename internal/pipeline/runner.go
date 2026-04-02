@@ -159,6 +159,85 @@ func WithResumeFrom(runID int64, stepID, followUpPrompt string) RunOption {
 // The deck log-watcher parses lines matching this pattern.
 const StepStatusLineFormat = "[step:%s] status:%s"
 
+// paneColorSet holds ANSI foreground escape sequences derived from the active
+// theme, injected via GLITCH_COL_* environment variables by createJobPane.
+type paneColorSet struct {
+	dim, accent, success, errCol, fg, reset string
+}
+
+// getPaneColors reads GLITCH_COL_* env vars (set by the TUI at pane launch time)
+// and returns pre-baked ANSI sequences. Returns zero-value (no color) when
+// FORCE_COLOR is not set, so plain-text fallbacks are used instead.
+func getPaneColors() paneColorSet {
+	if os.Getenv("FORCE_COLOR") != "1" {
+		return paneColorSet{}
+	}
+	toANSI := func(envKey, fallback string) string {
+		hex := os.Getenv(envKey)
+		if len(hex) != 6 {
+			hex = fallback
+		}
+		var r, g, b uint64
+		fmt.Sscanf(hex[0:2], "%x", &r)
+		fmt.Sscanf(hex[2:4], "%x", &g)
+		fmt.Sscanf(hex[4:6], "%x", &b)
+		return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
+	}
+	return paneColorSet{
+		dim:     toANSI("GLITCH_COL_DIM", "6272a4"),
+		accent:  toANSI("GLITCH_COL_ACCENT", "bd93f9"),
+		success: toANSI("GLITCH_COL_SUCCESS", "50fa7b"),
+		errCol:  toANSI("GLITCH_COL_ERROR", "ff5555"),
+		fg:      toANSI("GLITCH_COL_FG", "f8f8f2"),
+		reset:   "\033[0m",
+	}
+}
+
+// writeStepStatus writes a [step:<id>] status:<state> line to w.
+// When FORCE_COLOR=1 is set the line is colorized using the active theme palette.
+func writeStepStatus(w io.Writer, stepID, status string) {
+	c := getPaneColors()
+	if c.reset == "" {
+		fmt.Fprintf(w, StepStatusLineFormat+"\n", stepID, status)
+		return
+	}
+	var statusColor string
+	switch status {
+	case "running":
+		statusColor = c.fg // theme FG = "warn" equivalent
+	case "done":
+		statusColor = c.success
+	case "failed":
+		statusColor = c.errCol
+	default:
+		statusColor = c.dim
+	}
+	fmt.Fprintf(w, "%s[step:%s%s%s]%s status:%s%s%s\n",
+		c.dim, c.accent, stepID, c.dim, c.reset,
+		statusColor, status, c.reset)
+}
+
+// writeStepError writes an indented error line to w with theme error color.
+func writeStepError(w io.Writer, err error) {
+	c := getPaneColors()
+	if c.reset == "" {
+		fmt.Fprintf(w, "  error: %v\n", err)
+		return
+	}
+	fmt.Fprintf(w, "%s  error: %v%s\n", c.errCol, err, c.reset)
+}
+
+// writeDebug writes a [debug] line to w with theme dim color.
+func writeDebug(format string, args ...any) {
+	c := getPaneColors()
+	msg := fmt.Sprintf(format, args...)
+	if c.reset == "" {
+		fmt.Fprint(os.Stderr, msg)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s%s%s", c.dim, msg, c.reset)
+}
+
 // stepStatus represents the lifecycle state of a step.
 type stepStatus int
 
@@ -841,15 +920,15 @@ func runDAG(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput s
 					cloneSnap["item"] = item
 					cloneArgs := map[string]any{"_item": item, "item": item}
 
-					fmt.Fprintf(cfg.statusWriter, StepStatusLineFormat+"\n", cloneID, "running")
+					writeStepStatus(cfg.statusWriter, cloneID, "running")
 					cloneOut, cloneErr := dispatchStep(ctx, &clone, cloneArgs, cloneSnap, ec, mgr, cfg.runID, cfg.pipeName, cfg.publisher, p, cfg.store, cfg.stepWriter, cfg)
 					if cloneErr != nil {
 						lastErr = cloneErr
-						fmt.Fprintf(cfg.statusWriter, StepStatusLineFormat+"\n", cloneID, "failed")
-						fmt.Fprintf(cfg.statusWriter, "  error: %v\n", cloneErr)
+						writeStepStatus(cfg.statusWriter, cloneID, "failed")
+						writeStepError(cfg.statusWriter, cloneErr)
 						break
 					}
-					fmt.Fprintf(cfg.statusWriter, StepStatusLineFormat+"\n", cloneID, "done")
+					writeStepStatus(cfg.statusWriter, cloneID, "done")
 
 					// Aggregate clone output under the parent placeholder ID.
 					if cloneOut != nil {
@@ -1416,7 +1495,7 @@ func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map
 		_ = pub.Publish(ctx, topics.StepStarted, payload)
 	}
 
-	fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "running")
+	writeStepStatus(runCfg.statusWriter, step.ID, "running")
 
 	stepStart := time.Now()
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -1540,8 +1619,8 @@ done:
 		}
 		stepSpan.RecordError(execErr)
 		stepSpan.SetStatus(codes.Error, execErr.Error())
-		fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "failed")
-		fmt.Fprintf(runCfg.statusWriter, "  error: %v\n", execErr)
+		writeStepStatus(runCfg.statusWriter, step.ID, "failed")
+		writeStepError(runCfg.statusWriter, execErr)
 		// Publish step.failed.
 		if payload, merr := json.Marshal(map[string]any{
 			"run_id":      runID,
@@ -1558,7 +1637,7 @@ done:
 	if cleanupErr != nil {
 		stepSpan.RecordError(cleanupErr)
 		stepSpan.SetStatus(codes.Error, cleanupErr.Error())
-		fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "failed")
+		writeStepStatus(runCfg.statusWriter, step.ID, "failed")
 		// Publish step.failed for cleanup error too.
 		if payload, merr := json.Marshal(map[string]any{
 			"run_id":      runID,
@@ -1572,7 +1651,7 @@ done:
 		return nil, cleanupErr
 	}
 	stepSpan.SetStatus(codes.Ok, "")
-	fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "done")
+	writeStepStatus(runCfg.statusWriter, step.ID, "done")
 
 	// Publish step.done.
 	if payload, merr := json.Marshal(map[string]any{
