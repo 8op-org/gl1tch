@@ -9,9 +9,30 @@ package router
 import (
 	"context"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/8op-org/gl1tch/internal/executor"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 )
+
+var (
+	routerTracer        = otel.Tracer("gl1tch/router")
+	routerSimilarity    metric.Float64Histogram
+	routerStrategyUsed  metric.Int64Counter
+)
+
+func init() {
+	meter := otel.Meter("gl1tch/router")
+	routerSimilarity, _ = meter.Float64Histogram("gl1tch.router.similarity_score",
+		metric.WithDescription("Cosine similarity score from embedding routing"),
+	)
+	routerStrategyUsed, _ = meter.Int64Counter("gl1tch.router.strategy_used",
+		metric.WithDescription("Number of times each routing strategy was used"),
+	)
+}
 
 // DefaultConfidentThreshold is the cosine similarity above which a match is
 // treated as definitive and the LLM stage is skipped.
@@ -102,12 +123,27 @@ func (r *HybridRouter) Route(ctx context.Context, prompt string, pipelines []pip
 		return &RouteResult{Method: "none"}, nil
 	}
 
+	ctx, span := routerTracer.Start(ctx, "router.classify")
+	defer span.End()
+
 	// Stage 1: embedding fast path.
 	if !r.cfg.DisableEmbeddings {
 		embedResult, err := r.embedRouter.Route(ctx, prompt, pipelines)
 		if err == nil && embedResult != nil && embedResult.Pipeline != nil {
+			routerSimilarity.Record(ctx, embedResult.Confidence)
 			if embedResult.Confidence >= r.cfg.ConfidentThreshold {
 				embedResult.Method = "embedding"
+				routerStrategyUsed.Add(ctx, 1, metric.WithAttributes(attribute.String("strategy", "embedding")))
+				matched := ""
+				if embedResult.Pipeline != nil {
+					matched = embedResult.Pipeline.Name
+				}
+				span.SetAttributes(
+					attribute.String("router.strategy", "embedding"),
+					attribute.String("router.matched_pipeline", matched),
+					attribute.Float64("router.confidence", embedResult.Confidence),
+				)
+				span.SetStatus(codes.Ok, "")
 				return embedResult, nil
 			}
 		}
@@ -116,10 +152,27 @@ func (r *HybridRouter) Route(ctx context.Context, prompt string, pipelines []pip
 	}
 
 	// Stage 2: LLM classifier.
+	routerStrategyUsed.Add(ctx, 1, metric.WithAttributes(attribute.String("strategy", "llm")))
 	result, err := r.classifier.Classify(ctx, prompt, pipelines)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		// LLM errors are non-fatal — return safe no-match.
 		return &RouteResult{Method: "none"}, nil
 	}
+	matched := ""
+	if result != nil && result.Pipeline != nil {
+		matched = result.Pipeline.Name
+	}
+	confidence := 0.0
+	if result != nil {
+		confidence = result.Confidence
+	}
+	span.SetAttributes(
+		attribute.String("router.strategy", "llm"),
+		attribute.String("router.matched_pipeline", matched),
+		attribute.Float64("router.confidence", confidence),
+	)
+	span.SetStatus(codes.Ok, "")
 	return result, nil
 }

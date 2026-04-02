@@ -13,6 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/8op-org/gl1tch/internal/activity"
 	"github.com/8op-org/gl1tch/internal/brainaudit"
 	"github.com/8op-org/gl1tch/internal/brainrag"
@@ -22,6 +28,23 @@ import (
 	"github.com/8op-org/gl1tch/internal/game"
 	"github.com/8op-org/gl1tch/internal/store"
 )
+
+var (
+	pipelineTracer  = otel.Tracer("gl1tch/pipeline")
+	pipelineRuns    metric.Int64Counter
+	pipelineStepDur metric.Float64Histogram
+)
+
+func init() {
+	meter := otel.Meter("gl1tch/pipeline")
+	pipelineRuns, _ = meter.Int64Counter("gl1tch.pipeline.runs",
+		metric.WithDescription("Total pipeline runs"),
+	)
+	pipelineStepDur, _ = meter.Float64Histogram("gl1tch.pipeline.step.duration_ms",
+		metric.WithDescription("Pipeline step duration in milliseconds"),
+		metric.WithUnit("ms"),
+	)
+}
 
 // RunOption configures a pipeline Run call.
 type RunOption func(*runConfig)
@@ -232,7 +255,19 @@ func Run(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput stri
 		}
 	}
 
-	result, runErr := runDAG(ctx, p, mgr, userInput, cfg)
+	runCtx, runSpan := pipelineTracer.Start(ctx, "pipeline.run",
+		trace.WithAttributes(attribute.String("pipeline.name", p.Name)),
+	)
+	result, runErr := runDAG(runCtx, p, mgr, userInput, cfg)
+	if runErr != nil {
+		runSpan.RecordError(runErr)
+		runSpan.SetStatus(codes.Error, runErr.Error())
+		pipelineRuns.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
+	} else {
+		runSpan.SetStatus(codes.Ok, "")
+		pipelineRuns.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "ok")))
+	}
+	runSpan.End()
 
 	finishedAt := time.Now()
 	durationMs := finishedAt.Sub(startedAt).Milliseconds()
@@ -1277,6 +1312,23 @@ func interpolateArgs(args map[string]any, vars map[string]any) map[string]any {
 // dispatchStep determines the executor for a step and runs it (with retries).
 // runID and pipeName are used to populate event payloads; pub receives the events.
 func dispatchStep(ctx context.Context, step *Step, args map[string]any, snap map[string]any, ec *ExecutionContext, mgr *executor.Manager, runID int64, pipeName string, pub EventPublisher, p *Pipeline, st *store.Store, w io.Writer, runCfg *runConfig) (map[string]any, error) {
+	executorName := step.Executor
+	if executorName == "" {
+		executorName = step.Type
+	}
+	ctx, stepSpan := pipelineTracer.Start(ctx, "pipeline.step",
+		trace.WithAttributes(
+			attribute.String("step.id", step.ID),
+			attribute.String("step.name", step.ID),
+			attribute.String("executor", executorName),
+		),
+	)
+	stepSpanStart := time.Now()
+	defer func() {
+		pipelineStepDur.Record(ctx, float64(time.Since(stepSpanStart).Milliseconds()))
+		stepSpan.End()
+	}()
+
 	// Wrap the step writer with a GameTeeWriter to capture token usage.
 	var teeW *game.GameTeeWriter
 	if w != nil && runCfg != nil {
@@ -1444,6 +1496,8 @@ done:
 				}
 			}
 		}
+		stepSpan.RecordError(execErr)
+		stepSpan.SetStatus(codes.Error, execErr.Error())
 		fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "failed")
 		fmt.Fprintf(runCfg.statusWriter, "  error: %v\n", execErr)
 		// Publish step.failed.
@@ -1460,6 +1514,8 @@ done:
 		return nil, execErr
 	}
 	if cleanupErr != nil {
+		stepSpan.RecordError(cleanupErr)
+		stepSpan.SetStatus(codes.Error, cleanupErr.Error())
 		fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "failed")
 		// Publish step.failed for cleanup error too.
 		if payload, merr := json.Marshal(map[string]any{
@@ -1473,6 +1529,7 @@ done:
 		}
 		return nil, cleanupErr
 	}
+	stepSpan.SetStatus(codes.Ok, "")
 	fmt.Fprintf(runCfg.statusWriter, StepStatusLineFormat+"\n", step.ID, "done")
 
 	// Publish step.done.

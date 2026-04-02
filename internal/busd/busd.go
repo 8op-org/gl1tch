@@ -22,6 +22,7 @@
 package busd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -29,6 +30,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // SocketPath returns the path to the Unix domain socket.
@@ -48,14 +52,33 @@ func SocketPath() (string, error) {
 // Event is the decoded form of a server-to-client wire frame. It is exported
 // so test helpers can unmarshal received frames into a typed value.
 type Event struct {
-	Event   string `json:"event"`
-	Payload any    `json:"payload"`
+	Event       string `json:"event"`
+	Payload     any    `json:"payload"`
+	Traceparent string `json:"traceparent,omitempty"`
 }
 
 // eventFrame is the wire format sent from the server to connected clients.
 type eventFrame struct {
-	Event   string `json:"event"`
-	Payload any    `json:"payload"`
+	Event       string `json:"event"`
+	Payload     any    `json:"payload"`
+	Traceparent string `json:"traceparent,omitempty"`
+}
+
+// ExtractContext returns a context with the trace context extracted from event's
+// traceparent field. If the field is empty, ctx is returned unchanged.
+func ExtractContext(ctx context.Context, evt Event) context.Context {
+	if evt.Traceparent == "" {
+		return ctx
+	}
+	carrier := propagation.MapCarrier{"traceparent": evt.Traceparent}
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+}
+
+// injectTraceparent extracts the current span's traceparent from ctx and returns it.
+func injectTraceparent(ctx context.Context) string {
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	return carrier.Get("traceparent")
 }
 
 // matchTopic returns true when pattern matches topic.
@@ -146,6 +169,43 @@ func (d *Daemon) Stop() {
 	}
 	d.clients = make(map[*client]struct{})
 	d.mu.Unlock()
+}
+
+// PublishCtx delivers an event to all clients subscribed to topic, injecting
+// the current span's traceparent into the wire frame.
+func (d *Daemon) PublishCtx(ctx context.Context, topic string, payload any) error {
+	tp := injectTraceparent(ctx)
+	frame, err := json.Marshal(eventFrame{Event: topic, Payload: payload, Traceparent: tp})
+	if err != nil {
+		return fmt.Errorf("busd: marshal event: %w", err)
+	}
+	frame = append(frame, '\n')
+
+	d.mu.RLock()
+	var targets []*client
+	for c := range d.clients {
+		if c.matches(topic) {
+			targets = append(targets, c)
+		}
+	}
+	d.mu.RUnlock()
+
+	var dead []*client
+	for _, c := range targets {
+		if err := c.send(frame); err != nil {
+			dead = append(dead, c)
+		}
+	}
+
+	if len(dead) > 0 {
+		d.mu.Lock()
+		for _, c := range dead {
+			delete(d.clients, c)
+			c.close()
+		}
+		d.mu.Unlock()
+	}
+	return nil
 }
 
 // Publish delivers an event to all clients subscribed to topic. It is
@@ -244,6 +304,14 @@ type publishClientFrame struct {
 	Payload any    `json:"payload"`
 }
 
+// publishClientFrameWithTrace is the wire frame sent by PublishEventCtx, carrying trace context.
+type publishClientFrameWithTrace struct {
+	Action      string `json:"action"`
+	Event       string `json:"event"`
+	Payload     any    `json:"payload"`
+	Traceparent string `json:"traceparent,omitempty"`
+}
+
 // PublishEvent dials the busd daemon at sockPath, sends a publish frame for
 // topic with payload, and closes the connection. The daemon broadcasts the
 // event to all subscribers.
@@ -255,6 +323,12 @@ type publishClientFrame struct {
 // Returns nil if the daemon is not running (dial fails), so callers can safely
 // call this without checking whether busd is available.
 func PublishEvent(sockPath, topic string, payload any) error {
+	return PublishEventCtx(context.Background(), sockPath, topic, payload)
+}
+
+// PublishEventCtx is like PublishEvent but injects the current span's traceparent
+// into the wire frame so subscribers can continue the trace.
+func PublishEventCtx(ctx context.Context, sockPath, topic string, payload any) error {
 	conn, err := net.Dial("unix", sockPath)
 	if err != nil {
 		// Daemon not running — degrade silently.
@@ -270,8 +344,13 @@ func PublishEvent(sockPath, topic string, payload any) error {
 		return fmt.Errorf("busd: write registration: %w", err)
 	}
 
-	// Publish frame.
-	pub := publishClientFrame{Action: "publish", Event: topic, Payload: payload}
+	// Publish frame with traceparent.
+	pub := publishClientFrameWithTrace{
+		Action:      "publish",
+		Event:       topic,
+		Payload:     payload,
+		Traceparent: injectTraceparent(ctx),
+	}
 	pubBytes, err := json.Marshal(pub)
 	if err != nil {
 		return fmt.Errorf("busd: marshal publish frame: %w", err)

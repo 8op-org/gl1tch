@@ -6,7 +6,25 @@ import (
 	"io"
 	"strings"
 	"sync"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var (
+	executorTracer = otel.Tracer("gl1tch/executor")
+	executorCalls  metric.Int64Counter
+)
+
+func init() {
+	meter := otel.Meter("gl1tch/executor")
+	executorCalls, _ = meter.Int64Counter("gl1tch.executor.calls",
+		metric.WithDescription("Total executor dispatch calls"),
+	)
+}
 
 // actionExecutor wraps an Executor and injects _action into the vars map on Execute.
 // It is returned by Manager.Get for category.action lookups.
@@ -140,6 +158,38 @@ func (m *Manager) LoadWrappersFromDir(dir string) []error {
 		}
 	}
 	return errs
+}
+
+// Execute looks up executor by name and runs it, recording a trace span and
+// incrementing the gl1tch.executor.calls counter.
+func (m *Manager) Execute(ctx context.Context, name string, input string, vars map[string]string, w io.Writer) error {
+	e, ok := m.Get(name)
+	if !ok {
+		return fmt.Errorf("executor %q not found", name)
+	}
+
+	category := name
+	if idx := strings.LastIndex(name, "."); idx > 0 {
+		category = name[:idx]
+	}
+
+	ctx, span := executorTracer.Start(ctx, "executor.execute",
+		trace.WithAttributes(
+			attribute.String("executor.name", name),
+			attribute.String("executor.category", category),
+		),
+	)
+	defer span.End()
+
+	executorCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("executor", name)))
+
+	if err := e.Execute(ctx, input, vars, w); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // List returns all registered executors in no guaranteed order.

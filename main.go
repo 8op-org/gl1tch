@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/8op-org/gl1tch/cmd"
 	"github.com/8op-org/gl1tch/internal/bootstrap"
 	"github.com/8op-org/gl1tch/internal/console"
+	"github.com/8op-org/gl1tch/internal/telemetry"
 )
 
 // Build-time variables injected by GoReleaser via -ldflags.
@@ -21,6 +23,12 @@ var (
 )
 
 func main() {
+	ctx := context.Background()
+	shutdown, err := telemetry.Setup(ctx, "gl1tch")
+	if err == nil {
+		defer shutdown(ctx) //nolint:errcheck
+	}
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
@@ -48,7 +56,7 @@ func main() {
 		return
 	}
 
-	err := bootstrap.Run()
+	err = bootstrap.Run()
 	if errors.Is(err, bootstrap.ErrReload) {
 		// Replace this process with the binary on disk — picks up a newly
 		// built binary without going back through the session-already-exists

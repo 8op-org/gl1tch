@@ -6,12 +6,36 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/8op-org/gl1tch/internal/busd/topics"
 	"github.com/8op-org/gl1tch/internal/executor"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/store"
 )
+
+var (
+	conductorTracer    = otel.Tracer("gl1tch/orchestrator")
+	conductorRuns      metric.Int64Counter
+	conductorStepDur   metric.Float64Histogram
+)
+
+func init() {
+	meter := otel.Meter("gl1tch/orchestrator")
+	conductorRuns, _ = meter.Int64Counter("gl1tch.workflow.runs",
+		metric.WithDescription("Total workflow runs"),
+	)
+	conductorStepDur, _ = meter.Float64Histogram("gl1tch.workflow.step.duration_ms",
+		metric.WithDescription("Workflow step duration in milliseconds"),
+		metric.WithUnit("ms"),
+	)
+}
 
 // BusPublisher is the interface ConductorRunner uses to emit BUSD events.
 // It is satisfied by *busPublisher in cmd/busd_publisher.go or any test double.
@@ -111,6 +135,13 @@ func (c *ConductorRunner) saveCheckpoint(ctx context.Context, runID int64, stepI
 // Run executes the workflow defined by def with the given input string.
 // Returns the output of the last step, or an error if any step fails.
 func (c *ConductorRunner) Run(ctx context.Context, def *WorkflowDef, input string) (string, error) {
+	ctx, span := conductorTracer.Start(ctx, "workflow.run",
+		trace.WithAttributes(
+			attribute.String("workflow.name", def.Name),
+		),
+	)
+	defer span.End()
+
 	// 1. Create workflow_runs record.
 	var runID int64
 	if c.cfg.store != nil {
@@ -121,6 +152,8 @@ func (c *ConductorRunner) Run(ctx context.Context, def *WorkflowDef, input strin
 			runID = id
 		}
 	}
+
+	span.SetAttributes(attribute.Int64("run.id", runID))
 
 	// 2. Publish run started.
 	c.publish(ctx, topics.WorkflowRunStarted, map[string]any{
@@ -135,6 +168,9 @@ func (c *ConductorRunner) Run(ctx context.Context, def *WorkflowDef, input strin
 	// 4. Execute steps.
 	output, err := c.executeSteps(ctx, def.Steps, wctx, runID, "")
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		conductorRuns.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		c.publish(ctx, topics.WorkflowRunFailed, map[string]any{
 			"workflow_name": def.Name,
 			"run_id":        runID,
@@ -145,6 +181,9 @@ func (c *ConductorRunner) Run(ctx context.Context, def *WorkflowDef, input strin
 		}
 		return "", err
 	}
+
+	span.SetStatus(codes.Ok, "")
+	conductorRuns.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "ok")))
 
 	// 7. Publish completed.
 	c.publish(ctx, topics.WorkflowRunCompleted, map[string]any{
@@ -193,6 +232,15 @@ func (c *ConductorRunner) executeSteps(
 			"type":    step.Type,
 		})
 
+		stepCtx, stepSpan := conductorTracer.Start(ctx, "workflow.step",
+			trace.WithAttributes(
+				attribute.String("step.id", step.ID),
+				attribute.String("step.type", step.Type),
+				attribute.String("step.name", branchLabel),
+			),
+		)
+		stepStart := time.Now()
+
 		var (
 			stepOutput string
 			stepErr    error
@@ -200,8 +248,12 @@ func (c *ConductorRunner) executeSteps(
 
 		switch step.Type {
 		case StepTypeDecision:
-			stepOutput, stepErr = c.runDecisionStep(ctx, step, wctx, steps, &i, runID, branchLabel)
+			stepOutput, stepErr = c.runDecisionStep(stepCtx, step, wctx, steps, &i, runID, branchLabel)
 			if stepErr != nil {
+				stepSpan.RecordError(stepErr)
+				stepSpan.SetStatus(codes.Error, stepErr.Error())
+				stepSpan.End()
+				conductorStepDur.Record(ctx, float64(time.Since(stepStart).Milliseconds()))
 				c.publish(ctx, topics.WorkflowStepFailed, map[string]any{
 					"step_id": step.ID,
 					"run_id":  runID,
@@ -212,6 +264,9 @@ func (c *ConductorRunner) executeSteps(
 				return "", stepErr
 			}
 			// Decision steps do not produce a direct output — the branch jump is the result.
+			stepSpan.SetStatus(codes.Ok, "")
+			stepSpan.End()
+			conductorStepDur.Record(ctx, float64(time.Since(stepStart).Milliseconds()))
 			c.publish(ctx, topics.WorkflowStepDone, map[string]any{
 				"step_id": step.ID,
 				"run_id":  runID,
@@ -219,20 +274,24 @@ func (c *ConductorRunner) executeSteps(
 			})
 			c.saveCheckpoint(ctx, runID, step.ID, "done", wctx)
 			if c.cfg.afterStep != nil {
-				c.cfg.afterStep(ctx, step, stepOutput, wctx)
+				c.cfg.afterStep(stepCtx, step, stepOutput, wctx)
 			}
 			// i was already updated inside runDecisionStep; do not increment again.
 			continue
 
 		case StepTypeParallel:
-			stepOutput, stepErr = c.runParallelStep(ctx, step, wctx, runID, branchLabel)
+			stepOutput, stepErr = c.runParallelStep(stepCtx, step, wctx, runID, branchLabel)
 
 		default: // pipeline-ref, agent-ref
 			var pipelineOpts []pipeline.RunOption
-			stepOutput, stepErr = c.dispatcher.Dispatch(ctx, step, wctx, c.cfg.mgr, pipelineOpts...)
+			stepOutput, stepErr = c.dispatcher.Dispatch(stepCtx, step, wctx, c.cfg.mgr, pipelineOpts...)
 		}
 
 		if stepErr != nil {
+			stepSpan.RecordError(stepErr)
+			stepSpan.SetStatus(codes.Error, stepErr.Error())
+			stepSpan.End()
+			conductorStepDur.Record(ctx, float64(time.Since(stepStart).Milliseconds()))
 			c.publish(ctx, topics.WorkflowStepFailed, map[string]any{
 				"step_id": step.ID,
 				"run_id":  runID,
@@ -243,6 +302,9 @@ func (c *ConductorRunner) executeSteps(
 			return "", stepErr
 		}
 
+		stepSpan.SetStatus(codes.Ok, "")
+		stepSpan.End()
+		conductorStepDur.Record(ctx, float64(time.Since(stepStart).Milliseconds()))
 		lastOutput = stepOutput
 		wctx.Set(step.ID+".output", stepOutput)
 
@@ -254,7 +316,7 @@ func (c *ConductorRunner) executeSteps(
 		c.saveCheckpoint(ctx, runID, step.ID, "done", wctx)
 
 		if c.cfg.afterStep != nil {
-			c.cfg.afterStep(ctx, step, stepOutput, wctx)
+			c.cfg.afterStep(stepCtx, step, stepOutput, wctx)
 		}
 
 		i++
