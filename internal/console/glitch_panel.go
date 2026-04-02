@@ -2395,7 +2395,7 @@ func (p glitchChatPanel) renderMessages(innerW int, pal styles.ANSIPalette) []st
 				label = e.widgetLabel
 			}
 			prefix = pal.Success + label + aRst + tsStr + " " + aRst
-			contPrefix = "              "
+			contPrefix = strings.Repeat(" ", len(label)+1)
 		}
 
 		// Word-wrap the text to fit innerW minus prefix width.
