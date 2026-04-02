@@ -148,3 +148,60 @@ func TestCliAdapter_Execute_FilterViaEnv(t *testing.T) {
 	}
 }
 
+func TestSidecarSchema_ModeBlock_ZeroValueSafe(t *testing.T) {
+	path := writeTempSidecar(t, `
+name: plain-tool
+command: echo
+`)
+	a, err := executor.NewCliAdapterFromSidecar(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	schema := a.Schema()
+	if !schema.Mode.IsZero() {
+		t.Error("expected Mode.IsZero() == true for sidecar without mode block")
+	}
+	if schema.Signals != nil {
+		t.Error("expected Signals to be nil for sidecar without signals block")
+	}
+}
+
+func TestSidecarSchema_ModeBlock_Populated(t *testing.T) {
+	path := writeTempSidecar(t, `
+name: widget-tool
+command: my-binary
+mode:
+  trigger: /widget
+  logo: WIDGET
+  speaker: WDGT
+  exit_command: quit
+  on_activate: init
+signals:
+  - topic: widget.*
+    handler: companion
+`)
+	a, err := executor.NewCliAdapterFromSidecar(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	schema := a.Schema()
+	if schema.Mode.IsZero() {
+		t.Error("expected Mode to be populated")
+	}
+	if schema.Mode.Trigger != "/widget" {
+		t.Errorf("expected trigger '/widget', got %q", schema.Mode.Trigger)
+	}
+	if schema.Mode.Speaker != "WDGT" {
+		t.Errorf("expected speaker 'WDGT', got %q", schema.Mode.Speaker)
+	}
+	if len(schema.Signals) != 1 {
+		t.Fatalf("expected 1 signal declaration, got %d", len(schema.Signals))
+	}
+	if schema.Signals[0].Topic != "widget.*" {
+		t.Errorf("expected topic 'widget.*', got %q", schema.Signals[0].Topic)
+	}
+	if schema.Signals[0].Handler != "companion" {
+		t.Errorf("expected handler 'companion', got %q", schema.Signals[0].Handler)
+	}
+}
+

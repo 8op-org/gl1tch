@@ -226,9 +226,10 @@ type pipelineBusConnectMsg struct {
 }
 
 // tryPipelineBusSubscribeCmd attempts to connect to busd and subscribe to
-// pipeline.run.*, pipeline.step.*, and cron.job.* topics. Returns
-// pipelineBusConnectMsg on success or pipelineBusDisconnectedMsg on failure.
-func tryPipelineBusSubscribeCmd() tea.Cmd {
+// pipeline.run.*, pipeline.step.*, and cron.job.* topics, plus any extra
+// topics derived from the widget registry. Returns pipelineBusConnectMsg on
+// success or pipelineBusDisconnectedMsg on failure.
+func tryPipelineBusSubscribeCmd(extraTopics ...string) tea.Cmd {
 	return func() tea.Msg {
 		sockPath, err := busd.SocketPath()
 		if err != nil {
@@ -238,9 +239,13 @@ func tryPipelineBusSubscribeCmd() tea.Cmd {
 		if err != nil {
 			return pipelineBusDisconnectedMsg{}
 		}
+		subs := append(
+			[]string{"pipeline.run.*", "pipeline.step.*", "cron.job.*", "cron.entry.*", topics.ClarificationRequested, topics.GameRunScored},
+			extraTopics...,
+		)
 		reg, _ := json.Marshal(map[string]any{
 			"name":      "switchboard",
-			"subscribe": []string{"pipeline.run.*", "pipeline.step.*", "cron.job.*", "cron.entry.*", topics.ClarificationRequested, topics.GameRunScored},
+			"subscribe": subs,
 		})
 		if _, err := conn.Write(append(reg, '\n')); err != nil {
 			conn.Close()

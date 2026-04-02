@@ -119,6 +119,16 @@ func (e *GameEngine) ollamaChat(ctx context.Context, systemPrompt, userMsg strin
 	return ollamaResp.Message.Content, nil
 }
 
+// Respond calls Ollama with the given system prompt and user message, returning
+// the assistant response. Returns "" on any error — callers treat this as optional.
+func (e *GameEngine) Respond(ctx context.Context, systemPrompt, userMsg string) string {
+	content, err := e.ollamaChat(ctx, systemPrompt, userMsg)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(content)
+}
+
 // parseEvaluateResult tries to JSON-unmarshal content into result. It handles
 // the case where Ollama wraps the JSON in markdown code fences.
 func parseEvaluateResult(content string, result *EvaluateResult) error {

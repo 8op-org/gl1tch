@@ -17,6 +17,25 @@ type SidecarModel struct {
 	Label string `yaml:"label"`
 }
 
+// ModeBlock declares widget/UI-takeover behaviour for a sidecar plugin.
+// All fields except OnActivate are required when a mode block is present.
+type ModeBlock struct {
+	Trigger     string `yaml:"trigger"`
+	Logo        string `yaml:"logo"`
+	Speaker     string `yaml:"speaker"`
+	ExitCommand string `yaml:"exit_command"`
+	OnActivate  string `yaml:"on_activate,omitempty"`
+}
+
+// IsZero returns true when the block is absent (Trigger is empty).
+func (m ModeBlock) IsZero() bool { return m.Trigger == "" }
+
+// SignalDeclaration maps a BUSD topic pattern to a named handler.
+type SignalDeclaration struct {
+	Topic   string `yaml:"topic"`
+	Handler string `yaml:"handler"`
+}
+
 // SidecarSchema is the structure of a ~/.config/glitch/wrappers/<name>.yaml file.
 type SidecarSchema struct {
 	Name         string         `yaml:"name"`
@@ -32,6 +51,10 @@ type SidecarSchema struct {
 	// Kind categorises the executor. Valid values: "agent" (default), "tool".
 	// Executors without a kind field default to "agent" for backwards compatibility.
 	Kind string `yaml:"kind"`
+	// Mode declares optional widget/UI-takeover behaviour. Zero-value when absent.
+	Mode ModeBlock `yaml:"mode,omitempty"`
+	// Signals declares optional BUSD topic subscriptions with named handlers. Nil when absent.
+	Signals []SignalDeclaration `yaml:"signals,omitempty"`
 }
 
 // CliAdapter wraps an arbitrary CLI tool as a Tier 2 Executor.
@@ -44,8 +67,9 @@ type CliAdapter struct {
 	args     []string
 	models   []SidecarModel
 	caps     []Capability
-	category string // optional; set from sidecar YAML
-	kind     string // "agent" or "tool"; defaults to "agent"
+	category string      // optional; set from sidecar YAML
+	kind     string      // "agent" or "tool"; defaults to "agent"
+	schema   SidecarSchema // full parsed schema; zero-value for non-sidecar adapters
 }
 
 // NewCliAdapter creates a Tier 2 executor that wraps cmd.
@@ -88,6 +112,7 @@ func NewCliAdapterFromSidecar(path string) (*CliAdapter, error) {
 		caps:     caps,
 		category: schema.Category,
 		kind:     kind,
+		schema:   schema,
 	}, nil
 }
 
@@ -96,6 +121,9 @@ func (c *CliAdapter) Description() string        { return c.desc }
 func (c *CliAdapter) Capabilities() []Capability { return c.caps }
 func (c *CliAdapter) Close() error               { return nil }
 func (c *CliAdapter) Command() string            { return c.cmd }
+
+// Schema returns the full parsed SidecarSchema. Zero-value for non-sidecar adapters.
+func (c *CliAdapter) Schema() SidecarSchema { return c.schema }
 
 // Category returns the optional hierarchical category prefix. Empty if not set.
 func (c *CliAdapter) Category() string { return c.category }

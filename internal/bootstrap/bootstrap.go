@@ -122,7 +122,7 @@ func buildTmuxConf(self string) string {
 		// Explicitly unbind removed chords so stale sessions don't keep them.
 		"unbind-key -T glitch-chord n\n" +
 		"unbind-key -T glitch-chord m\n" +
-		"unbind-key -T glitch-chord o\n" +
+		"bind-key -T glitch-chord o     { switch-client -T root ; select-pane -t :.+ }\n" +
 		"unbind-key -T glitch-chord t\n" +
 		"unbind-key -T glitch-chord h\n" +
 		"unbind-key -T glitch-chord q\n"

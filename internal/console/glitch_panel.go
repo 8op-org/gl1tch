@@ -76,6 +76,16 @@ type glitchCWDMsg struct{ path string }
 // glitchQuitMsg is returned to the switchboard to trigger the quit confirmation modal.
 type glitchQuitMsg struct{}
 
+// glitchWidgetModeMsg is returned to the switchboard to toggle widget mode
+// (logo swap). cfg is non-nil on activation and nil on deactivation.
+type glitchWidgetModeMsg struct{ cfg *WidgetConfig }
+
+// glitchWidgetOutputMsg carries one-shot output from a widget subprocess.
+type glitchWidgetOutputMsg struct {
+	text    string
+	speaker string // label shown in the chat panel
+}
+
 // glitchModelMsg is returned to the switchboard after a model switch (informational).
 type glitchModelMsg struct{ model string }
 
@@ -158,6 +168,7 @@ type glitchSpeaker int
 const (
 	glitchSpeakerBot  glitchSpeaker = iota // GLITCH
 	glitchSpeakerUser                      // YOU
+	glitchSpeakerGame                      // THE GIBSON
 )
 
 type glitchEntry struct {
@@ -165,6 +176,7 @@ type glitchEntry struct {
 	text          string
 	ts            time.Time
 	clarification *clarificationMeta // non-nil for clarification messages
+	widgetLabel   string             // non-empty overrides the default speaker label for glitchSpeakerGame
 }
 
 // clarificationMeta holds the pipeline-side metadata for a clarification
@@ -687,6 +699,9 @@ type glitchChatPanel struct {
 	scrollOffset  int  // lines scrolled up from bottom; 0 = auto-follow latest
 	scrollFocused bool // tab-focused on scroll region; j/k/[/] active
 
+	activeWidget   *WidgetConfig  // non-nil when a widget is active
+	widgetRegistry *WidgetRegistry // loaded at startup, injected from switchboard
+
 	acSuggestions []slashSuggestion // filtered autocomplete list
 	acCursor      int               // selected suggestion index
 	acActive      bool              // suggestion overlay visible
@@ -702,8 +717,32 @@ type glitchChatPanel struct {
 	routing bool // true while the router goroutine is running
 }
 
-// buildPanelRouter constructs a HybridRouter using the config dir's wrappers and
-// the default Ollama embedder. Called once per intent-check goroutine.
+// widgetExecCmd runs a widget's binary with input on stdin and returns the
+// output as a glitchWidgetOutputMsg labelled with the widget's speaker name.
+// If the binary is not on PATH, returns a narration hint instead.
+func widgetExecCmd(cfg *WidgetConfig, input string) tea.Cmd {
+	return func() tea.Msg {
+		binary, err := exec.LookPath(cfg.Schema.Command)
+		if err != nil {
+			hint := "not found"
+			if cfg.Schema.Description != "" {
+				hint = cfg.Schema.Description
+			}
+			return glitchNarrationMsg{text: cfg.Schema.Name + " not found — " + hint}
+		}
+		var buf bytes.Buffer
+		c := exec.Command(binary) //nolint:gosec
+		c.Stdin = strings.NewReader(input)
+		c.Stdout = &buf
+		c.Stderr = &buf
+		c.Run() //nolint:errcheck
+		return glitchWidgetOutputMsg{
+			text:    strings.TrimSpace(buf.String()),
+			speaker: cfg.Schema.Mode.Speaker,
+		}
+	}
+}
+
 func buildPanelRouter(cfgDir string) *router.HybridRouter {
 	mgr := executor.NewManager()
 	if cfgDir != "" {
@@ -978,6 +1017,16 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 				who:  glitchSpeakerBot,
 				text: msg.text,
 				ts:   time.Now(),
+			})
+		}
+		return p, nil
+
+	case glitchWidgetOutputMsg:
+		if msg.text != "" {
+			p.messages = append(p.messages, glitchEntry{
+				who:         glitchSpeakerGame,
+				text:        msg.text,
+				widgetLabel: msg.speaker,
 			})
 		}
 		return p, nil
@@ -1413,28 +1462,53 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 						}
 						return glitchNextToken(ch)()
 					}
-				case "/mud":
-					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
-					p.messages = append(p.messages, glitchEntry{
-						who:  glitchSpeakerBot,
-						text: "jacking you into The Gibson. i'll be watching.",
-					})
-					return p, func() tea.Msg {
-						binary, err := exec.LookPath("gl1tch-mud")
-						if err != nil {
-							return glitchNarrationMsg{text: "gl1tch-mud not found — run: go install github.com/adam-stokes/gl1tch-mud@latest"}
-						}
-						exec.Command("tmux", "split-window", "-h", "-p", "50", binary).Run() //nolint:errcheck
-						return nil
-					}
 				case "/help":
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
 					p.messages = append(p.messages, glitchEntry{
 						who: glitchSpeakerBot,
-						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n  /cwd [path]       — set working directory\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open a 25% right split; run cmd or get guidance\n  /mud              — jack into The Gibson (MUD in right split)\n  /cron             — get help scheduling recurring jobs\n\n  workspace\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
+						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n  /cwd [path]       — set working directory\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open a 25% right split; run cmd or get guidance\n  /cron             — get help scheduling recurring jobs\n\n  workspace\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
 					})
 					return p, nil
+				default:
+					// Check widget registry for dynamic triggers.
+					if p.widgetRegistry != nil {
+						if cfg := p.widgetRegistry.FindByTrigger(cmd); cfg != nil {
+							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
+							if p.activeWidget != nil {
+								p.messages = append(p.messages, glitchEntry{
+									who:  glitchSpeakerBot,
+									text: cfg.Schema.Mode.Speaker + " already active. type '" + cfg.Schema.Mode.ExitCommand + "' to exit.",
+								})
+								return p, nil
+							}
+							p.activeWidget = cfg
+							p.messages = append(p.messages, glitchEntry{
+								who:  glitchSpeakerBot,
+								text: "activating " + cfg.Schema.Name + ". i'll be watching.",
+							})
+							cmds := []tea.Cmd{
+								func() tea.Msg { return glitchWidgetModeMsg{cfg: cfg} },
+							}
+							if cfg.Schema.Mode.OnActivate != "" {
+								cmds = append(cmds, widgetExecCmd(cfg, cfg.Schema.Mode.OnActivate))
+							}
+							return p, tea.Batch(cmds...)
+						}
+					}
 				}
+			}
+
+			// Widget mode: route input to the active widget binary instead of AI.
+			if p.activeWidget != nil {
+				cfg := p.activeWidget
+				if userText == cfg.Schema.Mode.ExitCommand {
+					p.activeWidget = nil
+					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
+					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: cfg.Schema.Name + " deactivated."})
+					return p, func() tea.Msg { return glitchWidgetModeMsg{cfg: nil} }
+				}
+				p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
+				return p, widgetExecCmd(cfg, userText)
 			}
 
 			p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText, ts: time.Now()})
@@ -2180,6 +2254,13 @@ func (p glitchChatPanel) renderMessages(innerW int, pal styles.ANSIPalette) []st
 			contPrefix = "              "
 		case glitchSpeakerUser:
 			prefix = userLabel + tsStr + " " + aRst
+			contPrefix = "              "
+		case glitchSpeakerGame:
+			label := "GIBSON"
+			if e.widgetLabel != "" {
+				label = e.widgetLabel
+			}
+			prefix = pal.Success + label + aRst + tsStr + " " + aRst
 			contPrefix = "              "
 		}
 

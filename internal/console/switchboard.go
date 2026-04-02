@@ -320,6 +320,10 @@ type Model struct {
 	pipelineBusCh chan pipelineBusEventMsg
 	// narrationCh receives game narration strings from background goroutines.
 	narrationCh chan string
+	// widgetRegistry holds all widget-capable sidecars loaded at startup.
+	widgetRegistry *WidgetRegistry
+	// signalHandlers maps handler names to dispatch functions.
+	signalHandlers SignalHandlerRegistry
 	// TDF header art — rendered once at startup, cached for every frame.
 	tdfHeader  []string
 	tdfHeaderW int // visual width (ANSI-stripped) of the widest header line
@@ -388,6 +392,14 @@ func NewWithStore(s *store.Store) Model {
 
 	// Narration channel for game engine goroutine results.
 	m.narrationCh = make(chan string, 8)
+
+	// Widget and signal registries loaded from wrappers dir.
+	wrappersDir := filepath.Join(os.Getenv("HOME"), ".config", "glitch", "wrappers")
+	m.widgetRegistry = LoadWidgetRegistry(wrappersDir)
+	m.signalHandlers = BuildSignalHandlerRegistry(m.narrationCh, s)
+
+	// Inject widget registry into the chat panel for trigger dispatch.
+	m.glitchChat.widgetRegistry = m.widgetRegistry
 
 	return m
 }
@@ -716,11 +728,16 @@ func looksLikeMarkdown(s string) bool {
 }
 
 // refreshTDFHeader re-renders the TDF header using the current theme palette.
-// Called at startup and whenever the active theme changes.
-func (m *Model) refreshTDFHeader() {
+// Called at startup, on theme change, and on widget mode activation/deactivation.
+// logo overrides the default "GL1TCH" text when non-empty.
+func (m *Model) refreshTDFHeader(logo ...string) {
+	text := "GL1TCH"
+	if len(logo) > 0 && logo[0] != "" {
+		text = logo[0]
+	}
 	if f, err := tdf.LoadEmbedded("inertia"); err == nil {
 		pal := m.ansiPalette()
-		m.tdfHeader = tdf.RenderStringThemed("GL1TCH", f, pal.Accent, pal.Dim)
+		m.tdfHeader = tdf.RenderStringThemed(text, f, pal.Accent, pal.Dim)
 		m.tdfHeaderW = 0
 		for _, line := range m.tdfHeader {
 			if w := len([]rune(tdf.StripANSI(line))); w > m.tdfHeaderW {
@@ -744,7 +761,7 @@ func (m Model) Init() tea.Cmd {
 		tickCmd(),
 		m.inboxModel.Init(),
 		m.themeState.Init(),
-		tryPipelineBusSubscribeCmd(),
+		tryPipelineBusSubscribeCmd(m.widgetRegistry.AllSignalTopics()...),
 		m.activityFeed.Init(),
 		loadPendingClarificationsCmd(m.store),
 		m.glitchChat.initCmd(),
@@ -1207,34 +1224,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Handle MUD companion events: react to mud.* topics via Ollama narration.
-		if strings.HasPrefix(msg.topic, "mud.") && m.narrationCh != nil {
-			ch := m.narrationCh
-			eventTopic := msg.topic
-			eventPayload := string(msg.payload)
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-				defer cancel()
-				engine := game.NewGameEngine()
-				const companionPrompt = `You are gl1tch, a cynical AI companion watching a hacker navigate a text MUD called The Gibson.
-React to what just happened in 2-4 lines. Terse. Dry. Occasionally helpful. Never cheerful.
-Reference the event naturally — don't just repeat the JSON. No markdown. No bullet points.`
-				userMsg := "Event: " + eventTopic + "\nData: " + eventPayload
-				narration := engine.Respond(ctx, companionPrompt, userMsg)
-				if narration == "" {
-					return
+		// Dispatch registered plugin signal handlers for any matching topic.
+		if m.widgetRegistry != nil && m.signalHandlers != nil {
+			dispatched := false
+			topic := msg.topic
+			payload := string(msg.payload)
+			for _, w := range m.widgetRegistry.widgets {
+				for _, sig := range w.Schema.Signals {
+					if matchTopic(sig.Topic, topic) {
+						m.signalHandlers.Dispatch(sig.Handler, topic, payload)
+						dispatched = true
+					}
 				}
-				select {
-				case ch <- narration:
-				default:
-				}
-			}()
-			var mudCmds []tea.Cmd
-			mudCmds = append(mudCmds, waitForNarrationCmd(m.narrationCh))
-			if m.pipelineBusCh != nil {
-				mudCmds = append(mudCmds, waitForPipelineBusEvent(m.pipelineBusCh))
 			}
-			return m, tea.Batch(mudCmds...)
+			if dispatched && m.narrationCh != nil {
+				var sigCmds []tea.Cmd
+				sigCmds = append(sigCmds, waitForNarrationCmd(m.narrationCh))
+				if m.pipelineBusCh != nil {
+					sigCmds = append(sigCmds, waitForPipelineBusEvent(m.pipelineBusCh))
+				}
+				return m, tea.Batch(sigCmds...)
+			}
 		}
 
 		m = m.handlePipelineBusEvent(msg)
@@ -1309,6 +1319,14 @@ Reference the event naturally — don't just repeat the JSON. No markdown. No bu
 
 	case glitchQuitMsg:
 		m.confirmQuit = true
+		return m, nil
+
+	case glitchWidgetModeMsg:
+		if msg.cfg != nil {
+			m.refreshTDFHeader(msg.cfg.Schema.Mode.Logo)
+		} else {
+			m.refreshTDFHeader()
+		}
 		return m, nil
 
 	case glitchOpenThemesMsg:

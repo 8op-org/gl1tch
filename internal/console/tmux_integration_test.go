@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/8op-org/gl1tch/internal/console"
 )
 
 // tmuxAvailable returns true if tmux is in PATH.
@@ -223,6 +225,64 @@ func TestTmux_GlitchClear(t *testing.T) {
 	})
 	if !ok {
 		t.Errorf("/clear did not clear chat:\n%s", tmuxCapture(t, session))
+	}
+}
+
+// ── Widget/Signal registry integration tests ──────────────────────────────────
+
+// TestWidgetRegistry_FullLifecycle verifies load → trigger → topics flow.
+func TestWidgetRegistry_FullLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mud.yaml"), []byte(`
+name: gl1tch-mud
+command: gl1tch-mud
+kind: tool
+mode:
+  trigger: /mud
+  logo: THE GIBSON
+  speaker: GIBSON
+  exit_command: quit
+  on_activate: init
+signals:
+  - topic: mud.*
+    handler: companion
+`), 0o644); err != nil {
+		t.Fatalf("write sidecar: %v", err)
+	}
+
+	reg := console.LoadWidgetRegistry(dir)
+
+	cfg := reg.FindByTrigger("/mud")
+	if cfg == nil {
+		t.Fatal("expected /mud trigger to be found")
+	}
+	if cfg.Schema.Mode.Logo != "THE GIBSON" {
+		t.Errorf("logo: got %q, want THE GIBSON", cfg.Schema.Mode.Logo)
+	}
+	if cfg.Schema.Mode.Speaker != "GIBSON" {
+		t.Errorf("speaker: got %q, want GIBSON", cfg.Schema.Mode.Speaker)
+	}
+	if cfg.Schema.Mode.ExitCommand != "quit" {
+		t.Errorf("exit_command: got %q, want quit", cfg.Schema.Mode.ExitCommand)
+	}
+
+	if reg.FindByTrigger("/unknown") != nil {
+		t.Error("unknown trigger should return nil")
+	}
+
+	topics := reg.AllSignalTopics()
+	if len(topics) != 1 || topics[0] != "mud.*" {
+		t.Errorf("signal topics: got %v, want [mud.*]", topics)
+	}
+}
+
+// TestSignalHandlerRegistry_BuiltinsRegistered verifies all built-in handlers are present.
+func TestSignalHandlerRegistry_BuiltinsRegistered(t *testing.T) {
+	reg := console.BuildSignalHandlerRegistry(nil, nil)
+	for _, name := range []string{"companion", "score", "log"} {
+		if _, ok := reg[name]; !ok {
+			t.Errorf("expected handler %q to be registered", name)
+		}
 	}
 }
 
