@@ -17,14 +17,24 @@ type SidecarModel struct {
 	Label string `yaml:"label"`
 }
 
+// SlashEntry is a single entry in a widget's slash-command menu.
+// Used to populate autocomplete suggestions while the widget is active.
+type SlashEntry struct {
+	Cmd  string `yaml:"cmd"`
+	Hint string `yaml:"hint"`
+}
+
 // ModeBlock declares widget/UI-takeover behaviour for a sidecar plugin.
-// All fields except OnActivate are required when a mode block is present.
+// All fields except OnActivate, SlashHint, and SlashCommands are required
+// when a mode block is present.
 type ModeBlock struct {
-	Trigger     string `yaml:"trigger"`
-	Logo        string `yaml:"logo"`
-	Speaker     string `yaml:"speaker"`
-	ExitCommand string `yaml:"exit_command"`
-	OnActivate  string `yaml:"on_activate,omitempty"`
+	Trigger       string       `yaml:"trigger"`
+	Logo          string       `yaml:"logo"`
+	Speaker       string       `yaml:"speaker"`
+	ExitCommand   string       `yaml:"exit_command"`
+	OnActivate    string       `yaml:"on_activate,omitempty"`
+	SlashHint     string       `yaml:"slash_hint,omitempty"`     // hint shown in normal-mode autocomplete
+	SlashCommands []SlashEntry `yaml:"slash_commands,omitempty"` // shown in autocomplete while widget is active
 }
 
 // IsZero returns true when the block is absent (Trigger is empty).

@@ -89,6 +89,24 @@ func (r *WidgetRegistry) FindByTrigger(trigger string) *WidgetConfig {
 	return nil
 }
 
+// PluginSuggestions returns one slashSuggestion per loaded widget whose
+// Mode.Trigger is non-empty, using Mode.SlashHint as the hint text.
+// These are merged into the normal-mode autocomplete list so plugins
+// can declare their own trigger entries without hardcoding in the core.
+func (r *WidgetRegistry) PluginSuggestions() []slashSuggestion {
+	var out []slashSuggestion
+	for _, w := range r.widgets {
+		if w.Schema.Mode.Trigger == "" {
+			continue
+		}
+		out = append(out, slashSuggestion{
+			cmd:  w.Schema.Mode.Trigger,
+			hint: w.Schema.Mode.SlashHint,
+		})
+	}
+	return out
+}
+
 // AllSignalTopics returns a deduplicated slice of all topic values declared
 // across all loaded sidecars' signals blocks.
 func (r *WidgetRegistry) AllSignalTopics() []string {

@@ -134,7 +134,6 @@ var glitchSlashCommands = []slashSuggestion{
 	{cmd: "/brain",    hint: "[query] — search notes, or start an interactive brain session"},
 	{cmd: "/rerun",    hint: "[name] — rerun a pipeline by name"},
 	{cmd: "/terminal", hint: "[cmd] — open 25% right split; run cmd or get guidance"},
-	{cmd: "/mud",      hint: "jack into The Gibson — opens MUD in right split"},
 	{cmd: "/cron",     hint: "get help scheduling recurring jobs"},
 	{cmd: "/model",    hint: "[name] — switch provider/model inline"},
 	{cmd: "/themes",   hint: "open theme picker"},
@@ -254,6 +253,83 @@ func glitchFilterSuggestions(input string) []slashSuggestion {
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].val > results[j].val
 	})
+	out := make([]slashSuggestion, len(results))
+	for i, r := range results {
+		out[i] = r.s
+	}
+	return out
+}
+
+// filterSuggestions returns autocomplete suggestions for the current panel state.
+//
+// In widget mode the panel shows the active widget's declared slash_commands
+// (plain-text MUD verbs, etc.) filtered by the typed prefix. The "/"
+// autocomplete trigger is intentionally bypassed so widget input flows
+// naturally without a leading slash.
+//
+// In normal mode it merges glitchSlashCommands with any trigger entries
+// contributed by the loaded widget registry (e.g. /mud from gl1tch-mud.yaml)
+// and applies the same scoring logic as glitchFilterSuggestions.
+func (p glitchChatPanel) filterSuggestions(input string) []slashSuggestion {
+	if p.activeWidget != nil {
+		cmds := p.activeWidget.Schema.Mode.SlashCommands
+		if len(cmds) == 0 {
+			return nil
+		}
+		query := strings.ToLower(strings.TrimSpace(input))
+		var out []slashSuggestion
+		for _, e := range cmds {
+			if query == "" || strings.HasPrefix(strings.ToLower(e.Cmd), query) {
+				out = append(out, slashSuggestion{cmd: e.Cmd, hint: e.Hint})
+			}
+		}
+		return out
+	}
+
+	// Normal mode: build merged base list.
+	base := make([]slashSuggestion, len(glitchSlashCommands))
+	copy(base, glitchSlashCommands)
+	if p.widgetRegistry != nil {
+		base = append(base, p.widgetRegistry.PluginSuggestions()...)
+	}
+
+	// Apply the same scoring logic as glitchFilterSuggestions over the merged list.
+	query := strings.TrimPrefix(input, "/")
+	if query == "" {
+		return base
+	}
+	qLow := strings.ToLower(query)
+	type scored struct {
+		s   slashSuggestion
+		val int
+	}
+	var results []scored
+	for _, s := range base {
+		name := strings.TrimPrefix(s.cmd, "/")
+		nameLow := strings.ToLower(name)
+		var score int
+		if nameLow == qLow {
+			score = 3000
+		} else if strings.HasPrefix(nameLow, qLow) {
+			score = 2000 + len(qLow)*10
+		} else if strings.Contains(nameLow, qLow) {
+			score = 1000 + len(qLow)*5
+		} else {
+			qi := 0
+			for _, c := range nameLow {
+				if qi < len(qLow) && c == rune(qLow[qi]) {
+					qi++
+				}
+			}
+			if qi == len(qLow) {
+				score = 1
+			}
+		}
+		if score > 0 {
+			results = append(results, scored{s: s, val: score})
+		}
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].val > results[j].val })
 	out := make([]slashSuggestion, len(results))
 	for i, r := range results {
 		out[i] = r.s
@@ -722,6 +798,8 @@ type glitchChatPanel struct {
 
 	// scheduledJobs is the count of entries in cron.yaml, injected from Model.
 	scheduledJobs int
+	// userScore is the player's cached game score, injected from Model.
+	userScore store.UserScore
 }
 
 // widgetExecCmd runs a widget's binary with input on stdin and returns the
@@ -1479,7 +1557,7 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
 					p.messages = append(p.messages, glitchEntry{
 						who: glitchSpeakerBot,
-						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n  /cwd [path]       — set working directory\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open a 25% right split; run cmd or get guidance\n  /cron             — get help scheduling recurring jobs\n  /trace            — show OTel trace for the selected feed entry\n\n  workspace\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
+						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n  /cwd [path]       — set working directory\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open a 25% right split; run cmd or get guidance\n  /mud              — jack into The Gibson — opens MUD in right split\n  /cron             — get help scheduling recurring jobs\n  /trace            — show OTel trace for the selected feed entry\n\n  workspace\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
 					})
 					return p, nil
 				case "/trace":
@@ -1569,14 +1647,21 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 		if newVal != oldVal {
 			p.acSuppressed = false
 		}
-		if strings.HasPrefix(newVal, "/") && !p.acSuppressed {
-			results := glitchFilterSuggestions(newVal)
+		if p.activeWidget != nil && newVal != "" && !p.acSuppressed {
+			// Widget mode: show matching commands from the active widget's declared list.
+			results := p.filterSuggestions(newVal)
+			p.acSuggestions = results
+			p.acActive = len(results) > 0
+			p.acCursor = 0
+		} else if p.activeWidget == nil && strings.HasPrefix(newVal, "/") && !p.acSuppressed {
+			// Normal mode: show merged glitch + plugin commands.
+			results := p.filterSuggestions(newVal)
 			p.acSuggestions = results
 			p.acActive = len(results) > 0
 			p.acCursor = 0
 		} else {
 			p.acActive = false
-			if !strings.HasPrefix(newVal, "/") {
+			if p.activeWidget != nil || !strings.HasPrefix(newVal, "/") {
 				p.acSuppressed = false
 			}
 		}
@@ -2009,14 +2094,32 @@ func (p glitchChatPanel) build(height, width int, pal styles.ANSIPalette) []stri
 	availW := width - hPad*2
 	clockVisW := len(timeStr)
 
-	// Centered scheduled-jobs badge between title and clock.
-	badge := fmt.Sprintf("[%d sched]", p.scheduledJobs)
-	badgeW := len(badge)
+	// Centered stats badge between subtitle and clock.
+	// Parts: scheduled-jobs count (if any), player level, XP, streak.
+	var badgeParts []string
+	if p.scheduledJobs > 0 {
+		badgeParts = append(badgeParts, fmt.Sprintf("↻ %d", p.scheduledJobs))
+	}
+	if p.userScore.Level > 0 {
+		badgeParts = append(badgeParts, fmt.Sprintf("Lv%d", p.userScore.Level))
+	}
+	if p.userScore.TotalXP > 0 {
+		if p.userScore.TotalXP >= 1000 {
+			badgeParts = append(badgeParts, fmt.Sprintf("%.1fkxp", float64(p.userScore.TotalXP)/1000))
+		} else {
+			badgeParts = append(badgeParts, fmt.Sprintf("%dxp", p.userScore.TotalXP))
+		}
+	}
+	if p.userScore.StreakDays > 1 {
+		badgeParts = append(badgeParts, fmt.Sprintf("↑%dd", p.userScore.StreakDays))
+	}
+	badge := strings.Join(badgeParts, " · ")
+	badgeW := utf8.RuneCountInString(badge)
 	centerPos := availW / 2
 	leftGap := centerPos - badgeW/2 - subtitleVisW
 	rightGap := availW - centerPos - (badgeW - badgeW/2) - clockVisW
 	var subtitleLine string
-	if leftGap >= 1 && rightGap >= 1 {
+	if badge != "" && leftGap >= 1 && rightGap >= 1 {
 		subtitleLine = padStr + pal.Dim + subtitle +
 			strings.Repeat(" ", leftGap) + badge +
 			strings.Repeat(" ", rightGap) + timeStr + aRst

@@ -347,6 +347,8 @@ type Model struct {
 	traceView string
 	// scheduledJobCount is the number of entries currently defined in cron.yaml.
 	scheduledJobCount int
+	// userScore is the player's cached game score, refreshed on startup and after each scored run.
+	userScore store.UserScore
 }
 
 // New creates a new Deck Model, discovering pipelines and providers.
@@ -424,6 +426,13 @@ func NewWithStore(s *store.Store) Model {
 	// Seed scheduled job count from cron.yaml at startup.
 	if entries, err := orcaicron.LoadConfig(); err == nil {
 		m.scheduledJobCount = len(entries)
+	}
+
+	// Seed player score from store at startup.
+	if s != nil {
+		if us, err := s.GetUserScore(context.Background()); err == nil {
+			m.userScore = us
+		}
 	}
 
 	return m
@@ -1287,6 +1296,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Channel full — drop silently.
 					}
 				}()
+				// Refresh cached score after a run is scored.
+				if m.store != nil {
+					if us, err := m.store.GetUserScore(context.Background()); err == nil {
+						m.userScore = us
+					}
+				}
 				var cmdsGame []tea.Cmd
 				cmdsGame = append(cmdsGame, waitForNarrationCmd(m.narrationCh))
 				if m.pipelineBusCh != nil {
@@ -3339,6 +3354,7 @@ func (m Model) midColWidth() int {
 func (m Model) viewCenterColumn(height, width int) []string {
 	panel := m.glitchChat
 	panel.scheduledJobs = m.scheduledJobCount
+	panel.userScore = m.userScore
 	glitchLines := panel.build(height, width, m.ansiPalette())
 
 	var lines []string
