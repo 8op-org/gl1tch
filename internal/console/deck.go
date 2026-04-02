@@ -1421,6 +1421,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirmQuit = true
 		return m, nil
 
+	case glitchWidgetOutputMsg:
+		newPanel, cmd := m.glitchChat.update(msg)
+		m.glitchChat = newPanel
+		return m, cmd
+
 	case glitchWidgetModeMsg:
 		if msg.cfg != nil {
 			m.refreshTDFHeader(msg.cfg.Schema.Mode.Logo)
