@@ -155,7 +155,7 @@ var glitchSlashCommands = []slashSuggestion{
 	{cmd: "/pipeline", hint: "[name] — run a pipeline, or build one from scratch"},
 	{cmd: "/brain",    hint: "[query] — search notes, or start an interactive brain session"},
 	{cmd: "/rerun",    hint: "[name] — rerun a pipeline by name"},
-	{cmd: "/terminal", hint: "[cmd] — open 25% right split; run cmd or get guidance"},
+	{cmd: "/terminal", hint: "[cmd] — open split; -v -left -p N; list kill equalize focus"},
 	{cmd: "/cron",     hint: "get help scheduling recurring jobs"},
 	{cmd: "/model",    hint: "[name] — switch provider/model inline"},
 	{cmd: "/themes",   hint: "open theme picker"},
@@ -782,13 +782,31 @@ func (b *glitchCLIBackend) stream(ctx context.Context, turns []glitchTurn, userM
 }
 
 // isToolCallLine returns true for lines that are part of the agent tool-call
-// tree format emitted by CLI backends (× failed, ● succeeded, | params, └ result).
-// These are filtered from raw-mode stream output so only prose reaches the chat.
+// tree format emitted by CLI backends. Filtered so only prose reaches the chat.
 func isToolCallLine(line string) bool {
-	for _, prefix := range []string{"× ", "● ", "| ", "└ "} {
+	for _, prefix := range []string{"× ", "✓ ", "✗ ", "● ", "| ", "└ "} {
 		if strings.HasPrefix(line, prefix) {
 			return true
 		}
+	}
+	// ASCII 'x' used by some backends for failed tool calls: "x Tool Name (type)"
+	if len(line) > 2 && line[0] == 'x' && line[1] == ' ' && line[2] >= 'A' && line[2] <= 'Z' {
+		return true
+	}
+	// Indented continuation lines (tool body, command params, multi-line output).
+	if strings.HasPrefix(line, "  ") {
+		return true
+	}
+	// "N lines..." count summaries emitted after tool results.
+	if len(line) > 0 && line[0] >= '0' && line[0] <= '9' && strings.HasSuffix(line, "lines...") {
+		return true
+	}
+	// Stats footer and common noise lines.
+	if strings.HasPrefix(line, "Total usage est:") || strings.HasPrefix(line, "API time spent:") {
+		return true
+	}
+	if strings.HasPrefix(line, "Output too large") || strings.HasPrefix(line, "Permission denied and could not") {
+		return true
 	}
 	return false
 }
@@ -1384,6 +1402,18 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 		}
 		switch msg.Type {
 		case tea.KeyEsc:
+			if p.streaming {
+				// Cancel the in-flight stream.
+				p.cancel()
+				p.streaming = false
+				p.animFrame = 0
+				if p.streamBuf != "" {
+					p.upsertStreamEntry()
+				}
+				p.streamBuf = ""
+				p = p.setFocused(true)
+				return p, nil
+			}
 			// Esc unfocuses but input is still always visible.
 			p = p.setFocused(false)
 			return p, nil
@@ -1806,48 +1836,159 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 				case "/terminal":
 					termArgs := strings.Fields(userText)
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
-					if len(termArgs) > 1 {
-						// /terminal <command> — open 25% right split and run the command.
-						cmd := strings.Join(termArgs[1:], " ")
-						p.messages = append(p.messages, glitchEntry{
-							who:  glitchSpeakerBot,
-							text: "opening terminal: " + cmd,
-						})
-						return p, func() tea.Msg {
-							exec.Command("tmux", "split-window", "-h", "-p", "25", cmd).Run() //nolint:errcheck
-							return nil
+					args := termArgs[1:]
+
+					// ── subcommands ──────────────────────────────────────────────────
+					if len(args) > 0 {
+						switch args[0] {
+						case "list":
+							panes := listTerminalPanes()
+							if len(panes) == 0 {
+								p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "no open terminal panes."})
+								return p, nil
+							}
+							lines := make([]string, len(panes))
+							for i, tp := range panes {
+								lines[i] = fmt.Sprintf("terminal %d  %s  (%s)", i+1, tp.command, tp.size)
+							}
+							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: strings.Join(lines, "\n")})
+							return p, nil
+
+						case "kill":
+							panes := listTerminalPanes()
+							if len(panes) == 0 {
+								p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "no terminal panes to kill."})
+								return p, nil
+							}
+							target := panes[len(panes)-1].id // default: most recent
+							if len(args) > 1 {
+								n, err := strconv.Atoi(args[1])
+								if err != nil || n < 1 || n > len(panes) {
+									p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: fmt.Sprintf("no terminal %s (only %d open).", args[1], len(panes))})
+									return p, nil
+								}
+								target = panes[n-1].id
+							}
+							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "terminal closed."})
+							return p, func() tea.Msg {
+								exec.Command("tmux", "kill-pane", "-t", target).Run() //nolint:errcheck
+								return nil
+							}
+
+						case "equalize":
+							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "panes equalized."})
+							return p, func() tea.Msg {
+								if t := currentTmuxPane(); t != "" {
+									exec.Command("tmux", "select-layout", "-t", t, "tiled").Run() //nolint:errcheck
+								} else {
+									exec.Command("tmux", "select-layout", "tiled").Run() //nolint:errcheck
+								}
+								return nil
+							}
+
+						case "focus":
+							panes := listTerminalPanes()
+							if len(panes) == 0 {
+								p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "no terminal panes to focus."})
+								return p, nil
+							}
+							n := 1
+							if len(args) > 1 {
+								if parsed, err := strconv.Atoi(args[1]); err == nil && parsed >= 1 {
+									n = parsed
+								}
+							}
+							if n > len(panes) {
+								p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: fmt.Sprintf("no terminal %d (only %d open).", n, len(panes))})
+								return p, nil
+							}
+							target := panes[n-1].id
+							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: fmt.Sprintf("focusing terminal %d.", n)})
+							return p, func() tea.Msg {
+								exec.Command("tmux", "select-pane", "-t", target).Run() //nolint:errcheck
+								return nil
+							}
 						}
 					}
-					// /terminal (no args) — open 25% right split (shell) + guide via brain + local model.
-					p.messages = append(p.messages, glitchEntry{
-						who:  glitchSpeakerBot,
-						text: "opening terminal split.",
-					})
-					if p.backend == nil {
-						return p, func() tea.Msg {
-							exec.Command("tmux", "split-window", "-h", "-p", "25").Run() //nolint:errcheck
-							return nil
+
+					// ── split: parse -v/-bottom, -left, -p N, then optional command ──
+					pct := 25
+					vertical := false
+					left := false
+					var shellCmd string
+					for i := 0; i < len(args); i++ {
+						switch args[i] {
+						case "-v", "-bottom":
+							vertical = true
+						case "-left":
+							left = true
+						case "-p":
+							if i+1 < len(args) {
+								if n, err := strconv.Atoi(args[i+1]); err == nil && n > 0 && n < 100 {
+									pct = n
+								}
+								i++
+							}
+						default:
+							shellCmd = strings.Join(args[i:], " ")
+							i = len(args)
 						}
 					}
-					p.streaming = true
-					p.streamBuf = ""
-					guideTurns := p.turns
-					backend := p.backend
-					ctx := p.ctx
-					st := p.store
+
+					pctStr := strconv.Itoa(pct)
+					var msgText string
+					switch {
+					case shellCmd != "" && pct != 25:
+						msgText = fmt.Sprintf("opening %d%% terminal: %s", pct, shellCmd)
+					case shellCmd != "":
+						msgText = "opening terminal: " + shellCmd
+					case pct != 25:
+						msgText = fmt.Sprintf("opening %d%% terminal split.", pct)
+					default:
+						msgText = "opening terminal split."
+					}
+					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: msgText})
+
+					splitArgs := []string{"split-window"}
+					if vertical {
+						splitArgs = append(splitArgs, "-v")
+					} else {
+						splitArgs = append(splitArgs, "-h")
+					}
+					if left {
+						splitArgs = append(splitArgs, "-b")
+					}
+					splitArgs = append(splitArgs, "-p", pctStr)
+					if shellCmd != "" {
+						splitArgs = append(splitArgs, shellCmd)
+					}
+
+					// bare /terminal with defaults — stream guidance if backend available.
+					if p.backend != nil && shellCmd == "" && pct == 25 && !vertical && !left {
+						p.streaming = true
+						p.streamBuf = ""
+						guideTurns := p.turns
+						backend := p.backend
+						ctx := p.ctx
+						st := p.store
+						return p, func() tea.Msg {
+							exec.Command("tmux", splitArgs...).Run() //nolint:errcheck
+							ch, err := backend.stream(ctx, guideTurns, "the user opened a terminal split with no command. ask what they want to do in it. suggest a command if their recent context gives you a clue. keep it brief.", glitchLoadBrainContext(st), "")
+							if err != nil {
+								return glitchErrMsg{err: err}
+							}
+							return glitchNextToken(ch)()
+						}
+					}
 					return p, func() tea.Msg {
-						exec.Command("tmux", "split-window", "-h", "-p", "25").Run() //nolint:errcheck
-						ch, err := backend.stream(ctx, guideTurns, "the user opened a terminal split with no command. ask what they want to do in it. suggest a command if their recent context gives you a clue. keep it brief.", glitchLoadBrainContext(st), "")
-						if err != nil {
-							return glitchErrMsg{err: err}
-						}
-						return glitchNextToken(ch)()
+						exec.Command("tmux", splitArgs...).Run() //nolint:errcheck
+						return nil
 					}
 				case "/help":
 					p.messages = append(p.messages, glitchEntry{who: glitchSpeakerUser, text: userText})
 					p.messages = append(p.messages, glitchEntry{
 						who: glitchSpeakerBot,
-						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open a 25% right split; run cmd or get guidance\n  /cron             — get help scheduling recurring jobs\n  /trace            — show OTel trace for the selected feed entry\n\n  modes\n  /mud              — jack into The Gibson — takes over chat as MUD terminal\n\n  workspace\n  /cwd [path]       — set working directory\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
+						text: "slash commands:\n\n  getting started\n  /init             — first-run wizard\n  /models           — pick a provider and model\n\n  build things\n  /prompt [name]    — load or build a system prompt with AI\n  /pipeline [name]  — run a pipeline, or build one from scratch\n  /brain [query]    — search notes, or start an interactive brain session\n\n  run things\n  /rerun [name]     — rerun a pipeline by name\n  /terminal [cmd]   — open split (-v bottom, -left, -p N%); or: list kill equalize focus\n  /cron             — get help scheduling recurring jobs\n  /trace            — show OTel trace for the selected feed entry\n\n  modes\n  /mud              — jack into The Gibson — takes over chat as MUD terminal\n\n  workspace\n  /cwd [path]       — set working directory\n  /model [name]     — switch provider/model inline\n  /themes           — open theme picker\n  /clear            — clear chat history\n  /quit             — exit glitch\n  /help             — this list\n\nscroll: j/k or [/] when scroll-focused (tab to switch)",
 					})
 					return p, nil
 				case "/trace":
