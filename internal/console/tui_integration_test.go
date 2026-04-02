@@ -10,14 +10,36 @@ import (
 	"time"
 )
 
+// prReviewPipelineFixture is a minimal github-pr-review pipeline for routing tests.
+// It uses a shell echo so no gh auth or LLM provider is required to verify dispatch.
+// Trigger phrases drive embedding matching so "run github-pr-review <url>" routes here.
+// The real pipeline (installed in ~/.config/glitch/pipelines/) uses executor:shell with
+// gh pr view + executor:claude for the actual review step.
+const prReviewPipelineFixture = `name: github-pr-review
+version: "1"
+description: "Fetch a GitHub pull request and produce a code review"
+trigger_phrases:
+  - "run github-pr-review"
+
+steps:
+  - id: review
+    executor: shell
+    vars:
+      cmd: echo "pr-review-ok"
+`
+
 const pipelineFixture = `name: test-echo
 version: "1"
 description: "Test pipeline that echoes input"
+trigger_phrases:
+  - "run test-echo"
+  - "execute test-echo"
 
 steps:
-  - name: echo
-    kind: shell
-    run: echo "pipeline-output-ok"
+  - id: echo
+    executor: shell
+    vars:
+      cmd: echo "pipeline-output-ok"
 `
 
 // setupTUISession creates a tmux session for TUI integration tests.
@@ -334,15 +356,18 @@ func TestTmux_Cmd_Pipeline_Run(t *testing.T) {
 	session, _, cleanup := setupTUISession(t, "pipe-run", []string{"GLITCH_PIPELINES_DIR=" + pDir})
 	defer cleanup()
 
-	// Use intent routing to trigger the pipeline directly by name.
-	exec.Command("tmux", "send-keys", "-t", session, "test-echo", "Enter").Run() //nolint:errcheck
+	// "run test-echo" starts with an explicit imperative verb so isImperativeInput
+	// returns true and the intent router checks pipeline candidates.
+	exec.Command("tmux", "send-keys", "-t", session, "run test-echo", "Enter").Run() //nolint:errcheck
 
+	// The pipeline creates a right-split pane; capture pane .0 which stays as the TUI.
+	tuiPane := session + ".0"
 	ok := waitFor(15*time.Second, func() bool {
-		c := tmuxCapture(t, session)
+		c := tmuxCapture(t, tuiPane)
 		return strings.Contains(c, "→ running")
 	})
 	if !ok {
-		t.Errorf("pipeline run via intent routing never showed → running:\n%s", tmuxCapture(t, session))
+		t.Errorf("pipeline run via intent routing never showed → running:\n%s", tmuxCapture(t, tuiPane))
 	}
 }
 
@@ -416,7 +441,7 @@ func TestTmux_Cmd_Themes(t *testing.T) {
 	ok := waitFor(3*time.Second, func() bool {
 		c := tmuxCapture(t, session)
 		return strings.Contains(c, "theme") || strings.Contains(c, "picker") ||
-			strings.Contains(c, "arrow")
+			strings.Contains(c, "esc cancel") || strings.Contains(c, "enter apply")
 	})
 	if !ok {
 		t.Errorf("/themes did not show theme picker message:\n%s", tmuxCapture(t, session))
@@ -553,12 +578,14 @@ func TestTmux_IntentRouting_MatchesPipeline(t *testing.T) {
 
 	exec.Command("tmux", "send-keys", "-t", session, "run test-echo", "Enter").Run() //nolint:errcheck
 
+	// The pipeline creates a right-split pane; capture pane .0 which stays as the TUI.
+	tuiPane := session + ".0"
 	ok := waitFor(10*time.Second, func() bool {
-		c := tmuxCapture(t, session)
+		c := tmuxCapture(t, tuiPane)
 		return strings.Contains(c, "→ running") && strings.Contains(c, "test-echo")
 	})
 	if !ok {
-		t.Errorf("intent routing did not match pipeline test-echo:\n%s", tmuxCapture(t, session))
+		t.Errorf("intent routing did not match pipeline test-echo:\n%s", tmuxCapture(t, tuiPane))
 	}
 }
 
@@ -765,5 +792,75 @@ func TestTmux_Keys_EscKeepsPanelFocused(t *testing.T) {
 	// The chat input area or its placeholder should still be visible.
 	if !strings.Contains(c, "ask glitch") && !strings.Contains(c, "│") {
 		t.Errorf("chat panel no longer visible after Escape:\n%s", c)
+	}
+}
+
+// ── PR review pipeline ────────────────────────────────────────────────────────
+
+// TestTmux_PRReview_DirectCommand verifies that /pipeline github-pr-review immediately
+// launches the pipeline when the file exists in GLITCH_CONFIG_DIR/pipelines/.
+// This path bypasses intent routing entirely — no Ollama required.
+func TestTmux_PRReview_DirectCommand(t *testing.T) {
+	session, cfgDir, cleanup := setupTUISession(t, "pr-direct", nil)
+	defer cleanup()
+
+	// Write the pipeline into cfgDir/pipelines/ — that is where /pipeline <name> looks.
+	pDir := filepath.Join(cfgDir, "pipelines")
+	if err := os.MkdirAll(pDir, 0o755); err != nil {
+		t.Fatalf("mkdir pipelines: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pDir, "github-pr-review.pipeline.yaml"), []byte(prReviewPipelineFixture), 0o644); err != nil {
+		t.Fatalf("write pipeline: %v", err)
+	}
+
+	sendSlashCmd(t, session, "/pipeline github-pr-review")
+
+	ok := waitFor(5*time.Second, func() bool {
+		c := tmuxCapture(t, session)
+		// Accept either the chat "launching…" message or the feed's "[pipeline] starting"
+		// line — either proves /pipeline dispatched the pipeline without error.
+		return (strings.Contains(c, "launching") || strings.Contains(c, "starting")) &&
+			strings.Contains(c, "github-pr-review")
+	})
+	if !ok {
+		t.Errorf("/pipeline github-pr-review did not launch:\n%s", tmuxCapture(t, session))
+	}
+}
+
+// TestTmux_PRReview_NaturalLanguage verifies that "run github-pr-review <url>" is
+// treated as an imperative pipeline invocation. With Ollama running the router
+// dispatches the pipeline ("→ running"); without it gl1tch still responds without
+// hanging. A public GitHub URL is used so no private repo details appear in source.
+func TestTmux_PRReview_NaturalLanguage(t *testing.T) {
+	pDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(pDir, "github-pr-review.pipeline.yaml"), []byte(prReviewPipelineFixture), 0o644); err != nil {
+		t.Fatalf("seed pipeline: %v", err)
+	}
+
+	session, _, cleanup := setupTUISession(t, "pr-nl", []string{"GLITCH_PIPELINES_DIR=" + pDir})
+	defer cleanup()
+
+	// Public GitHub URL — safe for source control. Private targets are passed at runtime.
+	const prompt = "run github-pr-review https://github.com/octocat/Hello-World/pull/2"
+	exec.Command("tmux", "send-keys", "-t", session, prompt, "Enter").Run() //nolint:errcheck
+
+	// Wait for the user message to appear in the feed.
+	if !waitFor(4*time.Second, func() bool {
+		return strings.Contains(tmuxCapture(t, session), "YOU")
+	}) {
+		t.Fatalf("user message never appeared in chat:\n%s", tmuxCapture(t, session))
+	}
+
+	// Require the pipeline to be dispatched. This test only passes with Ollama running
+	// and the router matching "run github-pr-review" to the seeded pipeline.
+	// Accept either the chat "→ running" message or the feed's "[pipeline] starting" line —
+	// both prove dispatch. The fast echo step can complete before we poll "→ running".
+	ok := waitFor(30*time.Second, func() bool {
+		c := tmuxCapture(t, session)
+		dispatched := strings.Contains(c, "→ running") || strings.Contains(c, "starting")
+		return dispatched && strings.Contains(c, "github-pr-review")
+	})
+	if !ok {
+		t.Errorf("intent routing did not dispatch github-pr-review pipeline:\n%s", tmuxCapture(t, session))
 	}
 }
