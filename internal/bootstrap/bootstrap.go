@@ -98,7 +98,7 @@ func buildTmuxConf(self string) string {
 	chords := "bind-key -T glitch-chord d     { switch-client -T root ; detach-client }\n" +
 		"bind-key -T glitch-chord r     { switch-client -T root ; run-shell \"" + self + " _reload\" }\n" +
 		"bind-key -T glitch-chord s     { switch-client -T root ; display-popup -E -w 44 -h 6 \"" + self + " _opsx\" }\n" +
-		"bind-key -T glitch-chord j     { switch-client -T root ; switch-client -t glitch ; select-window -t glitch:0 ; send-keys -t glitch:0 J }\n" +
+		"unbind-key -T glitch-chord j\n" +
 		// Window management
 		"bind-key -T glitch-chord c     { switch-client -T root ; new-window }\n" +
 		"bind-key -T glitch-chord [     { switch-client -T root ; previous-window }\n" +

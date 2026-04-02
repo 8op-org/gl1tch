@@ -59,9 +59,9 @@ func TestBuildTmuxConf_Keybindings(t *testing.T) {
 	if strings.Contains(conf, "bind-key -n Escape select-pane") {
 		t.Error("tmux.conf still contains global ESC intercept")
 	}
-	// Status bar hints: ^spc j jump must be present; ^spc h help must be gone.
-	if !strings.Contains(plain, "^spc j jump") {
-		t.Error("tmux.conf window-status-current-format missing '^spc j jump' hint")
+	// Status bar hints: ^spc j jump must be gone (replaced by /terminal); ^spc h help must also be gone.
+	if strings.Contains(plain, "^spc j") {
+		t.Error("tmux.conf window-status-current-format still contains removed '^spc j' hint — /terminal covers this now")
 	}
 	if strings.Contains(plain, "^spc h help") {
 		t.Error("tmux.conf window-status-current-format still contains removed '^spc h help' hint")

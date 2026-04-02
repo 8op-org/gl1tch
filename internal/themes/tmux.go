@@ -11,9 +11,7 @@ func TmuxStatusCenterFormat(accent, dim string) string {
 	key := func(k string) string { return fmt.Sprintf("#[fg=%s]%s", accent, k) }
 	desc := func(d string) string { return fmt.Sprintf("#[fg=%s]%s", dim, d) }
 	sp := fmt.Sprintf("#[fg=%s]  ", dim)
-	grp := fmt.Sprintf("#[fg=%s]  ·  ", dim)
 	return " " +
-		key("^spc j") + desc(" jump") + grp +
 		key("^spc d") + desc(" detach") + sp +
 		key("^spc r") + desc(" reload") + sp +
 		key("/quit") + desc(" quit") + " "

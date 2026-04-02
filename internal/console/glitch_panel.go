@@ -1879,9 +1879,9 @@ func (p glitchChatPanel) update(msg tea.Msg) (glitchChatPanel, tea.Cmd) {
 							p.messages = append(p.messages, glitchEntry{who: glitchSpeakerBot, text: "panes equalized."})
 							return p, func() tea.Msg {
 								if t := currentTmuxPane(); t != "" {
-									exec.Command("tmux", "select-layout", "-t", t, "tiled").Run() //nolint:errcheck
+									exec.Command("tmux", "select-layout", "-t", t, "even-horizontal").Run() //nolint:errcheck
 								} else {
-									exec.Command("tmux", "select-layout", "tiled").Run() //nolint:errcheck
+									exec.Command("tmux", "select-layout", "even-horizontal").Run() //nolint:errcheck
 								}
 								return nil
 							}

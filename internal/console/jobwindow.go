@@ -163,6 +163,39 @@ func currentTmuxPane() string {
 	return strings.TrimSpace(os.Getenv("TMUX_PANE"))
 }
 
+// terminalPane holds basic info about a non-glitch pane in the current window.
+type terminalPane struct {
+	id      string // tmux pane ID, e.g. "%43"
+	index   string // tmux pane index within the window
+	command string // current command running in the pane
+	size    string // "WxH"
+}
+
+// listTerminalPanes returns all panes in the current tmux window that are NOT
+// the gl1tch pane (identified by TMUX_PANE). Ordered by pane index.
+func listTerminalPanes() []terminalPane {
+	glitchID := currentTmuxPane()
+	out, err := exec.Command("tmux", "list-panes", "-F",
+		"#{pane_id}\t#{pane_index}\t#{pane_current_command}\t#{pane_width}x#{pane_height}").Output()
+	if err != nil {
+		return nil
+	}
+	var panes []terminalPane
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		parts := strings.SplitN(line, "\t", 4)
+		if len(parts) < 4 || parts[0] == glitchID {
+			continue
+		}
+		panes = append(panes, terminalPane{
+			id:      parts[0],
+			index:   parts[1],
+			command: parts[2],
+			size:    parts[3],
+		})
+	}
+	return panes
+}
+
 // createJobPane creates an inline tmux pane for a pipeline job instead of a
 // separate window. The first pipeline is split horizontally from the glitch
 // pane at 50 % (side-by-side). Subsequent pipelines are split vertically
