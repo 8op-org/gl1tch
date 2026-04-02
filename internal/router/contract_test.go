@@ -124,12 +124,12 @@ func TestRouterContract_CommandsCanRoute(t *testing.T) {
 			wantName:    "git-pulse",
 		},
 		{
-			prompt:      "review my PR https://github.com/org/repo/pull/1",
+			prompt:      "run pr-review on https://github.com/org/repo/pull/1",
 			llmResponse: `{"pipeline":"pr-review","confidence":0.92,"input":"https://github.com/org/repo/pull/1","cron":""}`,
 			wantName:    "pr-review",
 		},
 		{
-			prompt:      "improve the docs for the executor package",
+			prompt:      "run docs-improve on executor package",
 			llmResponse: `{"pipeline":"docs-improve","confidence":0.88,"input":"executor package","cron":""}`,
 			wantName:    "docs-improve",
 		},

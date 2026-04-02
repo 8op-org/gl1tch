@@ -53,8 +53,8 @@ func TestRouter_RealWorldPrompts_LLMPath(t *testing.T) {
 		wantMethod   string
 	}{
 		{
-			// mar30 prompt #43: explicitly names the pipeline
-			prompt:       "now re-run the support-digest pipeline",
+			// mar30 prompt #43: explicitly names the pipeline — starts with "re-run "
+			prompt:       "re-run the support-digest pipeline",
 			llmJSON:      `{"pipeline":"support-digest-dryrun","confidence":0.91,"input":"","cron":""}`,
 			wantPipeline: "support-digest-dryrun",
 			wantMethod:   "llm",
@@ -83,25 +83,25 @@ func TestRouter_RealWorldPrompts_LLMPath(t *testing.T) {
 			wantMethod:   "llm",
 		},
 		{
-			// mar31 prompt: git operation — no pipeline registered for it
+			// mar31 prompt: git operation — not imperative → hard gate
 			prompt:       "commit and push",
 			llmJSON:      `{"pipeline":"NONE","confidence":0.0,"input":"","cron":""}`,
 			wantPipeline: "",
-			wantMethod:   "llm",
+			wantMethod:   "none",
 		},
 		{
-			// mar31 prompt: git operation, typo variant from archive ("comit and push it all up")
+			// mar31 prompt: git operation, typo variant — not imperative → hard gate
 			prompt:       "comit and push it all up",
 			llmJSON:      `{"pipeline":"NONE","confidence":0.0,"input":"","cron":""}`,
 			wantPipeline: "",
-			wantMethod:   "llm",
+			wantMethod:   "none",
 		},
 		{
-			// mar30 prompt: state cleanup — no pipeline for this either
+			// mar30 prompt: state cleanup — not imperative → hard gate
 			prompt:       "clean my state again",
 			llmJSON:      `{"pipeline":"NONE","confidence":0.45,"input":"","cron":""}`,
-			wantPipeline: "", // 0.45 < AmbiguousThreshold 0.65 → rejected
-			wantMethod:   "llm",
+			wantPipeline: "",
+			wantMethod:   "none",
 		},
 		{
 			// mar31 prompt: ambiguous short query
@@ -126,21 +126,18 @@ func TestRouter_RealWorldPrompts_LLMPath(t *testing.T) {
 			wantMethod:   "llm",
 		},
 		{
-			// mar31 prompt: ask with focus extraction
+			// mar31 prompt: not imperative ("generate") → hard gate
 			prompt:       "generate a multistep pipeline to send a birthday card",
 			llmJSON:      `{"pipeline":"clarify-haiku-multistep","confidence":0.83,"input":"birthday card","cron":""}`,
-			wantPipeline: "clarify-haiku-multistep",
-			wantInput:    "birthday card",
-			wantMethod:   "llm",
+			wantPipeline: "",
+			wantMethod:   "none",
 		},
 		{
-			// Cron with quoted/punctuated input field — sanitizeFocus should strip quotes
+			// not imperative ("summarize") → hard gate
 			prompt:       "summarize support emails every 2 hours",
 			llmJSON:      `{"pipeline":"support-digest-dryrun","confidence":0.89,"input":"\"support queue\"","cron":"0 */2 * * *"}`,
-			wantPipeline: "support-digest-dryrun",
-			wantInput:    "support queue", // quotes stripped by sanitizeFocus
-			wantCron:     "0 */2 * * *",
-			wantMethod:   "llm",
+			wantPipeline: "",
+			wantMethod:   "none",
 		},
 		{
 			// Invalid cron from LLM (4 fields) — validateCron rejects it → empty

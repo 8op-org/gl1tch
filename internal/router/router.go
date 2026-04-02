@@ -158,6 +158,15 @@ func (r *HybridRouter) Route(ctx context.Context, prompt string, pipelines []pip
 	ctx, span := routerTracer.Start(ctx, "router.classify")
 	defer span.End()
 
+	// Hard gate: non-imperative input never dispatches a pipeline, regardless of
+	// embedding similarity or LLM output. Questions, observations, and generic
+	// task requests ("fix this", "review my PR") are handled by the AI directly.
+	if !isImperativeInput(prompt) {
+		span.SetAttributes(attribute.String("router.strategy", "none-not-imperative"))
+		span.SetStatus(codes.Ok, "")
+		return &RouteResult{Method: "none"}, nil
+	}
+
 	// candidatePipelines is what gets passed to the LLM. Starts as the full list
 	// (for DisableEmbeddings) but is narrowed to candidates when embeddings run.
 	candidatePipelines := pipelines

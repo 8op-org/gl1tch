@@ -193,9 +193,10 @@ func createJobPane(feedID, shellCmd, label, startDir, lastPaneID, extraEnv strin
 	if extraEnv != "" {
 		envPrefix = extraEnv + " "
 	}
+	expandedDir := expandTilde(startDir)
 	cdPrefix := ""
-	if startDir != "" {
-		cdPrefix = fmt.Sprintf("cd %q && ", startDir)
+	if expandedDir != "" {
+		cdPrefix = fmt.Sprintf("cd %q && ", expandedDir)
 	}
 	windowCmd := fmt.Sprintf("%s%s{ %s ; } 2>&1 | tee %s ; echo $? > %s ; exec $SHELL", envPrefix, cdPrefix, shellCmd, logFile, doneFile)
 
@@ -207,8 +208,8 @@ func createJobPane(feedID, shellCmd, label, startDir, lastPaneID, extraEnv strin
 		// Subsequent pipelines: split vertically below the last pipeline pane.
 		args = []string{"split-window", "-v", "-t", lastPaneID, "-P", "-F", "#{pane_id}"}
 	}
-	if startDir != "" {
-		args = append(args, "-c", startDir)
+	if expandedDir != "" {
+		args = append(args, "-c", expandedDir)
 	}
 	args = append(args, windowCmd)
 
@@ -227,6 +228,19 @@ func createJobPane(feedID, shellCmd, label, startDir, lastPaneID, extraEnv strin
 		exec.Command("tmux", "select-pane", "-t", paneID, "-T", label).Run() //nolint:errcheck
 	}
 	return paneID, logFile, doneFile
+}
+
+// expandTilde replaces a leading "~" with the user's home directory.
+// Paths that don't start with "~" are returned unchanged.
+func expandTilde(path string) string {
+	if !strings.HasPrefix(path, "~") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return home + path[1:]
 }
 
 var ansiEscRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)

@@ -216,7 +216,7 @@ func TestHybridRouter_LLMMatch(t *testing.T) {
 	}
 	r := New(mgr, &funcEmbedder{fn: embedFn}, cfg)
 
-	result, err := r.Route(context.Background(), "push my feature branch", pipelines)
+	result, err := r.Route(context.Background(), "run git-push on feature branch", pipelines)
 	if err != nil {
 		t.Fatalf("Route error: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestHybridRouter_ExtractsInput(t *testing.T) {
 	}
 	r := New(mgr, &funcEmbedder{fn: embedFn}, cfg)
 
-	result, err := r.Route(context.Background(), "improve executor package docs", pipelines)
+	result, err := r.Route(context.Background(), "run docs-improve on executor package", pipelines)
 	if err != nil {
 		t.Fatalf("Route error: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestHybridRouter_ExtractsCron(t *testing.T) {
 	}
 	r := New(mgr, &funcEmbedder{fn: embedFn}, cfg)
 
-	result, err := r.Route(context.Background(), "improve docs every 2 hours", pipelines)
+	result, err := r.Route(context.Background(), "run docs-improve every 2 hours", pipelines)
 	if err != nil {
 		t.Fatalf("Route error: %v", err)
 	}
@@ -550,9 +550,9 @@ func TestHybridRouter_LLMHallucination(t *testing.T) {
 	}
 }
 
-func TestHybridRouter_HighConfQuestion_GoesToLLM(t *testing.T) {
-	// High cosine similarity (≥ ConfidentThreshold) but the prompt is a question.
-	// isImperativeInput must block the fast path, forcing the LLM stage.
+func TestHybridRouter_NonImperative_NeverRoutesToLLM(t *testing.T) {
+	// Non-imperative inputs (questions, observations, generic tasks) must be
+	// stopped by the hard gate before the LLM is ever called — even with cosine=1.0.
 	llmCalled := int64(0)
 	mgr := executor.NewManager()
 	if err := mgr.Register(&executor.StubExecutor{
@@ -570,10 +570,8 @@ func TestHybridRouter_HighConfQuestion_GoesToLLM(t *testing.T) {
 		{Name: "pipeline-a", Description: "alpha unit"},
 	}
 
-	// Query vector identical to description → cosine = 1.0 ≥ ConfidentThreshold (0.85).
-	// But prompt ends with "?" → isImperativeInput = false → fast path blocked → LLM called.
 	embedFn := func(text string) []float32 {
-		return []float32{1, 0} // same for both description and query
+		return []float32{1, 0} // cosine=1.0 — topic is relevant, but intent is not imperative
 	}
 
 	cfg := Config{
@@ -583,14 +581,25 @@ func TestHybridRouter_HighConfQuestion_GoesToLLM(t *testing.T) {
 	}
 	r := New(mgr, &funcEmbedder{fn: embedFn}, cfg)
 
-	result, err := r.Route(context.Background(), "why is pipeline-a failing?", pipelines)
-	if err != nil {
-		t.Fatalf("Route error: %v", err)
+	inputs := []string{
+		"why is pipeline-a failing?",
+		"please review this PR",
+		"fix the thing",
+		"looks like pipeline-a is stuck",
 	}
-	if atomic.LoadInt64(&llmCalled) == 0 {
-		t.Error("LLM must be called for high-conf questions — fast path requires isImperativeInput")
-	}
-	if result.Method != "llm" {
-		t.Errorf("expected method 'llm', got %q", result.Method)
+	for _, prompt := range inputs {
+		result, err := r.Route(context.Background(), prompt, pipelines)
+		if err != nil {
+			t.Fatalf("Route error: %v", err)
+		}
+		if atomic.LoadInt64(&llmCalled) != 0 {
+			t.Errorf("LLM must NOT be called for non-imperative input %q", prompt)
+		}
+		if result.Pipeline != nil {
+			t.Errorf("non-imperative input %q must not route to pipeline, got %q", prompt, result.Pipeline.Name)
+		}
+		if result.Method != "none" {
+			t.Errorf("expected method 'none' for %q, got %q", prompt, result.Method)
+		}
 	}
 }
