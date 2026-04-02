@@ -25,6 +25,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/npcname"
 	"github.com/8op-org/gl1tch/internal/tdf"
 	orcaicron "github.com/8op-org/gl1tch/internal/cron"
+	"github.com/8op-org/gl1tch/internal/busd"
 	"github.com/8op-org/gl1tch/internal/busd/topics"
 	"github.com/8op-org/gl1tch/internal/game"
 	"github.com/8op-org/gl1tch/internal/inbox"
@@ -418,7 +419,8 @@ func NewWithStore(s *store.Store) Model {
 	// Widget and signal registries loaded from wrappers dir.
 	wrappersDir := filepath.Join(os.Getenv("HOME"), ".config", "glitch", "wrappers")
 	m.widgetRegistry = LoadWidgetRegistry(wrappersDir)
-	m.signalHandlers = BuildSignalHandlerRegistry(m.narrationCh, s)
+	activePack := game.APMWorldPackLoader{}.ActivePack()
+	m.signalHandlers = BuildSignalHandlerRegistry(m.narrationCh, s, activePack)
 
 	// Inject widget registry into the chat panel for trigger dispatch.
 	m.glitchChat.widgetRegistry = m.widgetRegistry
@@ -426,6 +428,25 @@ func NewWithStore(s *store.Store) Model {
 	// Seed scheduled job count from cron.yaml at startup.
 	if entries, err := orcaicron.LoadConfig(); err == nil {
 		m.scheduledJobCount = len(entries)
+	}
+
+	// Startup game maintenance: auto-resolve expired ICE encounters and apply
+	// MUD reputation decay for inactive days. Both are fire-and-forget.
+	if s != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = s.AutoResolveExpiredEncounters(func() {
+				// Apply streak penalty for each expired encounter.
+				if us, err := s.GetUserScore(ctx); err == nil {
+					if us.StreakDays > 0 {
+						us.StreakDays--
+					}
+					_ = s.UpdateUserScore(ctx, us)
+				}
+			})
+			_ = game.ApplyMUDReputationDecay(ctx, s, activePack)
+		}()
 	}
 
 	// Seed player score from store at startup.
@@ -1281,8 +1302,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					evalResult, err := engine.Evaluate(ctx, string(runDataJSON), pack)
 					if err == nil && st != nil {
+						sockPath, sockErr := busd.SocketPath()
 						for _, id := range evalResult.Achievements {
-							_ = st.RecordAchievement(ctx, id)
+							alreadyHave, _ := st.HasAchievement(id)
+							if !alreadyHave {
+								_ = st.RecordAchievement(ctx, id)
+								if sockErr == nil {
+									_ = busd.PublishEvent(sockPath, topics.GameAchievementUnlocked, map[string]string{"achievement_id": id})
+								}
+							}
+						}
+						if evalResult.ICEClass != "" {
+							deadline := time.Now().Add(time.Duration(pack.ICEEncounter.TimeoutHours) * time.Hour)
+							_ = st.InsertICEEncounter(payload.Usage.Provider+"-"+fmt.Sprintf("%d", time.Now().UnixNano()), evalResult.ICEClass, "", deadline)
+							if sockErr == nil {
+								_ = busd.PublishEvent(sockPath, topics.GameICEEncountered, map[string]string{"ice_class": evalResult.ICEClass})
+							}
+						}
+						if sockErr == nil {
+							for _, qe := range evalResult.QuestEvents {
+								_ = busd.PublishEvent(sockPath, topics.GameQuestEvent, map[string]string{"event_type": qe})
+							}
 						}
 					}
 
@@ -1296,6 +1336,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Channel full — drop silently.
 					}
 				}()
+				// Update personal bests after scoring.
+				if st != nil {
+					runIDStr := fmt.Sprintf("%d", payload.Usage.DurationMS)
+					if payload.Usage.DurationMS > 0 {
+						_ = st.InsertOrUpdatePersonalBest("fastest_run_ms", float64(payload.Usage.DurationMS), runIDStr)
+					}
+					if payload.XP > 0 {
+						_ = st.InsertOrUpdatePersonalBest("highest_xp", float64(payload.XP), runIDStr)
+					}
+					if payload.Usage.CacheReadTokens > 0 {
+						_ = st.InsertOrUpdatePersonalBest("most_cache_tokens", float64(payload.Usage.CacheReadTokens), runIDStr)
+					}
+					if payload.Usage.TotalCostUSD > 0 {
+						_ = st.InsertOrUpdatePersonalBest("lowest_cost_usd", payload.Usage.TotalCostUSD, runIDStr)
+					}
+					if payload.StreakDays > 0 {
+						_ = st.InsertOrUpdatePersonalBest("longest_streak", float64(payload.StreakDays), runIDStr)
+					}
+				}
+
 				// Refresh cached score after a run is scored.
 				if m.store != nil {
 					if us, err := m.store.GetUserScore(context.Background()); err == nil {

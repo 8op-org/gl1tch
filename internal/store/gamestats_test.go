@@ -90,6 +90,94 @@ func TestGameStatsQuery_AggregatesOverWindow(t *testing.T) {
 	}
 }
 
+func TestInsertAchievement_Idempotent(t *testing.T) {
+	s, err := OpenAt(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	// First insert — should succeed.
+	if err := s.RecordAchievement(ctx, "speed-demon"); err != nil {
+		t.Fatalf("RecordAchievement first: %v", err)
+	}
+	// Second insert — should be a no-op, not an error.
+	if err := s.RecordAchievement(ctx, "speed-demon"); err != nil {
+		t.Fatalf("RecordAchievement second (idempotent): %v", err)
+	}
+
+	has, err := s.HasAchievement("speed-demon")
+	if err != nil {
+		t.Fatalf("HasAchievement: %v", err)
+	}
+	if !has {
+		t.Error("expected HasAchievement to return true after insert")
+	}
+
+	// Unknown achievement should return false.
+	has2, err := s.HasAchievement("never-inserted")
+	if err != nil {
+		t.Fatalf("HasAchievement unknown: %v", err)
+	}
+	if has2 {
+		t.Error("expected HasAchievement to return false for unknown ID")
+	}
+}
+
+func TestPersonalBests_UpdateLogic(t *testing.T) {
+	s, err := OpenAt(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	// First record — always inserted.
+	if err := s.InsertOrUpdatePersonalBest("highest_xp", 100, "run-1"); err != nil {
+		t.Fatalf("InsertOrUpdatePersonalBest first: %v", err)
+	}
+	// Better value — should replace.
+	if err := s.InsertOrUpdatePersonalBest("highest_xp", 200, "run-2"); err != nil {
+		t.Fatalf("InsertOrUpdatePersonalBest better: %v", err)
+	}
+	// Worse value — should NOT replace.
+	if err := s.InsertOrUpdatePersonalBest("highest_xp", 50, "run-3"); err != nil {
+		t.Fatalf("InsertOrUpdatePersonalBest worse: %v", err)
+	}
+
+	bests, err := s.GetPersonalBests()
+	if err != nil {
+		t.Fatalf("GetPersonalBests: %v", err)
+	}
+	if len(bests) != 1 {
+		t.Fatalf("expected 1 best, got %d", len(bests))
+	}
+	if bests[0].Value != 200 {
+		t.Errorf("expected value=200 (best), got %f", bests[0].Value)
+	}
+	if bests[0].RunID != "run-2" {
+		t.Errorf("expected run_id=run-2, got %q", bests[0].RunID)
+	}
+
+	// Lower-is-better: fastest_run_ms.
+	_ = s.InsertOrUpdatePersonalBest("fastest_run_ms", 5000, "run-a")
+	_ = s.InsertOrUpdatePersonalBest("fastest_run_ms", 3000, "run-b") // better (lower)
+	_ = s.InsertOrUpdatePersonalBest("fastest_run_ms", 4000, "run-c") // worse (higher)
+
+	bests2, _ := s.GetPersonalBests()
+	for _, pb := range bests2 {
+		if pb.Metric == "fastest_run_ms" {
+			if pb.Value != 3000 {
+				t.Errorf("fastest_run_ms: expected 3000, got %f", pb.Value)
+			}
+			if pb.RunID != "run-b" {
+				t.Errorf("fastest_run_ms run_id: expected run-b, got %q", pb.RunID)
+			}
+		}
+	}
+}
+
 func TestGameStatsQuery_ProviderMixPopulated(t *testing.T) {
 	s, err := OpenAt(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

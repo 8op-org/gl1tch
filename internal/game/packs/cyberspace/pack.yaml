@@ -42,3 +42,15 @@ weights:
   retry_penalty: 50
   streak_multiplier: 1.0
   provider_weights: {}
+  mud_xp_events:
+    mud.room.entered: 10
+    mud.espionage.talked: 25
+    mud.hack.success: 50
+
+reputation_decay:
+  decay_per_day: 2
+  floor: 10
+  max_decay_days: 7
+
+ice_encounter:
+  timeout_hours: 24

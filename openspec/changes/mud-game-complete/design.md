@@ -64,6 +64,8 @@ The tuner's Ollama analysis prompt gains a section asking for 3-5 bounty contrac
 
 ICE encounter is a short-lived TUI sub-mode triggered by the `game.ice.encountered` signal handler. The handler writes a pending encounter to a SQLite `ice_encounters` table with a deadline timestamp. `glitch game ice` reads the pending encounter and presents a simple "fight or jack out" choice. Timeout = loss. Loss decrements streak by 1 (not to zero). Win = clear the encounter, no effect.
 
+The deadline duration is controlled by `ice_encounter.timeout_hours` in the pack (default 24h). The MUD plugin is not required for ICE encounters — they are triggered by pipeline runs, not MUD activity. The 24h default accommodates unattended or CI-adjacent runs where the player is not at the terminal. When the MUD plugin is active and a session is live, operators can set `timeout_hours: 1` (or shorter) for more pressure.
+
 ### 7. Reputation Decay: daily cron-style check on `glitch` startup
 
 On each `glitch` startup, the store checks the last pipeline run timestamp. For each full day with no run, MUD reputation for all factions decays by a configurable `decay_per_day` value (default 2). Decay is capped at a floor (default 10, to prevent total lockout). This requires a `last_run_at` column (already derivable from run history) and the decay rate in the pack.

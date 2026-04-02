@@ -49,6 +49,7 @@ tasks:
     deps: [backup, build]
     cmds:
       - cp bin/{{.BINARY}} $(go env GOPATH)/bin/{{.BINARY}}
+      - codesign --force --sign - $(go env GOPATH)/bin/{{.BINARY}}
       - ln -sf $(go env GOPATH)/bin/{{.BINARY}} ~/.local/bin/{{.BINARY}}
 
   test:

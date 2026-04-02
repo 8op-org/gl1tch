@@ -33,6 +33,12 @@ const (
 	// Game run scoring
 	GameRunScored = "game.run.scored"
 
+	// Game event signals
+	GameAchievementUnlocked = "game.achievement.unlocked"
+	GameICEEncountered       = "game.ice.encountered"
+	GameQuestEvent           = "game.quest.event"
+	GameBountyCompleted      = "game.bounty.completed"
+
 	// Workflow run lifecycle
 	WorkflowRunStarted   = "workflow.run.started"
 	WorkflowRunCompleted = "workflow.run.completed"

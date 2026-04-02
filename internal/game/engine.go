@@ -135,5 +135,6 @@ type GameRunScoredPayload struct {
 	StreakDays   int         `json:"streak_days"`
 	StepFailures int         `json:"step_failures"`
 	Achievements []string    `json:"achievements"`
+	ICEClass     string      `json:"ice_class"`
 	Usage        TokenUsage  `json:"usage"`
 }

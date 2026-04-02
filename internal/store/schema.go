@@ -135,6 +135,24 @@ const createWorkflowRunsSchema = `CREATE TABLE IF NOT EXISTS workflow_runs (
   completed_at DATETIME
 )`
 
+// createICEEncountersSchema is the DDL for the ice_encounters table.
+const createICEEncountersSchema = `CREATE TABLE IF NOT EXISTS ice_encounters (
+  id         TEXT PRIMARY KEY,
+  ice_class  TEXT NOT NULL,
+  run_id     TEXT NOT NULL DEFAULT '',
+  deadline   INTEGER NOT NULL,
+  resolved   INTEGER NOT NULL DEFAULT 0,
+  outcome    TEXT
+)`
+
+// createPersonalBestsSchema is the DDL for the game_personal_bests table.
+const createPersonalBestsSchema = `CREATE TABLE IF NOT EXISTS game_personal_bests (
+  metric      TEXT PRIMARY KEY,
+  value       REAL NOT NULL DEFAULT 0,
+  run_id      TEXT NOT NULL DEFAULT '',
+  recorded_at INTEGER NOT NULL
+)`
+
 // createWorkflowCheckpointsSchema is the DDL for the workflow_checkpoints table.
 const createWorkflowCheckpointsSchema = `CREATE TABLE IF NOT EXISTS workflow_checkpoints (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,7 +207,13 @@ func applySchema(db *sql.DB) error {
 	if err := applyWorkflowRunsTableMigration(db); err != nil {
 		return err
 	}
-	return applyWorkflowCheckpointsTableMigration(db)
+	if err := applyWorkflowCheckpointsTableMigration(db); err != nil {
+		return err
+	}
+	if err := applyICEEncountersTableMigration(db); err != nil {
+		return err
+	}
+	return applyPersonalBestsTableMigration(db)
 }
 
 // applyStepCheckpointsTableMigration creates the step_checkpoints table if it
@@ -312,6 +336,20 @@ func applyWorkflowRunsTableMigration(db *sql.DB) error {
 // if it does not already exist. CREATE TABLE IF NOT EXISTS is idempotent.
 func applyWorkflowCheckpointsTableMigration(db *sql.DB) error {
 	_, err := db.Exec(createWorkflowCheckpointsSchema)
+	return err
+}
+
+// applyICEEncountersTableMigration creates the ice_encounters table if it does
+// not already exist. CREATE TABLE IF NOT EXISTS is idempotent.
+func applyICEEncountersTableMigration(db *sql.DB) error {
+	_, err := db.Exec(createICEEncountersSchema)
+	return err
+}
+
+// applyPersonalBestsTableMigration creates the game_personal_bests table if it
+// does not already exist. CREATE TABLE IF NOT EXISTS is idempotent.
+func applyPersonalBestsTableMigration(db *sql.DB) error {
+	_, err := db.Exec(createPersonalBestsSchema)
 	return err
 }
 

@@ -138,12 +138,23 @@ func (t *Tuner) ShouldTune(
 
 // analysisResult is the structured JSON returned by the first Ollama call.
 type analysisResult struct {
-	Calibrations      []calibration     `json:"calibrations"`
-	NewAchievements   []newAchievement  `json:"new_achievements"`
-	ICERules          iceRules          `json:"ice_rules"`
-	QuestRules        []string          `json:"quest_rules"`
-	NarratorNotes     string            `json:"narrator_notes"`
-	WeightSuggestions map[string]any    `json:"weight_suggestions"`
+	Calibrations      []calibration         `json:"calibrations"`
+	NewAchievements   []newAchievement      `json:"new_achievements"`
+	ICERules          iceRules              `json:"ice_rules"`
+	QuestRules        []string              `json:"quest_rules"`
+	NarratorNotes     string                `json:"narrator_notes"`
+	WeightSuggestions map[string]any        `json:"weight_suggestions"`
+	BountyContracts   []analysisContract    `json:"bounty_contracts"`
+}
+
+type analysisContract struct {
+	ID             string  `json:"id"`
+	Description    string  `json:"description"`
+	ObjectiveType  string  `json:"objective_type"`
+	ObjectiveValue float64 `json:"objective_value"`
+	XPReward       int     `json:"xp_reward"`
+	RoomID         string  `json:"room_id"`
+	ValidDays      int     `json:"valid_days"`
 }
 
 type calibration struct {
@@ -181,6 +192,14 @@ Analyze the current rules against the stats and return ONLY a valid JSON object 
 - quest_rules: array of quest event trigger condition strings
 - narrator_notes: string describing how narrator should evolve given player arc
 - weight_suggestions: object with any of {base_multiplier, cache_bonus_rate, speed_bonus_cap, speed_bonus_scale, retry_penalty, streak_multiplier} that should change
+- bounty_contracts: array of 3-5 {id, description, objective_type, objective_value, xp_reward, room_id, valid_days} contracts
+  - id: kebab-case unique string (e.g. "cache-blitz-7d")
+  - description: 1-sentence player-facing objective
+  - objective_type: one of "cache_ratio", "speed_ms", "run_streak", "cost_zero", "output_ratio"
+  - objective_value: numeric threshold the player must hit
+  - xp_reward: integer bonus XP (100-2000, scaled to difficulty)
+  - room_id: one of "mainframe", "bazaar", "cryovault", "ghost-net", "ice-wall"
+  - valid_days: how many days until contract expires (1-14)
 
 Return ONLY valid JSON. No explanation. No markdown.`,
 		pack.GameRules, string(statsJSON))
@@ -218,6 +237,9 @@ Instructions:
 - Keep trace-ice (cost_usd threshold) and data-ice (input_tokens threshold) rules
 - Evolve narrator_style using the analysis narrator_notes
 - Apply weight_suggestions; keep multiplier values in range [0.1, 5.0]
+- Include bounty_contracts from the analysis as a YAML list under the key bounty_contracts.
+  Each contract: id, description, objective_type, objective_value, xp_reward, room_id, valid_until (ISO8601 date)
+  Compute valid_until by adding valid_days to today's date.
 
 Output ONLY the YAML frontmatter, starting with --- and ending with ---. No explanation. No markdown fences.`,
 		analysisJSON, pack.GameRules, string(weightsJSON))
@@ -288,10 +310,17 @@ func (t *Tuner) Tune(ctx context.Context, stats store.GameStats, score GameRunSc
 // provider_weights uses map[string]any because Ollama sometimes emits string
 // values instead of floats; we sanitize rather than hard-fail.
 type loosePack struct {
-	Kind          string         `yaml:"kind"`
-	GameRules     string         `yaml:"game_rules"`
-	NarratorStyle string         `yaml:"narrator_style"`
-	Weights       looseWeights   `yaml:"weights"`
+	Kind             string             `yaml:"kind"`
+	GameRules        string             `yaml:"game_rules"`
+	NarratorStyle    string             `yaml:"narrator_style"`
+	Weights          looseWeights       `yaml:"weights"`
+	BountyContracts  []looseBounty      `yaml:"bounty_contracts"`
+}
+
+type looseBounty struct {
+	ID       string `yaml:"id"`
+	XPReward int    `yaml:"xp_reward"`
+	RoomID   string `yaml:"room_id"`
 }
 
 type looseWeights struct {
@@ -327,6 +356,16 @@ func (t *Tuner) validate(yamlBytes []byte) error {
 	if fm.Weights.StreakMultiplier != 0 {
 		if err := checkRange("streak_multiplier", fm.Weights.StreakMultiplier); err != nil {
 			return err
+		}
+	}
+
+	// Validate bounty_contracts: any present entries must have id, positive xp_reward.
+	for i, c := range fm.BountyContracts {
+		if c.ID == "" {
+			return fmt.Errorf("bounty_contracts[%d] missing id", i)
+		}
+		if c.XPReward <= 0 {
+			return fmt.Errorf("bounty_contracts[%d] (%s) has non-positive xp_reward: %d", i, c.ID, c.XPReward)
 		}
 	}
 

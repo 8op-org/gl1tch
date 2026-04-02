@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/8op-org/gl1tch/internal/game"
 )
 
 func TestSignalHandlerRegistry_UnknownHandler_Drops(t *testing.T) {
-	reg := BuildSignalHandlerRegistry(nil, nil)
+	reg := BuildSignalHandlerRegistry(nil, nil, game.GameWorldPack{})
 	// Should not panic; unknown handler is silently dropped.
 	reg.Dispatch("nonexistent", "some.topic", `{"key":"val"}`)
 }
@@ -18,7 +20,7 @@ func TestSignalHandlerRegistry_LogHandler_WritesLine(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
-	reg := BuildSignalHandlerRegistry(nil, nil)
+	reg := BuildSignalHandlerRegistry(nil, nil, game.GameWorldPack{})
 	reg.Dispatch("log", "test.topic", `{"hello":"world"}`)
 
 	logPath := filepath.Join(tmpHome, ".local", "share", "glitch", "plugin-signals.log")
@@ -39,7 +41,7 @@ func TestSignalHandlerRegistry_LogHandler_AppendsMultiple(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
-	reg := BuildSignalHandlerRegistry(nil, nil)
+	reg := BuildSignalHandlerRegistry(nil, nil, game.GameWorldPack{})
 	reg.Dispatch("log", "topic.one", "payload-one")
 	reg.Dispatch("log", "topic.two", "payload-two")
 

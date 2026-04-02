@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/8op-org/gl1tch/internal/console"
+	"github.com/8op-org/gl1tch/internal/game"
 )
 
 // tmuxAvailable returns true if tmux is in PATH.
@@ -278,7 +279,7 @@ signals:
 
 // TestSignalHandlerRegistry_BuiltinsRegistered verifies all built-in handlers are present.
 func TestSignalHandlerRegistry_BuiltinsRegistered(t *testing.T) {
-	reg := console.BuildSignalHandlerRegistry(nil, nil)
+	reg := console.BuildSignalHandlerRegistry(nil, nil, game.GameWorldPack{})
 	for _, name := range []string{"companion", "score", "log"} {
 		if _, ok := reg[name]; !ok {
 			t.Errorf("expected handler %q to be registered", name)

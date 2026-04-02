@@ -440,6 +440,16 @@ func (s *Store) RecordAchievement(ctx context.Context, achievementID string) err
 	return nil
 }
 
+// HasAchievement returns true if the given achievement ID is already recorded.
+func (s *Store) HasAchievement(id string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM achievements WHERE achievement_id = ?`, id).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("store: has achievement: %w", err)
+	}
+	return count > 0, nil
+}
+
 // GetUnlockedAchievements returns all unlocked achievement IDs.
 func (s *Store) GetUnlockedAchievements(ctx context.Context) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT achievement_id FROM achievements ORDER BY unlocked_at ASC`)
@@ -462,6 +472,154 @@ func (s *Store) GetUnlockedAchievements(ctx context.Context) ([]string, error) {
 		ids = []string{}
 	}
 	return ids, nil
+}
+
+// PersonalBest holds a single tracked personal best metric.
+type PersonalBest struct {
+	Metric     string
+	Value      float64
+	RunID      string
+	RecordedAt time.Time
+}
+
+// ICEEncounter represents a pending or resolved ICE encounter.
+type ICEEncounter struct {
+	ID       string
+	ICEClass string
+	RunID    string
+	Deadline time.Time
+	Resolved bool
+	Outcome  string
+}
+
+// InsertOrUpdatePersonalBest replaces the stored value for metric if value is
+// better (higher, except for fastest_run_ms and lowest_cost_usd which are lower).
+func (s *Store) InsertOrUpdatePersonalBest(metric string, value float64, runID string) error {
+	// For "lower is better" metrics, we want to keep the smallest value.
+	lowerIsBetter := metric == "fastest_run_ms" || metric == "lowest_cost_usd"
+
+	var existing float64
+	err := s.db.QueryRow(`SELECT value FROM game_personal_bests WHERE metric = ?`, metric).Scan(&existing)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("store: personal best lookup: %w", err)
+	}
+	if err == nil {
+		// Row exists — only update if this is better.
+		if lowerIsBetter && value >= existing {
+			return nil
+		}
+		if !lowerIsBetter && value <= existing {
+			return nil
+		}
+	}
+	_, err = s.db.Exec(
+		`INSERT OR REPLACE INTO game_personal_bests (metric, value, run_id, recorded_at) VALUES (?, ?, ?, ?)`,
+		metric, value, runID, time.Now().UnixMilli(),
+	)
+	if err != nil {
+		return fmt.Errorf("store: update personal best: %w", err)
+	}
+	return nil
+}
+
+// GetPersonalBests returns all personal best rows ordered by metric name.
+func (s *Store) GetPersonalBests() ([]PersonalBest, error) {
+	rows, err := s.db.Query(`SELECT metric, value, run_id, recorded_at FROM game_personal_bests ORDER BY metric`)
+	if err != nil {
+		return nil, fmt.Errorf("store: get personal bests: %w", err)
+	}
+	defer rows.Close()
+	var bests []PersonalBest
+	for rows.Next() {
+		var pb PersonalBest
+		var recordedAtMS int64
+		if err := rows.Scan(&pb.Metric, &pb.Value, &pb.RunID, &recordedAtMS); err != nil {
+			return nil, fmt.Errorf("store: get personal bests scan: %w", err)
+		}
+		pb.RecordedAt = time.UnixMilli(recordedAtMS)
+		bests = append(bests, pb)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: get personal bests rows: %w", err)
+	}
+	return bests, nil
+}
+
+// InsertICEEncounter records a new ICE encounter with the given deadline.
+func (s *Store) InsertICEEncounter(id, iceClass, runID string, deadline time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT OR IGNORE INTO ice_encounters (id, ice_class, run_id, deadline, resolved) VALUES (?, ?, ?, ?, 0)`,
+		id, iceClass, runID, deadline.UnixMilli(),
+	)
+	if err != nil {
+		return fmt.Errorf("store: insert ice encounter: %w", err)
+	}
+	return nil
+}
+
+// GetPendingICEEncounter returns the most recent unresolved encounter, or nil if none.
+func (s *Store) GetPendingICEEncounter() (*ICEEncounter, error) {
+	var enc ICEEncounter
+	var deadlineMS int64
+	var outcome sql.NullString
+	err := s.db.QueryRow(
+		`SELECT id, ice_class, run_id, deadline, resolved, outcome FROM ice_encounters WHERE resolved = 0 ORDER BY deadline DESC LIMIT 1`,
+	).Scan(&enc.ID, &enc.ICEClass, &enc.RunID, &deadlineMS, &enc.Resolved, &outcome)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("store: get pending ice encounter: %w", err)
+	}
+	enc.Deadline = time.UnixMilli(deadlineMS)
+	enc.Outcome = outcome.String
+	return &enc, nil
+}
+
+// ResolveICEEncounter marks an encounter as resolved with the given outcome.
+func (s *Store) ResolveICEEncounter(id, outcome string) error {
+	_, err := s.db.Exec(
+		`UPDATE ice_encounters SET resolved = 1, outcome = ? WHERE id = ?`,
+		outcome, id,
+	)
+	if err != nil {
+		return fmt.Errorf("store: resolve ice encounter: %w", err)
+	}
+	return nil
+}
+
+// AutoResolveExpiredEncounters finds unresolved encounters past their deadline
+// and marks them as losses. applyPenalty is called once per expired encounter.
+func (s *Store) AutoResolveExpiredEncounters(applyPenalty func()) error {
+	now := time.Now().UnixMilli()
+	rows, err := s.db.Query(
+		`SELECT id FROM ice_encounters WHERE resolved = 0 AND deadline < ?`, now,
+	)
+	if err != nil {
+		return fmt.Errorf("store: auto-resolve ice encounters query: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	_ = rows.Err()
+
+	for _, id := range ids {
+		if _, err := s.db.Exec(
+			`UPDATE ice_encounters SET resolved = 1, outcome = 'loss' WHERE id = ?`, id,
+		); err != nil {
+			continue
+		}
+		if applyPenalty != nil {
+			applyPenalty()
+		}
+	}
+	return nil
 }
 
 // ScoreEventsByProvider aggregates XP and run count grouped by provider.

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,40 @@ type PackWeights struct {
 	RetryPenalty    int64              `yaml:"retry_penalty"`
 	StreakMultiplier float64            `yaml:"streak_multiplier"`
 	ProviderWeights map[string]float64 `yaml:"provider_weights"`
+	MUDXPEvents     map[string]int     `yaml:"mud_xp_events"`
+}
+
+// BountyContract is a time-limited challenge placed in a MUD room by the tuner.
+type BountyContract struct {
+	ID             string    `yaml:"id"`
+	Description    string    `yaml:"description"`
+	ObjectiveType  string    `yaml:"objective_type"`
+	ObjectiveValue float64   `yaml:"objective_value"`
+	XPReward       int       `yaml:"xp_reward"`
+	RoomID         string    `yaml:"room_id"`
+	ValidUntil     time.Time `yaml:"valid_until"`
+}
+
+// ReputationDecayConfig controls how MUD faction reputation decays during inactive days.
+type ReputationDecayConfig struct {
+	DecayPerDay   int `yaml:"decay_per_day"`
+	Floor         int `yaml:"floor"`
+	MaxDecayDays  int `yaml:"max_decay_days"`
+}
+
+// ICEEncounterConfig controls ICE encounter timeout behaviour.
+type ICEEncounterConfig struct {
+	TimeoutHours int `yaml:"timeout_hours"`
+}
+
+// DefaultReputationDecay returns sensible default decay settings.
+func DefaultReputationDecay() ReputationDecayConfig {
+	return ReputationDecayConfig{DecayPerDay: 2, Floor: 10, MaxDecayDays: 7}
+}
+
+// DefaultICEEncounterConfig returns a 24-hour timeout suitable for unattended runs.
+func DefaultICEEncounterConfig() ICEEncounterConfig {
+	return ICEEncounterConfig{TimeoutHours: 24}
 }
 
 // DefaultPackWeights returns coefficients that reproduce the original
@@ -42,10 +77,25 @@ func DefaultPackWeights() PackWeights {
 
 // GameWorldPack holds the prompts that drive the game engine.
 type GameWorldPack struct {
-	Name          string
-	GameRules     string
-	NarratorStyle string
-	Weights       PackWeights
+	Name             string
+	GameRules        string
+	NarratorStyle    string
+	Weights          PackWeights
+	BountyContracts  []BountyContract
+	ReputationDecay  ReputationDecayConfig
+	ICEEncounter     ICEEncounterConfig
+}
+
+// ActiveBountyContracts returns contracts that have not yet expired.
+func (p GameWorldPack) ActiveBountyContracts() []BountyContract {
+	now := time.Now()
+	var active []BountyContract
+	for _, c := range p.BountyContracts {
+		if c.ValidUntil.IsZero() || c.ValidUntil.After(now) {
+			active = append(active, c)
+		}
+	}
+	return active
 }
 
 // WorldPackLoader resolves the active game world pack.
@@ -62,13 +112,16 @@ type DefaultWorldPackLoader struct{}
 // ActivePack parses and returns the embedded default pack.
 func (DefaultWorldPackLoader) ActivePack() GameWorldPack {
 	var raw struct {
-		Name          string      `yaml:"name"`
-		GameRules     string      `yaml:"game_rules"`
-		NarratorStyle string      `yaml:"narrator_style"`
-		Weights       PackWeights `yaml:"weights"`
+		Name             string                `yaml:"name"`
+		GameRules        string                `yaml:"game_rules"`
+		NarratorStyle    string                `yaml:"narrator_style"`
+		Weights          PackWeights           `yaml:"weights"`
+		BountyContracts  []BountyContract      `yaml:"bounty_contracts"`
+		ReputationDecay  ReputationDecayConfig `yaml:"reputation_decay"`
+		ICEEncounter     ICEEncounterConfig    `yaml:"ice_encounter"`
 	}
 	if err := yaml.Unmarshal(defaultPackData, &raw); err != nil {
-		return GameWorldPack{Name: "default", Weights: DefaultPackWeights()}
+		return GameWorldPack{Name: "default", Weights: DefaultPackWeights(), ReputationDecay: DefaultReputationDecay(), ICEEncounter: DefaultICEEncounterConfig()}
 	}
 	w := raw.Weights
 	if w.BaseMultiplier == 0 {
@@ -76,12 +129,27 @@ func (DefaultWorldPackLoader) ActivePack() GameWorldPack {
 	} else if w.ProviderWeights == nil {
 		w.ProviderWeights = map[string]float64{}
 	}
-	return GameWorldPack{
-		Name:          raw.Name,
-		GameRules:     raw.GameRules,
-		NarratorStyle: raw.NarratorStyle,
-		Weights:       w,
+	if w.MUDXPEvents == nil {
+		w.MUDXPEvents = map[string]int{}
 	}
+	rd := raw.ReputationDecay
+	if rd.DecayPerDay == 0 {
+		rd = DefaultReputationDecay()
+	}
+	ice := raw.ICEEncounter
+	if ice.TimeoutHours == 0 {
+		ice = DefaultICEEncounterConfig()
+	}
+	pack := GameWorldPack{
+		Name:            raw.Name,
+		GameRules:       raw.GameRules,
+		NarratorStyle:   raw.NarratorStyle,
+		Weights:         w,
+		BountyContracts: raw.BountyContracts,
+		ReputationDecay: rd,
+		ICEEncounter:    ice,
+	}
+	return pack
 }
 
 // APMWorldPackLoader scans the APM agent directory for a kind: game-world
@@ -133,11 +201,14 @@ func parseGameWorldAgent(data []byte) (GameWorldPack, bool) {
 	frontmatter := rest[:idx]
 
 	var fm struct {
-		Kind          string      `yaml:"kind"`
-		Name          string      `yaml:"name"`
-		GameRules     string      `yaml:"game_rules"`
-		NarratorStyle string      `yaml:"narrator_style"`
-		Weights       PackWeights `yaml:"weights"`
+		Kind             string                `yaml:"kind"`
+		Name             string                `yaml:"name"`
+		GameRules        string                `yaml:"game_rules"`
+		NarratorStyle    string                `yaml:"narrator_style"`
+		Weights          PackWeights           `yaml:"weights"`
+		BountyContracts  []BountyContract      `yaml:"bounty_contracts"`
+		ReputationDecay  ReputationDecayConfig `yaml:"reputation_decay"`
+		ICEEncounter     ICEEncounterConfig    `yaml:"ice_encounter"`
 	}
 	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err != nil {
 		return GameWorldPack{}, false
@@ -151,10 +222,24 @@ func parseGameWorldAgent(data []byte) (GameWorldPack, bool) {
 	} else if w.ProviderWeights == nil {
 		w.ProviderWeights = map[string]float64{}
 	}
+	if w.MUDXPEvents == nil {
+		w.MUDXPEvents = map[string]int{}
+	}
+	rd := fm.ReputationDecay
+	if rd.DecayPerDay == 0 {
+		rd = DefaultReputationDecay()
+	}
+	ice := fm.ICEEncounter
+	if ice.TimeoutHours == 0 {
+		ice = DefaultICEEncounterConfig()
+	}
 	return GameWorldPack{
-		Name:          fm.Name,
-		GameRules:     fm.GameRules,
-		NarratorStyle: fm.NarratorStyle,
-		Weights:       w,
+		Name:            fm.Name,
+		GameRules:       fm.GameRules,
+		NarratorStyle:   fm.NarratorStyle,
+		Weights:         w,
+		BountyContracts: fm.BountyContracts,
+		ReputationDecay: rd,
+		ICEEncounter:    ice,
 	}, true
 }
