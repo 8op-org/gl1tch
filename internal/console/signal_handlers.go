@@ -84,7 +84,7 @@ func scoreHandler(st *store.Store) func(topic, payload string) {
 		xpResult := game.ComputeXP(game.TokenUsage{
 			InputTokens:  usage.Input,
 			OutputTokens: usage.Output,
-		}, 0)
+		}, 0, game.DefaultPackWeights())
 		ev := store.ScoreEvent{
 			XP:           xpResult.Final,
 			InputTokens:  usage.Input,

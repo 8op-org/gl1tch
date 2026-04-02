@@ -32,6 +32,12 @@ tasks:
   # Core build tasks
   # ---------------------------------------------------------------------------
 
+  backup:
+    desc: "Snapshot current glitch config/data to .backups/ (gitignored)"
+    cmds:
+      - mkdir -p .backups
+      - glitch backup --output .backups/glitch-backup-$(date +%Y%m%d%H%M%S).tar.gz
+
   build:
     desc: "Compile the glitch binary to bin/glitch and tuishot renderer"
     cmds:
@@ -40,7 +46,7 @@ tasks:
 
   install:
     desc: "Build and install glitch to GOPATH/bin; symlink into ~/.local/bin"
-    deps: [build]
+    deps: [backup, build]
     cmds:
       - cp bin/{{.BINARY}} $(go env GOPATH)/bin/{{.BINARY}}
       - ln -sf $(go env GOPATH)/bin/{{.BINARY}} ~/.local/bin/{{.BINARY}}
@@ -107,6 +113,7 @@ tasks:
 
   dev:
     desc: "New-user clean build: backup+wipe config/data/binaries, rebuild from source, fetch APM agents (run manually)"
+    deps: [backup]
     cmds:
       - tmux detach-client -s glitch 2>/dev/null || true
       - tmux kill-session -t glitch 2>/dev/null || true

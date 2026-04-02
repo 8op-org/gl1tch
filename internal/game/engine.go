@@ -16,22 +16,32 @@ type XPResult struct {
 }
 
 // ComputeXP calculates XP earned from a run based on token efficiency metrics.
-func ComputeXP(usage TokenUsage, retryCount int) XPResult {
+// weights controls all formula coefficients; pass DefaultPackWeights() for
+// identical behaviour to the original hard-coded formula.
+func ComputeXP(usage TokenUsage, retryCount int, weights PackWeights) XPResult {
 	var r XPResult
 	denom := usage.InputTokens + usage.CacheCreationTokens
 	if denom > 0 && usage.OutputTokens > 0 {
 		ratio := float64(usage.OutputTokens) / float64(denom)
-		r.Base = int64(float64(usage.OutputTokens) * ratio * 10)
+		r.Base = int64(float64(usage.OutputTokens) * ratio * weights.BaseMultiplier)
 	}
-	r.CacheBonus = usage.CacheReadTokens / 2
-	speedVal := int64(1000) - usage.DurationMS/100
+	r.CacheBonus = int64(float64(usage.CacheReadTokens) * weights.CacheBonusRate)
+	speedVal := weights.SpeedBonusCap - int64(float64(usage.DurationMS)*weights.SpeedBonusScale)
 	if speedVal > 0 {
 		r.SpeedBonus = speedVal
 	}
-	r.RetryPenalty = int64(retryCount) * 50
+	r.RetryPenalty = int64(retryCount) * weights.RetryPenalty
 	r.Final = r.Base + r.CacheBonus + r.SpeedBonus - r.RetryPenalty
 	if r.Final < 0 {
 		r.Final = 0
+	}
+	// Apply provider multiplier.
+	if mult, ok := weights.ProviderWeights[usage.Provider]; ok && mult != 0 {
+		r.Final = int64(float64(r.Final) * mult)
+	}
+	// Apply streak multiplier when streak > 1.
+	if usage.StreakDays > 1 && weights.StreakMultiplier != 0 && weights.StreakMultiplier != 1.0 {
+		r.Final = int64(float64(r.Final) * weights.StreakMultiplier)
 	}
 	return r
 }

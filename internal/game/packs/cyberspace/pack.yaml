@@ -12,8 +12,18 @@ game_rules: |
   - cost-cutter: cost_usd == 0 AND output_tokens > 0
   - first-blood: total_runs == 1
   - streak-3: streak_days >= 3
+  - streak-7: streak_days >= 7
+  - data-hoarder: input_tokens >= 50000
 
-  ICE class (only if step_failures > 0): return "black-ice".
+  ICE class rules (pick the first that matches, else null):
+  - black-ice: step_failures > 0
+  - trace-ice: cost_usd > 0.10
+  - data-ice: input_tokens > 20000
+
+  Quest event triggers (include matching strings in quest_events array, else []):
+  - "streak-milestone": streak_days == 3 OR streak_days == 7 OR streak_days == 14 OR streak_days == 30 OR streak_days == 60 OR streak_days == 90
+  - "xp-threshold": xp >= 1000
+  - "first-achievement": an achievement was just unlocked AND total_runs <= 5
 
   Return only valid JSON. No explanation. No markdown.
 
@@ -23,3 +33,12 @@ narrator_style: |
   Write 3-6 lines of plain text. No markdown. No bullet points. No headers.
   Use the run data JSON provided to narrate what happened: token efficiency, XP earned, level/rank, streak if > 1 day, any achievements unlocked.
   Reference "the Gibson", "cycles", "jacking in", "ICE", "ghost run" naturally.
+
+weights:
+  base_multiplier: 10.0
+  cache_bonus_rate: 0.5
+  speed_bonus_cap: 1000
+  speed_bonus_scale: 0.01
+  retry_penalty: 50
+  streak_multiplier: 1.0
+  provider_weights: {}

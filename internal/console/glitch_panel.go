@@ -670,23 +670,34 @@ func (b *glitchCLIBackend) stream(ctx context.Context, turns []glitchTurn, userM
 				cmd.Wait() //nolint:errcheck
 				pw.Close()
 			}()
-			buf := make([]byte, 512)
-			for {
-				n, err := pr.Read(buf)
-				if n > 0 {
-					select {
-					case ch <- string(buf[:n]):
-					case <-ctx.Done():
-						return
-					}
+			scanner := bufio.NewScanner(pr)
+			scanner.Buffer(make([]byte, 64*1024), 64*1024)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if isToolCallLine(line) {
+					continue
 				}
-				if err != nil {
+				select {
+				case ch <- line + "\n":
+				case <-ctx.Done():
 					return
 				}
 			}
 		}()
 	}
 	return ch, nil
+}
+
+// isToolCallLine returns true for lines that are part of the agent tool-call
+// tree format emitted by CLI backends (× failed, ● succeeded, | params, └ result).
+// These are filtered from raw-mode stream output so only prose reaches the chat.
+func isToolCallLine(line string) bool {
+	for _, prefix := range []string{"× ", "● ", "| ", "└ "} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // glitchLoadBrainContext reads the last 8 brain notes from the store and formats

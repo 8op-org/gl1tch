@@ -159,7 +159,8 @@ var skipDirs = map[string]bool{
 	"logs":   true,
 
 	// ── glitch-specific non-source dirs ────────────────────────────────────────
-	".worktrees": true, // git worktrees
+	".worktrees":   true, // git worktrees
+	"systemprompts": true, // internal LLM system prompt templates — not source docs
 }
 
 // builtinIndexCode walks a path, chunks source files, embeds them with Ollama,

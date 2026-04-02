@@ -18,6 +18,9 @@ import (
 //     write instruction) is always prepended.
 //   - Otherwise the write instruction is always appended — brain is always on.
 func injectBrainContext(ctx context.Context, prompt string, _ *Pipeline, step *Step, ec *ExecutionContext) string {
+	if step != nil && step.NoBrain {
+		return prompt
+	}
 	if inj := ec.GetBrainInjector(); inj != nil {
 		if preamble, err := inj.ReadContext(ctx, ec.RunID()); err == nil && preamble != "" {
 			prompt = preamble + "\n\n" + prompt

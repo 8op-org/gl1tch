@@ -92,15 +92,64 @@ func TestComputeXP(t *testing.T) {
 		},
 	}
 
+	dw := DefaultPackWeights()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ComputeXP(tc.usage, tc.retryCount)
+			got := ComputeXP(tc.usage, tc.retryCount, dw)
 			if got.Final != tc.wantFinal {
 				t.Errorf("Final = %d, want %d (base=%d cache=%d speed=%d penalty=%d)",
 					got.Final, tc.wantFinal,
 					got.Base, got.CacheBonus, got.SpeedBonus, got.RetryPenalty)
 			}
 		})
+	}
+}
+
+func TestComputeXP_ProviderMultiplier(t *testing.T) {
+	w := DefaultPackWeights()
+	w.ProviderWeights["providers.claude"] = 1.5
+	usage := TokenUsage{
+		Provider:     "providers.claude",
+		InputTokens:  100,
+		OutputTokens: 50,
+		DurationMS:   500,
+	}
+	base := ComputeXP(usage, 0, DefaultPackWeights())
+	withMult := ComputeXP(usage, 0, w)
+	if withMult.Final != int64(float64(base.Final)*1.5) {
+		t.Errorf("provider multiplier: got %d, want %d", withMult.Final, int64(float64(base.Final)*1.5))
+	}
+}
+
+func TestComputeXP_StreakMultiplier(t *testing.T) {
+	w := DefaultPackWeights()
+	w.StreakMultiplier = 1.2
+	usage := TokenUsage{
+		Provider:     "providers.claude",
+		InputTokens:  100,
+		OutputTokens: 50,
+		DurationMS:   500,
+		StreakDays:   5,
+	}
+	base := ComputeXP(usage, 0, DefaultPackWeights())
+	withStreak := ComputeXP(usage, 0, w)
+	if withStreak.Final != int64(float64(base.Final)*1.2) {
+		t.Errorf("streak multiplier: got %d, want %d", withStreak.Final, int64(float64(base.Final)*1.2))
+	}
+}
+
+func TestComputeXP_StreakMultiplierNotAppliedWhenOne(t *testing.T) {
+	w := DefaultPackWeights() // StreakMultiplier == 1.0
+	usage := TokenUsage{
+		InputTokens:  100,
+		OutputTokens: 50,
+		DurationMS:   500,
+		StreakDays:   10,
+	}
+	base := ComputeXP(usage, 0, DefaultPackWeights())
+	withStreak := ComputeXP(usage, 0, w)
+	if withStreak.Final != base.Final {
+		t.Errorf("streak=1.0 should be no-op: base=%d withStreak=%d", base.Final, withStreak.Final)
 	}
 }
 

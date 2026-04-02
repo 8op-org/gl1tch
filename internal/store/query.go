@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 )
 
 // QueryRuns returns up to limit runs ordered by started_at descending.
@@ -116,4 +118,112 @@ func (s *Store) DeleteRun(id int64) error {
 		_, err := db.Exec(`DELETE FROM runs WHERE id = ?`, id)
 		return err
 	})
+}
+
+// GameStatsQuery returns aggregate behavioral stats from score_events over the
+// last sinceDays calendar days. Returns a zero-value GameStats (no error) when
+// no events exist within the window.
+func (s *Store) GameStatsQuery(ctx context.Context, sinceDays int) (GameStats, error) {
+	cutoff := time.Now().AddDate(0, 0, -sinceDays).UnixMilli()
+
+	var gs GameStats
+	gs.ProviderRunCounts = make(map[string]int64)
+
+	// ── aggregate stats ──────────────────────────────────────────────────────
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(AVG(CASE WHEN (input_tokens + cache_creation_tokens) > 0
+				THEN CAST(output_tokens AS REAL) / CAST(input_tokens + cache_creation_tokens AS REAL)
+				ELSE 0 END), 0),
+			COALESCE(AVG(cache_read_tokens), 0),
+			COALESCE(AVG(cost_usd), 0),
+			COALESCE(SUM(CASE WHEN xp = 0 THEN 1 ELSE 0 END), 0)
+		FROM score_events
+		WHERE created_at >= ?`, cutoff)
+
+	var totalRuns, zeroXPRuns int64
+	if err := row.Scan(&totalRuns, &gs.AvgOutputRatio, &gs.AvgCacheReadTokens, &gs.AvgCostUSD, &zeroXPRuns); err != nil {
+		return GameStats{}, nil //nolint:nilerr — return zero on empty
+	}
+	gs.TotalRuns = totalRuns
+	gs.RunsSinceDate = totalRuns
+	if totalRuns > 0 {
+		gs.StepFailureRate = float64(zeroXPRuns) / float64(totalRuns)
+	}
+
+	if totalRuns == 0 {
+		gs.UnlockedAchievementIDs = []string{}
+		return gs, nil
+	}
+
+	// ── p50 output ratio ──────────────────────────────────────────────────────
+	p50offset := (totalRuns - 1) / 2
+	rowP50 := s.db.QueryRowContext(ctx, `
+		SELECT CAST(output_tokens AS REAL) / CAST(input_tokens + cache_creation_tokens + 0.001 AS REAL)
+		FROM score_events
+		WHERE created_at >= ?
+		ORDER BY CAST(output_tokens AS REAL) / CAST(input_tokens + cache_creation_tokens + 0.001 AS REAL)
+		LIMIT 1 OFFSET ?`, cutoff, p50offset)
+	_ = rowP50.Scan(&gs.P50OutputRatio)
+
+	// ── p90 output ratio ──────────────────────────────────────────────────────
+	p90offset := int64(float64(totalRuns-1) * 0.9)
+	rowP90 := s.db.QueryRowContext(ctx, `
+		SELECT CAST(output_tokens AS REAL) / CAST(input_tokens + cache_creation_tokens + 0.001 AS REAL)
+		FROM score_events
+		WHERE created_at >= ?
+		ORDER BY CAST(output_tokens AS REAL) / CAST(input_tokens + cache_creation_tokens + 0.001 AS REAL)
+		LIMIT 1 OFFSET ?`, cutoff, p90offset)
+	_ = rowP90.Scan(&gs.P90OutputRatio)
+
+	// ── p90 cache read tokens ─────────────────────────────────────────────────
+	rowP90Cache := s.db.QueryRowContext(ctx, `
+		SELECT cache_read_tokens
+		FROM score_events
+		WHERE created_at >= ?
+		ORDER BY cache_read_tokens
+		LIMIT 1 OFFSET ?`, cutoff, p90offset)
+	_ = rowP90Cache.Scan(&gs.P90CacheReadTokens)
+
+	// ── provider run counts ───────────────────────────────────────────────────
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT provider, COUNT(*) FROM score_events
+		WHERE created_at >= ?
+		GROUP BY provider`, cutoff)
+	if err != nil {
+		return GameStats{}, nil //nolint:nilerr
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var provider string
+		var count int64
+		if err := rows.Scan(&provider, &count); err != nil {
+			continue
+		}
+		gs.ProviderRunCounts[provider] = count
+	}
+	if err := rows.Err(); err != nil {
+		return GameStats{}, nil //nolint:nilerr
+	}
+
+	// ── unlocked achievements ─────────────────────────────────────────────────
+	achRows, err := s.db.QueryContext(ctx,
+		`SELECT achievement_id FROM achievements ORDER BY unlocked_at ASC`)
+	if err != nil {
+		gs.UnlockedAchievementIDs = []string{}
+		return gs, nil //nolint:nilerr
+	}
+	defer achRows.Close()
+	gs.UnlockedAchievementIDs = []string{}
+	for achRows.Next() {
+		var id string
+		if err := achRows.Scan(&id); err != nil {
+			continue
+		}
+		gs.UnlockedAchievementIDs = append(gs.UnlockedAchievementIDs, id)
+	}
+	_ = achRows.Err()
+
+	return gs, nil
 }

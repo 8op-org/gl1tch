@@ -56,6 +56,22 @@ type StepRecord struct {
 	Output     map[string]any `json:"output,omitempty"`
 }
 
+// GameStats holds aggregate behavioral statistics over a time window, used by
+// the game tuner to calibrate achievement thresholds and XP formula weights.
+type GameStats struct {
+	TotalRuns             int64
+	AvgOutputRatio        float64
+	P50OutputRatio        float64
+	P90OutputRatio        float64
+	AvgCacheReadTokens    float64
+	P90CacheReadTokens    float64
+	AvgCostUSD            float64
+	ProviderRunCounts     map[string]int64
+	UnlockedAchievementIDs []string
+	StepFailureRate       float64
+	RunsSinceDate         int64
+}
+
 // StoreWriter is the interface satisfied by *Store for recording run lifecycle
 // events. Callers that only need to write (not query) should depend on this
 // interface rather than *Store directly.

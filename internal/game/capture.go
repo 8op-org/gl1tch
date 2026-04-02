@@ -9,7 +9,8 @@ import (
 	"io"
 )
 
-// TokenUsage holds the token metrics extracted from a provider's output stream.
+// TokenUsage holds the token metrics extracted from a provider's output stream,
+// plus game-context fields set by the scoring path before calling ComputeXP.
 type TokenUsage struct {
 	Provider            string
 	Model               string
@@ -19,6 +20,9 @@ type TokenUsage struct {
 	CacheCreationTokens int64
 	TotalCostUSD        float64
 	DurationMS          int64
+	// StreakDays is set by the scoring path to allow the streak multiplier to
+	// be applied inside ComputeXP. It is never populated by token parsers.
+	StreakDays int
 }
 
 // TokenParser extracts TokenUsage from accumulated provider output bytes.

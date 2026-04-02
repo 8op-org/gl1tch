@@ -1,3 +1,6 @@
+# Local backups (created by task dev / task install)
+.backups/
+
 # Build artifacts
 bin/
 build/

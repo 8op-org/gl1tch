@@ -75,7 +75,9 @@ type runConfig struct {
 	stepFailuresMu sync.Mutex
 	stepFailures   int
 	// lastUsage accumulates token usage across all steps (last non-zero wins).
-	lastUsage      game.TokenUsage
+	lastUsage  game.TokenUsage
+	packLoader game.WorldPackLoader // optional; used to read PackWeights for ComputeXP
+	tuner      *game.Tuner         // optional; fires async after scoring if conditions met
 }
 
 // WithRunStore attaches a result store to the run so results are persisted.
@@ -129,6 +131,18 @@ func WithSilentStatus() RunOption {
 // the LLM must return a structured response, not ask the user questions.
 func WithNoClarification() RunOption {
 	return func(c *runConfig) { c.disableClarification = true }
+}
+
+// WithPackLoader attaches a WorldPackLoader to the run. The active pack's
+// PackWeights are used for ComputeXP. If not set, DefaultPackWeights are used.
+func WithPackLoader(l game.WorldPackLoader) RunOption {
+	return func(c *runConfig) { c.packLoader = l }
+}
+
+// WithTuner attaches a Tuner to the run. After scoring, the tuner's trigger
+// conditions are checked and, if met, Tune is launched in a background goroutine.
+func WithTuner(t *game.Tuner) RunOption {
+	return func(c *runConfig) { c.tuner = t }
 }
 
 // WithResumeFrom instructs the runner to resume an existing run from a
@@ -321,10 +335,15 @@ func Run(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput stri
 		failures := cfg.stepFailures
 		cfg.stepFailuresMu.Unlock()
 
-		xpResult := game.ComputeXP(usage, failures)
 		us, _ := cfg.store.GetUserScore(ctx)
 		prevLevel := us.Level
 		us = game.UpdateStreak(us, time.Now())
+		usage.StreakDays = us.StreakDays
+		packWeights := game.DefaultPackWeights()
+		if cfg.packLoader != nil {
+			packWeights = cfg.packLoader.ActivePack().Weights
+		}
+		xpResult := game.ComputeXP(usage, failures, packWeights)
 		us.TotalXP += xpResult.Final
 		us.TotalRuns++
 		newLevel, levelTitle, nextLevelXP := game.LevelForXP(us.TotalXP)
@@ -363,6 +382,29 @@ func Run(ctx context.Context, p *Pipeline, mgr *executor.Manager, userInput stri
 		}
 		if payloadBytes, merr := json.Marshal(payload); merr == nil {
 			_ = cfg.publisher.Publish(ctx, topics.GameRunScored, payloadBytes)
+		}
+
+		// Post-score: increment runs counter and conditionally fire the tuner.
+		if cfg.tuner != nil {
+			cfg.tuner.IncrementRuns()
+			state := cfg.tuner.LoadState()
+			if cfg.tuner.ShouldTune(
+				time.Now(), state,
+				prevLevel, newLevel,
+				0, us.StreakDays,
+				payload.Achievements,
+			) {
+				tunerStats, statsErr := cfg.store.GameStatsQuery(ctx, 30)
+				if statsErr == nil {
+					tuner := cfg.tuner
+					go func() {
+						if err := tuner.Tune(context.Background(), tunerStats, payload); err != nil {
+							// Game is optional — log only.
+							_ = err
+						}
+					}()
+				}
+			}
 		}
 	}
 
@@ -1621,7 +1663,7 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 
 	// RAG injection: if a BrainRAGInjector is configured, inject relevant brain notes.
 	var ragNoteIDs []string
-	if ragInj := ec.GetRAGInjector(); ragInj != nil {
+	if ragInj := ec.GetRAGInjector(); ragInj != nil && !step.NoBrain {
 		injected, injErr := ragInj.InjectInto(ctx, promptOrInput)
 		if injErr != nil {
 			fmt.Fprintf(os.Stderr, "[brainrag] warn: RAG inject failed for step %q: %v\n", step.ID, injErr)
@@ -1643,7 +1685,7 @@ func resolveExecutor(ctx context.Context, step *Step, args map[string]any, snap 
 	// Append the GLITCH_CLARIFY instruction for executors that support reactive
 	// clarification. Pipelines using unregistered executors are unaffected.
 	// Skipped for internal pipelines (e.g. classification) that require structured output.
-	if clarify.IsReactive(typeName) && !runCfg.disableClarification {
+	if clarify.IsReactive(typeName) && !runCfg.disableClarification && !step.NoClarify {
 		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction()
 	}
 
@@ -1729,7 +1771,7 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 	promptOrInput = injectBrainContext(ctx, promptOrInput, p, step, ec)
 
 	// RAG injection: if a BrainRAGInjector is configured, inject relevant brain notes.
-	if ragInj := ec.GetRAGInjector(); ragInj != nil {
+	if ragInj := ec.GetRAGInjector(); ragInj != nil && !step.NoBrain {
 		injected, injErr := ragInj.InjectInto(ctx, promptOrInput)
 		if injErr != nil {
 			fmt.Fprintf(os.Stderr, "[brainrag] warn: RAG inject failed for step %q: %v\n", step.ID, injErr)
@@ -1751,7 +1793,7 @@ func executePluginStep(ctx context.Context, step *Step, ec *ExecutionContext, mg
 	// Append GLITCH_CLARIFY instruction for reactive executors so the model
 	// knows the protocol for requesting user input.
 	// Skipped for internal pipelines (e.g. classification) that require structured output.
-	if clarify.IsReactive(executorName) && (runCfg == nil || !runCfg.disableClarification) {
+	if clarify.IsReactive(executorName) && (runCfg == nil || !runCfg.disableClarification) && !step.NoClarify {
 		promptOrInput = strings.TrimRight(promptOrInput, "\n") + clarify.Instruction()
 	}
 

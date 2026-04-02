@@ -52,6 +52,13 @@ type Step struct {
 	// WriteBrain controls brain write injection for this step.
 	// Pointer for tri-state: nil = inherit pipeline setting, true = force on, false = force off.
 	WriteBrain *bool `yaml:"write_brain"`
+	// NoBrain suppresses brain context injection for this step when true.
+	// Use for steps that produce raw output (e.g. document writers) where the
+	// brain preamble would leak into the content.
+	NoBrain bool `yaml:"no_brain"`
+	// NoClarify suppresses the GLITCH_CLARIFY instruction for this step.
+	// Use for automated steps that must produce output without asking the user.
+	NoClarify bool `yaml:"no_clarify"`
 	// PromptID is the title of a saved prompt in the store. When set, the prompt
 	// body is prepended (with a blank line separator) to the step's input before
 	// execution. Uses case-insensitive title matching.
