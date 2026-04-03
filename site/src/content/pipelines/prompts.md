@@ -15,7 +15,7 @@ Open the prompt manager:
 glitch prompts
 ```
 
-Press `n` to create a new prompt, give it a title and body, press `s` to save.
+Press `n` to create a new prompt, fill in the title and body, press `ctrl+s` to save.
 
 Use it in a pipeline:
 
@@ -28,42 +28,64 @@ steps:
     input: "{{steps.diff.output}}"
 ```
 
-That's it. When the step runs, your saved prompt body prepends to the input automatically.
+When the step runs, your saved prompt body prepends to the input automatically.
 
 
-## Managing Your Prompt Library
+## The Prompt Manager
 
-### Create a prompt
+The manager has three panels. `tab` / `shift+tab` cycles between them.
 
-1. Run `glitch prompts`
-2. Press `n` — new prompt form opens
-3. Enter a title: `"Code review persona"`
-4. Enter the body:
-
-```text
-You are a senior engineer doing code review. Be direct and specific.
-Focus on correctness first, then performance, then style.
-Always suggest a fix, not just an observation.
+```
+┌─────────────────┬───────────────────────────────┐
+│  Prompt list    │  Editor                        │
+│                 │  Title ___________________     │
+│  > Code review  │  Body                          │
+│    Commit msg   │  ________________________      │
+│    Debug helper │  Model: ollama/qwen2.5-coder   │
+│                 │  CWD:   ~/Projects/myapp       │
+│                 ├───────────────────────────────┤
+│                 │  Runner output                 │
+└─────────────────┴───────────────────────────────┘
 ```
 
-5. Press `s` to save
+### List panel (left)
 
-### Find a prompt
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Navigate up and down |
+| `n` | New prompt — opens editor with blank form |
+| `e` / `enter` | Edit selected prompt |
+| `d` | Delete selected prompt (asks to confirm) |
+| `tab` | Move to editor panel |
+| any other key | Types into the filter — fuzzy search by title or body |
+| `q` / `esc` | Quit |
 
-Press `/` in the prompt manager to filter by title. Search is incremental and case-insensitive.
+### Editor panel (top-right)
 
-### Edit a prompt
+`tab` / `shift+tab` moves focus between Title → Body → Model → CWD.
 
-Navigate to it, press `e`. Changes apply to every pipeline that references it — immediately, on next run.
+| Key | Action |
+|-----|--------|
+| `ctrl+s` | Save prompt |
+| `ctrl+r` | Run prompt against the selected model — output appears in runner panel |
+| `esc` | Back to list |
 
-### Test a prompt
+The **Model** field selects which executor runs when you test. The **CWD** field scopes the run to a project directory — useful when your prompt references local files.
 
-Press `t` from the prompt manager. A test panel opens and streams a live response from your configured model. Iterate before you commit the prompt to a pipeline.
+### Runner panel (bottom-right)
+
+| Key | Action |
+|-----|--------|
+| `ctrl+r` | Run again from scratch |
+| `r` | Open follow-up input — continue the conversation |
+| `p` | Promote the response to the body editor for review and saving |
+| `j` / `k` | Scroll output |
+| `esc` | Back to editor |
 
 
 ## Using Prompts in Pipelines
 
-Add `prompt_id` to any step that calls a model. The value is the exact title of your saved prompt.
+Add `prompt_id` to any step that calls a model. The value is the title of your saved prompt (case-insensitive).
 
 ```yaml
 steps:
@@ -84,9 +106,7 @@ When this step runs, the executor receives:
 [your step input]
 ```
 
-The saved prompt always comes first. Brain context and any other injections happen after.
-
-> **NOTE:** If `prompt_id` references a title that doesn't exist in your library, the step fails with a clear error message. Use `glitch prompts` to verify the title before running.
+> **NOTE:** If `prompt_id` references a title that doesn't exist, the step fails with a clear error. Use `glitch prompts` to verify the title before running.
 
 
 ## Examples
@@ -147,7 +167,7 @@ steps:
 
 ### Commit Message Generator
 
-Save a prompt titled `"Commit message style"` that describes your project's conventions. Use it any time you want consistent commit messages.
+Save a prompt titled `"Commit message style"` that describes your project's conventions.
 
 ```yaml
 name: commit-helper
@@ -175,18 +195,7 @@ steps:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `prompt_id` | string | no | Title of the saved prompt to inject. Must match exactly. |
-
-### Prompt manager keyboard shortcuts
-
-| Key | Action |
-|-----|--------|
-| `n` | New prompt |
-| `e` | Edit selected prompt |
-| `t` | Test selected prompt against a model |
-| `s` | Save |
-| `/` | Filter/search by title |
-| `q` | Close the manager |
+| `prompt_id` | string | no | Title of the saved prompt to inject. Case-insensitive match. |
 
 ### Injection order
 
