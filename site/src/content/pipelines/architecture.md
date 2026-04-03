@@ -65,14 +65,15 @@ The send panel at the bottom lets you select a saved agent, attach a saved promp
 
 ### Views inside the workspace
 
-Press `/` commands or keyboard shortcuts to switch what you're looking at:
+The workspace has three panels. Navigate between them with `tab`. Use keyboard shortcuts from the focused panel:
 
-| View | How to open | What it shows |
-|------|-------------|---------------|
-| Chat | default | Conversation with your assistant |
-| Signal board | `/signals` | Live status of all running and recent pipeline jobs |
-| Inbox | `/inbox` | Detailed results of past runs, searchable |
-| Brain editor | `/brain` | Read and edit your brain memory notes |
+| Panel | How to focus | What it shows |
+|-------|-------------|---------------|
+| Chat | default / `tab` | Conversation with your assistant |
+| Inbox | `tab` to cycle | All pipeline runs — select one and press `enter` for full output |
+| Signal board | `s` from any panel | Live status of running and recent jobs |
+
+From the signal board, `enter` opens the inbox detail for the selected run. From inbox detail, `j`/`k` scrolls the output, `e` opens it in your `$EDITOR`, and `r` sends selected lines back to the agent as follow-up context.
 
 ## Where Things Live
 
@@ -111,6 +112,28 @@ glitch cron logs    # tail the cron log
 The brain is a local store of context built up from your pipeline runs. When a step has `write_brain: true`, its output is indexed and stored. On future runs with `--brain`, gl1tch retrieves relevant context and injects it into your prompts.
 
 Your workspace learns over time without you having to re-explain things.
+
+## Viewing Pipeline Results
+
+After a run finishes, results land in the inbox panel. You can also pull them up directly:
+
+```bash
+glitch pipeline results              # most recent run
+glitch pipeline results git-digest   # most recent run for a named pipeline
+glitch pipeline results git-digest --limit 3  # last 3 runs
+```
+
+From inside the workspace, ask gl1tch directly:
+
+```text
+show me what git-digest found
+```
+
+gl1tch will call `glitch pipeline results git-digest` and display the output in chat. To see it in a separate pane:
+
+```text
+/terminal glitch pipeline results git-digest
+```
 
 ## How glitch ask Works
 

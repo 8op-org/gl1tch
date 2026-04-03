@@ -110,10 +110,10 @@ The pipeline is saved. Run it any time:
 glitch pipeline run git-digest
 ```
 
-Or ask from the console:
+Or run it from the console:
 
 ```text
-run git-digest
+/pipeline git-digest
 ```
 
 ---
