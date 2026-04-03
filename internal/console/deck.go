@@ -148,6 +148,7 @@ type jobHandle struct {
 	actLabel     string // activity feed label (truncated prompt)
 	executorID   string // executor type ("claude", "opencode", etc.) — for clarification follow-up
 	modelID      string // model slug — for clarification follow-up
+	session      string // session that launched this job; used to interrupt other sessions on completion
 }
 
 // ── Tea messages ──────────────────────────────────────────────────────────────
@@ -1550,6 +1551,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			jh := &jobHandle{
 				id: feedID, cancel: cancel, ch: ch,
 				tmuxWindow: windowName, logFile: logFile, pipelineName: name,
+				session: m.glitchChat.sessions.active,
 			}
 			m.activeJobs[feedID] = jh
 			startLogWatcher(feedID, logFile, doneFile, ch)
@@ -1708,6 +1710,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				doneCmd = tea.Batch(doneCmd, glitchCmd)
 			}
 		}
+		// If the job finished in a session other than the one currently visible,
+		// gently interrupt the user with a quip and a redirect hint.
+		if jh, ok := m.activeJobs[msg.id]; ok && jh.session != "" && m.glitchChat.sessions != nil && jh.session != m.glitchChat.sessions.active {
+			m.glitchChat.sessions.markAttention(jh.session)
+			label := jh.pipelineName
+			if label == "" {
+				label = msg.id
+			}
+			var quip string
+			if finalStatus == FeedFailed {
+				quip = fmt.Sprintf("hey — '%s' blew up in [%s]. /session %s when you surface.", label, jh.session, jh.session)
+			} else {
+				quip = fmt.Sprintf("ping from [%s] — '%s' wrapped. /session %s to check it.", jh.session, label, jh.session)
+			}
+			newPanel, alertCmd := m.glitchChat.update(glitchNarrationMsg{text: quip})
+			m.glitchChat = newPanel
+			doneCmd = tea.Batch(doneCmd, alertCmd)
+		}
 		delete(m.activeJobs, msg.id)
 		return m, doneCmd
 
@@ -1755,6 +1775,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if jh.actAgent != "" {
 				failCmd = tea.Batch(failCmd, appendActivityCmd(jh.actAgent, jh.actLabel, "agent_run_failed", "failed"))
 			}
+		}
+		// Interrupt the user if the failure happened in a different session.
+		if jh, ok := m.activeJobs[msg.id]; ok && jh.session != "" && m.glitchChat.sessions != nil && jh.session != m.glitchChat.sessions.active {
+			m.glitchChat.sessions.markAttention(jh.session)
+			label := jh.pipelineName
+			if label == "" {
+				label = msg.id
+			}
+			quip := fmt.Sprintf("hey — '%s' blew up in [%s]. /session %s when you surface.", label, jh.session, jh.session)
+			newPanel, alertCmd := m.glitchChat.update(glitchNarrationMsg{text: quip})
+			m.glitchChat = newPanel
+			failCmd = tea.Batch(failCmd, alertCmd)
 		}
 		delete(m.activeJobs, msg.id)
 		return m, failCmd
@@ -2893,6 +2925,7 @@ func (m Model) launchPendingPipeline(cwd string) (Model, tea.Cmd) {
 		tmuxWindow: windowName, logFile: logFile, pipelineName: name,
 		actAgent: m.pendingActAgent, actLabel: m.pendingActLabel,
 		executorID: m.pendingExecutorID, modelID: m.pendingModelID,
+		session: m.glitchChat.sessions.active,
 	}
 	m.pendingActAgent = ""
 	m.pendingActLabel = ""
@@ -3126,7 +3159,7 @@ func (m Model) submitRerun(msg modal.RerunConfirmedMsg) (Model, tea.Cmd) {
 		}
 		ch := make(chan tea.Msg, 256)
 		_, cancel := context.WithCancel(context.Background())
-		jh := &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile, pipelineName: run.Name}
+		jh := &jobHandle{id: feedID, cancel: cancel, ch: ch, tmuxWindow: windowName, logFile: logFile, pipelineName: run.Name, session: m.glitchChat.sessions.active}
 		m.activeJobs[feedID] = jh
 		startLogWatcher(feedID, logFile, doneFile, ch)
 		return m, drainChan(ch)
