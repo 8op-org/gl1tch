@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +25,8 @@ func init() {
 	pipelineCmd.AddCommand(pipelineResumeCmd)
 	pipelineResumeCmd.Flags().Int64Var(&pipelineResumeRunID, "run-id", 0, "Store run ID to resume")
 	_ = pipelineResumeCmd.MarkFlagRequired("run-id")
+	pipelineCmd.AddCommand(pipelineResultsCmd)
+	pipelineResultsCmd.Flags().IntVar(&pipelineResultsLimit, "limit", 1, "number of matching runs to show")
 }
 
 var pipelineCmd = &cobra.Command{
@@ -146,6 +150,113 @@ func glitchConfigDir() (string, error) {
 var pipelineRunInput string
 
 var pipelineResumeRunID int64
+
+var pipelineResultsLimit int
+
+// extractStreamResult scans NDJSON stdout from a Claude/Ollama executor run and
+// returns the human-readable result text. Falls back to raw stdout if no
+// stream-json result line is found (e.g. shell executor output).
+func extractStreamResult(stdout string) string {
+	if stdout == "" {
+		return ""
+	}
+	// Fast path: if the output doesn't look like NDJSON, return as-is.
+	if len(stdout) == 0 || stdout[0] != '{' {
+		return stdout
+	}
+	type resultLine struct {
+		Type   string `json:"type"`
+		Result string `json:"result"`
+	}
+	var last string
+	scanner := bufio.NewScanner(strings.NewReader(stdout))
+	scanner.Buffer(make([]byte, 1<<20), 1<<20)
+	for scanner.Scan() {
+		line := scanner.Text()
+		var r resultLine
+		if err := json.Unmarshal([]byte(line), &r); err == nil && r.Type == "result" && r.Result != "" {
+			last = r.Result
+		}
+	}
+	if last != "" {
+		return last
+	}
+	return stdout
+}
+
+var pipelineResultsCmd = &cobra.Command{
+	Use:   "results [name]",
+	Short: "Show the output of the most recent pipeline run, optionally filtered by name",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := store.Open()
+		if err != nil {
+			return fmt.Errorf("results: open store: %w", err)
+		}
+		defer s.Close()
+
+		runs, err := s.QueryRuns(200)
+		if err != nil {
+			return fmt.Errorf("results: query store: %w", err)
+		}
+
+		// Filter by name if given.
+		nameFilter := ""
+		if len(args) > 0 {
+			nameFilter = args[0]
+		}
+
+		var matched []store.Run
+		for _, r := range runs {
+			if nameFilter == "" || r.Name == nameFilter {
+				matched = append(matched, r)
+				if len(matched) >= pipelineResultsLimit {
+					break
+				}
+			}
+		}
+
+		if len(matched) == 0 {
+			if nameFilter != "" {
+				return fmt.Errorf("no runs found for pipeline %q", nameFilter)
+			}
+			return fmt.Errorf("no pipeline runs recorded yet")
+		}
+
+		for i, r := range matched {
+			if i > 0 {
+				fmt.Println("---")
+			}
+			status := "in-flight"
+			if r.ExitStatus != nil {
+				if *r.ExitStatus == 0 {
+					status = "ok"
+				} else {
+					status = fmt.Sprintf("exit %d", *r.ExitStatus)
+				}
+			}
+			startedAt := time.UnixMilli(r.StartedAt).Format(time.DateTime)
+			fmt.Printf("pipeline: %s  |  run: %d  |  started: %s  |  status: %s\n", r.Name, r.ID, startedAt, status)
+			if len(r.Steps) > 0 {
+				for _, step := range r.Steps {
+					dur := ""
+					if step.DurationMs > 0 {
+						dur = fmt.Sprintf("  %dms", step.DurationMs)
+					}
+					fmt.Printf("  %-20s %s%s\n", step.ID, step.Status, dur)
+				}
+			}
+			fmt.Println()
+			if r.Stdout != "" {
+				fmt.Println(extractStreamResult(r.Stdout))
+			}
+			if r.Stderr != "" {
+				fmt.Fprintf(os.Stderr, "%s\n", r.Stderr)
+			}
+		}
+		return nil
+	},
+}
 
 var pipelineResumeCmd = &cobra.Command{
 	Use:   "resume",
