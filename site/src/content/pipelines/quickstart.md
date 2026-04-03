@@ -46,38 +46,17 @@ That's a real pipeline run — `git log`, `git diff --stat`, and `git status` ch
 
 ## Add AI to the pipeline
 
-The next step is pairing shell output with a local model. Ask gl1tch to summarize the same commits:
-
-```bash
-glitch ask --provider ollama "summarize my last 5 commits"
-```
-
-gl1tch fetches your commits with `git log`, then passes them to your local Ollama model:
-
-```
-[step:fetch] status:running
-[step:fetch] status:done
-[step:summarize] status:running
-[step:summarize] status:done
-
-Recent commits added a signal handler for in-game chat interaction and a
-subcommand for discovering plugin models. There were also improvements to
-the router with enhanced test coverage, and dead code was cleaned up by
-removing an unused EditorPanel class.
-```
-
-No model flag needed. When you specify a provider without a model, gl1tch picks the cheapest available one automatically — in this case `qwen2.5:latest`.
-
-## Use Claude instead
+Ask gl1tch to summarize the same commits. gl1tch defaults to Claude Haiku — fast, cheap, and capable enough for most pipeline steps:
 
 ```bash
 glitch ask --provider claude "summarize my last 5 commits"
 ```
 
-Same routing, same pipeline — Claude Haiku by default (the cheapest option), or pass `--model claude-sonnet-4-6` to upgrade.
+gl1tch fetches your commits with `git log`, passes them to Haiku, and streams the result:
 
 ```
 [step:fetch] status:running
+[step:fetch] status:done
 [step:summarize] status:running
 [step:summarize] status:done
 
@@ -93,6 +72,20 @@ Enables plugins to resolve the user's configured model without hardcoding names.
 Major routing overhaul: removed a gate blocking natural-language invocations,
 added fast-path extraction for cron expressions, and added near-miss clarification.
 ```
+
+No model flag needed — gl1tch picks the cheapest model for the provider automatically.
+
+> **Note:** Pipelines that use tools, run shell commands autonomously, or coordinate multi-agent workflows require a model with tool/function-calling support. Haiku handles summarization and generation steps well; for agentic tasks upgrade to `--model claude-sonnet-4-6` or `--model claude-opus-4-6`.
+
+## Use Ollama instead
+
+If you'd rather keep everything local:
+
+```bash
+glitch ask --provider ollama "summarize my last 5 commits"
+```
+
+gl1tch picks your default Ollama model (`qwen2.5:latest` unless you configure otherwise) and runs the same pipeline locally — no API key, no outbound traffic.
 
 ## Review a PR
 
