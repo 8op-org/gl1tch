@@ -35,7 +35,6 @@ import (
 	"github.com/8op-org/gl1tch/internal/picker"
 	"github.com/8op-org/gl1tch/internal/braineditor"
 	"github.com/8op-org/gl1tch/internal/buildershared"
-	"github.com/8op-org/gl1tch/internal/pipelineeditor"
 	"github.com/8op-org/gl1tch/internal/store"
 	"github.com/8op-org/gl1tch/internal/styles"
 	"github.com/8op-org/gl1tch/internal/themes"
@@ -321,9 +320,6 @@ type Model struct {
 	inboxEditorTempFile     string // path to temp file open in $EDITOR
 	inboxEditorClipSnapshot string // clipboard state before editor launch
 	inboxEditorOrigContent  string // original content written to temp file
-	// Pipeline editor (full-screen two-column TUI).
-	pipelineEditorOpen bool
-	pipelineEditor     pipelineeditor.Model
 	// Brain editor (full-screen two-column TUI).
 	brainEditorOpen bool
 	brainEditor     braineditor.Model
@@ -387,7 +383,6 @@ func NewWithStore(s *store.Store) Model {
 		},
 		glitchChat:            newGlitchPanel(cfgDir, agentProviders, s, cwd, nil),
 		sendPanel:             buildershared.NewSendPanel(agentProviders).SetSavedPipelineTitles(pipelines),
-		pipelineEditor:        pipelineeditor.New(agentProviders, pipelinesDir(), s),
 		brainEditor:           braineditor.New(s, agentProviders),
 		pipelineScheduleInput: pipeSchedTA,
 		signalBoard:           SignalBoard{activeFilter: "running"},
@@ -1062,7 +1057,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			overlayActive := m.confirmQuit || m.themePicker.Open ||
 				m.dirPickerOpen || m.confirmDelete ||
 				m.pipelineLaunchMode != plModeNone || m.showRerun ||
-				m.pipelineEditorOpen || m.brainEditorOpen
+				m.brainEditorOpen
 			if !overlayActive {
 				if km.String() == "enter" {
 					m.lastUserMsgAt = time.Now()
@@ -1854,26 +1849,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// When any global overlay is active, all keys must go through handleKey
 		// so ESC / y / n can dismiss it regardless of which panel is focused.
-		if m.confirmQuit || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.pipelineEditorOpen || m.brainEditorOpen {
+		if m.confirmQuit || m.themePicker.Open || m.dirPickerOpen || m.confirmDelete || m.pipelineLaunchMode != plModeNone || m.showRerun || m.brainEditorOpen {
 			return m.handleKey(msg)
 		}
 		return m.handleKey(msg)
 
-	case pipelineeditor.CloseMsg:
-		m.pipelineEditorOpen = false
-		m.launcher.pipelines = ScanPipelines(pipelinesDir())
-		return m, nil
-
 	case braineditor.CloseMsg:
 		m.brainEditorOpen = false
-		return m, nil
-
-	case buildershared.RunLineMsg, buildershared.RunDoneMsg, pipelineeditor.ClarifyPollMsg:
-		if m.pipelineEditorOpen {
-			updated, cmd := m.pipelineEditor.HandleMsg(msg)
-			m.pipelineEditor = updated
-			return m, cmd
-		}
 		return m, nil
 
 	case inbox.RunCompletedMsg:
@@ -2109,13 +2091,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handlePipelineLaunchOverlay(msg)
 	}
 
-	// Pipeline editor — captured before panel handlers.
-	if m.pipelineEditorOpen {
-		updatedEditor, cmd := m.pipelineEditor.HandleKey(msg)
-		m.pipelineEditor = updatedEditor
-		return m, cmd
-	}
-
 	// Brain editor — captured before panel handlers.
 	if m.brainEditorOpen {
 		updated, cmd := m.brainEditor.Update(tea.KeyMsg(msg))
@@ -2175,17 +2150,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.signalBoardFocused && key == "/" {
 		m.signalBoard.searching = true
 		return m, nil
-	}
-
-	// Global focus shortcuts — p focuses the agent send panel (pipeline picker is in sendpanel).
-	switch key {
-	case "p":
-		m.launcher.focused = false
-		m.agent.focused = true
-		m.feedFocused = false
-		m.signalBoardFocused = false
-		m.sendPanel = m.sendPanel.Enter()
-		return m, loadAgentPromptsCmd(m.store)
 	}
 
 	switch key {
@@ -2377,17 +2341,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.sendPanel = m.sendPanel.SetFocused(false)
 		}
 		return m, nil
-
-	// Pipeline CRUD keys (launcher focused).
-	case "n":
-		if m.launcher.focused {
-			return m.handleNewPipeline()
-		}
-
-	case "e":
-		if m.launcher.focused && len(m.launcher.pipelines) > 0 {
-			return m.handleEditPipeline()
-		}
 
 	case "x":
 		if m.signalBoardFocused {
@@ -2739,32 +2692,6 @@ func (m Model) handlePipelineLaunchOverlay(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
-}
-
-// handleNewPipeline opens the full-screen pipeline editor for a new pipeline.
-func (m Model) handleNewPipeline() (Model, tea.Cmd) {
-	m.pipelineEditor.SetProviders(m.agent.providers)
-	m.pipelineEditor.SetPalette(m.ansiPalette())
-	m.pipelineEditor.SetSize(m.width, m.height-1)
-	updated := m.pipelineEditor.OpenNew()
-	m.pipelineEditor = updated
-	m.pipelineEditorOpen = true
-	return m, nil
-}
-
-// handleEditPipeline opens the full-screen pipeline editor for the selected pipeline.
-func (m Model) handleEditPipeline() (Model, tea.Cmd) {
-	if len(m.launcher.pipelines) == 0 {
-		return m, nil
-	}
-	m.pipelineEditor.SetProviders(m.agent.providers)
-	m.pipelineEditor.SetPalette(m.ansiPalette())
-	m.pipelineEditor.SetSize(m.width, m.height-1)
-	name := m.launcher.pipelines[m.launcher.selected]
-	updated := m.pipelineEditor.OpenEdit(name)
-	m.pipelineEditor = updated
-	m.pipelineEditorOpen = true
 	return m, nil
 }
 
@@ -3386,11 +3313,6 @@ func (m Model) View() string {
 	}
 	if m.pipelineLaunchMode == plScheduleInput {
 		return overlayCenter(blankCanvas(w, h), m.viewPipelineScheduleInput(w), w, h)
-	}
-
-	// Pipeline editor — full-screen two-column panel.
-	if m.pipelineEditorOpen {
-		return m.pipelineEditor.View(w, h)
 	}
 
 	// Brain editor — full-screen two-column panel.

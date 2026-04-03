@@ -107,7 +107,6 @@ Press `ctrl+space`, then the key:
 | `ctrl+space d` | Detach (session keeps running) |
 | `ctrl+space r` | Reload gl1tch |
 | `ctrl+space a` | Focus assistant input |
-| `ctrl+space p` | Open pipeline builder |
 | `ctrl+space b` | Open brain editor |
 
 
