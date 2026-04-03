@@ -164,7 +164,7 @@ archives:
       - src: plugins/ollama/ollama.yaml
         dst: wrappers
       - src: install.sh
-        dst: .
+        dst: scripts
 
 checksum:
   name_template: "checksums.txt"
