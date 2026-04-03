@@ -195,6 +195,96 @@ glitch restore ./backup.tar.gz --dry-run
 
 ---
 
+## glitch model
+
+Print the best available model as `provider/model`. Reads your persisted backend selection first, then falls back to live provider discovery. Exits with code 1 if no model is available.
+
+```bash
+glitch model                # print best available: e.g. ollama/llama3.2
+glitch model --local        # restrict to local providers only
+glitch model --json         # {"provider":"ollama","model":"llama3.2"}
+```
+
+Useful in shell scripts and pipeline steps:
+
+```bash
+GLITCH_MODEL=$(glitch model)
+GLITCH_MODEL=$(glitch model --local)
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--local` | `false` | Restrict to local providers only (Ollama). |
+| `--json` | `false` | Output as JSON: `{"provider":"...","model":"..."}`. |
+
+---
+
+## glitch busd
+
+Interact with the gl1tch event bus. Useful for plugins and external tools that need to send signals into a running gl1tch session.
+
+### glitch busd publish
+
+Publish a JSON event to the gl1tch event bus socket.
+
+```bash
+glitch busd publish <topic> [json-payload]
+
+glitch busd publish my.custom.event '{"key":"value"}'
+glitch busd publish mud.chat.reply '{"text":"hello","world":"blockhaven"}'
+```
+
+The payload must be valid JSON. Omit it to send an empty event. Fails with a helpful error if gl1tch is not running.
+
+---
+
+## glitch game
+
+Your pipeline runs earn XP and track streaks. The game system surfaces this as a cyberpunk meta-layer — levels, achievements, ICE encounters, and a self-tuning world that adapts to how you work.
+
+### glitch game recap
+
+Narrate your last N days as a cyberpunk story arc. Uses your run history to generate a short narrative with Ollama.
+
+```bash
+glitch game recap
+glitch game recap --days 14
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--days` | `7` | Number of days to include in the recap. |
+
+### glitch game top
+
+Show your personal best records across all tracked metrics.
+
+```bash
+glitch game top
+```
+
+Displays fastest run, highest XP, longest streak, most cache tokens, and lowest cost per run.
+
+### glitch game ice
+
+Resolve a pending ICE encounter. Encounters spawn when specific thresholds are crossed. You choose to fight or jack out — losing decrements your streak.
+
+```bash
+glitch game ice
+```
+
+Prints the active encounter (if any) with a choice prompt. No encounter? No output.
+
+### glitch game tune
+
+Manually trigger the self-evolving game pack tuner. Analyzes your last 30 days of run data with Ollama and writes an evolved world pack to `~/.local/share/glitch/agents/game-world-tuned.agent.md`. The tuner runs automatically after runs; use this to force a refresh.
+
+```bash
+glitch game tune
+```
+
+---
+
 ## glitch widget
 
 ### glitch widget jump-window
