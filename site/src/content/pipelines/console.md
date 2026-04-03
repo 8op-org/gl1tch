@@ -1,6 +1,6 @@
 ---
 title: "Console — The Switchboard"
-description: "Navigate the GL1TCH Switchboard TUI, launch pipelines, run agents, and manage your workspace."
+description: "Navigate the GL1TCH Switchboard TUI, launch pipelines, run agents, and manage named chat sessions."
 order: 2
 ---
 
@@ -39,15 +39,14 @@ GL1TCH supports **named chat sessions** — separate conversation threads you ca
 | `◐` | **Unread** | Background session has new messages since last viewed |
 | `⚠` | **Attention** | High-priority activity (errors, clarifications, game alerts) requiring action |
 
-**Switching sessions**: Press `^spc S` to cycle between open sessions. The previous session is marked idle; the new one becomes active. Sessions with unread messages or attention states remain highlighted in the footer.
+**Switching sessions**: Use `/session <name|#>` or the shorthand `/s <name|#>` to switch or create sessions. The previous session is marked idle; the new one becomes active. Sessions with unread messages or attention states remain highlighted in the footer.
 
-**Creating a session**: Press `^spc n` (new session) and type a name (e.g., "debug", "refactor", "game"). A new empty session is created and immediately becomes active.
+**Creating a session**: Type `/session new <name>` (e.g., `/session new debug`) in the chat panel. A new empty session is created and immediately becomes active.
 
 ### Status Bar Session Indicators
 
 The tmux status bar (bottom right) displays:
 - Current time (always visible)
-- Chord hints: `^spc n new` (create session), `^spc p build` (prompt builder), `^spc t themes` (theme picker)
 - Attention badge if any background session needs your attention
 
 When a background session receives a new message or encounters an error, its badge changes from idle (`·`) to unread (`◐`) or attention (`⚠`), and the status bar briefly highlights it.
@@ -179,7 +178,7 @@ When you press `tab` in the Launcher, focus moves to the Agent Runner. Press `ta
 
 | Key | Action |
 |---|---|
-| `T` or `^spc t` | Open theme picker modal |
+| `T` | Open theme picker modal |
 | `?` or `h` | Show help (keybinding reference) |
 | `R` | Reload providers/models (refresh from disk) |
 
@@ -448,11 +447,9 @@ gl1tch: The deployment finished with exit code 0. All
 If the assistant suggests running a pipeline, it formats the suggestion as an action:
 
 ```
-gl1tch: I recommend running schema-sync --force to
-        resolve the schema validation error.
+gl1tch: The backup pipeline finished with exit code 0.
+        All 3 steps completed in 45s.
 ```
-
-You can type `/pipeline schema-sync --force` in the chat to execute this immediately, or select it from the launcher.
 
 ### Clarifications and Blocking Questions
 
@@ -470,27 +467,27 @@ This enables interactive pipelines: a pipeline can pause mid-execution, ask a qu
 
 ## Chord Shortcuts
 
-Chord shortcuts start with `^spc` (ctrl+space) followed by a key. This is the primary way to navigate your GL1TCH workspace beyond the Switchboard.
+Chord shortcuts start with `^spc` (ctrl+space) followed by a key.
 
 | Chord | Action |
 |---|---|
-| `^spc h` | Show help screen (full keybinding reference) |
-| `^spc c` | Create a new window |
-| `^spc d` | Detach from the session (safely exit tmux) |
+| `^spc a` | Focus the GL1TCH assistant panel |
+| `^spc c` | Create a new tmux window |
+| `^spc d` | Detach from the tmux session |
 | `^spc r` | Reload GL1TCH (pick up a new binary without restarting) |
-| `^spc q` | Quit GL1TCH entirely (tears down all tmux sessions) |
-| `^spc [` | Previous window in the session |
-| `^spc ]` | Next window in the session |
+| `^spc s` | Open the opsx popup |
+| `^spc o` | Cycle to the next pane |
+| `^spc [` | Previous window |
+| `^spc ]` | Next window |
+| `^spc \|` | Split pane horizontally |
+| `^spc -` | Split pane vertically |
 | `^spc x` | Kill the current pane |
 | `^spc X` | Kill the current window |
-| `^spc a` | Jump to the GL1TCH assistant (shell/REPL pane) |
-| `^spc t` | Open the theme picker |
-| `^spc n` | New workspace session (alternative to `^spc c` for named sessions) |
-| `^spc p` | Open the pipeline/prompt builder |
+| `^spc Left/Right/Up/Down` | Navigate panes by direction |
 
 ### Terminal and Pipeline Commands
 
-The `/terminal` and `/pipeline` commands control your workspace without requiring modal dialogs or leaving the Switchboard.
+The `/terminal` and `/pipeline` commands let you open panes and launch pipelines without leaving the Switchboard.
 
 #### `/terminal` — Open Panes with Natural Language
 
@@ -520,13 +517,11 @@ If the input doesn't match any natural-language pattern, it's treated as a raw s
 
 #### `/pipeline` — Run and Schedule Pipelines
 
-Run a saved pipeline with optional input and scheduling:
+Run a saved pipeline by name, or start the creation flow:
 
 ```
-/pipeline backup                           # run with defaults
-/pipeline deploy --prod                    # run with flags
-/pipeline backup --input "weekly"          # pass input data
-/pipeline schema-sync --at "2pm tomorrow"  # schedule for later
+/pipeline backup          # run the saved backup pipeline
+/pipeline my-new-pipeline # if it doesn't exist, GL1TCH starts a creation flow
 ```
 
 Output streams to the Activity Feed. If the pipeline takes longer than a few seconds, a dedicated tmux window opens so you can tail scrollback while continuing other work in the Switchboard.
@@ -545,7 +540,7 @@ Pipeline panes (opened when you run a pipeline) are laid out automatically: firs
 
 Several features open as full-screen modals layered on top of the Switchboard. You can always press `esc` to close and return to the main view.
 
-### Theme Picker (`T` or `^spc t`)
+### Theme Picker (`T`)
 
 Opens a modal showing available themes. Use `j`/`k` to navigate, press `↵` to select. The theme applies immediately to all GL1TCH panels (Switchboard, Inbox, prompts, etc.) and persists across sessions.
 
@@ -620,40 +615,6 @@ publish                                         OK · 120ms
 Spans are indented by depth. Each shows status (`OK` or `ERR`) and duration in milliseconds. This view is useful for diagnosing performance bottlenecks in slow pipelines.
 
 **Note**: Trace data is only available if the pipeline or agent step was instrumented with OTel calls (via `internal/telemetry`). Most built-in steps emit traces automatically; custom pipelines may need explicit instrumentation.
-
-### Prompt Builder (`^spc p`)
-
-Opens a full-screen accordion-style editor for authoring and testing new pipelines or agent prompts. This is a separate view from the Switchboard and is useful for iterative development.
-
-```
-┌──────────────────────────────────────────────────┐
-│ PROMPT BUILDER                                   │
-├──────────────────────────────────────────────────┤
-│ Title: [New Pipeline              ]              │
-│                                                  │
-│ ▼ Step 1: Input                                  │
-│   Type: [user-input      ▼]                      │
-│   Prompt: [Ask user...   ]                       │
-│                                                  │
-│ ▼ Step 2: Brain                                  │
-│   Model: [gpt-4          ▼]                      │
-│   System: [You are...    ]                       │
-│                                                  │
-│ ▼ Step 3: Output                                 │
-│   Format: [markdown      ▼]                      │
-│                                                  │
-│ [save] [test] [esc] back                         │
-└──────────────────────────────────────────────────┘
-```
-
-**Key actions**:
-- `tab` — Move between sections
-- `↵` — Expand/collapse a step
-- `j`/`k` — Navigate between steps
-- `space` — Expand/collapse the current step
-- `[save]` button — Save your pipeline to `~/.config/glitch/pipelines/`
-- `[test]` button — Run a test execution and show output inline
-- `esc` — Return to the Switchboard
 
 ### Theme Persistence
 
@@ -733,7 +694,7 @@ If you manually resize panes, the console may need a re-render. Press `ctrl+l` t
 1. Navigate to your pipeline in the launcher
 2. Press `↵` to run it
 3. Watch output stream in the Activity Feed
-4. If it fails, press `^spc p` to open the builder, make edits, save, and test again
+4. If it fails, edit the YAML file directly and press `r` in the Switchboard to reload
 5. When satisfied, the pipeline is already saved and ready for production
 
 ### Agent Iteration
@@ -749,11 +710,10 @@ If you manually resize panes, the console may need a re-render. Press `ctrl+l` t
 ### Multi-Window Workflow
 
 While a pipeline is running in the Switchboard:
-1. Press `^spc c` to open a new window
+1. Press `^spc c` to open a new tmux window
 2. Type commands directly in the shell (e.g., `tail -f /var/log/app.log`)
-3. Press `^spc j` to jump back to the Switchboard
+3. Press `^spc [` or `^spc ]` to cycle back to the Switchboard window
 4. Check the Activity Feed for your pipeline's progress
-5. When done, use `^spc ]` to cycle back through windows
 
 ### Saving and Re-running Results
 
@@ -766,9 +726,7 @@ Pipeline outputs are automatically saved to the **Inbox**. To re-run an old pipe
 
 ## See Also
 
-- [Pipelines](./pipelines.md) — Author and structure `.pipeline.yaml` files
-- [Sidecars & Agents](./sidecars.md) — Configure AI providers and models
-- [Router & Intent Dispatch](./router.md) — How the assistant interprets your prompts and commands
-- [Signals & Handlers](./signals.md) — Set up narration, achievements, and game events
-- [Themes & Colors](./themes.md) — Customize the Switchboard appearance
+- [Pipelines](/docs/pipelines/pipelines) — Author and structure `.pipeline.yaml` files
+- [Themes](/docs/pipelines/themes) — Customize the Switchboard appearance
+- [Brain System](/docs/pipelines/brain) — How the GL1TCH assistant stores and retrieves context
 
