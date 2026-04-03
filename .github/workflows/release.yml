@@ -40,6 +40,10 @@ jobs:
           VERSION="${TAG#v}"
           REPO="8op-org/gl1tch"
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "${ACTOR}@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
           printf '{\n  "version": "%s",\n  "repo": "%s",\n  "assets": {\n    "darwin_arm64":  "%s/glitch_%s_darwin_arm64.tar.gz",\n    "darwin_amd64":  "%s/glitch_%s_darwin_amd64.tar.gz",\n    "linux_amd64":   "%s/glitch_%s_linux_amd64.tar.gz",\n    "linux_arm64":   "%s/glitch_%s_linux_arm64.tar.gz",\n    "windows_amd64": "%s/glitch_%s_windows_amd64.zip"\n  }\n}\n' \
             "${TAG}" "${REPO}" \
             "${BASE}" "${VERSION}" \
@@ -48,10 +52,6 @@ jobs:
             "${BASE}" "${VERSION}" \
             "${BASE}" "${VERSION}" \
             > site/public/release.json
-          git config user.name "github-actions[bot]"
-          git config user.email "${ACTOR}@users.noreply.github.com"
-          git fetch origin main
-          git rebase origin/main
           git add site/public/release.json
           if git diff --cached --quiet; then
             echo "release.json unchanged."
@@ -68,53 +68,32 @@ jobs:
           VERSION=${TAG#v}
           CHANGELOG_FILE="site/src/content/changelog/${TAG}.md"
 
-          if [ -f "${CHANGELOG_FILE}" ]; then
-            echo "Changelog ${CHANGELOG_FILE} already exists — skipping."
-            exit 0
-          fi
-
-          # Read dist/CHANGELOG.md if it exists, otherwise use a placeholder
+          # Extract highlights from goreleaser changelog
+          HIGHLIGHTS='  - "Initial release"'
           if [ -f "dist/CHANGELOG.md" ]; then
-            GORELEASER_CHANGELOG="dist/CHANGELOG.md"
-          else
-            echo "dist/CHANGELOG.md not found — using placeholder."
-            GORELEASER_CHANGELOG=""
-          fi
-
-          # Extract feat/fix lines as YAML list items for highlights
-          if [ -n "${GORELEASER_CHANGELOG}" ]; then
-            HIGHLIGHTS=$(grep -E '^[*-] (feat|fix):' "${GORELEASER_CHANGELOG}" | sed 's/^[*-] //' | while IFS= read -r line; do
+            EXTRACTED=$(grep -E '^[*-] (feat|fix):' dist/CHANGELOG.md | sed 's/^[*-] //' | while IFS= read -r line; do
               printf '  - "%s"\n' "${line//\"/\\\"}"
             done)
-          fi
-
-          if [ -z "${HIGHLIGHTS}" ]; then
-            HIGHLIGHTS='  - "Initial release"'
+            [ -n "${EXTRACTED}" ] && HIGHLIGHTS="${EXTRACTED}"
           fi
 
           TODAY=$(date +%Y-%m-%d)
-
-          mkdir -p "site/src/content/changelog"
-
-          cat > "${CHANGELOG_FILE}" << EOF
-          ---
-          version: "${VERSION}"
-          date: "${TODAY}"
-          highlights:
-          ${HIGHLIGHTS}
-          breaking: false
-          ---
-          EOF
-
-          # Normalize indentation (remove leading spaces from heredoc)
-          sed -i 's/^          //' "${CHANGELOG_FILE}"
 
           git config user.name "github-actions[bot]"
           git config user.email "${ACTOR}@users.noreply.github.com"
           git fetch origin main
           git rebase origin/main
-          git add "${CHANGELOG_FILE}"
 
+          if [ -f "${CHANGELOG_FILE}" ]; then
+            echo "Changelog ${CHANGELOG_FILE} already exists — skipping."
+            exit 0
+          fi
+
+          mkdir -p "site/src/content/changelog"
+          printf -- '---\nversion: "%s"\ndate: "%s"\nhighlights:\n%s\nbreaking: false\n---\n' \
+            "${VERSION}" "${TODAY}" "${HIGHLIGHTS}" > "${CHANGELOG_FILE}"
+
+          git add "${CHANGELOG_FILE}"
           if git diff --cached --quiet; then
             echo "Nothing to commit."
           else
