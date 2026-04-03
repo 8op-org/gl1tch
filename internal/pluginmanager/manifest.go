@@ -54,7 +54,11 @@ type PluginSidecar struct {
 	Args         []string       `yaml:"args"`
 	Description  string         `yaml:"description"`
 	Category     string         `yaml:"category"`
-	Kind         string         `yaml:"kind"` // "agent" or "tool"
+	Kind         string         `yaml:"kind"` // "agent", "tool", or "daemon"
+	// Daemon, when true, marks the plugin as a long-running background process.
+	// gl1tch will start it automatically on session launch (after BUSD is ready)
+	// and leave it running for the lifetime of the session.
+	Daemon       bool           `yaml:"daemon,omitempty"`
 	InputSchema  string         `yaml:"input_schema"`
 	OutputSchema string         `yaml:"output_schema"`
 	Signals      []PluginSignal `yaml:"signals,omitempty"`

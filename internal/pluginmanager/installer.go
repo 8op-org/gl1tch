@@ -143,6 +143,7 @@ type sidecarOut struct {
 	Args         []string    `yaml:"args,omitempty"`
 	Category     string      `yaml:"category,omitempty"`
 	Kind         string      `yaml:"kind,omitempty"`
+	Daemon       bool        `yaml:"daemon,omitempty"`
 	InputSchema  string      `yaml:"input_schema,omitempty"`
 	OutputSchema string      `yaml:"output_schema,omitempty"`
 	Signals      []signalOut `yaml:"signals,omitempty"`
@@ -181,6 +182,7 @@ func buildSidecarSchema(m *PluginManifest, binPath string) sidecarOut {
 		Args:         m.Sidecar.Args,
 		Category:     m.Sidecar.Category,
 		Kind:         kind,
+		Daemon:       m.Sidecar.Daemon,
 		InputSchema:  m.Sidecar.InputSchema,
 		OutputSchema: m.Sidecar.OutputSchema,
 		Signals:      sigs,

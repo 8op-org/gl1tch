@@ -58,9 +58,12 @@ type SidecarSchema struct {
 	// Category is an optional hierarchical prefix (e.g. "providers.claude").
 	// When set, the adapter is also registered under "category.name" in the Manager.
 	Category string `yaml:"category"`
-	// Kind categorises the executor. Valid values: "agent" (default), "tool".
+	// Kind categorises the executor. Valid values: "agent" (default), "tool", "daemon".
 	// Executors without a kind field default to "agent" for backwards compatibility.
 	Kind string `yaml:"kind"`
+	// Daemon, when true, marks this plugin as a long-running background process.
+	// gl1tch starts it automatically on session launch after BUSD is ready.
+	Daemon bool `yaml:"daemon,omitempty"`
 	// Mode declares optional widget/UI-takeover behaviour. Zero-value when absent.
 	Mode ModeBlock `yaml:"mode,omitempty"`
 	// Signals declares optional BUSD topic subscriptions with named handlers. Nil when absent.

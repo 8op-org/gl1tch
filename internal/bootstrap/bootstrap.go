@@ -11,6 +11,7 @@ import (
 
 	"github.com/8op-org/gl1tch/internal/assistant"
 	"github.com/8op-org/gl1tch/internal/busd"
+	"github.com/8op-org/gl1tch/internal/daemonwidget"
 	"github.com/8op-org/gl1tch/internal/keybindings"
 	"github.com/8op-org/gl1tch/internal/layout"
 	"github.com/8op-org/gl1tch/internal/systemprompts"
@@ -277,6 +278,11 @@ func Run() error {
 	} else {
 		defer busdSrv.Stop()
 	}
+
+	// Start any installed plugins that declare daemon:true in their sidecar YAML.
+	// BUSD is already listening so daemons can connect immediately.
+	daemons := daemonwidget.StartAll(filepath.Join(cfgDir, "wrappers"))
+	defer daemons.Stop()
 
 	run := func(args ...string) error {
 		c := exec.Command("tmux", args...)
