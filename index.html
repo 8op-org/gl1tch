@@ -98,83 +98,48 @@ esc
 <li><a href="/docs/pipelines/pipelines">Pipelines</a></li>
 <li><a href="/docs/pipelines/console">Console</a></li>
 <li><a href="/docs/pipelines/examples">Examples</a></li>
-</ul> </div> </article><article id="ds-article-console" class="ds-article" aria-hidden="true"> <div class="ds-article-meta"> <span class="ds-article-title fg-purple">Console</span> <span class="ds-article-desc fg-comment">Chat with your AI assistant, launch pipelines, and watch your automations run — all from one workspace.</span> </div> <div class="ds-content"> <p>Your gl1tch workspace is a single terminal screen that brings together everything: a conversation with your AI assistant, a list of your saved pipelines, and a live feed of everything that’s running. Open it by launching gl1tch, then talk to it like a person or type a slash command to take action.</p>
-<h2 id="quick-start">Quick Start</h2>
-<p>Launch gl1tch and open your workspace:</p>
+</ul> </div> </article><article id="ds-article-console" class="ds-article" aria-hidden="true"> <div class="ds-article-meta"> <span class="ds-article-title fg-purple">Console</span> <span class="ds-article-desc fg-comment">Talk to your AI assistant, launch pipelines, and manage your session — all from one conversation screen.</span> </div> <div class="ds-content"> <p>gl1tch is a conversation. You open it in your terminal, type what you want, and your assistant handles it — whether that’s answering a question, running a pipeline, or kicking off an automation. Everything happens in one screen. Your session keeps running even when you step away.</p>
+<p>Launch it:</p>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span></span></code></pre>
-<p>Your workspace opens with three regions:</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>┌─────────────────────────────────────────────────────────────┐</span></span>
-<span class="line"><span>│ GL1TCH DECK — CONTROL PANEL                         hh:mm:ss │</span></span>
-<span class="line"><span>├──────────────────────┬──────────────────────────────────────┤</span></span>
-<span class="line"><span>│                      │                                       │</span></span>
-<span class="line"><span>│  PIPELINE LAUNCHER   │                                       │</span></span>
-<span class="line"><span>│  ─────────────────   │   ACTIVITY FEED                       │</span></span>
-<span class="line"><span>│  • backup            │   (live output, status badges)        │</span></span>
-<span class="line"><span>│  • standup           │                                       │</span></span>
-<span class="line"><span>│  • pr-triage         │                                       │</span></span>
-<span class="line"><span>│                      │                                       │</span></span>
-<span class="line"><span>│  ASSISTANT           │                                       │</span></span>
-<span class="line"><span>│  ─────────────────   │                                       │</span></span>
-<span class="line"><span>│  Provider: ollama    │                                       │</span></span>
-<span class="line"><span>│  Model: llama3.2     │                                       │</span></span>
-<span class="line"><span>│                      │                                       │</span></span>
-<span class="line"><span>│  > _                 │                                       │</span></span>
-<span class="line"><span>│                      │                                       │</span></span>
-<span class="line"><span>├──────────────────────┴──────────────────────────────────────┤</span></span>
-<span class="line"><span>│ [TAB] focus  [j/k] navigate  [↵] launch  [ESC] back         │</span></span>
-<span class="line"><span>└─────────────────────────────────────────────────────────────┘</span></span></code></pre>
-<p>Press <code>Tab</code> to move between regions. Use <code>j</code>/<code>k</code> to navigate lists. Press <code>↵</code> to launch a pipeline or send a message.</p>
+<p>The input prompt is at the bottom. Type anything and press <code>Enter</code>.</p>
 <h2 id="talking-to-your-assistant">Talking to Your Assistant</h2>
-<p>Type anything in the assistant input and press <code>ctrl+↵</code> to send. Your assistant knows about your recent runs, what pipelines you have, and the current working directory.</p>
-<p>Ask questions:</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>why did the backup fail?</span></span>
-<span class="line"><span>what's the diff on PR 42?</span></span>
-<span class="line"><span>suggest a refactor for this function</span></span></code></pre>
-<p>Give it direct commands:</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>run standup</span></span>
-<span class="line"><span>launch pr-triage</span></span>
-<span class="line"><span>show pipelines</span></span></code></pre>
-<p>Your assistant only launches a pipeline when you explicitly tell it to. Questions and analysis requests are answered directly without triggering a run.</p>
-<p>Press <code>c</code> from anywhere in the workspace to jump straight to the assistant input.</p>
+<p>Ask questions in plain English:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>why did the backup pipeline fail?</span></span>
+<span class="line"><span>what changed in the last 10 commits?</span></span>
+<span class="line"><span>explain this error: connection refused on port 5432</span></span></code></pre>
+<p>Give direct commands:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>run my standup pipeline</span></span>
+<span class="line"><span>show me my saved pipelines</span></span>
+<span class="line"><span>what pipelines do I have?</span></span></code></pre>
+<p>Your assistant knows your current working directory, your recent pipeline runs, and your brain context. It answers based on what’s actually in your project — not generic advice.</p>
 <h2 id="slash-commands">Slash Commands</h2>
-<p>Slash commands take immediate action without involving the AI.</p>
-<h3 id="running-pipelines">Running Pipelines</h3>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/pipeline</span><span style="color:#F1FA8C"> backup</span><span style="color:#6272A4">              # run the "backup" pipeline by name</span></span>
-<span class="line"><span style="color:#50FA7B">/pipeline</span><span style="color:#F1FA8C"> my-new-pipeline</span><span style="color:#6272A4">     # starts a creation flow if it doesn't exist yet</span></span></code></pre>
-<p>Output streams to the Activity Feed in real time.</p>
-<h3 id="managing-your-workspace">Managing Your Workspace</h3>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#6272A4">                     # open a new terminal pane (bottom, 25%)</span></span>
-<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> 50%</span><span style="color:#6272A4">                 # 50% split</span></span>
-<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> left</span><span style="color:#F1FA8C"> 40%</span><span style="color:#6272A4">            # left side, 40% width</span></span>
-<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> in</span><span style="color:#F1FA8C"> ~/projects/myapp</span><span style="color:#6272A4"> # pane opens in that directory</span></span>
-<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> htop</span><span style="color:#6272A4">                # pane runs htop directly</span></span></code></pre>
+<p>Slash commands take immediate action. Type <code>/</code> to see autocomplete.</p>
+<h3 id="pipelines">Pipelines</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/pipeline</span><span style="color:#F1FA8C"> standup</span><span style="color:#6272A4">          # run the "standup" pipeline</span></span>
+<span class="line"><span style="color:#50FA7B">/pipeline</span><span style="color:#F1FA8C"> pr-triage</span><span style="color:#6272A4">        # run any named pipeline</span></span>
+<span class="line"><span style="color:#50FA7B">/rerun</span><span style="color:#F1FA8C"> standup</span><span style="color:#6272A4">             # re-run the last run of a pipeline</span></span></code></pre>
+<h3 id="terminal-splits">Terminal Splits</h3>
+<p>Open a terminal pane alongside your assistant without leaving gl1tch:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#6272A4">                  # new pane, 25% bottom</span></span>
+<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> 50%</span><span style="color:#6272A4">              # 50% split</span></span>
+<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> left</span><span style="color:#F1FA8C"> 40%</span><span style="color:#6272A4">         # left side, 40% width</span></span>
+<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> ~/projects/myapp</span><span style="color:#6272A4"> # pane opens in that directory</span></span>
+<span class="line"><span style="color:#50FA7B">/terminal</span><span style="color:#F1FA8C"> htop</span><span style="color:#6272A4">             # pane runs a command directly</span></span></code></pre>
 <h3 id="sessions">Sessions</h3>
-<p>Manage separate conversation threads without losing context:</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/session</span><span style="color:#F1FA8C"> new</span><span style="color:#F1FA8C"> debug</span><span style="color:#6272A4">            # create a session named "debug"</span></span>
-<span class="line"><span style="color:#50FA7B">/session</span><span style="color:#F1FA8C"> debug</span><span style="color:#6272A4">                # switch to it (shorthand: /s debug)</span></span></code></pre>
-<p>Active session shows <code>●</code> in the footer. Background sessions with new activity show <code>◐</code>.</p>
-<h3 id="other-commands">Other Commands</h3>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/help</span><span style="color:#6272A4">                         # show command reference</span></span>
-<span class="line"><span style="color:#50FA7B">/quit</span><span style="color:#6272A4">                         # exit gl1tch</span></span></code></pre>
-<h2 id="launching-pipelines-from-the-sidebar">Launching Pipelines From the Sidebar</h2>
-<p>Your saved pipelines (<code>.pipeline.yaml</code> files in <code>~/.config/glitch/pipelines/</code>) appear in the left sidebar automatically.</p>
-<ol>
-<li>Press <code>Tab</code> to focus the Pipeline Launcher</li>
-<li>Use <code>j</code>/<code>k</code> to navigate to the pipeline you want</li>
-<li>Press <code>↵</code> to launch it</li>
-<li>Watch output stream in the Activity Feed</li>
-</ol>
-<p>While a pipeline is running, the launcher shows <code>[running]</code> and the feed updates live. When it finishes, the badge changes to <code>[done]</code> or <code>[failed]</code>.</p>
-<h2 id="the-activity-feed">The Activity Feed</h2>
-<p>The Activity Feed shows everything that runs — pipeline output, assistant responses, errors. Each entry is timestamped and tagged.</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>[14:23:05] [running] pipeline:standup</span></span>
-<span class="line"><span>  → Fetching commits...</span></span>
-<span class="line"><span>  → Writing standup...</span></span>
-<span class="line"><span></span></span>
-<span class="line"><span>[14:23:18] [done] pipeline:standup</span></span>
-<span class="line"><span>  → standup.md saved.</span></span></code></pre>
-<p>Navigate with <code>j</code>/<code>k</code>. Press <code>↵</code> on any entry to open the full result — you’ll see the complete output, step-by-step timings, and a re-run button.</p>
-<h3 id="searching-and-filtering">Searching and Filtering</h3>
+<p>Keep separate conversation threads without losing context:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/session</span><span style="color:#F1FA8C"> new</span><span style="color:#F1FA8C"> debug</span><span style="color:#6272A4">         # create a session named "debug"</span></span>
+<span class="line"><span style="color:#50FA7B">/session</span><span style="color:#F1FA8C"> debug</span><span style="color:#6272A4">             # switch to it (shorthand: /s debug)</span></span></code></pre>
+<p>Each session has its own full history. Active session shows <code>●</code> in the footer.</p>
+<h3 id="switching-models">Switching Models</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/model</span><span style="color:#F1FA8C"> ollama/qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#50FA7B">/model</span><span style="color:#F1FA8C"> claude/claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#50FA7B">/models</span><span style="color:#6272A4">                    # open the model picker</span></span></code></pre>
+<h3 id="other">Other</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/cwd</span><span style="color:#F1FA8C"> ~/projects/myapp</span><span style="color:#6272A4">      # change working directory</span></span>
+<span class="line"><span style="color:#50FA7B">/clear</span><span style="color:#6272A4">                     # clear the conversation</span></span>
+<span class="line"><span style="color:#50FA7B">/help</span><span style="color:#6272A4">                      # show command reference</span></span>
+<span class="line"><span style="color:#50FA7B">/quit</span><span style="color:#6272A4">                      # exit</span></span></code></pre>
+<h2 id="keyboard-shortcuts">Keyboard Shortcuts</h2>
 
 
 
@@ -200,76 +165,9 @@ esc
 
 
 
-<table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>/</code></td><td>Fuzzy search entries by name</td></tr><tr><td><code>f</code></td><td>Cycle status filter: <code>all</code> → <code>running</code> → <code>done</code> → <code>failed</code></td></tr><tr><td><code>j</code>/<code>k</code></td><td>Navigate entries</td></tr><tr><td><code>↵</code></td><td>Open full result</td></tr></tbody></table>
-<h2 id="keyboard-reference">Keyboard Reference</h2>
-<h3 id="navigation">Navigation</h3>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>Tab</code></td><td>Cycle focus: Launcher → Assistant → Feed → Launcher</td></tr><tr><td><code>Shift+Tab</code></td><td>Cycle focus backward</td></tr><tr><td><code>h</code> / <code>←</code></td><td>Focus left sidebar</td></tr><tr><td><code>l</code> / <code>→</code></td><td>Focus Activity Feed</td></tr><tr><td><code>j</code> / <code>k</code></td><td>Move up/down in current region</td></tr><tr><td><code>↵</code></td><td>Launch / open / send</td></tr><tr><td><code>Esc</code></td><td>Cancel or go back</td></tr></tbody></table>
-<h3 id="workspace-shortcuts">Workspace Shortcuts</h3>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>c</code></td><td>Jump to assistant input</td></tr><tr><td><code>T</code></td><td>Open theme picker</td></tr><tr><td><code>R</code></td><td>Refresh provider and model list</td></tr><tr><td><code>?</code></td><td>Show help</td></tr></tbody></table>
+<table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>Enter</code></td><td>Send message</td></tr><tr><td><code>Esc</code></td><td>Unfocus input</td></tr><tr><td><code>↑</code> / <code>↓</code></td><td>Navigate input history</td></tr><tr><td><code>/help</code></td><td>Show all commands</td></tr></tbody></table>
 <h3 id="chord-shortcuts">Chord Shortcuts</h3>
-<p>Chord shortcuts start with <code>ctrl+space</code> followed by a key:</p>
+<p>Press <code>ctrl+space</code>, then the key:</p>
 
 
 
@@ -299,63 +197,33 @@ esc
 
 
 
-
-
-
-
-
-
-
-
-<table><thead><tr><th>Chord</th><th>Action</th></tr></thead><tbody><tr><td><code>ctrl+space a</code></td><td>Focus assistant panel</td></tr><tr><td><code>ctrl+space r</code></td><td>Reload gl1tch (picks up a new binary)</td></tr><tr><td><code>ctrl+space s</code></td><td>Open the ops popup</td></tr><tr><td><code>ctrl+space |</code></td><td>Split pane horizontally</td></tr><tr><td><code>ctrl+space -</code></td><td>Split pane vertically</td></tr><tr><td><code>ctrl+space x</code></td><td>Kill current pane</td></tr><tr><td><code>ctrl+space ←/→/↑/↓</code></td><td>Navigate panes by direction</td></tr></tbody></table>
-<h2 id="customizing">Customizing</h2>
-<h3 id="themes">Themes</h3>
-<p>Press <code>T</code> to open the theme picker. Available themes:</p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>Theme</th><th>Style</th></tr></thead><tbody><tr><td><strong>Dracula</strong></td><td>Dark, high-contrast purples and cyans (default)</td></tr><tr><td><strong>Nord</strong></td><td>Cool arctic palette</td></tr><tr><td><strong>Gruvbox</strong></td><td>Warm earthy tones</td></tr></tbody></table>
-<p>Your theme choice persists across sessions.</p>
-<h3 id="named-sessions">Named Sessions</h3>
-<p>Create separate conversation threads for different contexts — debugging a deploy in one session, drafting docs in another:</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">/session</span><span style="color:#F1FA8C"> new</span><span style="color:#F1FA8C"> deploy-debug</span></span>
-<span class="line"><span style="color:#50FA7B">/session</span><span style="color:#F1FA8C"> new</span><span style="color:#F1FA8C"> docs-draft</span></span>
-<span class="line"><span style="color:#50FA7B">/s</span><span style="color:#F1FA8C"> deploy-debug</span><span style="color:#6272A4">              # switch back</span></span></code></pre>
-<p>Each session keeps its own full history. Background sessions with new activity are highlighted so nothing gets missed.</p>
+<table><thead><tr><th>Chord</th><th>Action</th></tr></thead><tbody><tr><td><code>ctrl+space d</code></td><td>Detach (session keeps running)</td></tr><tr><td><code>ctrl+space r</code></td><td>Reload gl1tch</td></tr><tr><td><code>ctrl+space a</code></td><td>Focus assistant input</td></tr><tr><td><code>ctrl+space p</code></td><td>Open pipeline builder</td></tr><tr><td><code>ctrl+space b</code></td><td>Open brain editor</td></tr></tbody></table>
+<h2 id="detaching-and-reattaching">Detaching and Reattaching</h2>
+<p>Your session keeps running after you detach. Scheduled pipelines fire, automations complete, results accumulate. Come back and it’s all there.</p>
+<p>Detach: <code>ctrl+space d</code></p>
+<p>Reattach from your shell:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> attach</span></span></code></pre>
+<blockquote>
+<p><strong>TIP:</strong> Run long pipelines, detach, and come back to results. You don’t have to watch it run.</p>
+</blockquote>
 <h2 id="examples">Examples</h2>
-<h3 id="why-did-that-fail">”Why did that fail?”</h3>
-<p>After a pipeline fails, ask your assistant directly:</p>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>why did backup fail?</span></span></code></pre>
-<p>Your assistant sees the recent run output, exit code, and step details. It answers based on what actually happened.</p>
-<h3 id="run-something-and-explain-it">”Run something and explain it”</h3>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>run standup explain</span></span></code></pre>
-<p>The pipeline runs immediately. Once it finishes, your assistant narrates what it did and what the output means.</p>
-<h3 id="open-a-scratch-terminal-while-a-pipeline-runs">”Open a scratch terminal while a pipeline runs”</h3>
-<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>/terminal 50% right</span></span></code></pre>
-<p>A new pane opens on the right. Your pipeline keeps running and streaming to the Activity Feed. Use <code>ctrl+space →</code> to switch back to the feed.</p>
+<h3 id="ask-about-a-failed-run">Ask about a failed run</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>why did the standup pipeline fail last night?</span></span></code></pre>
+<p>Your assistant sees the run output, exit code, and step timing. It tells you exactly what went wrong.</p>
+<h3 id="run-a-pipeline-and-ask-about-the-output">Run a pipeline and ask about the output</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>run pr-triage</span></span></code></pre>
+<p>Once it finishes, ask:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>which PR should I look at first?</span></span></code></pre>
+<p>Your assistant uses the pipeline output as context for its answer.</p>
+<h3 id="work-in-parallel-with-a-terminal-split">Work in parallel with a terminal split</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>/terminal 40% right</span></span></code></pre>
+<p>A pane opens on the right. Run tests, edit files, do whatever — your assistant stays on the left, ready for questions.</p>
 <h2 id="see-also">See Also</h2>
 <ul>
-<li><a href="/docs/pipelines/pipelines">Pipelines</a> — Write and structure <code>.pipeline.yaml</code> files</li>
-<li><a href="/docs/pipelines/examples">Examples</a> — Copy-paste pipelines for real workflows</li>
 <li><a href="/docs/pipelines/quickstart">Your First Pipeline</a> — Get running in five minutes</li>
+<li><a href="/docs/pipelines/pipelines">Pipelines</a> — Write and chain pipeline steps</li>
+<li><a href="/docs/pipelines/brain">Brain</a> — Teach your assistant about your projects</li>
+<li><a href="/docs/pipelines/cron">Scheduling</a> — Run pipelines automatically</li>
 </ul> </div> </article><article id="ds-article-pipelines" class="ds-article" aria-hidden="true"> <div class="ds-article-meta"> <span class="ds-article-title fg-purple">Pipelines</span> <span class="ds-article-desc fg-comment">Write YAML workflows that chain shell commands, AI models, and your own tools to automate any developer task.</span> </div> <div class="ds-content"> <p>A pipeline is a YAML file that tells gl1tch what to run, in what order, and how to pass results between steps. Write one pipeline for your standup. Another for PR review. Another for your deploy. gl1tch runs them on demand, chains their outputs together, and keeps a history of every run.</p>
 <h2 id="quick-start">Quick Start</h2>
 <p>Here’s a complete, working pipeline. Copy it, save it as <code>summarize.pipeline.yaml</code>, and run it:</p>
