@@ -4,7 +4,7 @@ description: "The AI providers and tools that run your pipeline steps."
 order: 3
 ---
 
-Every pipeline step has an `executor` field that picks what does the work — a local AI model, a cloud provider, a CLI tool, or a builtin. You can ask gl1tch to build pipeline steps for you, or write them directly in YAML.
+Every pipeline step has an `executor` field that picks what does the work — a local AI model, a cloud provider, a CLI tool, or a builtin. You can describe what you want in the console or with `glitch ask` and gl1tch will build the pipeline steps for you, or write them directly in YAML.
 
 ## Quick reference
 

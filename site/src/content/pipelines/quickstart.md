@@ -46,7 +46,13 @@ That's a real pipeline run — `git log`, `git diff --stat`, and `git status` ch
 
 ## Add AI to the pipeline
 
-Ask gl1tch to summarize the same commits using your local Ollama model:
+Ask gl1tch to summarize the same commits. You can type this directly in the console, or run it from your terminal — both work exactly the same way:
+
+```
+summarize my last 5 commits
+```
+
+From the terminal:
 
 ```bash
 glitch ask --provider ollama "summarize my last 5 commits"
@@ -80,7 +86,11 @@ gl1tch picks Claude Haiku by default (the cheapest option). Pass `--model claude
 
 ## Review a PR
 
-Pass gl1tch a GitHub PR URL and it routes to `pr-review` automatically:
+Pass gl1tch a GitHub PR URL — in the console or from the terminal:
+
+```
+https://github.com/8op-org/gl1tch/pull/40
+```
 
 ```bash
 glitch ask "https://github.com/8op-org/gl1tch/pull/40"
