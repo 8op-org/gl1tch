@@ -36,6 +36,7 @@ func BuildSignalHandlerRegistry(narrationCh chan<- string, st *store.Store, pack
 		"game-ice-encountered":      iceEncounteredHandler(st, pack),
 		"game-quest-event":          logHandler(), // re-use log handler for quest events
 		"game-bounty-completed":     bountyCompletedHandler(st, pack),
+		"mud-chat-reply":            mudChatReplyHandler(eng),
 	}
 	// Register MUD XP bridge handlers for each topic in the pack's mud_xp_events map.
 	for topic, xp := range pack.Weights.MUDXPEvents {
@@ -350,6 +351,43 @@ func npcNarrateHandler(narrationCh chan<- string, st *store.Store) func(topic, p
 			if result != "" {
 				narrationCh <- result
 			}
+		}()
+	}
+}
+
+// mudChatReplyHandler generates a gl1tch companion reply when a player
+// addresses "glitch" in chat, and publishes the reply back to the game
+// via the mud.chat.reply BUSD topic so it appears in the web chat.
+func mudChatReplyHandler(eng *game.GameEngine) func(topic, payload string) {
+	const sysPrompt = `You are gl1tch, a cynical AI haunting this MUD world. A player just said your name in chat.
+Reply in character: terse, dry, occasionally helpful, never cheerful. 1-2 sentences max.
+No markdown, no asterisks, no emotes. Speak directly.`
+
+	return func(topic, payload string) {
+		var p struct {
+			From  string `json:"from"`
+			Text  string `json:"text"`
+			World string `json:"world"`
+		}
+		if err := json.Unmarshal([]byte(payload), &p); err != nil || p.Text == "" {
+			return
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			userMsg := fmt.Sprintf("%s said: %s", p.From, p.Text)
+			reply := eng.Respond(ctx, sysPrompt, userMsg)
+			if reply == "" {
+				return
+			}
+			sockPath, err := busd.SocketPath()
+			if err != nil {
+				return
+			}
+			_ = busd.PublishEvent(sockPath, "mud.chat.reply", map[string]any{
+				"text":  reply,
+				"world": p.World,
+			})
 		}()
 	}
 }
