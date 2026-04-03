@@ -183,7 +183,7 @@ brews:
       bin.install "glitch"
     test: |
       assert_match version.to_s, shell_output("#{bin}/glitch --version")
-    skip_upload: false
+    skip_upload: "{{ if .Env.HOMEBREW_TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
 
 changelog:
   use: git
