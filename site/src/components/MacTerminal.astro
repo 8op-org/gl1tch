@@ -1,29 +1,33 @@
 ---
-import GlitchLogo from './GlitchLogo.astro';
 ---
-<div class="mac-terminal" id="mac-terminal">
-  <div class="mac-titlebar">
-    <div class="mac-dots" aria-hidden="true">
-      <span class="mac-dot mac-dot-red"></span>
-      <span class="mac-dot mac-dot-yellow"></span>
-      <span class="mac-dot mac-dot-green"></span>
-    </div>
-    <span class="mac-title">GLITCH</span>
-  </div>
+<div class="tui-terminal" id="mac-terminal">
+  <!-- Left pane border accent -->
+  <div class="tui-pane-bar" aria-hidden="true"></div>
 
-  <div class="mac-body">
-    <div class="terminal-logo">
-      <GlitchLogo />
+  <!-- Main content area -->
+  <div class="tui-main">
+
+    <!-- Logo area -->
+    <div class="tui-logo-area">
+      <img src="/glitch-logo.gif" alt="GL1TCH" class="tui-logo" />
     </div>
 
-    <div class="terminal-output" id="terminal-output">
-      <div class="output-line output-system">your AI workspace</div>
-      <div class="output-line output-dim">Type /help to see available commands.</div>
-    </div>
+    <!-- Output area (typewriter responses appear here) -->
+    <div class="terminal-output" id="terminal-output"></div>
 
-    <div class="terminal-input-wrap">
-      <div class="terminal-input-row">
-        <span class="terminal-prompt">&gt;&gt;</span>
+    <!-- Bottom bars, pinned -->
+    <div class="tui-bottom">
+
+      <!-- Status bar -->
+      <div class="tui-statusbar">
+        <span class="tui-status-left">&gt;&gt; GL1TCH AI assistant &nbsp;//&nbsp; Claude Code</span>
+        <span class="tui-status-center">&#x21BB; 3 &middot; Lv6 &middot; 8.0kxp</span>
+        <span class="tui-status-right" id="tui-clock"></span>
+      </div>
+
+      <!-- Input row -->
+      <div class="tui-input-row">
+        <span class="tui-prompt">&gt;&gt; </span>
         <input
           type="text"
           id="terminal-input"
@@ -31,13 +35,37 @@ import GlitchLogo from './GlitchLogo.astro';
           autocorrect="off"
           autocapitalize="none"
           spellcheck="false"
+          placeholder="ask glitch anything…"
           aria-label="GLITCH terminal input"
         />
       </div>
-      <div class="terminal-input-hint">enter send  ·  ↑↓ history  ·  tab complete  ·  /install  /pipelines  /docs</div>
-    </div>
-  </div>
-</div>
+
+      <!-- Hint bar -->
+      <div class="tui-hintbar">
+        <span class="tui-hintbar-left">
+          <kbd>enter</kbd><span class="tui-hint-dim"> send &middot; </span>
+          <kbd>esc</kbd><span class="tui-hint-dim"> unfocus &middot; </span>
+          <kbd>/help</kbd><span class="tui-hint-dim"> commands</span>
+        </span>
+        <span class="tui-hintbar-right tui-hint-dim">~/Projects/gl1tch</span>
+      </div>
+
+      <!-- Sessions bar -->
+      <div class="tui-sessionsbar">
+        <span class="tui-hint-dim">sessions: </span>
+        <span class="tui-session-active">&#x25BA; main</span>
+      </div>
+
+      <!-- Chord bar -->
+      <div class="tui-chordbar">
+        <kbd>^spc d</kbd><span class="tui-hint-dim"> detach &nbsp;&middot;&nbsp; </span>
+        <kbd>^spc r</kbd><span class="tui-hint-dim"> reload &nbsp;&middot;&nbsp; </span>
+        <kbd>/quit</kbd><span class="tui-hint-dim"> quit</span>
+      </div>
+
+    </div><!-- /.tui-bottom -->
+  </div><!-- /.tui-main -->
+</div><!-- /.tui-terminal -->
 
 <script>
 import Fuse from 'fuse.js';
@@ -60,6 +88,22 @@ let historyIdx = -1;
 
 const inputEl  = document.getElementById('terminal-input') as HTMLInputElement;
 const outputEl = document.getElementById('terminal-output') as HTMLDivElement;
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+
+function updateClock() {
+  const el = document.getElementById('tui-clock');
+  if (!el) return;
+  const now = new Date();
+  let h = now.getHours();
+  const m = now.getMinutes().toString().padStart(2, '0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  el.textContent = `${h}:${m}${ampm}`;
+}
+
+updateClock();
+setInterval(updateClock, 10000);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -605,7 +649,7 @@ function typewrite(text: string): Promise<void> {
         div.textContent = text.slice(0, i + 1);
         i++;
         const ch = text[i - 1];
-        const delay = ch === '\n' ? 25 : ch === '.' || ch === ':' ? 30 : 10;
+        const delay = ch === '\n' ? 8 : ch === '.' || ch === ':' ? 8 : 3;
         twTimer = setTimeout(tick, delay);
         scrollBottom();
       } else {
@@ -619,17 +663,11 @@ function typewrite(text: string): Promise<void> {
 // ── Intro sequence ────────────────────────────────────────────────────────────
 
 async function runIntro() {
-  await sleep(400);
-
-  await typewrite('hey. your AI workspace lives in your terminal. local models run by default — nothing leaves your machine, no bill unless you ask for cloud.');
-  await sleep(350);
-
-  await typewrite('type /install to get it running. /pipelines to see what it can do. /docs if you want the full picture.');
+  appendLine('output-dim', 'gl1tch ready.');
 }
 
 function clearTerminal() {
-  // Keep only the two static boot lines
-  Array.from(outputEl.children).slice(2).forEach(el => el.remove());
+  while (outputEl.firstChild) outputEl.removeChild(outputEl.firstChild);
 }
 
 function tabComplete() {
@@ -712,3 +750,234 @@ document.addEventListener('DOMContentLoaded', () => {
   init();
 });
 </script>
+
+<style>
+  /* ── TUI color palette ──────────────────────────────────────── */
+  :root {
+    --tui-bg:        #1a1b26;
+    --tui-border:    #3d7a8a;
+    --tui-statusbg:  #0f1017;
+    --tui-yellow:    #e0af68;
+    --tui-cyan:      #7dcfff;
+    --tui-dim:       #565f89;
+    --tui-fg:        #c0caf5;
+  }
+
+  /* ── Outer wrapper ──────────────────────────────────────────── */
+  .tui-terminal {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    background: var(--tui-bg);
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--tui-fg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── Left pane border (2px teal bar) ───────────────────────── */
+  .tui-pane-bar {
+    flex: 0 0 2px;
+    background: var(--tui-border);
+    height: 100%;
+  }
+
+  /* ── Main content column ────────────────────────────────────── */
+  .tui-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  /* ── Logo area ──────────────────────────────────────────────── */
+  .tui-logo-area {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 0 12px;
+  }
+
+  .tui-logo {
+    max-width: 420px;
+    width: 60%;
+    height: auto;
+    image-rendering: pixelated;
+  }
+
+  /* ── Output area ────────────────────────────────────────────── */
+  .terminal-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--tui-border) transparent;
+  }
+
+  .terminal-output::-webkit-scrollbar { width: 4px; }
+  .terminal-output::-webkit-scrollbar-track { background: transparent; }
+  .terminal-output::-webkit-scrollbar-thumb { background: var(--tui-border); border-radius: 2px; }
+
+  /* ── Output line types ──────────────────────────────────────── */
+  .output-line {
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 2px;
+    color: var(--tui-fg);
+  }
+
+  .output-cmd      { color: var(--tui-yellow); }
+  .output-response { color: var(--tui-fg); }
+  .output-dim      { color: var(--tui-dim); }
+  .output-error    { color: #f7768e; }
+  .output-system   { color: var(--tui-cyan); }
+
+  /* ── Bottom section (all pinned bars) ───────────────────────── */
+  .tui-bottom {
+    flex: 0 0 auto;
+  }
+
+  /* ── Status bar ─────────────────────────────────────────────── */
+  .tui-statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--tui-statusbg);
+    padding: 3px 12px;
+    font-size: 11px;
+    color: var(--tui-dim);
+    border-top: 1px solid #1e2030;
+  }
+
+  .tui-status-left   { color: var(--tui-dim); }
+  .tui-status-center { color: var(--tui-dim); }
+  .tui-status-right  { color: var(--tui-dim); font-variant-numeric: tabular-nums; }
+
+  /* ── Input row ──────────────────────────────────────────────── */
+  .tui-input-row {
+    display: flex;
+    align-items: center;
+    background: var(--tui-statusbg);
+    padding: 5px 12px;
+    border-top: 1px solid #1e2030;
+  }
+
+  .tui-prompt {
+    color: var(--tui-yellow);
+    flex: 0 0 auto;
+    margin-right: 4px;
+    opacity: 0.75;
+  }
+
+  .tui-input-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--tui-fg);
+    font-family: inherit;
+    font-size: 13px;
+    caret-color: var(--tui-yellow);
+  }
+
+  .tui-input-row input::placeholder {
+    color: var(--tui-dim);
+    opacity: 0.6;
+  }
+
+  .tui-input-row input:disabled {
+    opacity: 0.4;
+  }
+
+  /* ── Hint bar ───────────────────────────────────────────────── */
+  .tui-hintbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--tui-statusbg);
+    padding: 2px 12px;
+    font-size: 10px;
+    border-top: 1px solid #1e2030;
+  }
+
+  .tui-hintbar-left { display: flex; align-items: center; gap: 0; }
+  .tui-hintbar-right { color: var(--tui-dim); }
+
+  .tui-hintbar kbd {
+    font-family: inherit;
+    font-size: 10px;
+    color: var(--tui-yellow);
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .tui-hint-dim { color: var(--tui-dim); }
+
+  /* ── Sessions bar ───────────────────────────────────────────── */
+  .tui-sessionsbar {
+    background: var(--tui-statusbg);
+    padding: 2px 12px;
+    font-size: 10px;
+    border-top: 1px solid #1e2030;
+    color: var(--tui-dim);
+  }
+
+  .tui-session-active {
+    color: var(--tui-cyan);
+    font-weight: 700;
+  }
+
+  /* ── Chord bar ──────────────────────────────────────────────── */
+  .tui-chordbar {
+    background: var(--tui-statusbg);
+    padding: 2px 12px;
+    font-size: 10px;
+    border-top: 1px solid #1e2030;
+    text-align: center;
+    color: var(--tui-dim);
+  }
+
+  .tui-chordbar kbd {
+    font-family: inherit;
+    font-size: 10px;
+    color: var(--tui-yellow);
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* ── Screenshot gallery ─────────────────────────────────────── */
+  .screenshot-gallery {
+    margin: 8px 0;
+    border: 1px solid var(--tui-border);
+    padding: 8px;
+  }
+
+  .sg-header {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: var(--tui-dim);
+  }
+
+  .sg-counter { color: var(--tui-yellow); }
+  .sg-caption { flex: 1; color: var(--tui-fg); }
+  .sg-keys    { color: var(--tui-dim); }
+
+  .sg-img-wrap { text-align: center; }
+  .sg-img      { max-width: 100%; max-height: 300px; border: 1px solid var(--tui-border); }
+
+  .sg-dots { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+  .sg-dot  { width: 6px; height: 6px; border-radius: 50%; background: var(--tui-dim); }
+  .sg-dot-active { background: var(--tui-cyan); }
+</style>
