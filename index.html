@@ -56,7 +56,9 @@ esc
 <span class="line"><span> M site/src/content/pipelines/quickstart.md</span></span></code></pre>
 <p>That’s a real pipeline run — <code>git log</code>, <code>git diff --stat</code>, and <code>git status</code> chained together in one step.</p>
 <h2 id="add-ai-to-the-pipeline">Add AI to the pipeline</h2>
-<p>Ask gl1tch to summarize the same commits using your local Ollama model:</p>
+<p>Ask gl1tch to summarize the same commits. You can type this directly in the console, or run it from your terminal — both work exactly the same way:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>summarize my last 5 commits</span></span></code></pre>
+<p>From the terminal:</p>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> ask</span><span style="color:#BD93F9"> --provider</span><span style="color:#F1FA8C"> ollama</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">summarize my last 5 commits</span><span style="color:#E9F284">"</span></span></code></pre>
 <p>gl1tch fetches your commits with <code>git log</code>, passes them to your local model, and streams the result:</p>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[step:fetch] status:running</span></span>
@@ -76,7 +78,8 @@ esc
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> ask</span><span style="color:#BD93F9"> --provider</span><span style="color:#F1FA8C"> claude</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">summarize my last 5 commits</span><span style="color:#E9F284">"</span></span></code></pre>
 <p>gl1tch picks Claude Haiku by default (the cheapest option). Pass <code>--model claude-sonnet-4-6</code> to upgrade.</p>
 <h2 id="review-a-pr">Review a PR</h2>
-<p>Pass gl1tch a GitHub PR URL and it routes to <code>pr-review</code> automatically:</p>
+<p>Pass gl1tch a GitHub PR URL — in the console or from the terminal:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>https://github.com/8op-org/gl1tch/pull/40</span></span></code></pre>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> ask</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">https://github.com/8op-org/gl1tch/pull/40</span><span style="color:#E9F284">"</span></span></code></pre>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[route] → pr-review (95%)</span></span>
 <span class="line"><span>[step:fetch_diff] status:running</span></span>
@@ -1019,7 +1022,7 @@ esc
 <li><a href="/docs/pipelines/executors">Executors</a> — what each executor does and how to configure it</li>
 <li><a href="/docs/pipelines/cli-reference">CLI Reference</a> — running pipelines from the command line</li>
 <li><a href="/docs/pipelines/workflows">Workflows</a> — chain multiple pipelines together</li>
-</ul> </div> </article><article id="ds-article-executors" class="ds-article" aria-hidden="true"> <div class="ds-article-meta"> <span class="ds-article-title fg-purple">Executors</span> <span class="ds-article-desc fg-comment">The AI providers and tools that run your pipeline steps.</span> </div> <div class="ds-content"> <p>Every pipeline step has an <code>executor</code> field that picks what does the work — a local AI model, a cloud provider, a CLI tool, or a builtin. You can ask gl1tch to build pipeline steps for you, or write them directly in YAML.</p>
+</ul> </div> </article><article id="ds-article-executors" class="ds-article" aria-hidden="true"> <div class="ds-article-meta"> <span class="ds-article-title fg-purple">Executors</span> <span class="ds-article-desc fg-comment">The AI providers and tools that run your pipeline steps.</span> </div> <div class="ds-content"> <p>Every pipeline step has an <code>executor</code> field that picks what does the work — a local AI model, a cloud provider, a CLI tool, or a builtin. You can describe what you want in the console or with <code>glitch ask</code> and gl1tch will build the pipeline steps for you, or write them directly in YAML.</p>
 <h2 id="quick-reference">Quick reference</h2>
 
 
