@@ -3736,7 +3736,7 @@ A named function within a plugin binary that gl1tch invokes when a BUSD topic fi
 <p>Telemetry is initialized in <code>main.go</code> via <code>telemetry.Setup()</code>, which wires three exporters:</p>
 <ol>
 <li><strong>File exporter</strong> — writes JSONL-formatted traces to <code>~/.local/share/glitch/traces.jsonl</code> (or <code>$XDG_DATA_HOME/glitch/traces.jsonl</code>). Falls back silently if file I/O fails.</li>
-<li><strong>OTLP gRPC exporter</strong> — active only if <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set; sends traces to a collector (e.g., Jaeger, Otel Collector).</li>
+<li><strong>OTLP gRPC exporter</strong> — active only if <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set; sends traces to a collector (e.g., Jaeger, Otel Collector, Datadog).</li>
 <li><strong>Feed exporter</strong> — routes span events to a buffered channel (capacity 256) consumed by the TUI’s feed panel for real-time display of step completions and game events.</li>
 </ol>
 <p>All three operate in parallel. The setup function returns a <code>shutdown</code> callback (already deferred in <code>main</code>) that flushes pending spans and closes file handles on exit.</p>
@@ -3764,5 +3764,94 @@ A named function within a plugin binary that gl1tch invokes when a BUSD topic fi
 <p><strong>ICE class</strong> (<code>game.ice_class</code>) — attribute on a <code>game.evaluate</code> span indicating which cost/data threshold was triggered. Values: <code>"trace-ice"</code> (cost exceeded), <code>"data-ice"</code> (token count exceeded), etc.</p>
 <p><strong>Achievements count</strong> (<code>game.achievements_count</code>) — attribute on game spans showing how many achievements were unlocked in that run.</p>
 <h2 id="file-storage">File Storage</h2>
-<p>Traces and metrics are stored as newline-delimited JSON (JSONL) in the local data directory:</p> </div> </article> </div> </div> <script type="module">const a={show(s){const i=s.dataset.target;if(!i)return;document.querySelectorAll(".ds-tab").forEach(e=>e.classList.remove("active")),s.classList.add("active"),document.querySelectorAll(".ds-article").forEach(e=>{e.classList.remove("visible"),e.setAttribute("aria-hidden","true")});const t=document.getElementById(i);if(t){t.classList.add("visible"),t.removeAttribute("aria-hidden");const e=document.getElementById("ds-body");e&&(e.scrollTop=0)}}};window.DS=a;</script> </div> </div> </div> </main> <div class="project-stats" aria-label="Project statistics" data-astro-cid-flfkhgwp><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>8d old</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>481 commits</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-yellow" data-astro-cid-flfkhgwp>velocity -1.1x</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-green" data-astro-cid-flfkhgwp>feat↑</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-yellow" data-astro-cid-flfkhgwp>fix↑</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>306 runs</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-yellow" data-astro-cid-flfkhgwp>89% success</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>74 scheduled</span></div> <footer class="terminal-attribution">
+<p>Traces and metrics are stored as newline-delimited JSON (JSONL) in the local data directory:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>~/.local/share/glitch/traces.jsonl    # OTel span records (or $XDG_DATA_HOME/glitch/traces.jsonl)</span></span>
+<span class="line"><span>~/.local/share/glitch/metrics.jsonl   # Meter provider metrics</span></span></code></pre>
+<p>Both files are human-readable and greppable; file rotation is out of scope and can be added later. The directory is created automatically on first write.</p>
+<p>Each line is a pretty-printed JSON object representing one span (traces) or metric point (metrics). You can parse these with <code>jq</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.name, .duration, .status.code'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span></code></pre>
+<h2 id="configuration">Configuration</h2>
+<h3 id="environment-variables">Environment Variables</h3>
+<p><strong><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></strong> — if set, enables OTLP gRPC export to this endpoint (e.g., <code>localhost:4317</code> for a local collector). If unset, traces go only to the local file. The collector must be reachable; connection errors are logged but do not block pipeline execution.</p>
+<p><strong><code>XDG_DATA_HOME</code></strong> — base directory for trace and metric files. Defaults to <code>$HOME/.local/share</code> if not set.</p>
+<h3 id="sampling-and-resource">Sampling and Resource</h3>
+<p>All spans are sampled (<code>AlwaysSample()</code>), meaning every span is exported. To change the sampling strategy, modify the <code>sdktrace.WithSampler()</code> call in <code>internal/telemetry/telemetry.go</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="go"><code><span class="line"><span style="color:#6A737D">// Always sample (current):</span></span>
+<span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">AlwaysSample</span><span style="color:#E1E4E8">()))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">// Sample only 10% of traces:</span></span>
+<span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">TraceIDRatioBased</span><span style="color:#E1E4E8">(</span><span style="color:#79B8FF">0.1</span><span style="color:#E1E4E8">)))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">// Never sample (only feed events):</span></span>
+<span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">NeverSample</span><span style="color:#E1E4E8">()))</span></span></code></pre>
+<p>The tracer provider is configured with a service resource containing:</p>
+<ul>
+<li><code>service.name</code> — set from the <code>serviceName</code> arg to <code>Setup()</code> (typically <code>"gl1tch"</code>)</li>
+<li><code>service.version</code> — hardcoded to <code>"dev"</code></li>
+</ul>
+<p>These attributes appear in every exported span, enabling filtering and grouping by service in observability backends.</p>
+<h2 id="feed-channel-backpressure">Feed Channel Backpressure</h2>
+<p>The feed exporter publishes to a buffered channel with capacity 256. If the channel fills (TUI consumer is slow), new spans are dropped without error. This is acceptable because telemetry is observability data, not control flow; dropping some feed events does not affect pipeline correctness. A <code>log.Printf</code> warning is issued when dropping occurs (currently commented out in the code but may be added for diagnostics).</p>
+<h2 id="tui-integration">TUI Integration</h2>
+<p>The TUI’s feed panel drains the feed channel asynchronously, displaying step completions and game events as they arrive. Each <code>FeedSpanEvent</code> includes:</p>
+<ul>
+<li><code>RunID</code>, <code>StepID</code> — for “pipeline” spans; empty for “game” spans</li>
+<li><code>SpanName</code> — the operation name (e.g., <code>"shell.exec"</code>, <code>"game.evaluate"</code>)</li>
+<li><code>DurationMS</code> — elapsed time in milliseconds</li>
+<li><code>StatusOK</code> — true if the span ended without error</li>
+<li><code>Kind</code> — <code>"pipeline"</code> or <code>"game"</code> (distinguishes routed event types)</li>
+<li><code>GameICEClass</code>, <code>GameAchievementsCount</code> — set for “game” spans only</li>
+</ul>
+<p>The <code>/trace</code> command (when implemented) will render the full span tree for a selected feed entry, scoped to that run’s traces.</p>
+<h2 id="integration-with-external-observability-platforms">Integration with External Observability Platforms</h2>
+<h3 id="jaeger">Jaeger</h3>
+<p>To send traces to Jaeger, start a local collector and point gl1tch at it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Start Jaeger all-in-one (includes collector on port 4317)</span></span>
+<span class="line"><span style="color:#B392F0">docker</span><span style="color:#9ECBFF"> run</span><span style="color:#79B8FF"> -p</span><span style="color:#9ECBFF"> 4317:4317</span><span style="color:#9ECBFF"> jaegertracing/all-in-one:latest</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># In another terminal, run gl1tch with OTLP export enabled</span></span>
+<span class="line"><span style="color:#E1E4E8">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">localhost:4317</span><span style="color:#B392F0"> glitch</span></span></code></pre>
+<p>Navigate to <code>http://localhost:16686</code> to view traces in the Jaeger UI.</p>
+<h3 id="opentelemetry-collector">OpenTelemetry Collector</h3>
+<p>Deploy an OTel Collector as a sidecar or standalone service, then configure gl1tch to export to it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#E1E4E8">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">collector.local:4317</span><span style="color:#B392F0"> glitch</span></span></code></pre>
+<p>The collector can then export to Jaeger, Tempo, Datadog, or any other OTLP-compatible backend.</p>
+<h3 id="local-file-analysis">Local File Analysis</h3>
+<p>If you do not have an external observability platform, traces are always written locally. Analyze them with command-line tools:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Count traces by span name</span></span>
+<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.name'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> sort</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> uniq</span><span style="color:#79B8FF"> -c</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Find slow spans (> 1 second)</span></span>
+<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> 'select((.endTime - .startTime) > 1000000000) | {name, duration_ns: (.endTime - .startTime)}'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Extract run IDs and their total duration</span></span>
+<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.attributes | select(.["run.id"]) | .["run.id"]'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> sort</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> uniq</span></span></code></pre>
+<h2 id="examples">Examples</h2>
+<h3 id="enable-otlp-export-to-local-collector">Enable OTLP export to local collector</h3>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#F97583">export</span><span style="color:#E1E4E8"> OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#E1E4E8">localhost:4317</span></span>
+<span class="line"><span style="color:#B392F0">glitch</span></span></code></pre>
+<p>After running a pipeline, verify traces arrived at the collector:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Check Jaeger (if running)</span></span>
+<span class="line"><span style="color:#B392F0">curl</span><span style="color:#9ECBFF"> http://localhost:16686/api/services</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.data[] | select(.name == "gl1tch")'</span></span></code></pre>
+<h3 id="change-sampling-to-10">Change sampling to 10%</h3>
+<p>Edit <code>internal/telemetry/telemetry.go</code> and change the sampler from:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="go"><code><span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">AlwaysSample</span><span style="color:#E1E4E8">()))</span></span></code></pre>
+<p>to:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="go"><code><span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">TraceIDRatioBased</span><span style="color:#E1E4E8">(</span><span style="color:#79B8FF">0.1</span><span style="color:#E1E4E8">)))</span></span></code></pre>
+<p>Then rebuild gl1tch. Only 1 in 10 pipeline runs will now export full traces (trace IDs are sampled before the decision, so sampling is consistent across all exporters).</p>
+<h3 id="query-local-traces">Query local traces</h3>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Pretty-print all traces</span></span>
+<span class="line"><span style="color:#B392F0">cat</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.'</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Find all errors</span></span>
+<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> 'select(.status.code == "Error")'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Export to CSV for analysis</span></span>
+<span class="line"><span style="color:#B392F0">jq</span><span style="color:#79B8FF"> -r</span><span style="color:#9ECBFF"> '[.name, .startTime, (.endTime - .startTime), .status.code] | @csv'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> ></span><span style="color:#9ECBFF"> traces.csv</span></span></code></pre>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="/docs/pipelines.md">Pipeline steps</a> — how to emit spans from shell and Go steps</li>
+<li><a href="/docs/game.md">Game system</a> — game events and achievement tracking (uses telemetry spans)</li>
+<li><a href="https://opentelemetry.io/docs/">OpenTelemetry Documentation</a> — semantic conventions, OTLP spec, exporter guides</li>
+</ul> </div> </article> </div> </div> <script type="module">const a={show(s){const i=s.dataset.target;if(!i)return;document.querySelectorAll(".ds-tab").forEach(e=>e.classList.remove("active")),s.classList.add("active"),document.querySelectorAll(".ds-article").forEach(e=>{e.classList.remove("visible"),e.setAttribute("aria-hidden","true")});const t=document.getElementById(i);if(t){t.classList.add("visible"),t.removeAttribute("aria-hidden");const e=document.getElementById("ds-body");e&&(e.scrollTop=0)}}};window.DS=a;</script> </div> </div> </div> </main> <div class="project-stats" aria-label="Project statistics" data-astro-cid-flfkhgwp><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>8d old</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>481 commits</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-yellow" data-astro-cid-flfkhgwp>velocity -1.1x</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-green" data-astro-cid-flfkhgwp>feat↑</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-yellow" data-astro-cid-flfkhgwp>fix↑</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>306 runs</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-yellow" data-astro-cid-flfkhgwp>89% success</span><span class="ps-sep" aria-hidden="true" data-astro-cid-flfkhgwp>·</span><span class="ps-item ps-dim" data-astro-cid-flfkhgwp>74 scheduled</span></div> <footer class="terminal-attribution">
 made with AI <span class="fg-comment">(mostly correct.. probably)</span> &middot; guided by adam s<span class="fg-purple">&dagger;</span>okes &middot; <a href="https://8op.org" target="_blank" rel="noopener">contributions welcome</a> </footer>  </body></html>
