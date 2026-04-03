@@ -1,28 +1,30 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cron Scheduling — GLITCH</title><meta name="description" content="Schedule recurring pipelines and agents with human-readable next-run times."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cron Scheduling — GLITCH</title><meta name="description" content="Schedule your pipelines to run automatically — wake up to results already waiting in your workspace."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
 INDEX
-</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> GL1TCH Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console — The Switchboard </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Real-World Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link active" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Cron Scheduling</h1> <p class="docs-page-desc">Schedule recurring pipelines and agents with human-readable next-run times.</p> <div class="docs-article"> <p>gl1tch’s cron system executes pipelines and agents on a schedule, specified as standard 5-field cron expressions. Entries are stored in <code>~/.config/glitch/cron.yaml</code>, watched for changes, and hot-reloaded by the daemon. The TUI shows upcoming jobs with their next fire time in human-readable relative format (e.g. “in 4m”, “in 2h 30m”).</p>
-<h2 id="architecture">Architecture</h2>
-<p>The cron system has three layers:</p>
-<ol>
-<li><strong>Scheduler</strong> (<code>internal/cron/scheduler.go</code>) — wraps <code>robfig/cron</code> and adds hot-reload via <code>fsnotify</code>. When a pipeline or agent runs, it publishes events to the internal event bus for logging and UI updates.</li>
-<li><strong>Config</strong> (<code>internal/cron/config.go</code>) — reads/writes <code>~/.config/glitch/cron.yaml</code> atomically. Entries can be upserted from the agent runner modal or pipeline launcher without restarting the daemon.</li>
-<li><strong>Helpers</strong> (<code>internal/cron/helpers.go</code>) — <code>NextRun()</code> parses a schedule and returns the next fire time; <code>FormatRelative()</code> converts that to human-readable strings like “in 2d 3h”.</li>
-</ol>
-<p>Entry execution spawns a subprocess with <code>os/exec</code>. Output is logged to <code>~/.local/share/glitch/cron.log</code> and prefixed with the entry name for correlation.</p>
-<h2 id="technologies">Technologies</h2>
-<ul>
-<li><strong>robfig/cron/v3</strong> — standard 5-field cron parser and scheduler loop. Supports minute, hour, day-of-month, month, and day-of-week fields. No timezone logic; uses the system clock.</li>
-<li><strong>fsnotify</strong> — watches <code>~/.config/glitch/cron.yaml</code> for changes and triggers a hot-reload within ~1 second.</li>
-<li><strong>charmbracelet/log</strong> — structured logging with timestamps, output to both stderr and the cron log file.</li>
-</ul>
-<h2 id="concepts">Concepts</h2>
-<p><strong>Entry</strong> — a single scheduled job. Has a name, cron expression, kind (pipeline or agent), and target file/name.</p>
-<p><strong>Schedule</strong> — a 5-field cron expression: minute, hour, day-of-month, month, day-of-week. Supports <code>*</code>, ranges (<code>1-5</code>), steps (<code>*/15</code>), and lists (<code>1,3,5</code>). No seconds or timezone. Evaluated in the system timezone.</p>
-<p><strong>Kind</strong> — either <code>pipeline</code> or <code>agent</code>. Determines how Target is resolved: as a <code>.pipeline.yaml</code> path (pipeline) or an agent name (agent).</p>
-<p><strong>Next-run time</strong> — calculated by <code>NextRun()</code> after parsing the schedule. Displayed as a human-readable relative duration: “now”, “in 4m”, “in 2h 30m”, “in 3d”, etc.</p>
-<p><strong>Hot-reload</strong> — the scheduler watches <code>~/.config/glitch/cron.yaml</code> for writes. When the file changes, all entries are re-parsed and the scheduler is updated in-place (no restart required).</p>
-<h2 id="configuration">Configuration</h2>
-<p>Cron entries are stored in <code>~/.config/glitch/cron.yaml</code>. Each entry is a YAML object with these fields:</p>
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Pipeline Examples </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link active" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Cron Scheduling</h1> <p class="docs-page-desc">Schedule your pipelines to run automatically — wake up to results already waiting in your workspace.</p> <div class="docs-article"> <p>Set a pipeline on a schedule and stop thinking about it. Your morning standup prep runs at 8 AM. Your nightly code review finishes while you sleep. Your dependency audit fires every Monday. gl1tch runs your pipelines on a cron schedule and logs the results — you just check in when you’re ready.</p>
+<h2 id="quick-start">Quick Start</h2>
+<p>Create <code>~/.config/glitch/cron.yaml</code> with your first scheduled pipeline:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">entries</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> morning-standup</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 8 * * 1-5</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/standup.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">5m</span><span style="color:#E9F284">"</span></span></code></pre>
+<p>Start the scheduler:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> start</span></span></code></pre>
+<p>Check that it registered:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> list</span></span></code></pre>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>morning-standup   0 8 * * 1-5   pipeline   standup.pipeline.yaml   in 14h 22m</span></span></code></pre>
+<p>Your pipeline now runs every weekday at 8 AM without you touching it.</p>
+<h2 id="how-schedules-work">How Schedules Work</h2>
+<p>Schedules use standard 5-field cron expressions:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>┌───── minute (0–59)</span></span>
+<span class="line"><span>│ ┌───── hour (0–23)</span></span>
+<span class="line"><span>│ │ ┌───── day of month (1–31)</span></span>
+<span class="line"><span>│ │ │ ┌───── month (1–12)</span></span>
+<span class="line"><span>│ │ │ │ ┌───── day of week (0–6, Sun=0)</span></span>
+<span class="line"><span>│ │ │ │ │</span></span>
+<span class="line"><span>* * * * *</span></span></code></pre>
+<p>Common patterns:</p>
 
 
 
@@ -52,98 +54,141 @@ INDEX
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody><tr><td><code>name</code></td><td>string</td><td>yes</td><td>Human-readable label for this job (must be unique)</td></tr><tr><td><code>schedule</code></td><td>string</td><td>yes</td><td>5-field cron expression (minute hour dom month dow)</td></tr><tr><td><code>kind</code></td><td>string</td><td>yes</td><td>Either <code>pipeline</code> or <code>agent</code></td></tr><tr><td><code>target</code></td><td>string</td><td>yes</td><td>For pipeline: path to <code>.pipeline.yaml</code>. For agent: agent name.</td></tr><tr><td><code>args</code></td><td>map[string]any</td><td>no</td><td>Key-value arguments passed to the target</td></tr><tr><td><code>input</code></td><td>string</td><td>no</td><td>Optional input string mapped to <code>{{param.input}}</code> in pipelines</td></tr><tr><td><code>timeout</code></td><td>string</td><td>no</td><td>Maximum duration (e.g. <code>"5m"</code>, <code>"30s"</code>). Zero = no timeout.</td></tr><tr><td><code>working_dir</code></td><td>string</td><td>no</td><td>Working directory for the subprocess. Empty inherits the daemon’s cwd.</td></tr></tbody></table>
-<p>The file must exist at <code>~/.config/glitch/cron.yaml</code>. If not present, <code>glitch cron start</code> creates it on first run.</p>
-<h2 id="examples">Examples</h2>
-<p><strong>Basic pipeline schedule</strong> — run a cleanup pipeline daily at 2 AM:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">entries</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">nightly-cleanup</span></span>
-<span class="line"><span style="color:#85E89D">    schedule</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"0 2 * * *"</span></span>
-<span class="line"><span style="color:#85E89D">    kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">pipeline</span></span>
-<span class="line"><span style="color:#85E89D">    target</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">./pipelines/cleanup.pipeline.yaml</span></span>
-<span class="line"><span style="color:#85E89D">    timeout</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"10m"</span></span>
-<span class="line"><span style="color:#85E89D">    working_dir</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">/home/user/projects/my-repo</span></span></code></pre>
-<p><strong>Agent with input</strong> — run an agent every 15 minutes, passing custom input:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">entries</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">poll-status</span></span>
-<span class="line"><span style="color:#85E89D">    schedule</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"*/15 * * * *"</span></span>
-<span class="line"><span style="color:#85E89D">    kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">agent</span></span>
-<span class="line"><span style="color:#85E89D">    target</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">status-checker</span></span>
-<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"slack-alerts"</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      channel</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"#ops"</span></span>
-<span class="line"><span style="color:#85E89D">      verbose</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">true</span></span></code></pre>
-<p><strong>Weekdays only</strong> — run a report at 9 AM on weekdays (Monday–Friday):</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">entries</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">weekday-report</span></span>
-<span class="line"><span style="color:#85E89D">    schedule</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"0 9 * * 1-5"</span></span>
-<span class="line"><span style="color:#85E89D">    kind</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">pipeline</span></span>
-<span class="line"><span style="color:#85E89D">    target</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">./pipelines/report.pipeline.yaml</span></span>
-<span class="line"><span style="color:#85E89D">    timeout</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"30m"</span></span></code></pre>
-<p><strong>Run immediately</strong> (for testing):</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>glitch cron list  # shows all entries with next-run times</span></span></code></pre>
-<p>Then from the TUI (<code>glitch cron start</code> or press <code>m</code> from the switchboard Cron panel) to execute immediately outside its schedule.</p>
+<table><thead><tr><th>Schedule</th><th>Meaning</th></tr></thead><tbody><tr><td><code>0 8 * * 1-5</code></td><td>8 AM, Monday through Friday</td></tr><tr><td><code>0 2 * * *</code></td><td>2 AM every day</td></tr><tr><td><code>*/15 * * * *</code></td><td>Every 15 minutes</td></tr><tr><td><code>0 9 * * 1</code></td><td>9 AM every Monday</td></tr><tr><td><code>30 17 * * 5</code></td><td>5:30 PM every Friday</td></tr></tbody></table>
+<p>Schedules run in your system timezone. No seconds field. No timezone suffix.</p>
 <h2 id="commands">Commands</h2>
 <h3 id="glitch-cron-start"><code>glitch cron start</code></h3>
-<p>Start the cron daemon in a detached tmux session called <code>glitch-cron</code>. The session runs the BubbleTea TUI by default (or <code>glitch cron run</code> in non-interactive contexts like CI). Loads <code>~/.config/glitch/cron.yaml</code> and begins watching it for changes.</p>
-<p><strong>Flags:</strong></p>
-<ul>
-<li><code>--force</code> — kill an existing <code>glitch-cron</code> session before starting.</li>
-</ul>
+<p>Start the scheduler in your workspace. Loads <code>~/.config/glitch/cron.yaml</code> and watches it for changes — edit the file and your schedule updates within a second, no restart required.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> start</span></span>
+<span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> start</span><span style="color:#BD93F9"> --force</span><span style="color:#6272A4">   # restart if already running</span></span></code></pre>
 <h3 id="glitch-cron-stop"><code>glitch cron stop</code></h3>
-<p>Kill the <code>glitch-cron</code> tmux session and stop the daemon.</p>
+<p>Stop the scheduler.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> stop</span></span></code></pre>
 <h3 id="glitch-cron-list"><code>glitch cron list</code></h3>
-<p>Print all configured entries in a table, showing name, schedule, kind, target, and next fire time in human-readable format. Next-run time includes both a relative duration (“in 4m”) and an absolute timestamp (“14:30 UTC”).</p>
+<p>Show all scheduled entries with their next fire time in plain English.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> list</span></span></code></pre>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>morning-standup   0 8 * * 1-5    pipeline   standup.pipeline.yaml     in 14h 22m</span></span>
+<span class="line"><span>nightly-review    0 23 * * *     pipeline   code-review.pipeline.yaml  in 6h 44m</span></span>
+<span class="line"><span>dep-audit         0 9 * * 1      pipeline   deps.pipeline.yaml         in 3d 2h</span></span></code></pre>
 <h3 id="glitch-cron-logs"><code>glitch cron logs</code></h3>
-<p>Tail the cron daemon log file at <code>~/.local/share/glitch/cron.log</code>. Each log line is prefixed with the entry name for correlation.</p>
-<h3 id="glitch-cron-run-internal"><code>glitch cron run</code> (internal)</h3>
-<p>The daemon entry point; invoked by <code>glitch cron start</code> inside the tmux session. Not intended for direct user invocation.</p>
-<h3 id="glitch-cron-tui-internal"><code>glitch cron tui</code> (internal)</h3>
-<p>Launches the BubbleTea TUI for job management. Embedded inside the daemon; hot-reloads on config changes. Provides a filterable job list, run-now action, and live log tail.</p>
-<h2 id="next-run-time-format">Next-run time format</h2>
-<p>Times are displayed as human-readable relative durations:</p>
-<ul>
-<li><strong>“now”</strong> — within 1 second</li>
-<li><strong>“in Xm”</strong> — e.g. “in 4m” (less than 1 hour)</li>
-<li><strong>“in Xh”</strong> — e.g. “in 2h” (less than 1 day)</li>
-<li><strong>“in Xh Ym”</strong> — e.g. “in 2h 30m” (less than 1 day, both hours and minutes)</li>
-<li><strong>“in Xd”</strong> — e.g. “in 3d” (1+ days, same hour tomorrow or later)</li>
-<li><strong>“in Xd Yh”</strong> — e.g. “in 3d 2h” (1+ days with hours)</li>
-</ul>
-<p>This format is used in <code>glitch cron list</code> output, the switchboard Cron panel, and the glitch-cron TUI.</p>
+<p>Tail the scheduler log. Each line is prefixed with the entry name so you can follow multiple jobs at once.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> cron</span><span style="color:#F1FA8C"> logs</span></span></code></pre>
+<h2 id="configuration-reference">Configuration Reference</h2>
+<p>All scheduled jobs live in <code>~/.config/glitch/cron.yaml</code>. The file is hot-reloaded on save.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">entries</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> &#x3C;string></span><span style="color:#6272A4">          # unique name for this job</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> &#x3C;string></span><span style="color:#6272A4">      # 5-field cron expression</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span><span style="color:#6272A4">          # "pipeline" or "agent"</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> &#x3C;string></span><span style="color:#6272A4">        # path to .pipeline.yaml, or agent name</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> &#x3C;string></span><span style="color:#6272A4">       # optional: "5m", "30s" — zero means no timeout</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> &#x3C;string></span><span style="color:#6272A4">   # optional: working directory for the job</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> &#x3C;string></span><span style="color:#6272A4">         # optional: maps to {{param.input}} in pipelines</span></span>
+<span class="line"><span style="color:#8BE9FD">    args</span><span style="color:#FF79C6">:</span><span style="color:#6272A4">                   # optional: key-value args passed to the target</span></span>
+<span class="line"><span style="color:#8BE9FD">      key</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> value</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field</th><th>Required</th><th>Description</th></tr></thead><tbody><tr><td><code>name</code></td><td>yes</td><td>Unique label shown in <code>glitch cron list</code></td></tr><tr><td><code>schedule</code></td><td>yes</td><td>5-field cron expression</td></tr><tr><td><code>kind</code></td><td>yes</td><td><code>pipeline</code> or <code>agent</code></td></tr><tr><td><code>target</code></td><td>yes</td><td>Path to a <code>.pipeline.yaml</code> or an agent name</td></tr><tr><td><code>timeout</code></td><td>no</td><td>Max run duration — e.g. <code>"10m"</code>, <code>"30s"</code></td></tr><tr><td><code>working_dir</code></td><td>no</td><td>Directory the job runs in; inherits your workspace if empty</td></tr><tr><td><code>input</code></td><td>no</td><td>String mapped to <code>{{param.input}}</code> inside the pipeline</td></tr><tr><td><code>args</code></td><td>no</td><td>Key-value map passed to the target</td></tr></tbody></table>
+<h2 id="examples">Examples</h2>
+<h3 id="morning-standup-brief">Morning Standup Brief</h3>
+<p>Your assistant pulls open PRs and recent commits, summarizes the day ahead, and has it ready before you open your laptop.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">entries</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> morning-standup</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 8 * * 1-5</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/standup.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/projects/my-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">5m</span><span style="color:#E9F284">"</span></span></code></pre>
+<h3 id="nightly-code-review">Nightly Code Review</h3>
+<p>Run a full code quality check every night. Wake up to findings already in your log.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">entries</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> nightly-review</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 23 * * *</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/code-review.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/projects/my-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">15m</span><span style="color:#E9F284">"</span></span></code></pre>
+<h3 id="weekly-dependency-audit">Weekly Dependency Audit</h3>
+<p>Every Monday morning, check for outdated or vulnerable dependencies before the week starts.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">entries</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> dep-audit</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 9 * * 1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/dep-check.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/projects/my-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">10m</span><span style="color:#E9F284">"</span></span></code></pre>
+<h3 id="full-cronyaml-with-multiple-jobs">Full <code>cron.yaml</code> with Multiple Jobs</h3>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">entries</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> morning-standup</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 8 * * 1-5</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/standup.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/projects/my-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">5m</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> nightly-review</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 23 * * *</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/code-review.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/projects/my-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">15m</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> dep-audit</span></span>
+<span class="line"><span style="color:#8BE9FD">    schedule</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">0 9 * * 1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    kind</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pipeline</span></span>
+<span class="line"><span style="color:#8BE9FD">    target</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/pipelines/dep-check.pipeline.yaml</span></span>
+<span class="line"><span style="color:#8BE9FD">    working_dir</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ~/projects/my-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">    timeout</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">10m</span><span style="color:#E9F284">"</span></span></code></pre>
 <h2 id="see-also">See Also</h2>
 <ul>
-<li><a href="./pipelines.md">Pipelines</a> — running inline or scheduled pipelines</li>
-<li><a href="./agents.md">Agents</a> — scheduling agent runs with recurring parameters</li>
-<li><a href="./switchboard.md">Switchboard</a> — cron panel in the main dashboard (press <code>c</code> to focus, <code>m</code> to open the TUI)</li>
+<li><a href="/docs/pipelines/pipelines">Pipelines</a> — build the pipelines you schedule here</li>
+<li><a href="/docs/pipelines/brain">Brain</a> — add memory to scheduled pipelines so your assistant learns over time</li>
+<li><a href="/docs/pipelines/plugins">Plugins</a> — extend what your scheduled pipelines can do</li>
 </ul> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/cli-reference"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">CLI Reference</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/architecture"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Architecture</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>

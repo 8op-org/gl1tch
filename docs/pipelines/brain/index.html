@@ -1,37 +1,59 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>The Brain System — GLITCH</title><meta name="description" content="Steps write what they learn. Later steps read it. The model decides what's worth remembering."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>The Brain System — GLITCH</title><meta name="description" content="Give your assistant memory — it records what it learns in one step and carries that knowledge into every step that follows."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
 INDEX
-</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> GL1TCH Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console — The Switchboard </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link active" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Real-World Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">The Brain System</h1> <p class="docs-page-desc">Steps write what they learn. Later steps read it. The model decides what&#39;s worth remembering.</p> <div class="docs-article"> <h2 id="how-it-works">How it works</h2>
-<p>Every step’s output is scanned for <code>&#x3C;brain></code> blocks. If one is found and a store is available, it’s persisted for the current run. Every subsequent step receives accumulated brain notes in its prompt preamble — automatically, before your prompt text.</p>
-<p>There are no YAML flags that control this. Brain scanning and injection are always on when a store is configured (which is the default when running via <code>glitch pipeline run</code>). The model decides what’s worth remembering by whether it emits a <code>&#x3C;brain></code> block.</p>
-<h2 id="writing-to-the-brain">Writing to the brain</h2>
-<p>Your prompt instructs the model to emit a brain block. gl1tch finds it, extracts it, stores it.</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">audit</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Audit this codebase for security issues. Be specific.</span></span>
-<span class="line"><span style="color:#9ECBFF">      Record your key findings in a &#x3C;brain> block at the end.</span></span></code></pre>
-<p>The model outputs its analysis, then appends:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>&#x3C;brain tags="security,sql-injection"></span></span>
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors </a><a class="docs-nav-link active" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Pipeline Examples </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">The Brain System</h1> <p class="docs-page-desc">Give your assistant memory — it records what it learns in one step and carries that knowledge into every step that follows.</p> <div class="docs-article"> <p>Your assistant reads, analyzes, and moves on — but without memory, every step starts from scratch. The brain system fixes that. When a step records a <code>&#x3C;brain></code> block, gl1tch stores it and injects it into every step that runs after. Your assistant remembers what it found so it can act on it later, automatically.</p>
+<h2 id="quick-start">Quick Start</h2>
+<p>Add one instruction to your prompt. Your assistant does the rest.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> security-audit</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> audit</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ollama</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Audit this codebase for security issues.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Record your top findings in a &#x3C;brain> block at the end.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> report</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">audit</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Using the brain context from the audit above,</span></span>
+<span class="line"><span style="color:#F1FA8C">      write a prioritized remediation plan.</span></span></code></pre>
+<p>Run it:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> pipeline</span><span style="color:#F1FA8C"> run</span><span style="color:#F1FA8C"> security-audit.pipeline.yaml</span></span></code></pre>
+<p>The <code>report</code> step receives the audit findings automatically — no template expressions, no copy-paste between steps.</p>
+<h2 id="how-it-works">How It Works</h2>
+<p>Tell your assistant to emit a <code>&#x3C;brain></code> block. gl1tch finds it, stores it, and injects it into every later step’s prompt before your text runs.</p>
+<p>Your assistant outputs its analysis, then appends:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>&#x3C;brain tags="security,sql-injection"></span></span>
 <span class="line"><span>SQL injection in user_search (line 42), admin_filter (line 89),</span></span>
 <span class="line"><span>report_query (line 156). All use string concatenation. No parameterized queries.</span></span>
 <span class="line"><span>&#x3C;/brain></span></span></code></pre>
-<p>gl1tch extracts the block, stores it, moves on. The full output — including the brain block — still goes to stdout.</p>
-<h2 id="reading-from-the-brain">Reading from the brain</h2>
-<p>If brain notes exist for the current run, they appear in the next step’s prompt preamble automatically. No opt-in needed. The model sees something like this before your prompt text:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>## Brain Notes (this run)</span></span>
+<p>The next step sees this before your prompt text:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>## Brain Notes (this run)</span></span>
 <span class="line"><span></span></span>
 <span class="line"><span>[audit] [tags: security, sql-injection]</span></span>
 <span class="line"><span>SQL injection in user_search (line 42), admin_filter (line 89),</span></span>
 <span class="line"><span>report_query (line 156). All use string concatenation. No parameterized queries.</span></span>
 <span class="line"><span></span></span>
-<span class="line"><span>---</span></span></code></pre>
-<p>Then your prompt follows. The model sees both.</p>
-<h2 id="the-brain-block-format">The brain block format</h2>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="xml"><code><span class="line"><span style="color:#E1E4E8">&#x3C;</span><span style="color:#85E89D">brain</span><span style="color:#B392F0"> tags</span><span style="color:#E1E4E8">=</span><span style="color:#9ECBFF">"tag1,tag2"</span><span style="color:#B392F0"> type</span><span style="color:#E1E4E8">=</span><span style="color:#9ECBFF">"finding"</span><span style="color:#B392F0"> title</span><span style="color:#E1E4E8">=</span><span style="color:#9ECBFF">"Short Title"</span><span style="color:#E1E4E8">></span></span>
-<span class="line"><span style="color:#E1E4E8">  The insight. Specific. One or two sentences.</span></span>
-<span class="line"><span style="color:#E1E4E8">&#x3C;/</span><span style="color:#85E89D">brain</span><span style="color:#E1E4E8">></span></span></code></pre>
+<span class="line"><span>---</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>[your prompt follows here]</span></span></code></pre>
+<p>No configuration. Brain scanning is always on.</p>
+<h2 id="writing-to-the-brain">Writing to the Brain</h2>
+<p>Your prompt is the only control you have — and it’s all you need. Tell your assistant what to record, and it will emit a <code>&#x3C;brain></code> block.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">  Find patterns in these GitHub issues. What areas keep breaking?</span></span>
+<span class="line"><span style="color:#F1FA8C">  Record your top 3 findings in a &#x3C;brain> block.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">  {{steps.fetch.output}}</span></span></code></pre>
+<p>The full output — including the brain block — still goes to stdout. gl1tch extracts and stores the block separately.</p>
+<h2 id="brain-block-format">Brain Block Format</h2>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="xml"><code><span class="line"><span style="color:#F8F8F2">&#x3C;</span><span style="color:#FF79C6">brain</span><span style="color:#50FA7B;font-style:italic"> tags</span><span style="color:#F8F8F2">=</span><span style="color:#E9F284">"</span><span style="color:#F1FA8C">tag1,tag2</span><span style="color:#E9F284">"</span><span style="color:#50FA7B;font-style:italic"> type</span><span style="color:#F8F8F2">=</span><span style="color:#E9F284">"</span><span style="color:#F1FA8C">finding</span><span style="color:#E9F284">"</span><span style="color:#50FA7B;font-style:italic"> title</span><span style="color:#F8F8F2">=</span><span style="color:#E9F284">"</span><span style="color:#F1FA8C">Short Title</span><span style="color:#E9F284">"</span><span style="color:#F8F8F2">></span></span>
+<span class="line"><span style="color:#F8F8F2">  The insight. Specific. One or two sentences.</span></span>
+<span class="line"><span style="color:#F8F8F2">&#x3C;/</span><span style="color:#FF79C6">brain</span><span style="color:#F8F8F2">></span></span></code></pre>
 <p>All attributes are optional:</p>
 
 
@@ -54,47 +76,137 @@ INDEX
 
 
 
-<table><thead><tr><th>Attribute</th><th>What it’s for</th></tr></thead><tbody><tr><td><code>tags</code></td><td>Comma-separated labels. Useful for filtering later.</td></tr><tr><td><code>type</code></td><td><code>research</code>, <code>finding</code>, <code>data</code>, or <code>code</code>.</td></tr><tr><td><code>title</code></td><td>Short label shown in the preamble header.</td></tr></tbody></table>
-<p>Keep brain notes short. A four-sentence insight is useful. Four paragraphs is noise.</p>
-<h2 id="a-real-example">A real example</h2>
-<p>This pipeline fetches open issues, has a local model find patterns, then has Claude synthesize recommendations. The brain carries the local model’s findings to Claude automatically.</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">issue-triage</span></span>
-<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">fetch</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"issue list --json title,body,labels --limit 20"</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">fetch</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Find patterns in these issues. What areas of the codebase</span></span>
-<span class="line"><span style="color:#9ECBFF">      keep breaking? Record your top 3 findings in a &#x3C;brain> block.</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      {{steps.fetch.output}}</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">recommend</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Using the brain context from the pattern analysis above,</span></span>
-<span class="line"><span style="color:#9ECBFF">      suggest which issues to prioritize this sprint and why.</span></span></code></pre>
-<p>Step 3 never references <code>{{steps.analyze.output}}</code>. It doesn’t need to — the brain notes from step 2 are already in its preamble.</p>
-<h2 id="brain-vs-stepsidoutput">Brain vs. <code>{{steps.&#x3C;id>.output}}</code></h2>
-<p>Use <code>{{steps.&#x3C;id>.output}}</code> when you need the full, raw output of a step — JSON, a diff, a file list.</p>
-<p>Use the brain when you want a step to record what it <em>understood</em>, not what it <em>received</em>. The brain carries interpreted signal. Template expressions carry raw data.</p>
-<p>A good pipeline uses both.</p>
-<h2 id="tell-the-model-the-context-is-there">Tell the model the context is there</h2>
-<p>The preamble arrives before your prompt, but models respond better when you mention it explicitly:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>Using the brain context from earlier steps in this run,</span></span>
+<table><thead><tr><th>Attribute</th><th>Purpose</th></tr></thead><tbody><tr><td><code>tags</code></td><td>Comma-separated labels for grouping related notes</td></tr><tr><td><code>type</code></td><td><code>research</code>, <code>finding</code>, <code>data</code>, or <code>code</code></td></tr><tr><td><code>title</code></td><td>Short label shown in the injected preamble header</td></tr></tbody></table>
+<p>Keep brain notes short. A focused two-sentence finding is useful. Four paragraphs is noise.</p>
+<h2 id="telling-your-assistant-the-context-is-there">Telling Your Assistant the Context Is There</h2>
+<p>Brain notes arrive before your prompt text automatically. Your assistant responds better when you mention them explicitly:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>Using the brain context from earlier steps in this run,</span></span>
 <span class="line"><span>summarize the findings and recommend next actions.</span></span></code></pre>
 <p>Not required. Noticeably better when included.</p>
-<h2 id="how-long-brain-notes-live">How long brain notes live</h2>
-<p>Brain notes are written to the gl1tch SQLite store and stay there. They don’t get deleted between runs.</p>
-<p>Within a single run, notes written by earlier steps are injected into later steps automatically. That’s the primary use case.</p>
-<p>Across runs, all accumulated brain notes are indexed into the RAG store — the same vector store used by <code>builtin.index_code</code>. So a brain note written by a pipeline run last Tuesday is available for semantic retrieval in a pipeline you run today, as long as the RAG injector is configured.</p> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/executors"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">Executors and Plugins</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/examples"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Real-World Pipelines</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>
+<h2 id="brain-vs-stepsidoutput">Brain vs. <code>{{steps.&#x3C;id>.output}}</code></h2>
+<p>These two tools do different things. Use the right one for the job.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Use</th><th>When</th></tr></thead><tbody><tr><td><code>{{steps.fetch.output}}</code></td><td>You need raw data — JSON, a diff, a file list</td></tr><tr><td>Brain</td><td>You want what your assistant <em>understood</em>, not what it <em>received</em></td></tr></tbody></table>
+<p>The brain carries interpreted signal. Template expressions carry raw data. A good pipeline uses both.</p>
+<h2 id="how-long-brain-notes-live">How Long Brain Notes Live</h2>
+<p>Within a single run, notes written by earlier steps inject into later steps automatically. That’s the primary use case.</p>
+<p>Notes also persist to your assistant’s long-term store. A brain note from last Tuesday is available for semantic retrieval in a pipeline you run today, when a RAG injector is configured.</p>
+<h2 id="examples">Examples</h2>
+<h3 id="morning-issue-triage">Morning Issue Triage</h3>
+<p>A fast-and-smart handoff: your local model finds patterns, Claude acts on them.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> issue-triage</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> fetch</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">issue list --json title,body,labels --limit 20</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> analyze</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ollama</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">fetch</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Find patterns in these issues. What areas of the codebase</span></span>
+<span class="line"><span style="color:#F1FA8C">      keep breaking? Record your top 3 findings in a &#x3C;brain> block.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.fetch.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> recommend</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Using the brain context from the pattern analysis above,</span></span>
+<span class="line"><span style="color:#F1FA8C">      suggest which issues to prioritize this sprint and why.</span></span></code></pre>
+<p>The <code>recommend</code> step never references <code>{{steps.analyze.output}}</code> — the brain notes are already in its preamble.</p>
+<h3 id="multi-layer-code-review">Multi-Layer Code Review</h3>
+<p>Each layer records what it found. The final step synthesizes everything.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> layered-review</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> security</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ollama</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Review this diff for security issues only.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Record your findings in a &#x3C;brain> block tagged "security".</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.diff.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> performance</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ollama</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> qwen2.5-coder:latest</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">security</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Review this diff for performance issues only.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Record your findings in a &#x3C;brain> block tagged "performance".</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.diff.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> summary</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">performance</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Using all brain context from this run, write a final</span></span>
+<span class="line"><span style="color:#F1FA8C">      code review that combines security and performance findings.</span></span></code></pre>
+<h2 id="reference">Reference</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Concept</th><th>Detail</th></tr></thead><tbody><tr><td>Brain scanning</td><td>Always on when running via <code>glitch pipeline run</code></td></tr><tr><td>Storage</td><td>Persisted to your assistant’s SQLite store</td></tr><tr><td>Injection timing</td><td>Before your prompt text in every subsequent step</td></tr><tr><td>Scope within a run</td><td>All steps after the writing step receive the note</td></tr><tr><td>Scope across runs</td><td>Available for semantic retrieval via RAG injector</td></tr><tr><td>Max useful length</td><td>Two to four sentences per brain block</td></tr></tbody></table>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="/docs/pipelines/pipelines">Pipelines</a> — step execution, input/output, and variable interpolation</li>
+<li><a href="/docs/pipelines/prompts">Prompts</a> — save reusable instructions alongside brain-aware pipelines</li>
+<li><a href="/docs/pipelines/cron">Cron</a> — schedule brain-powered pipelines to run while you sleep</li>
+</ul> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/executors"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">Executors</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/examples"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Pipeline Examples</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>

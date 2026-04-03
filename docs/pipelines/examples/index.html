@@ -1,215 +1,345 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Real-World Pipelines — GLITCH</title><meta name="description" content="Four complete pipelines you can copy and run today."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Pipeline Examples — GLITCH</title><meta name="description" content="Copy-paste pipelines for real developer workflows — standup digests, PR review, security scans, and more."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
 INDEX
-</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> GL1TCH Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console — The Switchboard </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link active" href="/docs/pipelines/examples"> Real-World Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Real-World Pipelines</h1> <p class="docs-page-desc">Four complete pipelines you can copy and run today.</p> <div class="docs-article"> <p>These are working pipelines. Copy the YAML, adjust the variables, and run them. Each one demonstrates a different pattern.</p>
-<hr>
-<h2 id="1-daily-standup-generator">1. Daily standup generator</h2>
-<p>Reads your recent git commits from GitHub and drafts a standup update.</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">standup</span></span>
-<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
-<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">  repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link active" href="/docs/pipelines/examples"> Pipeline Examples </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Pipeline Examples</h1> <p class="docs-page-desc">Copy-paste pipelines for real developer workflows — standup digests, PR review, security scans, and more.</p> <div class="docs-article"> <p>Real pipelines you can copy, adjust, and run today. Each one is a complete working example built around a task developers actually repeat. Change the <code>vars</code> to match your setup and run it.</p>
+<h2 id="quick-start">Quick Start</h2>
+<p>Save any example as <code>&#x3C;name>.pipeline.yaml</code>, then run:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> pipeline</span><span style="color:#F1FA8C"> run</span><span style="color:#FF79C6"> &#x3C;</span><span style="color:#F1FA8C">nam</span><span style="color:#F8F8F2">e</span><span style="color:#FF79C6">></span><span style="color:#F1FA8C">.pipeline.yaml</span></span></code></pre>
+<p>To save it for repeated use:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">cp</span><span style="color:#FF79C6"> &#x3C;</span><span style="color:#F1FA8C">nam</span><span style="color:#F8F8F2">e</span><span style="color:#FF79C6">></span><span style="color:#F1FA8C">.pipeline.yaml</span><span style="color:#F1FA8C"> ~/.config/glitch/pipelines/</span></span>
+<span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> pipeline</span><span style="color:#F1FA8C"> run</span><span style="color:#FF79C6"> &#x3C;</span><span style="color:#F1FA8C">nam</span><span style="color:#F8F8F2">e</span><span style="color:#FF79C6">></span></span></code></pre>
+<h2 id="morning-standup-digest">Morning Standup Digest</h2>
+<p>Reads your last 24 hours of commits and drafts a standup update. Run it before your daily sync.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> standup</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  repo</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">your-org/your-repo</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#6A737D">  # Fetch commits from the last 24 hours</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">recent-commits</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"api repos/{{vars.repo}}/commits?since=$(date -u -v-1d +%Y-%m-%dT%H:%M:%SZ) --jq '.[].commit.message'"</span></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> commits</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">api repos/{{vars.repo}}/commits?since=$(date -u -v-1d +%Y-%m-%dT%H:%M:%SZ) --jq '.[].commit.message'</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Generate a standup summary</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">draft-standup</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">recent-commits</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Here are my git commits from the last 24 hours:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> draft</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">commits</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Here are my git commits from the last 24 hours:</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      {{steps.recent-commits.output}}</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.commits.output}}</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Write a brief daily standup update with three sections:</span></span>
-<span class="line"><span style="color:#9ECBFF">      - What I did yesterday</span></span>
-<span class="line"><span style="color:#9ECBFF">      - What I'm doing today (infer from commit trajectory)</span></span>
-<span class="line"><span style="color:#9ECBFF">      - Any blockers (say "none" if nothing obvious)</span></span>
+<span class="line"><span style="color:#F1FA8C">      Write a brief daily standup with three sections:</span></span>
+<span class="line"><span style="color:#F1FA8C">      - Yesterday: what I completed</span></span>
+<span class="line"><span style="color:#F1FA8C">      - Today: what I'm working on next (infer from the trajectory)</span></span>
+<span class="line"><span style="color:#F1FA8C">      - Blockers: say "none" if nothing is obvious</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Keep it under 10 lines. No preamble.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Keep it under 10 lines. No preamble.</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Save to a file</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">draft-standup</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./standup.md"</span></span>
-<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.draft-standup.output}}"</span></span></code></pre>
-<p><strong>How to run:</strong></p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> standup.pipeline.yaml</span></span></code></pre>
-<p><strong>Customize:</strong> Change <code>vars.repo</code> to your repository. Adjust the date math in the <code>gh api</code> call if you want a different time window.</p>
-<hr>
-<h2 id="2-codebase-health-check">2. Codebase health check</h2>
-<p>Indexes your codebase using Ollama embeddings, then asks Claude about the architecture using brain context.</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">health-check</span></span>
-<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">draft</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./standup.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.draft.output}}</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Change <code>vars.repo</code> to your repository. Adjust the date window in the <code>gh api</code> call — swap <code>-1d</code> for <code>-7d</code> to get a week’s worth.</p>
+<h2 id="review-a-pull-request">Review a Pull Request</h2>
+<p>Fetches the diff for a PR, lists the changed files, and gives you an AI review with specific line-level feedback.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> pr-review</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  repo</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">your-org/your-repo</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">  pr</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">42</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#6A737D">  # Index the codebase for semantic search</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">index</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.index_code</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      root</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"."</span></span>
-<span class="line"><span style="color:#85E89D">      model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"qwen2.5-coder:latest"</span></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> get-diff</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">pr diff {{vars.pr}} --repo {{vars.repo}}</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Local model analyzes patterns and writes brain notes</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze-structure</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">index</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Based on the codebase index provided, analyze:</span></span>
-<span class="line"><span style="color:#9ECBFF">      1. How many packages/modules exist</span></span>
-<span class="line"><span style="color:#9ECBFF">      2. Which areas have the most complexity</span></span>
-<span class="line"><span style="color:#9ECBFF">      3. Any circular dependencies or code smells</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> get-meta</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">pr view {{vars.pr}} --repo {{vars.repo}} --json title,body,author,additions,deletions,changedFiles</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Record your key findings in a &#x3C;brain tags="architecture"> block.</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> review</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">get-diff</span><span style="color:#F8F8F2">, </span><span style="color:#F1FA8C">get-meta</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Review this pull request.</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Claude synthesizes recommendations — brain notes from analyze-structure arrive automatically</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">recommendations</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze-structure</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      You have brain context from a codebase analysis.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Metadata:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.get-meta.output}}</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Based on those findings, provide:</span></span>
-<span class="line"><span style="color:#9ECBFF">      1. A health score (1-10) with justification</span></span>
-<span class="line"><span style="color:#9ECBFF">      2. The top 3 areas that need refactoring</span></span>
-<span class="line"><span style="color:#9ECBFF">      3. Any architectural concerns</span></span>
+<span class="line"><span style="color:#F1FA8C">      Diff:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.get-diff.output}}</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Be specific. Reference file paths and package names.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Provide:</span></span>
+<span class="line"><span style="color:#F1FA8C">      1. A one-paragraph summary of what the PR does</span></span>
+<span class="line"><span style="color:#F1FA8C">      2. Any bugs or logic errors you can spot</span></span>
+<span class="line"><span style="color:#F1FA8C">      3. Style or naming issues worth fixing</span></span>
+<span class="line"><span style="color:#F1FA8C">      4. One thing that's done well</span></span>
+<span class="line"><span style="color:#F1FA8C">      5. A recommended verdict: Approve / Request Changes / Needs Discussion</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Save the report</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save-report</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">recommendations</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./health-report.md"</span></span>
-<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.recommendations.output}}"</span></span></code></pre>
-<p><strong>How to run:</strong></p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Make sure Ollama is running with the model pulled</span></span>
-<span class="line"><span style="color:#B392F0">ollama</span><span style="color:#9ECBFF"> pull</span><span style="color:#9ECBFF"> qwen2.5-coder:latest</span></span>
-<span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> health-check.pipeline.yaml</span></span></code></pre>
-<p><strong>Customize:</strong> Change <code>args.root</code> to target a specific directory. Swap the Ollama model for a larger one if you want deeper analysis.</p>
-<hr>
-<h2 id="3-github-pr-triage">3. GitHub PR triage</h2>
-<p>Lists open PRs, groups them by risk level, and posts a triage summary as an issue comment.</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">pr-triage</span></span>
-<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
-<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">  repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
-<span class="line"><span style="color:#85E89D">  triage_issue</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<span class="line"><span style="color:#F1FA8C">      Be specific — reference file names and line ranges where relevant.</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#6A737D">  # Fetch open PRs with metadata</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">list-prs</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"pr list --repo {{vars.repo}} --json number,title,author,additions,deletions,changedFiles,labels --limit 20"</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">review</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./pr-{{vars.pr}}-review.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.review.output}}</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Set <code>vars.pr</code> to the PR number before each run. For a lighter-weight review, swap <code>claude-sonnet-4-6</code> for <code>claude-haiku-4-5-20251001</code>.</p>
+<h2 id="scan-for-security-issues">Scan for Security Issues</h2>
+<p>Runs a static analysis pass on your codebase and produces a prioritized list of security findings.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> security-scan</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  dir</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">.</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Classify by risk</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">classify</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">list-prs</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Here are the open pull requests:</span></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> find-secrets</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> shell</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      grep -rn \</span></span>
+<span class="line"><span style="color:#F1FA8C">        -e "api_key\s*=" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        -e "secret\s*=" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        -e "password\s*=" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        -e "PRIVATE KEY" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        --include="*.go" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        --include="*.yaml" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        --include="*.env" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        {{vars.dir}} 2>/dev/null | head -50 || echo "none found"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      {{steps.list-prs.output}}</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> find-sql-injection</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> shell</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      grep -rn \</span></span>
+<span class="line"><span style="color:#F1FA8C">        -e 'fmt\.Sprintf.*SELECT\|INSERT\|UPDATE\|DELETE' \</span></span>
+<span class="line"><span style="color:#F1FA8C">        --include="*.go" \</span></span>
+<span class="line"><span style="color:#F1FA8C">        {{vars.dir}} 2>/dev/null | head -30 || echo "none found"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Triage each PR into one of three risk categories:</span></span>
-<span class="line"><span style="color:#9ECBFF">      - HIGH: large diffs (>500 lines), touches core/critical paths, or no tests</span></span>
-<span class="line"><span style="color:#9ECBFF">      - MEDIUM: moderate changes, single feature area</span></span>
-<span class="line"><span style="color:#9ECBFF">      - LOW: small fixes, docs, config changes</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> analyze</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">find-secrets</span><span style="color:#F8F8F2">, </span><span style="color:#F1FA8C">find-sql-injection</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      I ran two security checks on a codebase.</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Format your output as a markdown table with columns:</span></span>
-<span class="line"><span style="color:#9ECBFF">      PR# | Title | Author | Risk | Reason</span></span>
+<span class="line"><span style="color:#F1FA8C">      Potential hardcoded secrets:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.find-secrets.output}}</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Then add a "Recommended Review Order" section listing PR numbers</span></span>
-<span class="line"><span style="color:#9ECBFF">      from highest to lowest priority.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Potential SQL injection patterns:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.find-sql-injection.output}}</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Post the triage as a comment on the tracking issue</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">post-triage</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">classify</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"issue comment {{vars.triage_issue}} --repo {{vars.repo}} --body '{{steps.classify.output}}'"</span></span></code></pre>
-<p><strong>How to run:</strong></p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> pr-triage.pipeline.yaml</span></span></code></pre>
-<p><strong>Customize:</strong> Set <code>vars.repo</code> to your repository and <code>vars.triage_issue</code> to the issue number where you want triage reports posted. You could also swap the <code>post-triage</code> step to use <code>executor: write</code> if you’d rather save locally instead of posting to GitHub.</p>
-<hr>
-<h2 id="4-parallel-model-comparison">4. Parallel model comparison</h2>
-<p>Sends the same prompt to Claude and Ollama simultaneously, then compares their outputs. Demonstrates parallel execution with no dependencies.</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">model-compare</span></span>
-<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
-<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">  test_prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">    Write a function in Go that reverses a linked list in place.</span></span>
-<span class="line"><span style="color:#9ECBFF">    Include the struct definition and a brief explanation.</span></span>
+<span class="line"><span style="color:#F1FA8C">      For each finding:</span></span>
+<span class="line"><span style="color:#F1FA8C">      1. Confirm if it's an actual risk or a false positive</span></span>
+<span class="line"><span style="color:#F1FA8C">      2. Rate severity: Critical / High / Medium / Low</span></span>
+<span class="line"><span style="color:#F1FA8C">      3. Suggest the fix in one sentence</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#6A737D">  # These two steps have no `needs`, so they run in parallel</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-response</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{vars.test_prompt}}"</span></span>
+<span class="line"><span style="color:#F1FA8C">      End with a summary: total confirmed findings and one immediate action.</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama-response</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">ollama</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">qwen2.5-coder:latest</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{vars.test_prompt}}"</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./security-report.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.analyze.output}}</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Add more <code>grep</code> steps for other patterns. Set <code>vars.dir</code> to a specific subdirectory to narrow the scan.</p>
+<h2 id="triage-open-issues">Triage Open Issues</h2>
+<p>Lists your open GitHub issues, groups them by priority, and posts the triage as a comment on a tracking issue.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> issue-triage</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  repo</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">your-org/your-repo</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">  tracking_issue</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Wait for both, then compare</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">compare</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">claude-response</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">ollama-response</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      I sent the same coding prompt to two different AI models.</span></span>
-<span class="line"><span style="color:#9ECBFF">      Compare their responses on these criteria:</span></span>
-<span class="line"><span style="color:#9ECBFF">      1. Correctness (does the code actually work?)</span></span>
-<span class="line"><span style="color:#9ECBFF">      2. Clarity (is the explanation helpful?)</span></span>
-<span class="line"><span style="color:#9ECBFF">      3. Idiomatic Go (does it follow Go conventions?)</span></span>
-<span class="line"><span style="color:#9ECBFF">      4. Edge cases (does it handle nil, single element, etc?)</span></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> list-issues</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">issue list --repo {{vars.repo}} --state open --json number,title,labels,createdAt,comments --limit 30</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      Give a score out of 10 for each criterion, then declare a winner.</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> triage</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">list-issues</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Triage these open GitHub issues:</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      --- CLAUDE RESPONSE ---</span></span>
-<span class="line"><span style="color:#9ECBFF">      {{steps.claude-response.output}}</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.list-issues.output}}</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#9ECBFF">      --- OLLAMA RESPONSE ---</span></span>
-<span class="line"><span style="color:#9ECBFF">      {{steps.ollama-response.output}}</span></span>
+<span class="line"><span style="color:#F1FA8C">      Group them into three buckets:</span></span>
+<span class="line"><span style="color:#F1FA8C">      - 🔴 High priority: bugs, regressions, blocking other work</span></span>
+<span class="line"><span style="color:#F1FA8C">      - 🟡 Medium priority: features in progress, active discussion</span></span>
+<span class="line"><span style="color:#F1FA8C">      - 🟢 Low priority: enhancements, nice-to-haves, stale threads</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Log completion</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">done</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">compare</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Model comparison complete."</span></span>
+<span class="line"><span style="color:#F1FA8C">      Format as a markdown table per group: Issue# | Title | Age | Reason.</span></span>
+<span class="line"><span style="color:#F1FA8C">      End with "Recommended next 3 to close" with brief reasoning.</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Save the comparison</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">compare</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">./model-comparison.md</span></span>
-<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.compare.output}}"</span></span></code></pre>
-<p><strong>How to run:</strong></p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Both providers need to be available</span></span>
-<span class="line"><span style="color:#B392F0">ollama</span><span style="color:#9ECBFF"> pull</span><span style="color:#9ECBFF"> qwen2.5-coder:latest</span></span>
-<span class="line"><span style="color:#B392F0">glitch</span><span style="color:#9ECBFF"> pipeline</span><span style="color:#9ECBFF"> run</span><span style="color:#9ECBFF"> model-compare.pipeline.yaml</span></span></code></pre>
-<p><strong>Customize:</strong> Change <code>vars.test_prompt</code> to any coding or writing task. Swap models to compare different Claude tiers (<code>haiku</code> vs <code>sonnet</code>) or different Ollama models. Add more parallel steps to compare three or four models at once — just add them to the <code>compare</code> step’s <code>needs</code> list.</p>
-<hr>
-<h2 id="patterns-to-steal">Patterns to steal</h2>
-<p>A few things these examples demonstrate that you can apply to your own pipelines:</p>
-<p><strong>Pipeline-level vars</strong> for configuration that might change between runs. Put repo names, file paths, and thresholds in <code>vars</code> instead of hardcoding them in prompts.</p>
-<p><strong>Brain blocks are opt-in by the model.</strong> Steps that fetch raw data (gh, http_get) won’t emit <code>&#x3C;brain></code> blocks — they return JSON, not prose. No configuration needed; the model simply won’t write one if you don’t prompt it to.</p>
-<p><strong>Parallel fan-out, serial fan-in.</strong> Steps without <code>needs</code> run in parallel. A downstream step that <code>needs</code> all of them waits for the slowest one. Use this for A/B testing, parallel data fetching, or redundant processing.</p>
-<p><strong>builtin.log for checkpoints.</strong> Drop <code>builtin.log</code> steps between expensive operations so you can see progress in the terminal output.</p>
-<p><strong>Write results to files.</strong> Every pipeline that produces useful output should end with an <code>executor: write</code> step. Terminal output scrolls away. Files persist.</p> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/brain"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">The Brain System</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/workflows"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Workflows</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> post</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">triage</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">issue comment {{vars.tracking_issue}} --repo {{vars.repo}} --body '{{steps.triage.output}}'</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Change <code>vars.tracking_issue</code> to your backlog or sprint tracking issue number. Swap the <code>post</code> step for a <code>write</code> executor if you’d rather save locally instead of posting to GitHub.</p>
+<h2 id="generate-a-changelog-entry">Generate a Changelog Entry</h2>
+<p>Compares two git refs and writes a formatted changelog entry — useful before cutting a release.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> changelog</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  from</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">v1.2.0</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">  to</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">HEAD</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">  repo</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">your-org/your-repo</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> commits</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> shell</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">git log {{vars.from}}..{{vars.to}} --oneline --no-merges</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> prs</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">pr list --repo {{vars.repo}} --state merged --json number,title,author,mergedAt --limit 50</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> draft</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">commits</span><span style="color:#F8F8F2">, </span><span style="color:#F1FA8C">prs</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Draft a changelog entry for the release from {{vars.from}} to {{vars.to}}.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Commits:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.commits.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Merged PRs:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.prs.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Use these sections (omit any that are empty):</span></span>
+<span class="line"><span style="color:#F1FA8C">      ### Features</span></span>
+<span class="line"><span style="color:#F1FA8C">      ### Bug Fixes</span></span>
+<span class="line"><span style="color:#F1FA8C">      ### Performance</span></span>
+<span class="line"><span style="color:#F1FA8C">      ### Breaking Changes</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Each entry: one sentence, past tense, no technical jargon.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Lead with the user-visible impact, not the implementation detail.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">draft</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./CHANGELOG-draft.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.draft.output}}</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Set <code>vars.from</code> to your last tag and <code>vars.to</code> to your release branch.</p>
+<h2 id="compare-two-ai-models">Compare Two AI Models</h2>
+<p>Sends the same prompt to two models simultaneously and judges which answer is better. Good for evaluating a new local model before committing to it.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> model-compare</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">    Explain the difference between a mutex and a semaphore.</span></span>
+<span class="line"><span style="color:#F1FA8C">    Give a practical Go example for each.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#6272A4">  # These two steps have no `needs`, so they run in parallel</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> cloud-answer</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{vars.prompt}}</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> local-answer</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> ollama</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> llama3.2:latest</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{vars.prompt}}</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> judge</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">cloud-answer</span><span style="color:#F8F8F2">, </span><span style="color:#F1FA8C">local-answer</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      I sent the same question to two AI models.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Question: {{vars.prompt}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Answer A:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.cloud-answer.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Answer B:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.local-answer.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Rate each on: accuracy, clarity, code correctness, and completeness.</span></span>
+<span class="line"><span style="color:#F1FA8C">      Score each criterion 1-10. Declare a winner with a one-sentence justification.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">judge</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./model-comparison.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.judge.output}}</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Change <code>vars.prompt</code> to any question or coding task. Swap in different models to compare Claude tiers, different Ollama models, or add a third parallel step for a three-way comparison.</p>
+<h2 id="explain-an-unfamiliar-codebase">Explain an Unfamiliar Codebase</h2>
+<p>Reads the directory structure, samples key files, and gives you a plain-English walkthrough of an unfamiliar repo.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> explain-repo</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  dir</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">.</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> structure</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> shell</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">find {{vars.dir}} -type f -name '*.go' -o -name '*.py' -o -name '*.ts' | head -60</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> readme</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> shell</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">cat {{vars.dir}}/README.md 2>/dev/null || echo 'no README found'</span><span style="color:#E9F284">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> sample-files</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> shell</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      for f in $(find {{vars.dir}} -maxdepth 3 -type f \( -name 'main.go' -o -name 'app.py' -o -name 'index.ts' -o -name 'server.go' \) | head -5); do</span></span>
+<span class="line"><span style="color:#F1FA8C">        echo "=== $f ==="; head -60 "$f"; echo</span></span>
+<span class="line"><span style="color:#F1FA8C">      done</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> explain</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">structure</span><span style="color:#F8F8F2">, </span><span style="color:#F1FA8C">readme</span><span style="color:#F8F8F2">, </span><span style="color:#F1FA8C">sample-files</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Help me understand this codebase.</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      File structure:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.structure.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      README:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.readme.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Key source files:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.sample-files.output}}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F1FA8C">      Give me:</span></span>
+<span class="line"><span style="color:#F1FA8C">      1. What this project does (2-3 sentences)</span></span>
+<span class="line"><span style="color:#F1FA8C">      2. The main entry points and what they do</span></span>
+<span class="line"><span style="color:#F1FA8C">      3. The high-level data flow (how data moves through the system)</span></span>
+<span class="line"><span style="color:#F1FA8C">      4. The three most important files to read first and why</span></span>
+<span class="line"><span style="color:#F1FA8C">      5. Any patterns or conventions I should know before diving in</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">explain</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./repo-explainer.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.explain.output}}</span><span style="color:#E9F284">"</span></span></code></pre>
+<p><strong>Customize:</strong> Set <code>vars.dir</code> to any local repo path. Adjust the <code>find</code> patterns to match the language(s) in the codebase.</p>
+<h2 id="patterns-worth-stealing">Patterns Worth Stealing</h2>
+<p><strong>Pipeline-level <code>vars</code> for config.</strong> Put repo names, file paths, and thresholds in <code>vars</code> instead of hardcoding them in prompts. Easier to change and easier to read.</p>
+<p><strong>Parallel fan-out, serial fan-in.</strong> Steps without <code>needs</code> run at the same time. A step that lists multiple IDs in <code>needs</code> waits for the slowest one. Use this pattern for A/B testing, parallel fetches, or multi-source data collection.</p>
+<p><strong>Fast model for extraction, smart model for reasoning.</strong> Use a local Ollama model or <code>claude-haiku</code> for pulling data out of text. Reserve <code>claude-sonnet</code> for the final analysis or decision step.</p>
+<p><strong>Always save results.</strong> Every pipeline that produces useful output should end with an <code>executor: write</code> step. Terminal output scrolls away. Files persist and are re-readable by your next pipeline.</p>
+<p><strong><code>builtin.log</code> for progress checkpoints.</strong> Add a log step between expensive operations so you can see where a long pipeline is in its run.</p>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="/docs/pipelines/pipelines">Pipelines</a> — Full guide to writing pipelines</li>
+<li><a href="/docs/pipelines/quickstart">Your First Pipeline</a> — Start here if you’re new</li>
+<li><a href="/docs/pipelines/console">Console</a> — Launch and monitor from your workspace</li>
+</ul> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/brain"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">The Brain System</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/workflows"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Workflows</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>

@@ -1,247 +1,32 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Telemetry — GLITCH</title><meta name="description" content="OpenTelemetry integration for distributed tracing and metrics in gl1tch pipelines."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Telemetry — GLITCH</title><meta name="description" content="Understand what gl1tch tracks, where it stays, and how to use it."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
 INDEX
-</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> GL1TCH Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console — The Switchboard </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Real-World Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link active" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Telemetry</h1> <p class="docs-page-desc">OpenTelemetry integration for distributed tracing and metrics in gl1tch pipelines.</p> <div class="docs-article"> <p>gl1tch uses OpenTelemetry (OTel) to instrument pipeline execution, capturing per-step timing, status, and game-state events for observability and debugging. Traces flow to file-based storage by default, or to an OTLP-compatible backend if configured; a custom feed exporter also streams span summaries to the TUI in real time.</p>
-<h2 id="architecture">Architecture</h2>
-<p>Telemetry is initialized in <code>main.go</code> via <code>telemetry.Setup()</code>, which wires three exporters:</p>
-<ol>
-<li><strong>Feed exporter</strong> — routes span events to a buffered channel (capacity 256) consumed by the TUI’s feed panel for real-time display of step completions and game events. Always active.</li>
-<li><strong>File exporter</strong> (default) — writes JSONL-formatted traces to <code>~/.local/share/glitch/traces.jsonl</code> (or <code>$XDG_DATA_HOME/glitch/traces.jsonl</code>). Used when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is not set. Falls back silently if file I/O fails.</li>
-<li><strong>OTLP gRPC exporter</strong> (optional) — active only if <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set; sends traces to a collector (e.g., Jaeger, Otel Collector, Datadog). Mutually exclusive with file exporter.</li>
-</ol>
-<p>The feed exporter always runs; file and OTLP exporters are mutually exclusive (file is default, OTLP takes precedence if the endpoint is configured). The setup function returns a <code>shutdown</code> callback (already deferred in <code>main</code>) that flushes pending spans and closes file handles on exit.</p>
-<p>Metrics are always exported to <code>~/.local/share/glitch/metrics.jsonl</code> in JSONL format. The metric reader polls the meter provider on a periodic interval.</p>
-<p>Data flow:</p>
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Pipeline Examples </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link active" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Telemetry</h1> <p class="docs-page-desc">Understand what gl1tch tracks, where it stays, and how to use it.</p> <div class="docs-article"> <p>gl1tch records timing and status data for every pipeline run. All of it stays on your machine. None of it is sent anywhere by default.</p>
+<h2 id="what-gets-tracked">What Gets Tracked</h2>
+<p>For every pipeline run, gl1tch records:</p>
 <ul>
-<li>Pipeline steps and game logic create spans via <code>otel.Tracer().Start(ctx, spanName)</code></li>
-<li>Spans are tagged with <code>run.id</code>, <code>step.id</code> (pipeline runs) or <code>game.*</code> attributes (game events)</li>
-<li>On span end:
-<ul>
-<li>Feed exporter receives the span in <code>ExportSpans()</code>, extracts key fields, and publishes to the buffered feed channel (256 capacity). If the channel is full, the span is silently dropped (observability data, not control flow).</li>
-<li>File or OTLP exporter (whichever is active) batches the span and exports it in the background</li>
+<li>Which pipeline ran and when</li>
+<li>Each step’s name, status (success or failure), and duration</li>
+<li>Token counts and cost estimates for AI steps</li>
 </ul>
-</li>
-<li>TUI feed panel drains the feed channel asynchronously, displaying updates in real time</li>
-<li>File and OTLP exporters use batch processors for efficiency (buffering before network/disk I/O)</li>
-</ul>
-<h2 id="technologies">Technologies</h2>
-<ul>
-<li><strong>OpenTelemetry SDK</strong> — distributed tracing and metrics APIs; semantic conventions for resource attributes.</li>
-<li><strong>OTLP gRPC</strong> — wire protocol for exporting traces to external collectors (opt-in).</li>
-<li><strong>Standard output exporters</strong> — JSONL writers for local file storage (no external dependencies).</li>
-</ul>
-<h2 id="concepts">Concepts</h2>
-<p><strong>Span</strong> — a unit of work with a start time, end time, and status. A span represents one step in a pipeline run or one game event (achievement unlock, ICE trigger, etc).</p>
-<p><strong>Run ID</strong> (<code>run.id</code>) — unique identifier for a single pipeline execution; links all steps in that run.</p>
-<p><strong>Step ID</strong> (<code>step.id</code>) — unique identifier for a single step within a run; used by TUI to map spans to feed entries.</p>
-<p><strong>Game span</strong> — a span with name starting with <code>game.</code> (e.g., <code>game.evaluate</code>, <code>game.tune</code>). Not tied to a run or step; routed by name prefix.</p>
-<p><strong>Feed event</strong> — a lightweight summary of a span (name, duration, status, run/step ID, kind) sent to the TUI feed channel. The feed exporter produces these on every span end, allowing the TUI to display step completions in near real time.</p>
-<p><strong>ICE class</strong> (<code>game.ice_class</code>) — attribute on a <code>game.evaluate</code> span indicating which cost/data threshold was triggered. Values: <code>"trace-ice"</code> (cost exceeded), <code>"data-ice"</code> (token count exceeded), etc.</p>
-<p><strong>Achievements count</strong> (<code>game.achievements_count</code>) — attribute on game spans showing how many achievements were unlocked in that run.</p>
-<h2 id="traces-and-metrics-emitted">Traces and Metrics Emitted</h2>
-<h3 id="pipeline-traces">Pipeline Traces</h3>
-<p>Every pipeline run creates a root span with the pipeline name as its title. Each step in the pipeline becomes a child span under that root, tagged with:</p>
-<ul>
-<li><code>run.id</code> — the unique pipeline run identifier</li>
-<li><code>step.id</code> — the step’s position or name within the run</li>
-<li><code>span.name</code> — the step type and operation (e.g., <code>"shell.exec"</code>, <code>"llm.invoke"</code>, <code>"conditional.eval"</code>)</li>
-</ul>
-<p>Attributes on pipeline spans vary by step type and are included in the full span data exported to files and external collectors.</p>
-<h3 id="game-spans">Game Spans</h3>
-<p>Game events emit spans with names prefixed by <code>game.</code> (e.g., <code>game.evaluate</code>, <code>game.unlock_achievement</code>). These are not tied to a specific run and are routed by name prefix. Common game span attributes:</p>
-<ul>
-<li><code>game.ice_class</code> — set on <code>game.evaluate</code> spans when a cost or token threshold triggers; values include <code>"trace-ice"</code>, <code>"data-ice"</code>, etc.</li>
-<li><code>game.achievements_count</code> — total achievements unlocked in the session</li>
-<li><code>game.score_delta</code> — points gained or lost in that event</li>
-</ul>
-<h3 id="metrics">Metrics</h3>
-<p>Metrics (counters, histograms, gauges) are exported to <code>metrics.jsonl</code>. The meter provider periodically exports aggregated metrics from application code. Common metric names:</p>
-<ul>
-<li><code>pipeline.runs.total</code> — counter of completed pipeline runs</li>
-<li><code>pipeline.steps.duration</code> — histogram of step execution times</li>
-<li><code>llm.tokens.total</code> — counter of tokens consumed by model</li>
-<li><code>game.achievements.total</code> — counter of achievements unlocked</li>
-</ul>
-<h2 id="file-storage">File Storage</h2>
-<p>Traces and metrics are stored as newline-delimited JSON (JSONL) in the local data directory:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>~/.local/share/glitch/traces.jsonl    # OTel span records (or $XDG_DATA_HOME/glitch/traces.jsonl)</span></span>
-<span class="line"><span>~/.local/share/glitch/metrics.jsonl   # Meter provider metrics</span></span></code></pre>
-<p>Both files are human-readable and greppable; file rotation is out of scope and can be added later. The directory is created automatically on first write.</p>
-<p>Each line is a pretty-printed JSON object representing one span (traces) or metric point (metrics). You can parse these with <code>jq</code>:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.name, .duration_ns, .status.code'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span></code></pre>
-<h2 id="configuration">Configuration</h2>
-<h3 id="environment-variables">Environment Variables</h3>
-<p><strong><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></strong> — if set, enables OTLP gRPC export to this endpoint (e.g., <code>localhost:4317</code> for a local collector, or <code>api.datadoghq.com:443</code> for Datadog). If unset, traces go only to the local file. The collector must be reachable; connection errors are logged but do not block pipeline execution.</p>
-<p><strong><code>XDG_DATA_HOME</code></strong> — base directory for trace and metric files. Defaults to <code>$HOME/.local/share</code> if not set.</p>
-<h3 id="sampling-and-resource">Sampling and Resource</h3>
-<p>All spans are sampled (<code>AlwaysSample()</code>), meaning every span is exported. To change the sampling strategy, modify the <code>sdktrace.WithSampler()</code> call in <code>internal/telemetry/telemetry.go</code>:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="go"><code><span class="line"><span style="color:#6A737D">// Always sample (current):</span></span>
-<span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">AlwaysSample</span><span style="color:#E1E4E8">()))</span></span>
+<p>This data has two uses: the activity feed in your workspace shows it in real time, and it’s written to disk so you can analyze it later.</p>
+<h2 id="where-it-lives">Where It Lives</h2>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>~/.local/share/glitch/traces.jsonl   # Per-step timing and status</span></span>
+<span class="line"><span>~/.local/share/glitch/metrics.jsonl  # Aggregate counters and histograms</span></span></code></pre>
+<p>Both files are newline-delimited JSON. Read them with <code>jq</code>:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6272A4"># See what just ran</span></span>
+<span class="line"><span style="color:#50FA7B">jq</span><span style="color:#E9F284"> '</span><span style="color:#F1FA8C">.name, .duration_ns, .status.code</span><span style="color:#E9F284">'</span><span style="color:#F1FA8C"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#FF79C6"> |</span><span style="color:#50FA7B"> tail</span><span style="color:#BD93F9"> -20</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">// Sample only 10% of traces:</span></span>
-<span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">TraceIDRatioBased</span><span style="color:#E1E4E8">(</span><span style="color:#79B8FF">0.1</span><span style="color:#E1E4E8">)))</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D">// Never sample (only feed events):</span></span>
-<span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">NeverSample</span><span style="color:#E1E4E8">()))</span></span></code></pre>
-<p>The tracer provider is configured with a service resource containing:</p>
-<ul>
-<li><code>service.name</code> — set from the <code>serviceName</code> arg to <code>Setup()</code> (typically <code>"gl1tch"</code>)</li>
-<li><code>service.version</code> — hardcoded to <code>"dev"</code></li>
-</ul>
-<p>These attributes appear in every exported span, enabling filtering and grouping by service in observability backends.</p>
-<h2 id="feed-channel-backpressure">Feed Channel Backpressure</h2>
-<p>The feed exporter publishes to a buffered channel with capacity 256. If the channel fills (TUI consumer is slow or not running), new spans are dropped without blocking the pipeline or raising an error. This is acceptable because:</p>
-<ul>
-<li>Telemetry is observability data, not control flow</li>
-<li>Dropping some feed events does not affect pipeline correctness</li>
-<li>The default case in the <code>select</code> statement silently drops when the channel is full</li>
-</ul>
-<p>If you notice feed events are missing in the TUI, check that the feed panel is actively draining the channel. You can also increase the channel capacity in <code>internal/telemetry/telemetry.go</code> if needed, though 256 is typically sufficient.</p>
-<h2 id="tui-integration">TUI Integration</h2>
-<p>The TUI’s feed panel drains the feed channel asynchronously, displaying step completions and game events as they arrive. Each <code>FeedSpanEvent</code> includes:</p>
-<ul>
-<li><code>RunID</code>, <code>StepID</code> — for “pipeline” spans; empty for “game” spans</li>
-<li><code>SpanName</code> — the operation name (e.g., <code>"shell.exec"</code>, <code>"game.evaluate"</code>)</li>
-<li><code>DurationMS</code> — elapsed time in milliseconds</li>
-<li><code>StatusOK</code> — true if the span ended without error</li>
-<li><code>Kind</code> — <code>"pipeline"</code> or <code>"game"</code> (distinguishes routed event types)</li>
-<li><code>GameICEClass</code>, <code>GameAchievementsCount</code> — set for “game” spans only</li>
-</ul>
-<p>The <code>/trace</code> command (when implemented) will render the full span tree for a selected feed entry, scoped to that run’s traces.</p>
-<h3 id="what-gets-instrumented-automatically">What Gets Instrumented Automatically</h3>
-<p>Built-in pipeline steps emit spans automatically:</p>
-<ul>
-<li><strong>Shell steps</strong> (<code>shell.exec</code>) — start, end, exit code, command, output</li>
-<li><strong>LLM steps</strong> (<code>llm.invoke</code>) — model, provider, prompt tokens, completion tokens, temperature</li>
-<li><strong>Conditional steps</strong> (<code>conditional.eval</code>) — result, latency</li>
-<li><strong>Game events</strong> (<code>game.evaluate</code>, <code>game.unlock_achievement</code>) — ICE class, achievements count</li>
-</ul>
-<p>Custom pipeline steps (Go or shell) may need manual instrumentation. See <a href="/docs/pipelines.md">Pipeline steps</a> for how to emit spans from custom code.</p>
-<h2 id="integration-with-external-observability-platforms">Integration with External Observability Platforms</h2>
-<h3 id="jaeger">Jaeger</h3>
-<p>To send traces to Jaeger, start a local collector and point gl1tch at it:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Start Jaeger all-in-one (includes collector on port 4317)</span></span>
-<span class="line"><span style="color:#B392F0">docker</span><span style="color:#9ECBFF"> run</span><span style="color:#79B8FF"> -p</span><span style="color:#9ECBFF"> 4317:4317</span><span style="color:#9ECBFF"> jaegertracing/all-in-one:latest</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># In another terminal, run gl1tch with OTLP export enabled</span></span>
-<span class="line"><span style="color:#E1E4E8">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">localhost:4317</span><span style="color:#B392F0"> glitch</span></span></code></pre>
-<p>Navigate to <code>http://localhost:16686</code> to view traces in the Jaeger UI.</p>
-<h3 id="opentelemetry-collector">OpenTelemetry Collector</h3>
-<p>Deploy an OTel Collector as a sidecar or standalone service, then configure gl1tch to export to it:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#E1E4E8">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">collector.local:4317</span><span style="color:#B392F0"> glitch</span></span></code></pre>
-<p>The collector can then export to Jaeger, Tempo, Datadog, or any other OTLP-compatible backend.</p>
-<h3 id="datadog">Datadog</h3>
-<p>Datadog accepts OTLP gRPC traces at their intake endpoint. Set:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#E1E4E8">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">http-intake.logs.datadoghq.com:443</span><span style="color:#B392F0"> glitch</span></span></code></pre>
-<p>Traces will appear in the Datadog APM UI under your service name (<code>"gl1tch"</code>). Ensure your Datadog API key is configured in your environment (Datadog agent or OTLP endpoint configuration).</p>
-<h3 id="tempo">Tempo</h3>
-<p>For self-hosted distributed tracing with Grafana Tempo, deploy Tempo with its OTLP gRPC receiver, then:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#E1E4E8">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">tempo.local:4317</span><span style="color:#B392F0"> glitch</span></span></code></pre>
-<p>Traces will be queryable in Grafana and integrated with Loki logs if configured.</p>
-<h2 id="debugging-telemetry">Debugging Telemetry</h2>
-<h3 id="inspect-what-traces-are-being-created">Inspect What Traces Are Being Created</h3>
-<p>When a pipeline runs, spans are emitted for each operation. Check what traces are being recorded:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Watch traces as they're written (tail -f + jq)</span></span>
-<span class="line"><span style="color:#B392F0">tail</span><span style="color:#79B8FF"> -f</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.name, .attributes'</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Count traces by span name</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.name'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> sort</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> uniq</span><span style="color:#79B8FF"> -c</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># List all unique run IDs (one pipeline run per ID)</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.attributes | select(.["run.id"]) | .["run.id"]'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> sort</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> uniq</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Show all spans for a specific run</span></span>
-<span class="line"><span style="color:#E1E4E8">RUN_ID</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">"abc123"</span><span style="color:#E1E4E8"> &#x26;&#x26; </span><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> "select(.attributes[</span><span style="color:#79B8FF">\"</span><span style="color:#9ECBFF">run.id</span><span style="color:#79B8FF">\"</span><span style="color:#9ECBFF">] == </span><span style="color:#79B8FF">\"</span><span style="color:#E1E4E8">$RUN_ID</span><span style="color:#79B8FF">\"</span><span style="color:#9ECBFF">)"</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span></code></pre>
-<h3 id="analyze-performance">Analyze Performance</h3>
-<p>Find performance bottlenecks by examining duration:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Find slow spans (> 1 second = 1,000,000,000 ns)</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> 'select((.endTime - .startTime) > 1000000000) | {name, duration_ns: (.endTime - .startTime)}'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Find slowest 10 spans</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '{name, duration_ns: (.endTime - .startTime)}'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#79B8FF"> -s</span><span style="color:#9ECBFF"> 'sort_by(.duration_ns) | reverse | .[0:10]'</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Calculate median duration by span name</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '{name, duration_ms: ((.endTime - .startTime) / 1000000)}'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#79B8FF"> -s</span><span style="color:#9ECBFF"> 'group_by(.name) | map({name: .[0].name, median_ms: ([.[].duration_ms] | sort | .[length/2])})'</span></span></code></pre>
-<h3 id="troubleshoot-missing-traces">Troubleshoot Missing Traces</h3>
-<p>If traces are not appearing in the feed or file:</p>
-<ol>
-<li>
-<p><strong>Check if Setup() was called:</strong> Verify <code>telemetry.Setup()</code> is called early in <code>main.go</code> and the shutdown function is deferred. Without it, no exporters are wired.</p>
-</li>
-<li>
-<p><strong>Check if OTLP endpoint is reachable:</strong> If <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set but the endpoint is unreachable, the OTLP exporter logs an error to stderr but does not block pipeline execution. When OTLP is enabled, traces are not written to the file exporter (they are mutually exclusive).</p>
-</li>
-<li>
-<p><strong>Check file permissions:</strong> If <code>~/.local/share/glitch/</code> is not writable, the file exporter fails silently. Verify the directory exists and is writable:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">mkdir</span><span style="color:#79B8FF"> -p</span><span style="color:#9ECBFF"> ~/.local/share/glitch</span><span style="color:#E1E4E8"> &#x26;&#x26; </span><span style="color:#B392F0">touch</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span></code></pre>
-</li>
-<li>
-<p><strong>Check sampling:</strong> If using <code>TraceIDRatioBased(0.1)</code>, only 10% of traces are exported. Use <code>AlwaysSample()</code> during debugging to see every span.</p>
-</li>
-<li>
-<p><strong>Check channel capacity:</strong> If the TUI is not running or is slow to drain the feed channel, spans may be dropped. Monitor with:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># See if spans are arriving faster than they're being consumed</span></span>
-<span class="line"><span style="color:#B392F0">watch</span><span style="color:#79B8FF"> -n</span><span style="color:#79B8FF"> 1</span><span style="color:#9ECBFF"> 'wc -l ~/.local/share/glitch/traces.jsonl'</span></span></code></pre>
-</li>
-</ol>
-<h3 id="inspect-metrics">Inspect Metrics</h3>
-<p>Metrics are recorded separately from traces:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Pretty-print all metrics</span></span>
-<span class="line"><span style="color:#B392F0">cat</span><span style="color:#9ECBFF"> ~/.local/share/glitch/metrics.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.'</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Find counters by name</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> 'select(.type == "Counter")'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/metrics.jsonl</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Export metrics to CSV</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#79B8FF"> -r</span><span style="color:#9ECBFF"> '[.name, .timestamp, .value] | @csv'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/metrics.jsonl</span><span style="color:#F97583"> ></span><span style="color:#9ECBFF"> metrics.csv</span></span></code></pre>
-<h3 id="local-file-analysis">Local File Analysis</h3>
-<p>For offline analysis without an external observability platform:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Pretty-print all traces</span></span>
-<span class="line"><span style="color:#B392F0">cat</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.'</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Find all error spans</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> 'select(.status.code == "Error")'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Export traces to CSV for analysis</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#79B8FF"> -r</span><span style="color:#9ECBFF"> '[.name, .startTime, (.endTime - .startTime), .status.code] | @csv'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> ></span><span style="color:#9ECBFF"> traces.csv</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Extract attributes from a specific span</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> '.attributes'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> head</span><span style="color:#79B8FF"> -1</span></span></code></pre>
-<h2 id="examples">Examples</h2>
-<h3 id="enable-otlp-export-to-local-collector">Enable OTLP export to local collector</h3>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#F97583">export</span><span style="color:#E1E4E8"> OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#F97583">=</span><span style="color:#E1E4E8">localhost:4317</span></span>
-<span class="line"><span style="color:#B392F0">glitch</span></span></code></pre>
-<p>After running a pipeline, verify traces arrived at the collector:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Check Jaeger (if running)</span></span>
-<span class="line"><span style="color:#B392F0">curl</span><span style="color:#9ECBFF"> http://localhost:16686/api/services</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.data[] | select(.name == "gl1tch")'</span></span></code></pre>
-<h3 id="change-sampling-to-10">Change sampling to 10%</h3>
-<p>Edit <code>internal/telemetry/telemetry.go</code> and change the sampling configuration from:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="go"><code><span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">AlwaysSample</span><span style="color:#E1E4E8">()))</span></span></code></pre>
-<p>to:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="go"><code><span class="line"><span style="color:#E1E4E8">traceOpts </span><span style="color:#F97583">=</span><span style="color:#B392F0"> append</span><span style="color:#E1E4E8">(traceOpts, sdktrace.</span><span style="color:#B392F0">WithSampler</span><span style="color:#E1E4E8">(sdktrace.</span><span style="color:#B392F0">TraceIDRatioBased</span><span style="color:#E1E4E8">(</span><span style="color:#79B8FF">0.1</span><span style="color:#E1E4E8">)))</span></span></code></pre>
-<p>Then rebuild gl1tch. Only 1 in 10 pipeline runs will now export full traces (trace IDs are sampled before the decision, so sampling is consistent across all exporters). During development, keep <code>AlwaysSample()</code> to see every span.</p>
-<h3 id="debug-with-verbose-exporter-output">Debug with verbose exporter output</h3>
-<p>To see exporter errors (e.g., OTLP connection failures):</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Look for stderr output from otel exporters when pipeline runs:</span></span>
-<span class="line"><span style="color:#B392F0">glitch</span><span style="color:#F97583"> 2>&#x26;1</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> grep</span><span style="color:#79B8FF"> -i</span><span style="color:#9ECBFF"> "otel\|telemetry"</span></span></code></pre>
-<p>If the OTLP exporter fails to connect, you’ll see a message on stderr, but the pipeline continues.</p>
-<h3 id="query-local-traces">Query local traces</h3>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># Pretty-print all traces</span></span>
-<span class="line"><span style="color:#B392F0">cat</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> |</span><span style="color:#B392F0"> jq</span><span style="color:#9ECBFF"> '.'</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Find all errors</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#9ECBFF"> 'select(.status.code == "Error")'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Export to CSV for analysis</span></span>
-<span class="line"><span style="color:#B392F0">jq</span><span style="color:#79B8FF"> -r</span><span style="color:#9ECBFF"> '[.name, .startTime, (.endTime - .startTime), .status.code] | @csv'</span><span style="color:#9ECBFF"> ~/.local/share/glitch/traces.jsonl</span><span style="color:#F97583"> ></span><span style="color:#9ECBFF"> traces.csv</span></span></code></pre>
-<h2 id="edge-cases-and-limitations">Edge Cases and Limitations</h2>
-<p><strong>File I/O failures:</strong> If the traces file cannot be written (permissions, disk full, etc.), the file exporter fails silently and traces are discarded. Ensure <code>~/.local/share/glitch/</code> is writable before running gl1tch in production.</p>
-<p><strong>OTLP connection failures:</strong> If <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set but unreachable, the OTLP exporter logs an error to stderr but does not block pipeline execution. Traces are lost for that run since file export is disabled when OTLP is configured.</p>
-<p><strong>Feed channel overflow:</strong> If the buffered channel (capacity 256) fills, spans are silently dropped. This is acceptable for observability but means you may miss events in the TUI feed if the consumer is slow. Monitor with <code>tail -f traces.jsonl | wc -l</code>.</p>
-<p><strong>No trace continuity across process restarts:</strong> Traces are exported on shutdown, but in-flight spans at crash time are lost. Always call the shutdown function returned by <code>Setup()</code> in a deferred statement.</p>
-<p><strong>Metrics export latency:</strong> Metrics use a periodic reader, so recent metric data may not appear in <code>metrics.jsonl</code> until the next export tick.</p>
+<span class="line"><span style="color:#6272A4"># Find slow steps (over 5 seconds)</span></span>
+<span class="line"><span style="color:#50FA7B">jq</span><span style="color:#E9F284"> '</span><span style="color:#F1FA8C">select((.endTime - .startTime) > 5000000000) | {name, duration_ns: (.endTime - .startTime)}</span><span style="color:#E9F284">'</span><span style="color:#FF79C6"> \</span></span>
+<span class="line"><span style="color:#F1FA8C">  ~/.local/share/glitch/traces.jsonl</span></span></code></pre>
+<h2 id="sending-to-an-external-tool">Sending to an External Tool</h2>
+<p>By default, traces go only to the local file. To forward them to Jaeger, Tempo, Datadog, or any compatible collector, set the endpoint:</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#BD93F9">OTEL_EXPORTER_OTLP_ENDPOINT</span><span style="color:#FF79C6">=</span><span style="color:#F1FA8C">localhost:4317</span><span style="color:#50FA7B"> glitch</span></span></code></pre>
+<p>When this variable is set, traces go to the collector instead of the local file. The collector must be reachable; if it isn’t, the pipeline still runs and the error is logged to stderr.</p>
+<h2 id="privacy">Privacy</h2>
+<p>gl1tch does not send telemetry to Anthropic, to any gl1tch service, or to any third party. The data stays on your disk unless you configure an external endpoint yourself.</p>
 <h2 id="see-also">See Also</h2>
 <ul>
-<li><a href="/docs/pipelines.md">Pipeline steps</a> — how to emit spans from shell and Go steps</li>
-<li><a href="/docs/game.md">Game system</a> — game events and achievement tracking (uses telemetry spans)</li>
-<li><a href="https://opentelemetry.io/docs/">OpenTelemetry Documentation</a> — semantic conventions, OTLP spec, exporter guides</li>
+<li><a href="/docs/pipelines/architecture">Architecture</a> — how the activity feed and run history work</li>
+<li><a href="/docs/pipelines/cli-reference">CLI Reference</a> — <code>glitch pipeline run</code> and related commands</li>
 </ul> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/prompts"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">Prompts</span> </a> <div></div> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>

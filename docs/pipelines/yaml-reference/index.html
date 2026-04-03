@@ -1,6 +1,7 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Pipeline YAML Reference — GLITCH</title><meta name="description" content="Every field, what it does, and when to use it."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Pipeline YAML Reference — GLITCH</title><meta name="description" content="Look up every pipeline field, condition, retry, and template expression."><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/bbs.css"></head> <body> <canvas id="hexbg" aria-hidden="true"></canvas>  <div class="docs-page" id="docs-page"> <button class="docs-hamburger" id="docs-hamburger" aria-label="Toggle sidebar"> <span class="docs-hamburger-icon">[=]</span> </button> <aside class="docs-sidebar" id="docs-sidebar"> <div class="docs-sidebar-header"> <a href="/" class="docs-logo-link"> <span class="fg-purple bold">GL1TCH</span> </a> <a href="/" class="docs-back-link">&larr; back to terminal</a> </div> <nav class="docs-nav"> <a class="docs-nav-link" href="/docs/">
 INDEX
-</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> GL1TCH Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console — The Switchboard </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link active" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors and Plugins </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Real-World Pipelines </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Pipeline YAML Reference</h1> <p class="docs-page-desc">Every field, what it does, and when to use it.</p> <div class="docs-article"> <h2 id="pipeline-level-fields">Pipeline-level fields</h2>
+</a> <div class="docs-nav-section"> <div class="docs-nav-section-label"> <span class="fg-comment">&#x250C;&#x2500;</span> PIPELINES </div> <a class="docs-nav-link" href="/docs/pipelines/philosophy"> Philosophy </a><a class="docs-nav-link" href="/docs/pipelines/quickstart"> Your First Pipeline </a><a class="docs-nav-link" href="/docs/pipelines/console"> Console </a><a class="docs-nav-link" href="/docs/pipelines/pipelines"> Pipelines </a><a class="docs-nav-link active" href="/docs/pipelines/yaml-reference"> Pipeline YAML Reference </a><a class="docs-nav-link" href="/docs/pipelines/executors"> Executors </a><a class="docs-nav-link" href="/docs/pipelines/brain"> The Brain System </a><a class="docs-nav-link" href="/docs/pipelines/examples"> Pipeline Examples </a><a class="docs-nav-link" href="/docs/pipelines/workflows"> Workflows </a><a class="docs-nav-link" href="/docs/pipelines/cli-reference"> CLI Reference </a><a class="docs-nav-link" href="/docs/pipelines/cron"> Cron Scheduling </a><a class="docs-nav-link" href="/docs/pipelines/architecture"> Architecture </a><a class="docs-nav-link" href="/docs/pipelines/technologies"> Technologies </a><a class="docs-nav-link" href="/docs/pipelines/themes"> Themes </a><a class="docs-nav-link" href="/docs/pipelines/plugins"> Plugins </a><a class="docs-nav-link" href="/docs/pipelines/prompts"> Prompts </a><a class="docs-nav-link" href="/docs/pipelines/telemetry"> Telemetry </a> <div class="docs-nav-section-end"> <span class="fg-comment">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</span> </div> </div> </nav> </aside> <div class="docs-sidebar-overlay" id="docs-sidebar-overlay"></div> <main class="docs-main"> <div class="docs-content"> <div class="docs-breadcrumb"> <a href="/docs/">docs</a> <span class="fg-comment"> / </span> <a href="/docs/">pipelines</a> </div> <article>  <h1 class="docs-page-title">Pipeline YAML Reference</h1> <p class="docs-page-desc">Look up every pipeline field, condition, retry, and template expression.</p> <div class="docs-article"> <p>Complete field reference for <code>.pipeline.yaml</code> files. Every field your pipeline can use is in the tables below.</p>
+<h2 id="pipeline-fields">Pipeline Fields</h2>
 
 
 
@@ -48,8 +49,8 @@ INDEX
 
 
 
-<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>name</code></td><td><code>string</code></td><td><em>required</em></td><td>Unique name for the pipeline. Used in logs, the store, and as a lookup key.</td></tr><tr><td><code>version</code></td><td><code>string</code></td><td><code>""</code></td><td>Schema version. Currently always <code>"1"</code>.</td></tr><tr><td><code>description</code></td><td><code>string</code></td><td><code>""</code></td><td>Human-readable summary of what the pipeline does. Used by the intent router to match <code>glitch ask</code> prompts to the right pipeline.</td></tr><tr><td><code>steps</code></td><td><code>Step[]</code></td><td><em>required</em></td><td>Ordered list of steps. Execution order is determined by <code>needs</code> dependencies, not array position.</td></tr><tr><td><code>vars</code></td><td><code>map[string]any</code></td><td><code>{}</code></td><td>Pipeline-level seed context. Available to all steps via template expressions.</td></tr><tr><td><code>max_parallel</code></td><td><code>int</code></td><td><code>8</code></td><td>Maximum number of steps that can run concurrently. Only matters for DAG pipelines with parallel branches.</td></tr></tbody></table>
-<h2 id="step-level-fields">Step-level fields</h2>
+<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>name</code></td><td><code>string</code></td><td><em>required</em></td><td>Unique pipeline name. Used in logs and as the lookup key for <code>glitch pipeline run</code>.</td></tr><tr><td><code>version</code></td><td><code>string</code></td><td><code>""</code></td><td>Schema version. Always <code>"1"</code>.</td></tr><tr><td><code>description</code></td><td><code>string</code></td><td><code>""</code></td><td>What the pipeline does. Used by <code>glitch ask</code> to route natural-language prompts to the right pipeline.</td></tr><tr><td><code>steps</code></td><td><code>Step[]</code></td><td><em>required</em></td><td>Ordered list of steps. Run order is determined by <code>needs</code> dependencies, not array position.</td></tr><tr><td><code>vars</code></td><td><code>map[string]any</code></td><td><code>{}</code></td><td>Pipeline-level variables. Available to all steps as <code>{{vars.&#x3C;name>}}</code>.</td></tr><tr><td><code>max_parallel</code></td><td><code>int</code></td><td><code>8</code></td><td>Maximum steps running at the same time. Only matters when steps have parallel <code>needs</code> branches.</td></tr></tbody></table>
+<h2 id="step-fields">Step Fields</h2>
 
 
 
@@ -163,9 +164,9 @@ INDEX
 
 
 
-<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>string</code></td><td><em>required</em></td><td>Unique identifier for the step. Referenced by <code>needs</code>, <code>on_failure</code>, and template expressions.</td></tr><tr><td><code>executor</code></td><td><code>string</code></td><td><code>""</code></td><td>The executor to run. Native executors: <code>claude</code>, <code>ollama</code>. Builtins: <code>builtin.assert</code>, <code>builtin.log</code>, etc. Sidecar wrappers: <code>gh</code>, <code>jq</code>, <code>write</code>, or any name registered in <code>~/.config/glitch/wrappers/</code>.</td></tr><tr><td><code>model</code></td><td><code>string</code></td><td><code>""</code></td><td>Model identifier passed to the executor. For <code>claude</code>: e.g. <code>claude-sonnet-4-6</code>, <code>claude-haiku-4-5-20251001</code>. For <code>ollama</code>: the local model name like <code>qwen2.5-coder:latest</code>.</td></tr><tr><td><code>prompt</code></td><td><code>string</code></td><td><code>""</code></td><td>The prompt text sent to AI executors. Supports <code>{{template}}</code> expressions for variable interpolation.</td></tr><tr><td><code>input</code></td><td><code>string</code></td><td><code>""</code></td><td>Raw input string. Used by non-AI executors or to override the default input. Supports template expressions.</td></tr><tr><td><code>publish_to</code></td><td><code>string</code></td><td><code>""</code></td><td>Topic name. When set, the step’s output is published to the event bus under this topic.</td></tr><tr><td><code>needs</code></td><td><code>string[]</code></td><td><code>[]</code></td><td>Step IDs that must complete before this step runs. Creates the DAG execution order.</td></tr><tr><td><code>vars</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Flat key-value pairs passed to the executor as environment/template variables. For the <code>gh</code> executor, use <code>vars.args</code> to pass CLI arguments.</td></tr><tr><td><code>args</code></td><td><code>map[string]any</code></td><td><code>{}</code></td><td>Structured data passed to the executor. Supersedes <code>vars</code> when set. Used by builtins that need typed input.</td></tr><tr><td><code>condition</code></td><td><code>Condition</code></td><td><code>{}</code></td><td>Conditional branching. See Conditions below.</td></tr><tr><td><code>for_each</code></td><td><code>string</code></td><td><code>""</code></td><td>Template expression or newline-separated list. When set, the step is cloned once per item. The current item is available as <code>{{item}}</code>.</td></tr><tr><td><code>retry</code></td><td><code>RetryPolicy</code></td><td><code>null</code></td><td>Retry policy for this step. See Retry below.</td></tr><tr><td><code>on_failure</code></td><td><code>string</code></td><td><code>""</code></td><td>Step ID to run if this step fails after all retry attempts.</td></tr><tr><td><code>prompt_id</code></td><td><code>string</code></td><td><code>""</code></td><td>Title of a saved prompt in the store. When set, the prompt body is prepended to the step’s input before execution. Case-insensitive title matching.</td></tr><tr><td><code>outputs</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Declares output keys produced by this step. After completion, the full output string is stored under each declared key.</td></tr><tr><td><code>inputs</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Maps input names to template expressions like <code>{{steps.&#x3C;id>.&#x3C;key>}}</code>. Resolved before execution using accumulated step outputs.</td></tr><tr><td><code>write_brain</code></td><td><code>bool</code></td><td><code>false</code></td><td>When true, the step’s output is written to the brain store after execution. Later runs can inject this context via <code>--brain</code>.</td></tr></tbody></table>
+<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>string</code></td><td><em>required</em></td><td>Unique step identifier. Referenced by <code>needs</code>, <code>on_failure</code>, and template expressions.</td></tr><tr><td><code>executor</code></td><td><code>string</code></td><td><code>""</code></td><td>What runs this step. AI: <code>claude</code>, <code>ollama</code>. Builtins: <code>builtin.assert</code>, <code>builtin.log</code>, etc. Tools: <code>gh</code>, <code>jq</code>, <code>write</code>, or any name in <code>~/.config/glitch/wrappers/</code>.</td></tr><tr><td><code>model</code></td><td><code>string</code></td><td><code>""</code></td><td>Model passed to the executor. For <code>claude</code>: <code>claude-sonnet-4-6</code>. For <code>ollama</code>: <code>qwen2.5-coder:latest</code>.</td></tr><tr><td><code>prompt</code></td><td><code>string</code></td><td><code>""</code></td><td>Prompt sent to AI executors. Supports <code>{{template}}</code> expressions.</td></tr><tr><td><code>input</code></td><td><code>string</code></td><td><code>""</code></td><td>Raw input string for non-AI executors, or to override the default input. Supports template expressions.</td></tr><tr><td><code>publish_to</code></td><td><code>string</code></td><td><code>""</code></td><td>Topic name. When set, this step’s output is published to the event bus under that topic.</td></tr><tr><td><code>needs</code></td><td><code>string[]</code></td><td><code>[]</code></td><td>Step IDs that must complete before this step starts. Defines the execution graph.</td></tr><tr><td><code>vars</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Key-value pairs passed to the executor. For <code>gh</code> and <code>jq</code>, use <code>vars.args</code> to pass CLI arguments.</td></tr><tr><td><code>args</code></td><td><code>map[string]any</code></td><td><code>{}</code></td><td>Structured data for builtins that need typed input. Supersedes <code>vars</code> when set.</td></tr><tr><td><code>condition</code></td><td><code>Condition</code></td><td><code>{}</code></td><td>Branch execution based on the previous step’s output. See <a href="#conditions">Conditions</a>.</td></tr><tr><td><code>for_each</code></td><td><code>string</code></td><td><code>""</code></td><td>Template expression or newline-separated list. The step is cloned once per item; use <code>{{item}}</code> for the current value.</td></tr><tr><td><code>retry</code></td><td><code>RetryPolicy</code></td><td><code>null</code></td><td>Retry configuration for this step. See <a href="#retry">Retry</a>.</td></tr><tr><td><code>on_failure</code></td><td><code>string</code></td><td><code>""</code></td><td>Step ID to run if this step fails after all retries.</td></tr><tr><td><code>prompt_id</code></td><td><code>string</code></td><td><code>""</code></td><td>Title of a saved prompt in the store. That prompt body is prepended to the step’s input before execution.</td></tr><tr><td><code>outputs</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Output keys produced by this step. After completion, accessible as <code>{{steps.&#x3C;id>.&#x3C;key>}}</code>.</td></tr><tr><td><code>inputs</code></td><td><code>map[string]string</code></td><td><code>{}</code></td><td>Maps input names to template expressions like <code>{{steps.&#x3C;id>.&#x3C;key>}}</code>. Resolved before execution.</td></tr><tr><td><code>write_brain</code></td><td><code>bool</code></td><td><code>false</code></td><td>When true, this step’s output is written to the brain store. Future runs can pull it in with <code>--brain</code>.</td></tr></tbody></table>
 <h2 id="conditions">Conditions</h2>
-<p>The <code>condition</code> field enables branching. It has three sub-fields:</p>
+<p>The <code>condition</code> field branches execution based on the previous step’s output.</p>
 
 
 
@@ -191,8 +192,8 @@ INDEX
 
 
 
-<table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>if</code></td><td><code>string</code></td><td>Expression to evaluate against the previous step’s output.</td></tr><tr><td><code>then</code></td><td><code>string</code></td><td>Step ID to jump to if the expression is true.</td></tr><tr><td><code>else</code></td><td><code>string</code></td><td>Step ID to jump to if the expression is false.</td></tr></tbody></table>
-<h3 id="condition-expressions">Condition expressions</h3>
+<table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>if</code></td><td><code>string</code></td><td>Expression to evaluate against the previous step’s output.</td></tr><tr><td><code>then</code></td><td><code>string</code></td><td>Step ID to jump to when the expression is true.</td></tr><tr><td><code>else</code></td><td><code>string</code></td><td>Step ID to jump to when the expression is false.</td></tr></tbody></table>
+<h3 id="condition-expressions">Condition Expressions</h3>
 
 
 
@@ -222,17 +223,16 @@ INDEX
 
 
 
-<table><thead><tr><th>Expression</th><th>Matches when</th></tr></thead><tbody><tr><td><code>always</code></td><td>Always true.</td></tr><tr><td><code>not_empty</code></td><td>Output is not empty after trimming whitespace.</td></tr><tr><td><code>contains:&#x3C;str></code></td><td>Output contains the literal string <code>&#x3C;str></code>.</td></tr><tr><td><code>matches:&#x3C;regex></code></td><td>Output matches the Go regex pattern <code>&#x3C;regex></code>.</td></tr><tr><td><code>len > N</code></td><td>Output length (in bytes) exceeds <code>N</code>.</td></tr></tbody></table>
-<p>Example:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">classify</span></span>
-<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">  model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
-<span class="line"><span style="color:#85E89D">  prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Is this Go or Python code? Reply with one word."</span></span>
-<span class="line"><span style="color:#85E89D">  condition</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">    if</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"contains:Go"</span></span>
-<span class="line"><span style="color:#85E89D">    then</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">go-handler</span></span>
-<span class="line"><span style="color:#85E89D">    else</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">python-handler</span></span></code></pre>
-<h2 id="retry-policy">Retry policy</h2>
+<table><thead><tr><th>Expression</th><th>Matches when</th></tr></thead><tbody><tr><td><code>always</code></td><td>Always true.</td></tr><tr><td><code>not_empty</code></td><td>Output is not empty after trimming whitespace.</td></tr><tr><td><code>contains:&#x3C;str></code></td><td>Output contains the literal string <code>&#x3C;str></code>.</td></tr><tr><td><code>matches:&#x3C;regex></code></td><td>Output matches the regex pattern <code>&#x3C;regex></code>.</td></tr><tr><td><code>len > N</code></td><td>Output length in bytes exceeds <code>N</code>.</td></tr></tbody></table>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#FF79C6">-</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> classify</span></span>
+<span class="line"><span style="color:#8BE9FD">  executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">  model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#8BE9FD">  prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">Is this Go or Python? Reply with one word.</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">  condition</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">    if</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">contains:Go</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    then</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> go-handler</span></span>
+<span class="line"><span style="color:#8BE9FD">    else</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> python-handler</span></span></code></pre>
+<h2 id="retry">Retry</h2>
 
 
 
@@ -262,18 +262,17 @@ INDEX
 
 
 
-<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>max_attempts</code></td><td><code>int</code></td><td><code>0</code></td><td>Number of retry attempts. <code>0</code> means no retry.</td></tr><tr><td><code>interval</code></td><td><code>duration</code></td><td><code>"0s"</code></td><td>Time between retries. Supports Go duration strings: <code>"2s"</code>, <code>"500ms"</code>, <code>"1m"</code>.</td></tr><tr><td><code>on</code></td><td><code>string</code></td><td><code>"always"</code></td><td>When to retry: <code>"always"</code> retries on any completion, <code>"on_failure"</code> retries only on error.</td></tr></tbody></table>
-<p>Example:</p>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#E1E4E8">- </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">flaky-api</span></span>
-<span class="line"><span style="color:#85E89D">  executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.http_get</span></span>
-<span class="line"><span style="color:#85E89D">  args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">    url</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"https://api.example.com/data"</span></span>
-<span class="line"><span style="color:#85E89D">  retry</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">    max_attempts</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">3</span></span>
-<span class="line"><span style="color:#85E89D">    interval</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"2s"</span></span>
-<span class="line"><span style="color:#79B8FF">    on</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">on_failure</span></span></code></pre>
-<h2 id="template-expressions">Template expressions</h2>
-<p>Templates use <code>{{double braces}}</code> and are resolved before step execution.</p>
+<table><thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>max_attempts</code></td><td><code>int</code></td><td><code>0</code></td><td>Number of retry attempts. <code>0</code> means no retry.</td></tr><tr><td><code>interval</code></td><td><code>duration</code></td><td><code>"0s"</code></td><td>Time between retries. Accepts <code>"2s"</code>, <code>"500ms"</code>, <code>"1m"</code>.</td></tr><tr><td><code>on</code></td><td><code>string</code></td><td><code>"always"</code></td><td><code>"always"</code> retries on any completion. <code>"on_failure"</code> retries only on error.</td></tr></tbody></table>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#FF79C6">-</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> flaky-api</span></span>
+<span class="line"><span style="color:#8BE9FD">  executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> builtin.http_get</span></span>
+<span class="line"><span style="color:#8BE9FD">  args</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">    url</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">https://api.example.com/data</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">  retry</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">    max_attempts</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> 3</span></span>
+<span class="line"><span style="color:#8BE9FD">    interval</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">2s</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#BD93F9">    on</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> on_failure</span></span></code></pre>
+<h2 id="template-expressions">Template Expressions</h2>
+<p>Templates use <code>{{double braces}}</code> and are resolved before each step runs.</p>
 
 
 
@@ -299,84 +298,86 @@ INDEX
 
 
 
-<table><thead><tr><th>Expression</th><th>Resolves to</th></tr></thead><tbody><tr><td><code>{{steps.&#x3C;id>.output}}</code></td><td>The string output of a completed step.</td></tr><tr><td><code>{{steps.&#x3C;id>.&#x3C;key>}}</code></td><td>A specific output key declared in the step’s <code>outputs</code> map.</td></tr><tr><td><code>{{vars.&#x3C;name>}}</code></td><td>A pipeline-level variable from the <code>vars</code> map.</td></tr><tr><td><code>{{item}}</code></td><td>The current iteration value inside a <code>for_each</code> step.</td></tr></tbody></table>
-<h2 id="complete-annotated-example">Complete annotated example</h2>
-<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#6A737D"># Every field in one file. You would never use all of these at once.</span></span>
-<span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">kitchen-sink</span></span>
-<span class="line"><span style="color:#85E89D">version</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"1"</span></span>
+<table><thead><tr><th>Expression</th><th>Resolves to</th></tr></thead><tbody><tr><td><code>{{steps.&#x3C;id>.output}}</code></td><td>The string output of a completed step.</td></tr><tr><td><code>{{steps.&#x3C;id>.&#x3C;key>}}</code></td><td>A specific output key declared in that step’s <code>outputs</code> map.</td></tr><tr><td><code>{{vars.&#x3C;name>}}</code></td><td>A pipeline-level variable from the <code>vars</code> map.</td></tr><tr><td><code>{{item}}</code></td><td>The current item inside a <code>for_each</code> loop.</td></tr></tbody></table>
+<h2 id="complete-example">Complete Example</h2>
+<p>Every field in one file. You would never use all of these at once.</p>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#8BE9FD">name</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> kitchen-sink</span></span>
+<span class="line"><span style="color:#8BE9FD">version</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">1</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">  repo</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">8op-org/gl1tch</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">max_parallel</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> 4</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D"># Pipeline-level settings</span></span>
-<span class="line"><span style="color:#85E89D">vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">  repo</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"8op-org/gl1tch"</span></span>
-<span class="line"><span style="color:#85E89D">  max_lines</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"500"</span></span>
-<span class="line"><span style="color:#85E89D">max_parallel</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">4</span></span>
+<span class="line"><span style="color:#8BE9FD">steps</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#6272A4">  # Fetch data with a CLI tool</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> fetch-issues</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> gh</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      args</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">issue list --repo {{vars.repo}} --json title,body --limit 10</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#85E89D">steps</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#6A737D">  # Step 1: Fetch data with a sidecar executor</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">fetch-issues</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">gh</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      args</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"issue list --repo {{vars.repo}} --json title,body --limit 10"</span></span>
+<span class="line"><span style="color:#6272A4">  # AI analysis that depends on fetch</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> analyze</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-sonnet-4-6</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">fetch-issues</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#FF79C6"> |</span></span>
+<span class="line"><span style="color:#F1FA8C">      Categorize these GitHub issues by priority:</span></span>
+<span class="line"><span style="color:#F1FA8C">      {{steps.fetch-issues.output}}</span></span>
+<span class="line"><span style="color:#8BE9FD">    outputs</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      summary</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> ""</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Step 2: AI analysis with dependency</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">analyze</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-sonnet-4-6</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">fetch-issues</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#F97583">|</span></span>
-<span class="line"><span style="color:#9ECBFF">      Analyze these GitHub issues and categorize by priority:</span></span>
-<span class="line"><span style="color:#9ECBFF">      {{steps.fetch-issues.output}}</span></span>
-<span class="line"><span style="color:#85E89D">    outputs</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      summary</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">""</span></span>
+<span class="line"><span style="color:#6272A4">  # Branch based on the analysis output</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> check-urgency</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> builtin.assert</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    args</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      expected</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">critical</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">      actual</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.analyze.output}}</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    condition</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      if</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">contains:critical</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">      then</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> alert</span></span>
+<span class="line"><span style="color:#8BE9FD">      else</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> log-ok</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Step 3: Conditional branching</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">check-urgency</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.assert</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      expected</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"critical"</span></span>
-<span class="line"><span style="color:#85E89D">      actual</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.analyze.output}}"</span></span>
-<span class="line"><span style="color:#85E89D">    condition</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      if</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"contains:critical"</span></span>
-<span class="line"><span style="color:#85E89D">      then</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">alert</span></span>
-<span class="line"><span style="color:#85E89D">      else</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-ok</span></span>
+<span class="line"><span style="color:#6272A4">  # Alert path</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> alert</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude</span></span>
+<span class="line"><span style="color:#8BE9FD">    model</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> claude-haiku-4-5-20251001</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    prompt</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">Draft an urgent alert for: {{steps.analyze.summary}}</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Step 4a: Alert path</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">alert</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude</span></span>
-<span class="line"><span style="color:#85E89D">    model</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">claude-haiku-4-5-20251001</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    prompt</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Draft an urgent alert for: {{steps.analyze.summary}}"</span></span>
+<span class="line"><span style="color:#6272A4">  # Quiet path</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> log-ok</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> builtin.log</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    args</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      message</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">No critical issues found.</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Step 4b: Quiet path</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-ok</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"No critical issues found."</span></span>
+<span class="line"><span style="color:#6272A4">  # Write output to disk</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> save-report</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> write</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    vars</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      path</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">./issue-report.md</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    input</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">{{steps.analyze.output}}</span><span style="color:#E9F284">"</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Step 5: Write output to file</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">save-report</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">write</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    vars</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      path</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"./issue-report.md"</span></span>
-<span class="line"><span style="color:#85E89D">    input</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"{{steps.analyze.output}}"</span></span>
+<span class="line"><span style="color:#6272A4">  # Retry on failure</span></span>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> post-webhook</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> builtin.http_get</span></span>
+<span class="line"><span style="color:#8BE9FD">    needs</span><span style="color:#FF79C6">:</span><span style="color:#F8F8F2"> [</span><span style="color:#F1FA8C">analyze</span><span style="color:#F8F8F2">]</span></span>
+<span class="line"><span style="color:#8BE9FD">    args</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      url</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">https://hooks.example.com/notify</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#8BE9FD">    retry</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      max_attempts</span><span style="color:#FF79C6">:</span><span style="color:#BD93F9"> 3</span></span>
+<span class="line"><span style="color:#8BE9FD">      interval</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">5s</span><span style="color:#E9F284">"</span></span>
+<span class="line"><span style="color:#BD93F9">      on</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> on_failure</span></span>
+<span class="line"><span style="color:#8BE9FD">    on_failure</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> log-webhook-error</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Step 6: Retry on failure</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">post-webhook</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.http_get</span></span>
-<span class="line"><span style="color:#85E89D">    needs</span><span style="color:#E1E4E8">: [</span><span style="color:#9ECBFF">analyze</span><span style="color:#E1E4E8">]</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      url</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"https://hooks.example.com/notify"</span></span>
-<span class="line"><span style="color:#85E89D">    retry</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      max_attempts</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">3</span></span>
-<span class="line"><span style="color:#85E89D">      interval</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"5s"</span></span>
-<span class="line"><span style="color:#79B8FF">      on</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">on_failure</span></span>
-<span class="line"><span style="color:#85E89D">    on_failure</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-webhook-error</span></span>
-<span class="line"></span>
-<span class="line"><span style="color:#6A737D">  # Fallback step</span></span>
-<span class="line"><span style="color:#E1E4E8">  - </span><span style="color:#85E89D">id</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">log-webhook-error</span></span>
-<span class="line"><span style="color:#85E89D">    executor</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">builtin.log</span></span>
-<span class="line"><span style="color:#85E89D">    args</span><span style="color:#E1E4E8">:</span></span>
-<span class="line"><span style="color:#85E89D">      message</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"Webhook delivery failed after 3 attempts."</span></span></code></pre> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/pipelines"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">Pipelines</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/executors"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Executors and Plugins</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>
+<span class="line"><span style="color:#FF79C6">  -</span><span style="color:#8BE9FD"> id</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> log-webhook-error</span></span>
+<span class="line"><span style="color:#8BE9FD">    executor</span><span style="color:#FF79C6">:</span><span style="color:#F1FA8C"> builtin.log</span></span>
+<span class="line"><span style="color:#8BE9FD">    args</span><span style="color:#FF79C6">:</span></span>
+<span class="line"><span style="color:#8BE9FD">      message</span><span style="color:#FF79C6">:</span><span style="color:#E9F284"> "</span><span style="color:#F1FA8C">Webhook delivery failed after 3 attempts.</span><span style="color:#E9F284">"</span></span></code></pre>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="/docs/pipelines/executors">Executors</a> — what each executor does and how to configure it</li>
+<li><a href="/docs/pipelines/cli-reference">CLI Reference</a> — running pipelines from the command line</li>
+<li><a href="/docs/pipelines/workflows">Workflows</a> — chain multiple pipelines together</li>
+</ul> </div>  </article> <nav class="docs-prev-next"> <a class="docs-prev-next-link prev" href="/docs/pipelines/pipelines"> <span class="docs-prev-next-label fg-comment">&larr; prev</span> <span class="docs-prev-next-title">Pipelines</span> </a> <a class="docs-prev-next-link next" href="/docs/pipelines/executors"> <span class="docs-prev-next-label fg-comment">next &rarr;</span> <span class="docs-prev-next-title">Executors</span> </a> </nav> </div> </main> </div> <script type="module">const d=document.getElementById("docs-hamburger"),n=document.getElementById("docs-sidebar"),e=document.getElementById("docs-sidebar-overlay");function t(){n?.classList.toggle("open"),e?.classList.toggle("open")}d?.addEventListener("click",t);e?.addEventListener("click",t);</script>  </body></html>
