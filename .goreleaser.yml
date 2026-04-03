@@ -172,6 +172,7 @@ checksum:
 
 brews:
   - name: glitch
+    directory: Formula
     repository:
       owner: 8op-org
       name: homebrew-tap
