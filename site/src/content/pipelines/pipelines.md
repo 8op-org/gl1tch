@@ -121,7 +121,7 @@ Or run it from the console:
 /pipeline git-digest
 ```
 
-![gl1tch launching git-digest](/screenshots/pipelines/pipeline-run-03-result.png)
+![gl1tch responding with commit analysis](/screenshots/pipelines/tui-response-commits.png)
 
 ---
 

@@ -849,6 +849,19 @@ body::before {
   font-size: 12px;
 }
 
+/* ── Screenshots in docs ── */
+
+.docs-article img {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  margin: 24px auto;
+  border: 1px solid var(--purple);
+  box-shadow: 0 0 0 1px var(--current-line), 4px 4px 0 0 var(--purple);
+  border-radius: 2px;
+}
+
 /* ── Prev/Next navigation ── */
 
 .docs-prev-next {
