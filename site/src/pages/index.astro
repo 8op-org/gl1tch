@@ -6,7 +6,19 @@ import ProjectStats from '../components/ProjectStats.astro';
 <Base>
   <main class="terminal-stage">
     <div class="terminal-workspace" id="terminal-workspace">
-      <MacTerminal />
+      <div class="mac-terminal">
+        <div class="mac-titlebar">
+          <div class="mac-dots" aria-hidden="true">
+            <span class="mac-dot mac-dot-red"></span>
+            <span class="mac-dot mac-dot-yellow"></span>
+            <span class="mac-dot mac-dot-green"></span>
+          </div>
+          <span class="mac-title">GL1TCH</span>
+        </div>
+        <div class="mac-body" style="padding:0; background:#1a1b26;">
+          <MacTerminal />
+        </div>
+      </div>
     </div>
   </main>
   <ProjectStats />

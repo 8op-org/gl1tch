@@ -769,6 +769,8 @@ document.addEventListener('DOMContentLoaded', () => {
     flex-direction: row;
     width: 100%;
     height: 100%;
+    min-height: 0;
+    flex: 1;
     background: var(--tui-bg);
     font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 13px;
@@ -855,9 +857,9 @@ document.addEventListener('DOMContentLoaded', () => {
     border-top: 1px solid #1e2030;
   }
 
-  .tui-status-left   { color: var(--tui-dim); }
-  .tui-status-center { color: var(--tui-dim); }
-  .tui-status-right  { color: var(--tui-dim); font-variant-numeric: tabular-nums; }
+  .tui-status-left   { color: var(--tui-dim); flex: 1; min-width: 0; }
+  .tui-status-center { color: var(--tui-dim); flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
+  .tui-status-right  { color: var(--tui-dim); flex: 1; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   /* ── Input row ──────────────────────────────────────────────── */
   .tui-input-row {
