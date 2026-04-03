@@ -853,10 +853,15 @@ body::before {
 
 .docs-article img {
   display: block;
-  max-width: 100%;
+  /* Natural size, capped at viewport minus some breathing room */
   width: auto;
+  max-width: min(960px, calc(100vw - 48px));
   height: auto;
-  margin: 24px auto;
+  /* Break out of the 720px content column and center on page */
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 32px 0;
   border: 1px solid var(--purple);
   box-shadow: 0 0 0 1px var(--current-line), 4px 4px 0 0 var(--purple);
   border-radius: 2px;
