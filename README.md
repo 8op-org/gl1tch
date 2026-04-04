@@ -91,24 +91,71 @@ Press `^spc` (ctrl+space) then a key:
 
 | Chord | Action |
 |---|---|
-| `^spc h` | Help screen |
-| `^spc t` | Switch to console |
-| `^spc m` | Theme picker |
-| `^spc c` | New window |
 | `^spc d` | Detach session |
 | `^spc r` | Reload GL1TCH (picks up new binary) |
 | `^spc q` | Quit |
-| `^spc [` / `]` | Previous / next window |
-| `^spc x` / `X` | Kill pane / window |
-| `^spc a` | Jump to GL1TCH assistant |
 
 ## Themes
 
-Press `T` or `/themes` to open the theme picker.
+Press `T` or `/themes` to open the theme picker. Custom themes live in `~/.config/glitch/themes/`.
 
-Built-in themes: **Dracula**, **Nord**, **Catppuccin Mocha**, **Tokyo Night**, **Rose Piné**, **Solarized Dark**, **Kanagawa**.
-
-Custom themes live in `~/.config/glitch/themes/`.
+| Theme | Variant | Accent |
+|---|---|---|
+| **Dracula** | dark | `#ff79c6` |
+| **GL1TCH** | dark | `#bd93f9` |
+| **Tokyo Night** | dark | `#7aa2f7` |
+| **Tokyo Night Storm** | dark | `#7aa2f7` |
+| **Tokyo Night Moon** | dark | `#82aaff` |
+| **Kanagawa** | dark | `#7e9cd8` |
+| **Kanagawa Dragon** | dark | `#7fb4ca` |
+| **Nord** | dark | `#88c0d0` |
+| **Nordic** | dark | `#81a1c1` |
+| **Catppuccin Mocha** | dark | `#cba6f7` |
+| **Catppuccin Macchiato** | dark | `#8aadf4` |
+| **Catppuccin Frappé** | dark | `#8caaee` |
+| **Catppuccin Latte** | light | `#1e66f5` |
+| **Rose Piné** | dark | `#c4a7e7` |
+| **Rose Piné Dawn** | light | `#286983` |
+| **Gruvbox** | dark | `#458588` |
+| **Gruvbox Light** | light | `#076678` |
+| **Everforest Dark** | dark | `#83c092` |
+| **Everforest Light** | light | `#8da101` |
+| **One Dark** | dark | `#61afef` |
+| **One Half Dark** | dark | `#61afef` |
+| **One Half Light** | light | `#0184bc` |
+| **One Light** | light | `#4078f2` |
+| **Solarized Dark** | dark | `#268bd2` |
+| **Solarized Light** | light | `#268bd2` |
+| **GitHub Dark** | dark | `#58a6ff` |
+| **GitHub Light** | light | `#0969da` |
+| **Night Owl** | dark | `#82aaff` |
+| **Night Owl Light** | light | `#4876d6` |
+| **Nightfly** | dark | `#82aaff` |
+| **Moonfly** | dark | `#74b2ff` |
+| **Ayu Dark** | dark | `#39bae6` |
+| **Ayu Light** | light | `#399ee6` |
+| **Iceberg Dark** | dark | `#84a0c6` |
+| **Iceberg Light** | light | `#2d539e` |
+| **Zenbones Dark** | dark | `#67afc1` |
+| **Zenbones Light** | light | `#407a9e` |
+| **Tomorrow Night** | dark | `#81a2be` |
+| **Tomorrow** | light | `#4271ae` |
+| **Seoul256 Dark** | dark | `#5f87af` |
+| **Seoul256 Light** | light | `#5f87af` |
+| **Cobalt2** | dark | `#ffc600` |
+| **Shades of Purple** | dark | `#fad000` |
+| **Panda** | dark | `#ff75b5` |
+| **Sonokai** | dark | `#76cce0` |
+| **Deus** | dark | `#7aa2f7` |
+| **Lucario** | dark | `#00bff3` |
+| **Apprentice** | dark | `#87af87` |
+| **Jellybeans** | dark | `#8197bf` |
+| **Srcery** | dark | `#68a8e4` |
+| **Gotham** | dark | `#195466` |
+| **Miasma** | dark | `#78824b` |
+| **Borland** | dark | `#ffff55` |
+| **Tender** | dark | `#b3deef` |
+| **Noctis Lux** | light | `#2d6b97` |
 
 ## Releasing
 
