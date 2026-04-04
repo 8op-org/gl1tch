@@ -60,45 +60,6 @@ func TestApplyFuzzy_NoMatch(t *testing.T) {
 	}
 }
 
-func TestBuildPickerItems_HasProviders(t *testing.T) {
-	providers := []picker.ProviderDef{
-		{ID: "claude", Label: "Claude", Models: []picker.ModelOption{{ID: "claude-sonnet-4-6", Label: "Sonnet"}}},
-		{ID: "shell", Label: "Shell"},
-	}
-	items := picker.BuildPickerItems(nil, providers, "/tmp", "/tmp")
-	var found int
-	for _, item := range items {
-		if item.Kind == "provider" {
-			found++
-		}
-	}
-	if found != 2 {
-		t.Errorf("want 2 provider items, got %d", found)
-	}
-}
-
-func TestBuildPickerItems_SessionsFirst(t *testing.T) {
-	sessions := []picker.WindowEntry{{Index: "1", Name: "claude-1"}}
-	items := picker.BuildPickerItems(sessions, nil, "/tmp", "/tmp")
-	if len(items) == 0 {
-		t.Fatal("expected items")
-	}
-	if items[0].Kind != "session" {
-		t.Errorf("first item should be session, got %q", items[0].Kind)
-	}
-}
-
-func TestBuildPickerItems_ProvidersLast(t *testing.T) {
-	providers := []picker.ProviderDef{{ID: "shell", Label: "Shell"}}
-	items := picker.BuildPickerItems(nil, providers, "/tmp", "/tmp")
-	if len(items) == 0 {
-		t.Fatal("expected items")
-	}
-	last := items[len(items)-1]
-	if last.Kind != "provider" {
-		t.Errorf("last item group should be provider, got %q", last.Kind)
-	}
-}
 
 func TestPickerItem_FilterString(t *testing.T) {
 	item := picker.PickerItem{Kind: "skill", Name: "beast-mode", Description: "top-notch coding agent"}

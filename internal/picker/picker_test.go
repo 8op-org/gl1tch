@@ -1,8 +1,6 @@
 package picker_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/8op-org/gl1tch/internal/picker"
@@ -76,64 +74,6 @@ func TestProviders_OllamaBaseHasNoModels(t *testing.T) {
 	t.Error("ollama not found in Providers")
 }
 
-func TestGetOrCreateWorktreeFrom_EmptyPathReturnsEmpty(t *testing.T) {
-	worktree, root := picker.GetOrCreateWorktreeFrom("", "test-session")
-	if worktree != "" || root != "" {
-		t.Errorf("expected empty strings, got worktree=%q root=%q", worktree, root)
-	}
-}
-
-func TestParseWindowList_Basic(t *testing.T) {
-	input := "0 GL1TCH\n1 claude-1\n2 gemini-2\n"
-	got := picker.ParseWindowList(input)
-	if len(got) != 2 {
-		t.Fatalf("expected 2 windows, got %d: %v", len(got), got)
-	}
-	if got[0].Name != "claude-1" {
-		t.Errorf("got[0].Name = %q, want %q", got[0].Name, "claude-1")
-	}
-	if got[1].Index != "2" {
-		t.Errorf("got[1].Index = %q, want %q", got[1].Index, "2")
-	}
-}
-
-func TestParseWindowList_FiltersSystemWindows(t *testing.T) {
-	input := "0 GL1TCH\n1 _sidebar\n2 claude-1\n"
-	got := picker.ParseWindowList(input)
-	if len(got) != 1 {
-		t.Fatalf("expected 1 window, got %d: %v", len(got), got)
-	}
-	if got[0].Name != "claude-1" {
-		t.Errorf("expected claude-1, got %q", got[0].Name)
-	}
-}
-
-func TestParseWindowList_Empty(t *testing.T) {
-	got := picker.ParseWindowList("")
-	if got != nil {
-		t.Errorf("expected nil for empty input, got %v", got)
-	}
-}
-
-func TestParseWindowList_MalformedLines(t *testing.T) {
-	// Lines with no space should be silently skipped.
-	input := "0 claude-1\nno-space-line\n2 gemini-1\n"
-	got := picker.ParseWindowList(input)
-	if len(got) != 2 {
-		t.Fatalf("expected 2 entries, got %d: %v", len(got), got)
-	}
-}
-
-func TestParseWindowList_FiltersWelcome(t *testing.T) {
-	input := "0 _welcome\n1 claude-1\n"
-	got := picker.ParseWindowList(input)
-	if len(got) != 1 {
-		t.Fatalf("expected 1 entry, got %d: %v", len(got), got)
-	}
-	if got[0].Name != "claude-1" {
-		t.Errorf("expected claude-1, got %q", got[0].Name)
-	}
-}
 
 func TestBuildProviders_ExcludesShell(t *testing.T) {
 	providers := picker.BuildProviders()
@@ -144,16 +84,6 @@ func TestBuildProviders_ExcludesShell(t *testing.T) {
 	}
 }
 
-// TestBuildPickerItems_PipelineCarriesFileField verifies that pipeline PickerItems
-// built by BuildPickerItems always have their PipelineFile field set.
-func TestBuildPickerItems_PipelineCarriesFileField(t *testing.T) {
-	items := picker.BuildPickerItems(nil, nil, "", "")
-	for _, item := range items {
-		if item.Kind == "pipeline" && item.PipelineFile == "" {
-			t.Errorf("pipeline item %q has empty PipelineFile", item.Name)
-		}
-	}
-}
 
 // TestPickerItem_JSONRoundTrip ensures PickerItem marshals and unmarshals cleanly
 // so that GLITCH_PICKER_SELECTION encoding works correctly.

@@ -6,9 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/sahilm/fuzzy"
-
-	"github.com/8op-org/gl1tch/internal/chatui"
-	"github.com/8op-org/gl1tch/internal/discovery"
 )
 
 // PickerItem is a single selectable row in the fuzzy picker.
@@ -95,67 +92,3 @@ func UnmarshalPickerItem(data []byte) (PickerItem, error) {
 	return item, err
 }
 
-// BuildPickerItems assembles all session-starter items in display group order:
-// sessions → pipelines → agents → providers.
-// cwd and homeDir are passed to chatui.ScanIndex to locate agents.
-func BuildPickerItems(sessions []WindowEntry, providers []ProviderDef, cwd, homeDir string) []PickerItem {
-	var items []PickerItem
-
-	// ── sessions ──
-	for _, s := range sessions {
-		items = append(items, PickerItem{
-			Kind:         "session",
-			Name:         s.Name,
-			Description:  "existing session",
-			SessionIndex: s.Index,
-		})
-	}
-
-	// ── pipelines ── (TypePipeline only — native/CLI-wrapper entries overlap providers)
-	if configDir := glitchConfigDir(); configDir != "" {
-		if plugins, err := discovery.Discover(configDir); err == nil {
-			for _, p := range plugins {
-				if p.Type != discovery.TypePipeline {
-					continue
-				}
-				items = append(items, PickerItem{
-					Kind:         "pipeline",
-					Name:         p.Name,
-					Description:  "pipeline",
-					PipelineFile: p.PipelineFile,
-				})
-			}
-		}
-	}
-
-	// ── agents only (skills are managed inside provider sessions, not launched from here) ──
-	index := chatui.ScanIndex(cwd, homeDir)
-	for _, e := range index {
-		if e.Kind != "agent" {
-			continue
-		}
-		items = append(items, PickerItem{
-			Kind:        e.Kind,
-			Name:        e.Name,
-			Description: e.Description,
-			SourceTag:   chatui.SourceLabel(e.Source),
-			InjectText:  e.Inject,
-		})
-	}
-
-	// ── providers ──
-	for _, p := range providers {
-		desc := ""
-		if len(selectableModels(p)) > 0 {
-			desc = "select model"
-		}
-		items = append(items, PickerItem{
-			Kind:        "provider",
-			Name:        p.Label,
-			Description: desc,
-			ProviderID:  p.ID,
-		})
-	}
-
-	return items
-}
