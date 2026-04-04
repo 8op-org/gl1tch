@@ -9,23 +9,73 @@
  \_____|______|_|  |_|  \_____|_|  |_|
 ```
 
-GL1TCH is a tmux-native AI workspace. It runs pipelines, coordinates AI agents, and keeps everything visible in one terminal session. Your GL1TCH is your own.
+GL1TCH is a tmux-native AI workspace. Run pipelines, coordinate agents, and keep everything visible in one terminal session — your GL1TCH, your way.
+
+## Install
+
+**macOS**
+```bash
+brew install 8op-org/tap/glitch
+```
+
+**Linux** — download the release tarball and run the install script:
+```bash
+curl -L https://github.com/8op-org/gl1tch/releases/latest/download/glitch_linux_amd64.tar.gz \
+  | tar xz -C /tmp/glitch-install
+cd /tmp/glitch-install && ./install.sh
+```
+
+Use `glitch_linux_arm64.tar.gz` on ARM64. The script installs `glitch` and all provider binaries to `~/.local/bin` — make sure it's on your `$PATH`.
+
+## Requirements
+
+- **tmux** — `brew install tmux` / `apt install tmux`
+- **An AI provider** — Ollama (local, free) or Claude CLI (cloud)
 
 ## Getting Started
 
 ### Launch
 
-```
+```bash
 glitch
 ```
 
-This creates (or reattaches to) your GL1TCH session. Everything runs inside tmux — you can detach and reconnect anytime.
+This creates (or reattaches to) your GL1TCH session inside tmux. Detach and reconnect anytime — your jobs keep running.
 
-### The Switchboard
+On first launch, run `/init` to walk through provider setup.
 
-The **Switchboard** (window 0) is your control panel. GL1TCH takes the full screen — talk to it to run pipelines, launch agents, check job status, or just get help.
+### Your First Pipeline
 
-### Navigation
+```
+/pipeline create a pipeline that summarizes my git log every morning
+```
+
+GL1TCH generates the pipeline, shows you a preview, and asks before saving. No YAML editing required.
+
+## Commands
+
+Type `/help` in the console to see all commands. Common ones:
+
+| Command | What it does |
+|---|---|
+| `/init` | First-run wizard — configure providers and preferences |
+| `/models` | Pick a provider and model |
+| `/model [name]` | Switch provider or model inline |
+| `/pipeline [name]` | Run a pipeline, or ask GL1TCH to build one |
+| `/rerun [name]` | Rerun a pipeline by name |
+| `/cron` | Get help scheduling recurring jobs |
+| `/brain [query]` | Search your notes, or start an interactive brain session |
+| `/prompt [name]` | Load or build a system prompt with AI |
+| `/session [new\|name\|#]` | Manage chat sessions |
+| `/s` | Shorthand for `/session` |
+| `/cwd [path]` | Set working directory |
+| `/terminal [cmd]` | Open a split pane, optionally running a command |
+| `/themes` | Open the theme picker |
+| `/clear` | Clear chat history |
+| `/help` | Full command list |
+| `/quit` | Exit GL1TCH |
+
+## Navigation
 
 | Key | Action |
 |---|---|
@@ -41,57 +91,24 @@ Press `^spc` (ctrl+space) then a key:
 
 | Chord | Action |
 |---|---|
-| `^spc h` | This help screen |
-| `^spc t` | Switch to Switchboard |
+| `^spc h` | Help screen |
+| `^spc t` | Switch to console |
 | `^spc m` | Theme picker |
 | `^spc c` | New window |
 | `^spc d` | Detach session |
 | `^spc r` | Reload GL1TCH (picks up new binary) |
-| `^spc q` | Quit (tears down all tmux sessions) |
+| `^spc q` | Quit |
 | `^spc [` / `]` | Previous / next window |
 | `^spc x` / `X` | Kill pane / window |
 | `^spc a` | Jump to GL1TCH assistant |
 
-### Pipelines
+## Themes
 
-Pipelines live in `~/.config/glitch/pipelines/`. Each is a `.pipeline.yaml` file.
-
-To run a pipeline, use an explicit run-verb in the chat:
-
-```
-run backup
-launch deploy every morning at 8am
-execute sync-repos on https://github.com/org/repo
-```
-
-GL1TCH only dispatches pipelines when you explicitly ask. Questions, observations, and generic task requests (`review my PR`, `check the logs`) are handled by the AI directly — they never trigger an automated pipeline.
-
-### Terminal Panes
-
-The `/terminal` command manages inline tmux panes without leaving the Switchboard:
-
-| Command | Action |
-|---|---|
-| `/terminal` | Open a new terminal pane (horizontal split) |
-| `/terminal <cmd>` | Open a pane running `<cmd>` |
-| `/terminal list` | List open terminal panes |
-| `/terminal kill` | Kill the most recently opened terminal pane |
-| `/terminal focus <n>` | Focus terminal pane `n` |
-| `/terminal equalize` | Equalize all pane sizes |
-
-### Themes
-
-Press `T` in the Switchboard or `^spc m` to open the theme picker. Themes live in `~/.config/glitch/themes/`.
+Press `T` or `/themes` to open the theme picker.
 
 Built-in themes: **Dracula**, **Nord**, **Catppuccin Mocha**, **Tokyo Night**, **Rose Piné**, **Solarized Dark**, **Kanagawa**.
 
-### Reconnecting
-
-```
-glitch
-```
-
-If a session is already running, this reattaches. Your jobs keep running while detached.
+Custom themes live in `~/.config/glitch/themes/`.
 
 ## Releasing
 
@@ -101,6 +118,6 @@ Use the `/release` skill in Claude Code to cut a new release:
 /release
 ```
 
-The skill guides you through the full flow: branch → PR → merge to protected main → changelog curation → semver tag → GitHub Actions release build.
+The skill guides you through: branch → PR → merge to protected main → changelog curation → semver tag → GitHub Actions release build.
 
 Requires: `gh` CLI authenticated, `goreleaser` installed, `task` installed.
