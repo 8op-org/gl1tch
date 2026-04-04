@@ -58,3 +58,11 @@ fi
 
 echo ""
 echo "Done. Make sure ${BIN_DIR} is on your PATH."
+echo ""
+
+# Run config init to write wrapper YAMLs and example pipelines.
+if command -v glitch >/dev/null 2>&1; then
+    glitch config init
+elif [ -f "${BIN_DIR}/glitch" ]; then
+    "${BIN_DIR}/glitch" config init
+fi

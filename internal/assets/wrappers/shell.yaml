@@ -1,0 +1,32 @@
+# gl1tch sidecar — shell
+#
+# Runs an arbitrary shell command and outputs stdout. No LLM.
+# Use for lightweight data-fetching steps (date, hostname, env vars, etc.)
+#
+# Supported vars:
+#   cmd  — the shell command to run (passed to sh -c)
+#
+# Example pipeline step:
+#   - id: today
+#     plugin: shell
+#     vars:
+#       cmd: "date +%Y-%m-%d"
+
+name: shell
+description: "Run a shell command and capture stdout — no LLM"
+kind: tool
+command: python3
+args:
+  - "-c"
+  - |
+    import os, subprocess, sys
+    cmd = os.environ.get('GLITCH_CMD', '')
+    if not cmd:
+        sys.exit(0)
+    r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    print(r.stdout, end='')
+    if r.returncode != 0:
+        # Print stderr to stdout so it's captured in the pipeline output buffer.
+        if r.stderr:
+            print(r.stderr, end='')
+        sys.exit(r.returncode)

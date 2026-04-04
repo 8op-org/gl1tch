@@ -1,13 +1,13 @@
 # gl1tch sidecar descriptor for the Gemini provider plugin.
 #
 # Install: copy this file to ~/.config/glitch/wrappers/gemini.yaml
-# and ensure `gl1tch-gemini` is on $PATH (run `make install`).
+# and ensure `glitch-gemini` is on $PATH (run `make install`).
 #
 # Prerequisites: gemini CLI installed and authenticated.
 #   https://ai.google.dev/gemini-api/docs/gemini-cli
 #
 # Calling convention:
-#   input  — the prompt text, passed as stdin to gl1tch-gemini
+#   input  — the prompt text, passed as stdin to glitch-gemini
 #   vars   — GLITCH_MODEL is set to the selected model ID
 #
 # Example pipeline step:
@@ -20,7 +20,7 @@
 name: gemini
 description: "Google Gemini AI via the gemini CLI (https://ai.google.dev/gemini-api/docs/gemini-cli)"
 kind: agent
-command: gl1tch-gemini
+command: glitch-gemini
 models:
   - id: gemini-2.5-pro
     label: "Gemini 2.5 Pro"

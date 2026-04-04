@@ -1,4 +1,4 @@
-BINARY      := gl1tch-opencode
+BINARY      := glitch-opencode
 SIDECAR     := opencode.yaml
 INSTALL_BIN := $(or $(shell test -w /usr/local/bin && echo /usr/local/bin),$(HOME)/.local/bin)
 WRAPPERS_DIR := $(HOME)/.config/glitch/wrappers

@@ -19,3 +19,9 @@ var ThemeFS embed.FS
 //
 //go:embed examples
 var ExamplesFS embed.FS
+
+// WrappersFS contains the core executor sidecar YAML descriptors.
+// These are written to ~/.config/glitch/wrappers/ by glitch config init.
+//
+//go:embed wrappers/*.yaml
+var WrappersFS embed.FS

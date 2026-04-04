@@ -3,11 +3,14 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/8op-org/gl1tch/internal/assets"
 )
 
 func init() {
@@ -22,7 +25,7 @@ var configCmd = &cobra.Command{
 
 var configInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Write default layout.yaml and keybindings.yaml",
+	Short: "Write default config files and bundled executor wrappers",
 	RunE:  runConfigInit,
 }
 
@@ -43,13 +46,7 @@ panes:
 const defaultKeybindingsYAML = `# glitch keybinding configuration
 # Only keys listed here are bound. Remove entries to preserve your tmux bindings.
 bindings:
-  - key: "M-n"
-    action: launch-session-picker
-  - key: "M-t"
-    action: open-sysop
-  - key: "M-w"
-    action: open-welcome
-  # Pane resizing (5 cells per keypress; vim-style keys work reliably on macOS)
+  # Pane resizing (5 cells per keypress)
   - key: "M-h"
     action: resize-pane-left
   - key: "M-l"
@@ -69,6 +66,7 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("config init: mkdir %s: %w", cfgDir, err)
 	}
 
+	// Write layout and keybindings.
 	files := []struct {
 		name    string
 		content string
@@ -89,6 +87,62 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("config init: write %s: %w", path, err)
 		}
 		fmt.Printf("wrote %s\n", path)
+	}
+
+	// Write bundled executor wrapper YAMLs to ~/.config/glitch/wrappers/.
+	wrappersDir := filepath.Join(cfgDir, "wrappers")
+	if err := os.MkdirAll(wrappersDir, 0o755); err != nil {
+		return fmt.Errorf("config init: mkdir wrappers: %w", err)
+	}
+	if err := writeEmbeddedDir(assets.WrappersFS, "wrappers", wrappersDir); err != nil {
+		return fmt.Errorf("config init: write wrappers: %w", err)
+	}
+
+	// Write bundled example pipelines to ~/.config/glitch/pipelines/.
+	pipelinesDir := filepath.Join(cfgDir, "pipelines")
+	if err := os.MkdirAll(pipelinesDir, 0o755); err != nil {
+		return fmt.Errorf("config init: mkdir pipelines: %w", err)
+	}
+	if err := writeEmbeddedDirFilter(assets.ExamplesFS, "examples", pipelinesDir, ".pipeline.yaml"); err != nil {
+		return fmt.Errorf("config init: write examples: %w", err)
+	}
+
+	return nil
+}
+
+// writeEmbeddedDir writes all files from an embedded FS subdirectory into dst.
+// Existing files are skipped.
+func writeEmbeddedDir(fsys fs.FS, srcDir, dst string) error {
+	return writeEmbeddedDirFilter(fsys, srcDir, dst, "")
+}
+
+// writeEmbeddedDirFilter is like writeEmbeddedDir but skips files whose names
+// don't end with suffix. Pass an empty suffix to write all files.
+func writeEmbeddedDirFilter(fsys fs.FS, srcDir, dst, suffix string) error {
+	entries, err := fs.ReadDir(fsys, srcDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if suffix != "" && !strings.HasSuffix(e.Name(), suffix) {
+			continue
+		}
+		destPath := filepath.Join(dst, e.Name())
+		if _, err := os.Stat(destPath); err == nil {
+			fmt.Printf("skipped %s (already exists)\n", destPath)
+			continue
+		}
+		data, err := fs.ReadFile(fsys, srcDir+"/"+e.Name())
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(destPath, data, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("wrote %s\n", destPath)
 	}
 	return nil
 }

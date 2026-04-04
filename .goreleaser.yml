@@ -152,19 +152,19 @@ archives:
     # Bundle sidecar YAML files and the install script alongside the binaries.
     files:
       - src: plugins/claude/claude.yaml
-        dst: wrappers
+        dst: wrappers/
       - src: plugins/github-copilot/github-copilot.yaml
-        dst: wrappers
+        dst: wrappers/
       - src: plugins/codex/codex.yaml
-        dst: wrappers
+        dst: wrappers/
       - src: plugins/gemini/gemini.yaml
-        dst: wrappers
+        dst: wrappers/
       - src: plugins/opencode/opencode.yaml
-        dst: wrappers
+        dst: wrappers/
       - src: plugins/ollama/ollama.yaml
-        dst: wrappers
+        dst: wrappers/
       - src: install.sh
-        dst: scripts
+        dst: install.sh
 
 checksum:
   name_template: "checksums.txt"
@@ -182,6 +182,24 @@ brews:
     license: "MIT"
     install: |
       bin.install "glitch"
+      bin.install "glitch-ollama"
+      bin.install "glitch-claude"
+      bin.install "glitch-opencode"
+      bin.install "glitch-codex"
+      bin.install "glitch-gemini"
+      bin.install "glitch-github-copilot"
+      (etc/"glitch/wrappers").mkpath
+      Dir["wrappers/*.yaml"].each { |f| (etc/"glitch/wrappers").install f }
+    post_install: |
+      wrappers_dst = "#{Dir.home}/.config/glitch/wrappers"
+      system "mkdir", "-p", wrappers_dst
+      Dir["#{etc}/glitch/wrappers/*.yaml"].each do |f|
+        dst = "#{wrappers_dst}/#{File.basename(f)}"
+        FileUtils.cp(f, dst) unless File.exist?(dst)
+      end
+    caveats: |
+      Run the following to finish setup:
+        glitch config init
     test: |
       assert_match version.to_s, shell_output("#{bin}/glitch --version")
     skip_upload: "{{ if .Env.HOMEBREW_TAP_GITHUB_PLUGIN }}false{{ else }}true{{ end }}"

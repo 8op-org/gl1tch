@@ -4,7 +4,22 @@ description: "Install gl1tch and run your first AI-powered automation in under f
 order: 1
 ---
 
-gl1tch runs AI-powered automations called pipelines. You tell it what you want — it routes to the right pipeline, or builds one on the spot. This page gets you from zero to a working pipeline in under five minutes.
+gl1tch runs AI-powered automations called pipelines. This page gets you from zero to a working pipeline — everything on this page has been tested on a fresh machine.
+
+## Requirements
+
+- **tmux** — gl1tch runs inside a tmux session
+- **An AI provider** — Ollama (local, free) or the Claude CLI (cloud)
+- **20GB+ disk** if using Ollama (the default coding model is ~5GB; `llama3.2` is ~2GB)
+- **4GB+ RAM** to run a local model
+
+Install tmux if you don't have it:
+
+```bash
+brew install tmux          # macOS
+sudo apt install tmux      # Ubuntu / Debian
+```
+
 
 ## Install
 
@@ -12,119 +27,132 @@ gl1tch runs AI-powered automations called pipelines. You tell it what you want �
 brew install 8op-org/tap/glitch
 ```
 
-Or build from source with Go 1.22+:
+**Linux** — download the release tarball and run the install script:
 
 ```bash
-go install github.com/8op-org/gl1tch/cmd/glitch@latest
+curl -L https://github.com/8op-org/gl1tch/releases/latest/download/glitch_linux_amd64.tar.gz \
+  | tar xz -C /tmp/glitch-install
+cd /tmp/glitch-install && ./install.sh
 ```
 
-You also need at least one AI provider: [Ollama](https://ollama.ai) running locally, or the [Claude CLI](https://claude.ai/download) authenticated. No Docker, no cloud account required.
+Use `glitch_linux_arm64.tar.gz` on ARM64 machines. The script installs `glitch` and all provider binaries to `~/.local/bin` — make sure it's on your `$PATH`.
+
+
+## Set up an AI provider
+
+You need at least one before you can run pipelines.
+
+### Ollama (local, no API cost)
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.2          # ~2GB, good all-around
+```
+
+On Linux, Ollama installs as a systemd service and starts automatically. On macOS, start it with `ollama serve`.
+
+### Claude CLI (cloud)
+
+```bash
+brew install claude           # macOS
+# or download from https://claude.ai/download
+claude                        # authenticate on first run
+```
+
+
+## Initialize your workspace
+
+```bash
+glitch config init
+```
+
+This writes your default config, executor wrappers, and the `wf-git-pulse` example pipeline to `~/.config/glitch`. You only need to run this once.
+
+Verify your provider is reachable:
+
+```bash
+glitch model          # prints the best available provider/model
+```
+
 
 ## Run your first pipeline
-
-gl1tch ships with `wf-git-pulse` — a pipeline that shows what's happening in any git repo right now:
 
 ```bash
 glitch pipeline run wf-git-pulse
 ```
 
+This pipeline shows what's happening in the current git repo — recent commits, diff stat, and working tree status. It runs entirely with shell steps, no AI model required.
+
 ```
-[pipeline] starting: wf-git-pulse
-[step:pulse] status:running
-[step:pulse] status:done
+[step:log] status:done
+[step:diffstat] status:done
+[step:status] status:done
 
 === recent commits ===
-067ce08 feat(console): mud-chat-reply signal handler
-68a8da1 feat(model): add glitch model subcommand for plugin model discovery
-7cc9125 Merge pull request #40 from 8op-org/feature/router-improvements
-389150d feat(router): five intent routing improvements with full test coverage
-aa2faf2 chore: delete dead EditorPanel from buildershared
-
-=== diff stat since last commit ===
- internal/console/signal_handlers.go | 38 +++++++++++++++++++++++++++++++++++++
- 1 file changed, 38 insertions(+)
-
-=== untracked / modified ===
- M site/src/content/pipelines/quickstart.md
+3a9f1c2 feat: add pipeline resume support
+8d2e047 fix: brain context injection on retry
+...
 ```
 
-That's a real pipeline run — `git log`, `git diff --stat`, and `git status` chained together in one step.
-
-## Add AI to the pipeline
-
-Ask gl1tch to summarize the same commits. You can type this directly in the console, or run it from your terminal — both work exactly the same way:
-
-```
-summarize my last 5 commits
-```
-
-From the terminal:
-
-```bash
-glitch ask --provider ollama "summarize my last 5 commits"
-```
-
-gl1tch fetches your commits with `git log`, passes them to your local model, and streams the result:
-
-```
-[step:fetch] status:running
-[step:fetch] status:done
-[step:summarize] status:running
-[step:summarize] status:done
-
-Recent commits added a signal handler for in-game chat interaction and a
-subcommand for discovering plugin models. There were also improvements to
-the router with enhanced test coverage, and dead code was cleaned up by
-removing an unused EditorPanel class.
-```
-
-No model flag needed — gl1tch picks your default Ollama model automatically (`qwen2.5:latest` unless you configure otherwise).
-
-> **Note:** Pipelines that use tools, run shell commands autonomously, or coordinate multi-agent workflows require a larger local model with tool/function-calling support. Smaller models handle summarization and generation steps well; for agentic tasks pull a capable model like `ollama pull qwen3:8b` and pass `--model qwen3:8b`.
-
-## Use Claude if you prefer a cloud provider
-
-```bash
-glitch ask --provider claude "summarize my last 5 commits"
-```
-
-gl1tch picks Claude Haiku by default (the cheapest option). Pass `--model claude-sonnet-4-6` to upgrade.
-
-## Review a PR
-
-Pass gl1tch a GitHub PR URL — in the console or from the terminal:
-
-```
-https://github.com/8op-org/gl1tch/pull/40
-```
-
-```bash
-glitch ask "https://github.com/8op-org/gl1tch/pull/40"
-```
-
-```
-[route] → pr-review (95%)
-[step:fetch_diff] status:running
-[step:fetch_comments] status:running
-[step:fix] status:running
-[step:fix] status:done
-```
-
-`pr-review` fetches the diff and reviewer comments, then produces corrected code. Requires `gh` authenticated.
 
 ## Open the console
-
-For ongoing sessions — asking questions, running pipelines, switching between projects:
 
 ```bash
 glitch
 ```
 
-Everything available from the command line is available here, plus conversation history, brain context, and the inline docs viewer (`/docs`).
+This opens your workspace in a tmux session. Everything available from the command line is here — plus conversation history, brain context, and the inline docs viewer (`/docs`).
+
+
+## Ask gl1tch something
+
+From the console or the terminal:
+
+```bash
+glitch ask "summarize my last 5 commits"
+```
+
+gl1tch routes the request to a pipeline if one matches, or handles it directly.
+
+
+## Write your own pipeline
+
+Save this as `~/.config/glitch/pipelines/git-summary.pipeline.yaml`:
+
+```yaml
+name: git-summary
+version: "1"
+
+steps:
+  - id: log
+    executor: shell
+    vars:
+      cmd: "git log --oneline -10"
+
+  - id: summarize
+    executor: ollama
+    model: llama3.2
+    needs: [log]
+    prompt: |
+      Here are the last 10 git commits:
+
+      {{steps.log.output}}
+
+      Summarize what's been worked on in 3-4 sentences. Be specific about what changed.
+```
+
+Run it:
+
+```bash
+glitch pipeline run git-summary
+```
+
+Swap `executor: ollama` + `model: llama3.2` for `executor: claude` + `model: claude-haiku-4-5-20251001` if you're using Claude instead.
+
 
 ## Next steps
 
-- [Pipelines](/docs/pipelines/pipelines) — What's inside a pipeline and how steps connect
-- [Console](/docs/pipelines/console) — Your gl1tch workspace in detail
-- [Brain](/docs/pipelines/brain) — How gl1tch remembers context across sessions
-- [Examples](/docs/pipelines/examples) — Ready-to-run pipelines for real developer workflows
+- [Pipelines](/docs/pipelines/pipelines) — what's inside a pipeline and how steps connect
+- [Executors](/docs/pipelines/executors) — all available executors
+- [Console](/docs/pipelines/console) — your gl1tch workspace in detail
+- [Examples](/docs/pipelines/examples) — ready-to-run pipelines for real developer workflows
