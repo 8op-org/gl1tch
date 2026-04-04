@@ -32,8 +32,10 @@ esc
 <li><a href="/docs/pipelines/technologies">Technologies</a> — what runs under the hood</li>
 </ul> </div> </article><article id="ds-article-quickstart" class="ds-article" aria-hidden="true"> <div class="ds-article-meta"> <span class="ds-article-title fg-purple">Your First Pipeline</span> <span class="ds-article-desc fg-comment">Install gl1tch and run your first AI-powered automation in under five minutes.</span> </div> <div class="ds-content"> <p>gl1tch runs AI-powered automations called pipelines. You tell it what you want — it routes to the right pipeline, or builds one on the spot. This page gets you from zero to a working pipeline in under five minutes.</p>
 <h2 id="install">Install</h2>
+<pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">brew</span><span style="color:#F1FA8C"> install</span><span style="color:#F1FA8C"> 8op-org/tap/glitch</span></span></code></pre>
+<p>Or build from source with Go 1.22+:</p>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">go</span><span style="color:#F1FA8C"> install</span><span style="color:#F1FA8C"> github.com/8op-org/gl1tch/cmd/glitch@latest</span></span></code></pre>
-<p>You need Go 1.22+ and at least one AI provider: <a href="https://ollama.ai">Ollama</a> running locally, or the <a href="https://claude.ai/download">Claude CLI</a> authenticated. No Docker, no cloud account required.</p>
+<p>You also need at least one AI provider: <a href="https://ollama.ai">Ollama</a> running locally, or the <a href="https://claude.ai/download">Claude CLI</a> authenticated. No Docker, no cloud account required.</p>
 <h2 id="run-your-first-pipeline">Run your first pipeline</h2>
 <p>gl1tch ships with <code>wf-git-pulse</code> — a pipeline that shows what’s happening in any git repo right now:</p>
 <pre class="astro-code dracula" style="background-color:#282A36;color:#F8F8F2; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#50FA7B">glitch</span><span style="color:#F1FA8C"> pipeline</span><span style="color:#F1FA8C"> run</span><span style="color:#F1FA8C"> wf-git-pulse</span></span></code></pre>
