@@ -9,10 +9,16 @@ gl1tch runs AI-powered automations called pipelines. You tell it what you want â
 ## Install
 
 ```bash
+brew install 8op-org/tap/glitch
+```
+
+Or build from source with Go 1.22+:
+
+```bash
 go install github.com/8op-org/gl1tch/cmd/glitch@latest
 ```
 
-You need Go 1.22+ and at least one AI provider: [Ollama](https://ollama.ai) running locally, or the [Claude CLI](https://claude.ai/download) authenticated. No Docker, no cloud account required.
+You also need at least one AI provider: [Ollama](https://ollama.ai) running locally, or the [Claude CLI](https://claude.ai/download) authenticated. No Docker, no cloud account required.
 
 ## Run your first pipeline
 
