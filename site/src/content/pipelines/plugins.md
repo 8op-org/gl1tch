@@ -56,9 +56,9 @@ glitch plugin list
 ```
 
 ```text
-gl1tch-mud      8op-org/gl1tch-mud      v1.0.0    ~/.local/bin/gl1tch-mud
-gl1tch-weather  8op-org/gl1tch-weather  v1.2.0    ~/.local/bin/gl1tch-weather
-gl1tch-notify   8op-org/gl1tch-notify   v0.9.0    ~/.local/bin/gl1tch-notify
+gl1tch-mud      adam-stokes/gl1tch-mud      v1.0.0    ~/.local/bin/gl1tch-mud
+gl1tch-weather  adam-stokes/gl1tch-weather  v1.2.0    ~/.local/bin/gl1tch-weather
+gl1tch-notify   adam-stokes/gl1tch-notify   v0.9.0    ~/.local/bin/gl1tch-notify
 ```
 
 ### Removing a Plugin
@@ -157,7 +157,7 @@ gl1tch picks the right binary for your platform automatically (`darwin-arm64`, `
 Run a text MUD world as a pipeline executor. Each step can query room state, move the player, or trigger world events.
 
 ```bash
-glitch plugin install 8op-org/gl1tch-mud
+glitch plugin install adam-stokes/gl1tch-mud
 ```
 
 ```yaml
@@ -184,7 +184,7 @@ steps:
 Fetch current conditions or forecasts. Useful as a data source step before any LLM summary or notification.
 
 ```bash
-glitch plugin install 8op-org/gl1tch-weather
+glitch plugin install adam-stokes/gl1tch-weather
 ```
 
 ```yaml
@@ -210,7 +210,7 @@ steps:
 Send desktop or push notifications when a pipeline finishes, fails, or hits a threshold.
 
 ```bash
-glitch plugin install 8op-org/gl1tch-notify
+glitch plugin install adam-stokes/gl1tch-notify
 ```
 
 ```yaml
