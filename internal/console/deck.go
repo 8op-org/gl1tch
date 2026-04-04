@@ -1341,6 +1341,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Handle rerun request from glitch-notify or other external plugins.
+		if msg.topic == topics.PipelineRerunRequested {
+			var p struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(msg.payload, &p) == nil && p.Name != "" {
+				cmd := tea.Batch(
+					func() tea.Msg { return glitchRerunMsg{name: p.Name, kind: "pipeline"} },
+				)
+				if m.pipelineBusCh != nil {
+					return m, tea.Batch(cmd, waitForPipelineBusEvent(m.pipelineBusCh))
+				}
+				return m, cmd
+			}
+			if m.pipelineBusCh != nil {
+				return m, waitForPipelineBusEvent(m.pipelineBusCh)
+			}
+			return m, nil
+		}
 		// Handle game scoring event: fire goroutine and return immediately.
 		if msg.topic == topics.GameRunScored && m.narrationCh != nil {
 			var payload game.GameRunScoredPayload

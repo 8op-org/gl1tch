@@ -52,4 +52,7 @@ const (
 	// Supervisor notification topics
 	NotificationErrorDiagnosed    = "notification.error.diagnosed"
 	NotificationAgentLoopComplete = "notification.agent.loop.completed"
+
+	// External trigger topics (published by plugins, handled by the main process)
+	PipelineRerunRequested = "pipeline.rerun.requested"
 )
