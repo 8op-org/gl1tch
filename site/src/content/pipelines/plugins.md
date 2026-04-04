@@ -231,6 +231,30 @@ steps:
 ```
 
 
+### glitch-gamification
+
+Track achievements, leaderboard rankings, and NPC agent stats across any gl1tch game. Runs as a daemon that any game plugin publishes events to.
+
+```bash
+glitch plugin install adam-stokes/gl1tch-gamification
+```
+
+```yaml
+name: award-on-milestone
+version: "1"
+
+steps:
+  - id: start-gamification
+    executor: shell
+    command: "glitch-gamification daemon &"
+
+  - id: check-top
+    executor: glitch-gamification
+    args:
+      command: top
+```
+
+
 ### Publishing Your Own Plugin
 
 1. Create a GitHub repo with your binary and a `glitch-plugin.yaml` at the root.
