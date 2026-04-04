@@ -3024,7 +3024,7 @@ func isNonBlockingCmd(s string) bool {
 	}
 	cmd := strings.ToLower(strings.Fields(s)[0])
 	switch cmd {
-	case "/session", "/clear", "/cwd", "/quit", "/exit", "/trace", "/themes", "/model", "/models", "/shell":
+	case "/session", "/s", "/clear", "/cwd", "/quit", "/exit", "/trace", "/themes", "/model", "/models", "/shell":
 		return true
 	}
 	return false
