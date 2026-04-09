@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var targetPath string
+
 var rootCmd = &cobra.Command{
 	Use:   "glitch",
 	Short: "your GitHub co-pilot",

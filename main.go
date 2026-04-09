@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,9 +10,6 @@ import (
 	"github.com/8op-org/gl1tch/cmd"
 )
 
-//go:embed workflows/*.yaml
-var workflows embed.FS
-
 var (
 	version = "dev"
 	commit  = "none"
@@ -21,7 +17,6 @@ var (
 )
 
 func main() {
-	cmd.EmbeddedWorkflows = workflows
 	if home, err := os.UserHomeDir(); err == nil {
 		loadDotenv(filepath.Join(home, ".config", "glitch", ".env"))
 	}

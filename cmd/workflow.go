@@ -13,6 +13,7 @@ import (
 )
 
 func init() {
+	workflowRunCmd.Flags().StringVarP(&targetPath, "path", "C", "", "run against this directory instead of cwd")
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
@@ -57,6 +58,12 @@ var workflowRunCmd = &cobra.Command{
 	Short: "run a workflow by name",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if targetPath != "" {
+			if err := os.Chdir(targetPath); err != nil {
+				return fmt.Errorf("chdir %s: %w", targetPath, err)
+			}
+		}
+
 		name := args[0]
 		input := ""
 		if len(args) > 1 {
