@@ -1,0 +1,31 @@
+name: github-pr-review
+description: Fetch and review a GitHub pull request
+
+steps:
+  - id: fetch-pr
+    run: |
+      gh pr view "{{.input}}" --json number,title,body,additions,deletions,changedFiles,baseRefName,headRefName,author,labels
+
+  - id: fetch-diff
+    run: |
+      gh pr diff "{{.input}}"
+
+  - id: review
+    llm:
+      provider: claude
+      model: claude-haiku-4-5-20251001
+      prompt: |
+        You are a senior engineer doing a pull request review. Be concise and direct.
+
+        Structure your review:
+        1. **Summary** — one sentence on what this PR does
+        2. **Critical issues** — bugs, broken invariants, edge cases (MUST FIX)
+        3. **Test coverage** — missing scenarios, blind spots
+        4. **Suggestions** — naming, style, minor improvements (NICE TO HAVE)
+        5. **Verdict** — APPROVE or REQUEST CHANGES
+
+        PR metadata:
+        {{step "fetch-pr"}}
+
+        Full diff:
+        {{step "fetch-diff"}}

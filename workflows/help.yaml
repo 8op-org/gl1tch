@@ -1,0 +1,21 @@
+name: help
+description: Show what glitch can do
+
+steps:
+  - id: info
+    run: |
+      echo "glitch — your GitHub co-pilot
+
+      Commands:
+        glitch ask <question or URL>    Route to the best workflow
+        glitch workflow list             List available workflows
+        glitch workflow run <name>       Run a specific workflow
+        glitch config show               Show configuration
+        glitch plugin list               List installed plugins
+
+      Examples:
+        glitch ask 'review PR https://github.com/org/repo/pull/42'
+        glitch ask 'show me open PRs'
+        glitch ask 'what issues are open'
+        glitch ask 'CI status'
+        glitch workflow run github-prs"

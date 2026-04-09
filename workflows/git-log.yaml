@@ -1,0 +1,15 @@
+name: git-log
+description: Summarize recent git activity
+
+steps:
+  - id: log
+    run: git log --oneline --since="7 days ago" --all
+
+  - id: format
+    llm:
+      prompt: |
+        Summarize this past week of git activity. Group by theme or area of the codebase.
+        Note any patterns (active areas, large changes, etc).
+
+        Commits:
+        {{step "log"}}

@@ -1,0 +1,20 @@
+name: github-pr-checks
+description: Show CI/CD check status for open pull requests
+
+steps:
+  - id: fetch
+    run: |
+      gh pr list --state open --limit 20 --json number,title,statusCheckRollup,url
+
+  - id: format
+    llm:
+      prompt: |
+        Report CI/CD status for these pull requests. For each PR:
+        - PR number and title
+        - Overall status (passing, failing, pending)
+        - Any failing checks by name
+
+        Flag any PRs with failing or stuck checks.
+
+        Raw data:
+        {{step "fetch"}}

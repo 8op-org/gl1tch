@@ -1,0 +1,21 @@
+name: github-issues
+description: List and summarize open issues in the current repository
+
+steps:
+  - id: fetch
+    run: |
+      gh issue list --state open --limit 30 --json number,title,state,author,url,labels,updatedAt,comments
+
+  - id: format
+    llm:
+      prompt: |
+        Summarize these open issues. For each issue:
+        - Issue number and title
+        - Labels
+        - Comment count
+        - How recently updated
+
+        Group by label or theme if possible. Flag any that look stale (no updates in 30+ days).
+
+        Raw data:
+        {{step "fetch"}}

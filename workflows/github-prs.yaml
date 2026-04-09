@@ -1,0 +1,21 @@
+name: github-prs
+description: List open pull requests in the current repository
+
+steps:
+  - id: fetch
+    run: |
+      gh pr list --state open --limit 30 --json number,title,state,author,url,updatedAt,isDraft,mergeable
+
+  - id: format
+    llm:
+      prompt: |
+        Summarize these open pull requests. For each PR, give:
+        - PR number and title
+        - Author
+        - Draft status
+        - How recently updated
+
+        Group by urgency if possible (stale PRs, ready to merge, drafts).
+
+        Raw data:
+        {{step "fetch"}}

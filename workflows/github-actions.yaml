@@ -1,0 +1,20 @@
+name: github-actions
+description: List recent GitHub Actions workflow runs
+
+steps:
+  - id: fetch
+    run: |
+      gh run list --limit 20 --json name,status,conclusion,headBranch,url,createdAt,updatedAt
+
+  - id: format
+    llm:
+      prompt: |
+        Summarize these recent GitHub Actions runs. For each:
+        - Workflow name and branch
+        - Status (success, failure, in_progress)
+        - When it ran
+
+        Highlight any failures or in-progress runs.
+
+        Raw data:
+        {{step "fetch"}}
