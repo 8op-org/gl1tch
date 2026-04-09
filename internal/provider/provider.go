@@ -1,7 +1,11 @@
 package provider
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os/exec"
 	"strings"
 )
@@ -16,15 +20,34 @@ func RunShell(command string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// RunOllama sends a prompt to an Ollama model and returns the response.
+// RunOllama sends a prompt to an Ollama model via the HTTP API.
 func RunOllama(model, prompt string) (string, error) {
-	cmd := exec.Command("ollama", "run", model)
-	cmd.Stdin = strings.NewReader(prompt)
-	out, err := cmd.CombinedOutput()
+	body, _ := json.Marshal(map[string]any{
+		"model":  model,
+		"prompt": prompt,
+		"stream": false,
+	})
+	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("ollama: %w\n%s", err, out)
+		return "", fmt.Errorf("ollama: %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("ollama: read: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("ollama: %s\n%s", resp.Status, data)
+	}
+
+	var result struct {
+		Response string `json:"response"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return "", fmt.Errorf("ollama: parse: %w", err)
+	}
+	return strings.TrimSpace(result.Response), nil
 }
 
 // RunClaude sends a prompt to Claude via the CLI and returns the response.
