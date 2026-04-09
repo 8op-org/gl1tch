@@ -10,22 +10,32 @@ steps:
     run: |
       gh pr diff "{{.input}}"
 
+  - id: fetch-comments
+    run: |
+      gh pr view "{{.input}}" --json comments,reviews --jq '[.comments[],.reviews[]] | sort_by(.createdAt) | .[] | "**\(.author.login)** (\(.createdAt)):\n\(.body)\n"'
+
   - id: review
     llm:
       provider: claude
       model: claude-haiku-4-5-20251001
       prompt: |
         You are a senior engineer doing a pull request review. Be concise and direct.
+        Pay close attention to existing review comments — address open questions and
+        unresolved feedback rather than repeating what's already been said.
 
         Structure your review:
         1. **Summary** — one sentence on what this PR does
-        2. **Critical issues** — bugs, broken invariants, edge cases (MUST FIX)
-        3. **Test coverage** — missing scenarios, blind spots
-        4. **Suggestions** — naming, style, minor improvements (NICE TO HAVE)
-        5. **Verdict** — APPROVE or REQUEST CHANGES
+        2. **Open threads** — unresolved comments or questions from reviewers
+        3. **Critical issues** — bugs, broken invariants, edge cases (MUST FIX)
+        4. **Test coverage** — missing scenarios, blind spots
+        5. **Suggestions** — naming, style, minor improvements (NICE TO HAVE)
+        6. **Verdict** — APPROVE or REQUEST CHANGES
 
         PR metadata:
         {{step "fetch-pr"}}
+
+        Review comments and discussion:
+        {{step "fetch-comments"}}
 
         Full diff:
         {{step "fetch-diff"}}
