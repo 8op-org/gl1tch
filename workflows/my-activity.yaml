@@ -1,0 +1,62 @@
+name: my-activity
+description: Dashboard of your open PRs, issues, and mentions across your repos
+
+steps:
+  - id: my-prs
+    run: |
+      gh search prs --author=@me --state=open --repo=elastic/ensemble --repo=elastic/oblt-cli --repo=elastic/observability-robots --repo=elastic/observability-framework --json repository,number,title,updatedAt,url,isDraft --limit 50
+
+  - id: review-requested
+    run: |
+      gh search prs --review-requested=@me --state=open --repo=elastic/ensemble --repo=elastic/oblt-cli --repo=elastic/observability-robots --repo=elastic/observability-framework --json repository,number,title,author,updatedAt,url --limit 50
+
+  - id: changes-requested
+    run: |
+      gh search prs --author=@me --state=open --review=changes_requested --repo=elastic/ensemble --repo=elastic/oblt-cli --repo=elastic/observability-robots --repo=elastic/observability-framework --json repository,number,title,updatedAt,url --limit 50
+
+  - id: my-issues
+    run: |
+      gh search issues --assignee=@me --state=open --repo=elastic/ensemble --repo=elastic/oblt-cli --repo=elastic/observability-robots --repo=elastic/observability-framework --json repository,number,title,updatedAt,url,labels --limit 50
+
+  - id: mentions
+    run: |
+      gh search issues --mentions=@me --state=open --repo=elastic/ensemble --repo=elastic/oblt-cli --repo=elastic/observability-robots --repo=elastic/observability-framework --json repository,number,title,updatedAt,url,isPullRequest --limit 50
+
+  - id: digest
+    llm:
+      prompt: |
+        You are generating a concise activity digest for a developer. Be direct, no fluff.
+        Use the developer's GitHub username from the data to personalize.
+
+        Organize into these sections (skip empty sections):
+
+        ## Needs your action
+        - PRs with CHANGES_REQUESTED — what to fix
+        - PRs where your review is requested — link + one-line summary
+
+        ## Your open PRs
+        - Status of each (approved, pending review, draft)
+        - How recently updated
+
+        ## Issues assigned to you
+        - Title, labels, staleness
+
+        ## Mentions
+        - Where you were mentioned (skip duplicates from above sections)
+
+        ---
+
+        My open PRs:
+        {{step "my-prs"}}
+
+        Reviews requested from me:
+        {{step "review-requested"}}
+
+        My PRs with changes requested:
+        {{step "changes-requested"}}
+
+        My open issues:
+        {{step "my-issues"}}
+
+        Mentions:
+        {{step "mentions"}}
