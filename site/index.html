@@ -46,9 +46,9 @@ body {
 
 /* Layout */
 .wrap {
-  max-width: 900px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 32px;
   position: relative;
   z-index: 1;
 }
@@ -156,11 +156,13 @@ h2 {
   border-left: 3px solid var(--teal);
   border-radius: 6px;
   padding: 20px 24px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   line-height: 1.8;
   overflow-x: auto;
   position: relative;
   margin-bottom: 24px;
+  white-space: pre;
+  word-break: keep-all;
 }
 
 .codeblock code {
@@ -261,14 +263,14 @@ h2 {
 }
 
 .feature-card h3 {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--yellow);
   margin-bottom: 8px;
 }
 
 .feature-card p {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--dim);
   line-height: 1.7;
 }
@@ -291,24 +293,30 @@ h2 {
 .callout-list li:last-child { border-bottom: none; }
 
 .callout-list h3 {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--yellow);
   margin-bottom: 4px;
 }
 
 .callout-list p {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--dim);
   line-height: 1.7;
+}
+
+/* Terminal demo blocks — slightly smaller to fit long commands */
+.terminal-block {
+  font-size: 0.8rem;
 }
 
 /* Agent cards (Section 5) */
 .agent-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   margin: 32px 0;
+  max-width: 640px;
 }
 
 .agent-card {
@@ -325,9 +333,9 @@ h2 {
 }
 
 .agent-card-header {
-  padding: 16px 20px;
+  padding: 14px 20px;
   border-bottom: 1px solid rgba(61, 122, 138, 0.15);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--teal);
 }
@@ -336,13 +344,13 @@ h2 {
   margin: 0;
   border-left: none;
   border-radius: 0;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   padding: 16px 20px;
 }
 
 .agent-card-note {
   padding: 12px 20px;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   color: var(--dim);
   line-height: 1.7;
   border-top: 1px solid rgba(61, 122, 138, 0.1);
@@ -458,8 +466,8 @@ footer {
   <h2>Ask anything</h2>
   <p class="section-copy">One command. gl1tch routes your question to the right workflow &mdash; PR URLs go to review, natural language gets matched by your local LLM.</p>
 
-  <div class="codeblock">
-    <code><span class="prompt">$</span> glitch ask "review PR https://github.com/org/repo/pull/42"
+  <div class="codeblock terminal-block">
+    <code><span class="prompt">$</span> glitch ask "review PR github.com/org/repo/pull/42"
 <span class="route">&rarr; routes to github-pr-review workflow</span>
 
 <span class="prompt">$</span> glitch ask "what issues are open"
@@ -541,13 +549,13 @@ footer {
   <h2>Extend with plugins</h2>
   <p class="section-copy">Any binary on your PATH named <code>glitch-*</code> becomes a command. No registry, no config, no approval process.</p>
 
-  <div class="codeblock">
+  <div class="codeblock terminal-block">
     <code><span class="prompt">$</span> glitch plugin list
   glitch-summarize
   glitch-deploy
 
 <span class="prompt">$</span> glitch summarize README.md
-<span class="comment"># runs glitch-summarize binary, passes args through</span></code>
+<span class="comment"># runs glitch-summarize, passes args through</span></code>
   </div>
 
   <div class="feature-grid">
@@ -584,18 +592,24 @@ footer {
 
     <div class="agent-card">
       <div class="agent-card-header">Cursor / Copilot</div>
-      <div class="codeblock copyable" data-copy="curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules">
-        <code><span class="comment"># Copy to your project root:</span>
-<span class="prompt">$</span> curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules</code>
+      <div class="codeblock copyable" data-copy="curl -sLo .cursorrules https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules">
+        <code><span class="comment"># Add to your project root:</span>
+<span class="prompt">$</span> curl -sLo .cursorrules \
+    https://raw.githubusercontent.com/\
+    8op-org/gl1tch/main/skills/cursor/.cursorrules</code>
       </div>
+      <div class="agent-card-note">Drops a .cursorrules file your agent picks up automatically.</div>
     </div>
 
     <div class="agent-card">
       <div class="agent-card-header">Any agent</div>
-      <div class="codeblock copyable" data-copy="curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md">
-        <code><span class="comment"># Copy to your project root:</span>
-<span class="prompt">$</span> curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md</code>
+      <div class="codeblock copyable" data-copy="curl -sLo AGENTS.md https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md">
+        <code><span class="comment"># Add to your project root:</span>
+<span class="prompt">$</span> curl -sLo AGENTS.md \
+    https://raw.githubusercontent.com/\
+    8op-org/gl1tch/main/skills/generic/AGENTS.md</code>
       </div>
+      <div class="agent-card-note">Generic instructions any LLM coding tool can follow.</div>
     </div>
   </div>
 
