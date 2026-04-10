@@ -294,6 +294,56 @@ code {
   line-height: 1.75;
 }
 
+/* ── Examples ─────────────────────────────────── */
+.examples {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.example {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 32px;
+}
+
+.example-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.example-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.example-tag {
+  font-size: 0.75rem;
+  color: var(--dim);
+  background: rgba(125, 207, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+
+.example-desc {
+  font-size: 0.9rem;
+  color: var(--dim);
+  line-height: 1.8;
+  margin-bottom: 20px;
+  max-width: 640px;
+}
+
+.example pre.code {
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  line-height: 1.9;
+}
+
 /* ── Agent cards ─────────────────────────────── */
 .agent-cards {
   display: flex;
@@ -558,6 +608,108 @@ footer {
       <h3>First-class args</h3>
       <p>stdin / stdout / stderr pass through. Flags are yours.</p>
     </div>
+  </div>
+</div>
+</section>
+
+<!-- ── Real-world examples ──────────────────── -->
+<section id="examples">
+<div class="wrap">
+  <h2>Real-world examples</h2>
+  <p class="section-copy">People use gl1tch to automate the repetitive parts of their day. Here's what that looks like.</p>
+
+  <div class="examples">
+
+    <div class="example">
+      <div class="example-header">
+        <h3>Morning briefing</h3>
+        <span class="example-tag">4 shell steps + 1 LLM step</span>
+      </div>
+      <p class="example-desc">A developer working across four repos needs a daily briefing: PRs awaiting review, assigned issues, recent mentions, and yesterday's activity. One command, one report.</p>
+      <pre class="code"><span class="p">$</span> glitch ask "morning briefing"
+
+<span class="r"># The workflow behind it:</span>
+<span class="k">name:</span> <span class="s">morning-briefing</span>
+<span class="k">steps:</span>
+  - <span class="k">id:</span> <span class="s">fetch-reviews</span>
+    <span class="k">run:</span> <span class="s">|</span>
+      gh api graphql -f query='{ search(
+        query: "type:pr state:open review-requested:@me"
+      ) { nodes { ... on PullRequest {
+        number title url author { login }
+      }}}}'
+
+  - <span class="k">id:</span> <span class="s">fetch-issues</span>
+    <span class="k">run:</span> <span class="s">|</span>
+      gh api graphql -f query='{ search(
+        query: "type:issue state:open assignee:@me"
+      ) { nodes { ... on Issue {
+        number title url labels { nodes { name }}
+      }}}}'
+
+  - <span class="k">id:</span> <span class="s">fetch-yesterday</span>
+    <span class="k">run:</span> <span class="s">|</span>
+      gh api graphql -f query='...' | jq '{
+        authored: ..., reviews: ..., closed: ...
+      }'
+
+  - <span class="k">id:</span> <span class="s">format</span>
+    <span class="k">llm:</span>
+      <span class="k">prompt:</span> <span class="s">|</span>
+        Produce a morning briefing.
+        Reviews: {{step "fetch-reviews"}}
+        Issues: {{step "fetch-issues"}}
+        Yesterday: {{step "fetch-yesterday"}}</pre>
+    </div>
+
+    <div class="example">
+      <div class="example-header">
+        <h3>GTD dashboard</h3>
+        <span class="example-tag">8 workflows + Astro static site</span>
+      </div>
+      <p class="example-desc">Eight gl1tch workflows output JSON — reviews, tasks, CI status, calendar, email triage — then a build script pipes them into an Astro static site. One command opens a full dashboard in your browser.</p>
+      <pre class="code"><span class="r"># build.sh — orchestrates all 8 workflows</span>
+run_workflow() {
+  local name="$1" output="$2" fallback="$3"
+  if glitch workflow run "$name" > "data/$output"; then
+    echo "ok"
+  else
+    echo "$fallback" > "data/$output"
+  fi
+}
+
+run_workflow dashboard-reviews  reviews.json  "[]"
+run_workflow dashboard-tasks    tasks.json    '{}'
+run_workflow dashboard-ci       ci.json       "[]"
+run_workflow dashboard-calendar calendar.json '{}'
+run_workflow dashboard-email    email.json    "[]"
+
+npx astro build
+open dist/index.html</pre>
+    </div>
+
+    <div class="example">
+      <div class="example-header">
+        <h3>Multi-repo activity digest</h3>
+        <span class="example-tag">5 shell steps + 1 LLM step</span>
+      </div>
+      <p class="example-desc">Sweep open PRs, review requests, issues, and mentions across multiple repos. The LLM organizes everything into an actionable digest grouped by what needs attention first.</p>
+      <pre class="code"><span class="p">$</span> glitch workflow run my-activity
+
+<span class="r"># Fetches in parallel across repos:</span>
+<span class="r">#   - Your open PRs (draft vs. ready)</span>
+<span class="r">#   - PRs requesting your review</span>
+<span class="r">#   - PRs with changes requested on yours</span>
+<span class="r">#   - Assigned issues with labels + staleness</span>
+<span class="r">#   - Recent mentions (deduped)</span>
+<span class="r">#</span>
+<span class="r"># LLM step organizes into:</span>
+<span class="r">#   ## Needs your action</span>
+<span class="r">#   ## Your open PRs</span>
+<span class="r">#   ## Issues assigned to you</span>
+<span class="r">#   ## Mentions</span></pre>
+    </div>
+
   </div>
 </div>
 </section>
