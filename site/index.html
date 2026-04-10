@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gl1tch — your AI, your terminal, your rules</title>
+<meta name="description" content="A composable CLI that chains shell commands and LLMs into workflows you own.">
+<meta name="theme-color" content="#1a1b26">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #1a1b26;
+  --bg-dark: #0f1017;
+  --fg: #c0caf5;
+  --dim: #565f89;
+  --teal: #7dcfff;
+  --yellow: #e0af68;
+  --pink: #f7768e;
+  --border: #3d7a8a;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.7;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Canvas background */
+#hexbg {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.07;
+}
+
+/* Layout */
+.wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+section {
+  padding: 80px 0;
+}
+
+/* Typography */
+h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--teal);
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.section-copy {
+  color: var(--dim);
+  font-size: 0.9rem;
+  max-width: 640px;
+  margin-bottom: 32px;
+  line-height: 1.8;
+}
+
+/* ── Hero ───────────────────────────────────── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.hero-inner { max-width: 700px; }
+
+.hero-title {
+  font-size: clamp(3rem, 10vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--fg);
+  position: relative;
+  display: inline-block;
+  line-height: 1.1;
+}
+
+/* Glitch animation layers */
+.hero-title::before,
+.hero-title::after {
+  content: 'gl1tch';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+}
+
+.hero-title::before {
+  color: var(--teal);
+  z-index: -1;
+  animation: glitch-1 3s infinite linear alternate-reverse;
+}
+
+.hero-title::after {
+  color: var(--pink);
+  z-index: -2;
+  animation: glitch-2 2.5s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-1 {
+  0%   { clip-path: inset(40% 0 61% 0); transform: translate(-2px, -1px); }
+  20%  { clip-path: inset(92% 0 1%  0); transform: translate(1px, 2px); }
+  40%  { clip-path: inset(43% 0 1%  0); transform: translate(-1px, 1px); }
+  60%  { clip-path: inset(25% 0 58% 0); transform: translate(2px, -1px); }
+  80%  { clip-path: inset(54% 0 7%  0); transform: translate(-1px, 2px); }
+  100% { clip-path: inset(58% 0 43% 0); transform: translate(0px, -2px); }
+}
+
+@keyframes glitch-2 {
+  0%   { clip-path: inset(65% 0 13% 0); transform: translate(2px, 1px); }
+  20%  { clip-path: inset(15% 0 62% 0); transform: translate(-2px, -1px); }
+  40%  { clip-path: inset(79% 0 2%  0); transform: translate(1px, 1px); }
+  60%  { clip-path: inset(2%  0 78% 0); transform: translate(-1px, 2px); }
+  80%  { clip-path: inset(40% 0 34% 0); transform: translate(2px, -1px); }
+  100% { clip-path: inset(67% 0 5%  0); transform: translate(-2px, 0px); }
+}
+
+.hero-tagline {
+  font-size: 1.1rem;
+  color: var(--teal);
+  margin: 20px 0 8px;
+  font-weight: 500;
+}
+
+.hero-desc {
+  font-size: 0.85rem;
+  color: var(--dim);
+  margin-bottom: 36px;
+  line-height: 1.8;
+}
+
+/* Code blocks */
+.codeblock {
+  background: var(--bg-dark);
+  border-left: 3px solid var(--teal);
+  border-radius: 6px;
+  padding: 20px 24px;
+  font-size: 0.8rem;
+  line-height: 1.8;
+  overflow-x: auto;
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.codeblock code {
+  color: var(--fg);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.codeblock .prompt { color: var(--teal); }
+.codeblock .route  { color: var(--dim); }
+.codeblock .key    { color: var(--teal); }
+.codeblock .str    { color: var(--yellow); }
+.codeblock .comment { color: var(--dim); }
+
+/* Copyable code blocks */
+.copyable { position: relative; }
+
+.copy-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: rgba(125, 207, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.copy-btn:hover {
+  color: var(--teal);
+  background: rgba(125, 207, 255, 0.15);
+  border-color: var(--teal);
+}
+
+.copy-btn.copied {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+
+/* Install block */
+.install-block {
+  display: inline-block;
+  text-align: left;
+  margin-bottom: 24px;
+  width: 100%;
+  max-width: 480px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 12px 28px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  letter-spacing: 0.02em;
+}
+
+.btn-primary {
+  background: var(--teal);
+  color: var(--bg-dark);
+  border: 1px solid var(--teal);
+}
+
+.btn-primary:hover {
+  background: transparent;
+  color: var(--teal);
+  box-shadow: 0 0 20px rgba(125, 207, 255, 0.15);
+}
+
+/* Feature grids */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-top: 32px;
+}
+
+.feature-card {
+  background: var(--bg-dark);
+  border: 1px solid rgba(61, 122, 138, 0.2);
+  border-radius: 8px;
+  padding: 24px;
+  transition: all 0.25s ease;
+}
+
+.feature-card:hover {
+  border-color: var(--border);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.feature-card h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--yellow);
+  margin-bottom: 8px;
+}
+
+.feature-card p {
+  font-size: 0.75rem;
+  color: var(--dim);
+  line-height: 1.7;
+}
+
+/* Split layout (Section 3) */
+.split {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+.callout-list { list-style: none; }
+
+.callout-list li {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(61, 122, 138, 0.15);
+}
+
+.callout-list li:last-child { border-bottom: none; }
+
+.callout-list h3 {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--yellow);
+  margin-bottom: 4px;
+}
+
+.callout-list p {
+  font-size: 0.75rem;
+  color: var(--dim);
+  line-height: 1.7;
+}
+
+/* Agent cards (Section 5) */
+.agent-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin: 32px 0;
+}
+
+.agent-card {
+  background: var(--bg-dark);
+  border: 1px solid rgba(61, 122, 138, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.agent-card:hover {
+  border-color: var(--border);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.agent-card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(61, 122, 138, 0.15);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.agent-card .codeblock {
+  margin: 0;
+  border-left: none;
+  border-radius: 0;
+  font-size: 0.7rem;
+  padding: 16px 20px;
+}
+
+.agent-card-note {
+  padding: 12px 20px;
+  font-size: 0.68rem;
+  color: var(--dim);
+  line-height: 1.7;
+  border-top: 1px solid rgba(61, 122, 138, 0.1);
+}
+
+.bottom-note {
+  margin-top: 24px;
+  font-size: 0.78rem;
+  color: var(--dim);
+  line-height: 1.8;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Section dividers */
+section + section {
+  border-top: 1px solid rgba(61, 122, 138, 0.1);
+}
+
+/* Footer */
+footer {
+  padding: 60px 0;
+  text-align: center;
+  border-top: 1px solid rgba(61, 122, 138, 0.1);
+}
+
+.footer-install {
+  display: inline-block;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.footer-links a {
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 0.75rem;
+  transition: color 0.2s ease;
+}
+
+.footer-links a:hover { color: var(--teal); }
+
+.footer-attr {
+  font-size: 0.7rem;
+  color: var(--dim);
+  margin-top: 16px;
+  opacity: 0.6;
+}
+
+/* ── Responsive ─────────────────────────────── */
+@media (max-width: 768px) {
+  section { padding: 48px 0; }
+
+  h2 { font-size: 1.4rem; }
+
+  .feature-grid,
+  .agent-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .codeblock {
+    font-size: 0.7rem;
+    padding: 16px;
+  }
+
+  .hero { min-height: auto; padding: 100px 0 60px; }
+}
+
+@media (max-width: 480px) {
+  .hero-title { font-size: 2.5rem; }
+  .wrap { padding: 0 16px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="hexbg"></canvas>
+
+<!-- ── Hero ──────────────────────────────────── -->
+<section class="hero">
+<div class="wrap">
+<div class="hero-inner">
+  <h1 class="hero-title">gl1tch</h1>
+  <p class="hero-tagline">your AI, your terminal, your rules</p>
+  <p class="hero-desc">A composable CLI that chains shell commands and LLMs into workflows you own.</p>
+
+  <div class="install-block">
+    <div class="codeblock copyable" data-copy="brew install 8op-org/tap/glitch">
+      <code><span class="prompt">$</span> brew install 8op-org/tap/glitch</code>
+    </div>
+  </div>
+
+  <a href="https://github.com/8op-org/gl1tch" class="btn btn-primary">View on GitHub</a>
+</div>
+</div>
+</section>
+
+<!-- ── Ask anything ─────────────────────────── -->
+<section id="ask">
+<div class="wrap">
+  <h2>Ask anything</h2>
+  <p class="section-copy">One command. gl1tch routes your question to the right workflow &mdash; PR URLs go to review, natural language gets matched by your local LLM.</p>
+
+  <div class="codeblock">
+    <code><span class="prompt">$</span> glitch ask "review PR https://github.com/org/repo/pull/42"
+<span class="route">&rarr; routes to github-pr-review workflow</span>
+
+<span class="prompt">$</span> glitch ask "what issues are open"
+<span class="route">&rarr; routes to github-issues workflow</span>
+
+<span class="prompt">$</span> glitch ask "CI status"
+<span class="route">&rarr; routes to github-actions workflow</span></code>
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h3>Smart routing</h3>
+      <p>URL patterns detected instantly, freeform questions matched via Ollama</p>
+    </div>
+    <div class="feature-card">
+      <h3>Local-first</h3>
+      <p>Your local LLM picks the workflow, nothing leaves your machine unless you say so</p>
+    </div>
+    <div class="feature-card">
+      <h3>Zero config</h3>
+      <p>Works out of the box with built-in workflows</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── Compose workflows ────────────────────── -->
+<section id="workflows">
+<div class="wrap">
+  <h2>Compose workflows</h2>
+  <p class="section-copy">Shell commands fetch the data. LLMs make sense of it. Chain them together in plain YAML.</p>
+
+  <div class="split">
+    <div class="codeblock">
+      <code><span class="key">name:</span> <span class="str">github-pr-review</span>
+<span class="key">steps:</span>
+  - <span class="key">id:</span> <span class="str">fetch-pr</span>
+    <span class="key">run:</span> <span class="str">|</span>
+      gh pr view "{{.input}}" --json title,body,reviews
+  - <span class="key">id:</span> <span class="str">fetch-diff</span>
+    <span class="key">run:</span> <span class="str">|</span>
+      gh pr diff "{{.input}}"
+  - <span class="key">id:</span> <span class="str">review</span>
+    <span class="key">llm:</span>
+      <span class="key">provider:</span> <span class="str">claude</span>
+      <span class="key">model:</span> <span class="str">claude-haiku-4-5-20251001</span>
+      <span class="key">prompt:</span> <span class="str">|</span>
+        PR: {{step "fetch-pr"}}
+        Diff: {{step "fetch-diff"}}
+        Review as a senior engineer.
+        Flag bugs and security issues.</code>
+    </div>
+
+    <ul class="callout-list">
+      <li>
+        <h3>Shell steps own data</h3>
+        <p><code>gh</code>, <code>git</code>, <code>curl</code>, anything on your PATH</p>
+      </li>
+      <li>
+        <h3>LLM steps own reasoning</h3>
+        <p>Claude, Ollama, swap providers per step</p>
+      </li>
+      <li>
+        <h3>Go templates</h3>
+        <p>Chain outputs with <code>{{step "id"}}</code>, pass input with <code>{{.input}}</code></p>
+      </li>
+      <li>
+        <h3>Your workflows, your repo</h3>
+        <p>Drop YAML in <code>.glitch/workflows/</code> and they're live</p>
+      </li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- ── Extend with plugins ──────────────────── -->
+<section id="plugins">
+<div class="wrap">
+  <h2>Extend with plugins</h2>
+  <p class="section-copy">Any binary on your PATH named <code>glitch-*</code> becomes a command. No registry, no config, no approval process.</p>
+
+  <div class="codeblock">
+    <code><span class="prompt">$</span> glitch plugin list
+  glitch-summarize
+  glitch-deploy
+
+<span class="prompt">$</span> glitch summarize README.md
+<span class="comment"># runs glitch-summarize binary, passes args through</span></code>
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h3>Zero ceremony</h3>
+      <p>Drop a binary, it's a command</p>
+    </div>
+    <div class="feature-card">
+      <h3>Any language</h3>
+      <p>Go, Python, Bash, Rust &mdash; if it runs, it's a plugin</p>
+    </div>
+    <div class="feature-card">
+      <h3>First-class args</h3>
+      <p>stdin/stdout/stderr pass through, flags are yours</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── Give your agents gl1tch ──────────────── -->
+<section id="agents">
+<div class="wrap">
+  <h2>Give your agents gl1tch</h2>
+  <p class="section-copy">Install a skill and your AI coding agent can run gl1tch workflows directly in your project.</p>
+
+  <div class="agent-cards">
+    <div class="agent-card">
+      <div class="agent-card-header">Claude Code</div>
+      <div class="codeblock copyable" data-copy="npx @anthropic-ai/superpower install gl1tch">
+        <code><span class="prompt">$</span> npx @anthropic-ai/superpower install gl1tch</code>
+      </div>
+      <div class="agent-card-note">Your agent gets glitch ask, workflow authoring, and pipeline execution as native skills.</div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">Cursor / Copilot</div>
+      <div class="codeblock copyable" data-copy="curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules">
+        <code><span class="comment"># Copy to your project root:</span>
+<span class="prompt">$</span> curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules</code>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">Any agent</div>
+      <div class="codeblock copyable" data-copy="curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md">
+        <code><span class="comment"># Copy to your project root:</span>
+<span class="prompt">$</span> curl -sO https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md</code>
+      </div>
+    </div>
+  </div>
+
+  <p class="bottom-note">Skills let your agent compose and run workflows without you typing a thing. Author once, delegate forever.</p>
+</div>
+</section>
+
+<!-- ── Footer ───────────────────────────────── -->
+<footer>
+<div class="wrap">
+  <div class="footer-install">
+    <div class="codeblock copyable" data-copy="brew install 8op-org/tap/glitch">
+      <code><span class="prompt">$</span> brew install 8op-org/tap/glitch</code>
+    </div>
+  </div>
+
+  <div class="footer-links">
+    <a href="https://github.com/8op-org/gl1tch">GitHub</a>
+    <a href="https://github.com/8op-org/gl1tch/blob/main/LICENSE">MIT License</a>
+  </div>
+
+  <p class="footer-attr">made with AI &mdash; guided by adam s&#x2020;okes</p>
+</div>
+</footer>
+
+<script>
+/* ── Hex-rain canvas ────────────────────────── */
+(function initHexCanvas() {
+  var canvas = document.getElementById('hexbg');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var COL_W = 28, ROW_H = 18;
+  var COLS, ROWS, offsets, speeds, grid;
+
+  function hexByte() {
+    return Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+  }
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function setup() {
+    COLS = Math.ceil(canvas.width / COL_W) + 2;
+    ROWS = Math.ceil(canvas.height / ROW_H) + 3;
+    offsets = Array.from({ length: COLS }, function() { return Math.random() * ROWS * ROW_H; });
+    speeds  = Array.from({ length: COLS }, function() { return 0.25 + Math.random() * 0.45; });
+    var GRID_H = ROWS * 4;
+    grid = Array.from({ length: GRID_H }, function() {
+      return Array.from({ length: COLS }, hexByte);
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '12px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(135, 135, 175, 0.07)';
+    for (var col = 0; col < COLS; col++) {
+      offsets[col] = (offsets[col] + speeds[col]) % (grid.length * ROW_H);
+      var startRow = Math.floor(offsets[col] / ROW_H);
+      var subPx = offsets[col] % ROW_H;
+      for (var row = 0; row <= ROWS + 1; row++) {
+        var y = row * ROW_H - subPx;
+        var gridRow = (startRow + row) % grid.length;
+        ctx.fillText(grid[gridRow][col], col * COL_W, y);
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  setup();
+  window.addEventListener('resize', function() { resize(); setup(); });
+  draw();
+})();
+
+/* ── Click-to-copy ──────────────────────────── */
+(function initCopy() {
+  document.querySelectorAll('.copyable').forEach(function(block) {
+    var btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    btn.addEventListener('click', function() {
+      var text = block.getAttribute('data-copy') || block.querySelector('code').textContent.trim();
+      navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(function() {
+          btn.textContent = 'copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    });
+    block.appendChild(btn);
+  });
+})();
+</script>
+</body>
+</html>
