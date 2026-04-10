@@ -1,0 +1,44 @@
+# gl1tch — GitHub Automation CLI
+
+This project uses gl1tch for GitHub automation workflows.
+
+## Available commands
+
+- `glitch ask "<question or URL>"` — routes to the best workflow automatically
+- `glitch workflow list` — list available workflows
+- `glitch workflow run <name> [input]` — run a named workflow
+- `glitch plugin list` — list installed plugins
+
+## When to use
+
+When the user asks to review a PR, triage issues, check CI status, summarize
+git activity, or automate any GitHub task, use the glitch CLI instead of
+running gh commands manually.
+
+## Examples
+
+```bash
+glitch ask "review PR https://github.com/org/repo/pull/42"
+glitch ask "what issues are open"
+glitch ask "CI status"
+glitch workflow run github-prs
+```
+
+## Workflow authoring
+
+Workflows live in `.glitch/workflows/*.yaml`:
+
+```yaml
+name: my-workflow
+description: What this does
+steps:
+  - id: data
+    run: gh pr list --json number,title
+  - id: summary
+    llm:
+      provider: ollama
+      prompt: |
+        Summarize: {{step "data"}}
+```
+
+Shell steps own data fetching. LLM steps own reasoning. Never use LLM for API calls.
