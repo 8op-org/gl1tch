@@ -433,7 +433,8 @@ footer {
 <canvas id="hexbg"></canvas>
 
 <!-- ── Hero ──────────────────────────────────── -->
-<section class="hero">
+<main>
+<section class="hero" id="hero">
 <div class="wrap">
 <div class="hero-inner">
   <h1 class="hero-title">gl1tch</h1>
@@ -602,6 +603,8 @@ footer {
 </div>
 </section>
 
+</main>
+
 <!-- ── Footer ───────────────────────────────── -->
 <footer>
 <div class="wrap">
@@ -687,6 +690,9 @@ footer {
           btn.textContent = 'copy';
           btn.classList.remove('copied');
         }, 2000);
+      }).catch(function() {
+        btn.textContent = 'failed';
+        setTimeout(function() { btn.textContent = 'copy'; }, 2000);
       });
     });
     block.appendChild(btn);
