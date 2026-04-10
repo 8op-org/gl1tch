@@ -344,6 +344,40 @@ code {
   line-height: 1.9;
 }
 
+.example-note {
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--dim);
+  line-height: 1.75;
+}
+
+.example-callout {
+  margin-top: 48px;
+  padding: 28px 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--yellow);
+  border-radius: 10px;
+}
+
+.example-callout h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--yellow);
+  margin-bottom: 10px;
+}
+
+.example-callout p {
+  font-size: 0.9rem;
+  color: var(--dim);
+  line-height: 1.8;
+}
+
+.example-callout pre.code {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
 /* ── Agent cards ─────────────────────────────── */
 .agent-cards {
   display: flex;
@@ -616,101 +650,150 @@ footer {
 <section id="examples">
 <div class="wrap">
   <h2>Real-world examples</h2>
-  <p class="section-copy">People use gl1tch to automate the repetitive parts of their day. Here's what that looks like.</p>
+  <p class="section-copy">These workflows are in production. Shell steps fetch live data, LLM steps make sense of it.</p>
 
   <div class="examples">
 
     <div class="example">
       <div class="example-header">
-        <h3>Morning briefing</h3>
-        <span class="example-tag">4 shell steps + 1 LLM step</span>
+        <h3>Email triage</h3>
+        <span class="example-tag">shell + jq + LLM</span>
       </div>
-      <p class="example-desc">A developer working across four repos needs a daily briefing: PRs awaiting review, assigned issues, recent mentions, and yesterday's activity. One command, one report.</p>
-      <pre class="code"><span class="p">$</span> glitch ask "morning briefing"
+      <p class="example-desc">Fetch unread emails, filter out bots with jq, then ask an LLM which ones actually need a reply.</p>
+      <pre class="code"><span class="k">name:</span> <span class="s">email-triage</span>
+<span class="k">description:</span> <span class="s">surface emails that need a human reply</span>
 
-<span class="r"># The workflow behind it:</span>
-<span class="k">name:</span> <span class="s">morning-briefing</span>
+<span class="k">steps:</span>
+  - <span class="k">id:</span> <span class="s">fetch-unread</span>
+    <span class="k">run:</span> <span class="s">|</span>
+      gws gmail +triage --max 50 --format json \
+        | jq '.messages'
+
+  - <span class="k">id:</span> <span class="s">filter-bots</span>
+    <span class="k">run:</span> <span class="s">|</span>
+      cat &lt;&lt;'EOF' | jq '[.[] | select(
+        (.from | test("noreply@|notifications@github|
+          jira@|automation@|dependabot"; "i")) | not
+      )]'
+      {{step "fetch-unread"}}
+      EOF
+
+  - <span class="k">id:</span> <span class="s">triage</span>
+    <span class="k">llm:</span>
+      <span class="k">provider:</span> <span class="s">claude</span>
+      <span class="k">model:</span> <span class="s">claude-haiku-4-5-20251001</span>
+      <span class="k">prompt:</span> <span class="s">|</span>
+        Classify which emails need attention.
+        Skip newsletters, automated reports, mass CCs.
+        Return JSON: [{sender, subject, reason}]
+
+        Emails: {{step "filter-bots"}}</pre>
+    </div>
+
+    <div class="example">
+      <div class="example-header">
+        <h3>Task prioritizer</h3>
+        <span class="example-tag">3 GraphQL fetches + jq scoring</span>
+      </div>
+      <p class="example-desc">Pull review requests, assigned issues, and your own PRs via GraphQL. Score them into HIGH / MEDIUM / LOW with pure jq — no LLM needed.</p>
+      <pre class="code"><span class="k">name:</span> <span class="s">task-prioritizer</span>
+<span class="k">description:</span> <span class="s">prioritized task list as JSON</span>
+
 <span class="k">steps:</span>
   - <span class="k">id:</span> <span class="s">fetch-reviews</span>
     <span class="k">run:</span> <span class="s">|</span>
-      gh api graphql -f query='{ search(
-        query: "type:pr state:open review-requested:@me"
-      ) { nodes { ... on PullRequest {
-        number title url author { login }
-      }}}}'
+      gh api graphql -f query='{
+        search(query: "type:pr state:open review-requested:@me"
+               type: ISSUE, first: 50) {
+          nodes { ... on PullRequest {
+            number title url createdAt
+            repository { nameWithOwner }
+            author { login }
+          }}
+        }
+      }' | jq '[.data.search.nodes[] | {
+        type: "review", number, title, url,
+        repo: .repository.nameWithOwner,
+        age_days: ((now - (.createdAt|fromdateiso8601)) / 86400 | floor)
+      }]'
 
-  - <span class="k">id:</span> <span class="s">fetch-issues</span>
+  - <span class="k">id:</span> <span class="s">fetch-own-prs</span>
     <span class="k">run:</span> <span class="s">|</span>
-      gh api graphql -f query='{ search(
-        query: "type:issue state:open assignee:@me"
-      ) { nodes { ... on Issue {
-        number title url labels { nodes { name }}
-      }}}}'
+      gh api graphql -f query='{
+        search(query: "type:pr state:open author:@me"
+               type: ISSUE, first: 50) {
+          nodes { ... on PullRequest {
+            number title url createdAt
+            commits(last:1) { nodes { commit {
+              statusCheckRollup { state }
+            }}}
+          }}
+        }
+      }' | jq '[.data.search.nodes[] | {
+        type: "own_pr", number, title, url,
+        ci: (.commits.nodes[0].commit
+              .statusCheckRollup.state // "UNKNOWN")
+      }]'
 
-  - <span class="k">id:</span> <span class="s">fetch-yesterday</span>
+  - <span class="k">id:</span> <span class="s">prioritize</span>
     <span class="k">run:</span> <span class="s">|</span>
-      gh api graphql -f query='...' | jq '{
-        authored: ..., reviews: ..., closed: ...
-      }'
-
-  - <span class="k">id:</span> <span class="s">format</span>
-    <span class="k">llm:</span>
-      <span class="k">prompt:</span> <span class="s">|</span>
-        Produce a morning briefing.
-        Reviews: {{step "fetch-reviews"}}
-        Issues: {{step "fetch-issues"}}
-        Yesterday: {{step "fetch-yesterday"}}</pre>
+      jq -n --argjson r '{{step "fetch-reviews"}}' \
+            --argjson p '{{step "fetch-own-prs"}}' '{
+        high: (
+          [$r[] | select(.age_days > 2)] +
+          [$p[] | select(.ci == "FAILURE")]
+        ),
+        medium: [$r[] | select(.age_days <= 2)],
+        low:    [$p[] | select(.ci != "FAILURE")]
+      }'</pre>
     </div>
 
     <div class="example">
       <div class="example-header">
-        <h3>GTD dashboard</h3>
-        <span class="example-tag">8 workflows + Astro static site</span>
+        <h3>Dashboard pipeline</h3>
+        <span class="example-tag">8 workflows &rarr; static site</span>
       </div>
-      <p class="example-desc">Eight gl1tch workflows output JSON — reviews, tasks, CI status, calendar, email triage — then a build script pipes them into an Astro static site. One command opens a full dashboard in your browser.</p>
-      <pre class="code"><span class="r"># build.sh — orchestrates all 8 workflows</span>
+      <p class="example-desc">Run every workflow, dump JSON into an Astro data directory, build a static dashboard, open it. Whole thing takes 30 seconds.</p>
+      <pre class="code"><span class="r">#!/bin/bash</span>
+<span class="r"># One script orchestrates everything</span>
+
 run_workflow() {
-  local name="$1" output="$2" fallback="$3"
-  if glitch workflow run "$name" > "data/$output"; then
-    echo "ok"
+  local name="$1" out="$2" fallback="$3"
+  if glitch workflow run "$name" > "data/$out"; then
+    echo "  $name... <span class="s">ok</span>"
   else
-    echo "$fallback" > "data/$output"
+    echo "$fallback" > "data/$out"
+    echo "  $name... <span class="k">fallback</span>"
   fi
 }
 
-run_workflow dashboard-reviews  reviews.json  "[]"
-run_workflow dashboard-tasks    tasks.json    '{}'
-run_workflow dashboard-ci       ci.json       "[]"
-run_workflow dashboard-calendar calendar.json '{}'
-run_workflow dashboard-email    email.json    "[]"
+run_workflow email-triage     email.json    "[]"
+run_workflow task-prioritizer tasks.json    '{}'
+run_workflow review-dashboard reviews.json  "[]"
+run_workflow my-prs           my-prs.json   "[]"
+run_workflow ci-status        ci.json       "[]"
+run_workflow calendar         calendar.json '{}'
+run_workflow falling-behind   gaps.json     '{}'
+run_workflow activity-log     activity.json '{}'
 
-npx astro build
-open dist/index.html</pre>
-    </div>
-
-    <div class="example">
-      <div class="example-header">
-        <h3>Multi-repo activity digest</h3>
-        <span class="example-tag">5 shell steps + 1 LLM step</span>
-      </div>
-      <p class="example-desc">Sweep open PRs, review requests, issues, and mentions across multiple repos. The LLM organizes everything into an actionable digest grouped by what needs attention first.</p>
-      <pre class="code"><span class="p">$</span> glitch workflow run my-activity
-
-<span class="r"># Fetches in parallel across repos:</span>
-<span class="r">#   - Your open PRs (draft vs. ready)</span>
-<span class="r">#   - PRs requesting your review</span>
-<span class="r">#   - PRs with changes requested on yours</span>
-<span class="r">#   - Assigned issues with labels + staleness</span>
-<span class="r">#   - Recent mentions (deduped)</span>
-<span class="r">#</span>
-<span class="r"># LLM step organizes into:</span>
-<span class="r">#   ## Needs your action</span>
-<span class="r">#   ## Your open PRs</span>
-<span class="r">#   ## Issues assigned to you</span>
-<span class="r">#   ## Mentions</span></pre>
+npx astro build &amp;&amp; open dist/index.html</pre>
+      <p class="example-note">Each workflow owns its own data fetching and formatting. The build script just runs them and catches failures with sensible defaults. Swap any workflow without touching the others.</p>
     </div>
 
   </div>
+
+  <div class="example-callout">
+    <h3>You don't have to write the YAML</h3>
+    <p>With the gl1tch skill installed in your coding agent, just describe what you want. The agent writes the workflow, saves it, and runs it.</p>
+    <pre class="code"><span class="p">&gt;</span> build me a workflow that checks my open PRs across
+  these repos, flags anything with failing CI, and
+  gives me a prioritized list of what to look at first
+
+<span class="r"># Your agent writes the YAML, saves it to</span>
+<span class="r"># .glitch/workflows/pr-triage.yaml, and runs it.</span>
+<span class="r"># Next time: glitch ask "triage my PRs"</span></pre>
+  </div>
+
 </div>
 </section>
 
