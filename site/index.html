@@ -15,12 +15,14 @@
 :root {
   --bg: #1a1b26;
   --bg-dark: #0f1017;
+  --bg-card: #13141d;
   --fg: #c0caf5;
-  --dim: #565f89;
+  --dim: #737aa2;
   --teal: #7dcfff;
   --yellow: #e0af68;
   --pink: #f7768e;
   --border: #3d7a8a;
+  --border-subtle: rgba(61, 122, 138, 0.2);
 }
 
 html { scroll-behavior: smooth; }
@@ -34,7 +36,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Canvas background */
 #hexbg {
   position: fixed;
   top: 0; left: 0;
@@ -44,59 +45,106 @@ body {
   opacity: 0.07;
 }
 
-/* Layout */
 .wrap {
-  max-width: 960px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 0 32px;
+  padding: 0 40px;
   position: relative;
   z-index: 1;
 }
 
-section {
-  padding: 80px 0;
-}
+section { padding: 100px 0; }
+section + section { border-top: 1px solid var(--border-subtle); }
 
-/* Typography */
+/* ── Typography ──────────────────────────────── */
 h2 {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--teal);
-  margin-bottom: 12px;
-  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+  letter-spacing: -0.03em;
 }
 
 .section-copy {
   color: var(--dim);
-  font-size: 0.9rem;
-  max-width: 640px;
-  margin-bottom: 32px;
-  line-height: 1.8;
+  font-size: 0.95rem;
+  max-width: 600px;
+  margin-bottom: 40px;
+  line-height: 1.9;
 }
 
-/* ── Hero ───────────────────────────────────── */
+/* ── Code blocks ─────────────────────────────── */
+pre.code {
+  background: var(--bg-dark);
+  border-left: 3px solid var(--teal);
+  border-radius: 8px;
+  padding: 24px 28px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  line-height: 2;
+  overflow-x: auto;
+  color: var(--fg);
+  margin-bottom: 32px;
+  position: relative;
+  white-space: pre;
+}
+
+pre.code .p { color: var(--teal); }        /* prompt */
+pre.code .r { color: var(--dim); }         /* route / comment */
+pre.code .k { color: var(--teal); }        /* yaml key */
+pre.code .s { color: var(--yellow); }      /* yaml string */
+
+/* Inline code */
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  color: var(--teal);
+}
+
+/* Copyable blocks */
+.copyable { position: relative; }
+
+.copy-btn {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: rgba(125, 207, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.copy-btn:hover { color: var(--teal); background: rgba(125, 207, 255, 0.12); border-color: var(--teal); }
+.copy-btn.copied { color: var(--yellow); border-color: var(--yellow); }
+
+/* ── Hero ────────────────────────────────────── */
 .hero {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 40px 0;
+  padding: 60px 0;
 }
 
-.hero-inner { max-width: 700px; }
+.hero-inner { max-width: 680px; }
 
 .hero-title {
-  font-size: clamp(3rem, 10vw, 5.5rem);
+  font-size: clamp(3.5rem, 10vw, 6rem);
   font-weight: 700;
   letter-spacing: -0.04em;
   color: var(--fg);
   position: relative;
   display: inline-block;
   line-height: 1.1;
+  margin-bottom: 24px;
 }
 
-/* Glitch animation layers */
 .hero-title::before,
 .hero-title::after {
   content: 'gl1tch';
@@ -105,13 +153,11 @@ h2 {
   width: 100%; height: 100%;
   overflow: hidden;
 }
-
 .hero-title::before {
   color: var(--teal);
   z-index: -1;
   animation: glitch-1 3s infinite linear alternate-reverse;
 }
-
 .hero-title::after {
   color: var(--pink);
   z-index: -2;
@@ -126,7 +172,6 @@ h2 {
   80%  { clip-path: inset(54% 0 7%  0); transform: translate(-1px, 2px); }
   100% { clip-path: inset(58% 0 43% 0); transform: translate(0px, -2px); }
 }
-
 @keyframes glitch-2 {
   0%   { clip-path: inset(65% 0 13% 0); transform: translate(2px, 1px); }
   20%  { clip-path: inset(15% 0 62% 0); transform: translate(-2px, -1px); }
@@ -137,302 +182,246 @@ h2 {
 }
 
 .hero-tagline {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   color: var(--teal);
-  margin: 20px 0 8px;
+  margin-bottom: 12px;
   font-weight: 500;
 }
 
 .hero-desc {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   color: var(--dim);
-  margin-bottom: 36px;
+  margin-bottom: 44px;
   line-height: 1.8;
 }
 
-/* Code blocks */
-.codeblock {
-  background: var(--bg-dark);
-  border-left: 3px solid var(--teal);
-  border-radius: 6px;
-  padding: 20px 24px;
-  font-size: 0.85rem;
-  line-height: 1.8;
-  overflow-x: auto;
-  position: relative;
-  margin-bottom: 24px;
-  white-space: pre;
-  word-break: keep-all;
-}
-
-.codeblock code {
-  color: var(--fg);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.codeblock .prompt { color: var(--teal); }
-.codeblock .route  { color: var(--dim); }
-.codeblock .key    { color: var(--teal); }
-.codeblock .str    { color: var(--yellow); }
-.codeblock .comment { color: var(--dim); }
-
-/* Copyable code blocks */
-.copyable { position: relative; }
-
-.copy-btn {
-  position: absolute;
-  top: 12px; right: 12px;
-  background: rgba(125, 207, 255, 0.08);
-  border: 1px solid var(--border);
-  color: var(--dim);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
-  padding: 4px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.copy-btn:hover {
-  color: var(--teal);
-  background: rgba(125, 207, 255, 0.15);
-  border-color: var(--teal);
-}
-
-.copy-btn.copied {
-  color: var(--yellow);
-  border-color: var(--yellow);
-}
-
-/* Install block */
-.install-block {
+.hero-install {
   display: inline-block;
   text-align: left;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   width: 100%;
-  max-width: 480px;
+  max-width: 460px;
 }
 
-/* Buttons */
+.hero-install pre.code {
+  margin-bottom: 0;
+}
+
 .btn {
   display: inline-block;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
-  font-weight: 500;
-  padding: 12px 28px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 14px 32px;
   border-radius: 6px;
   text-decoration: none;
   transition: all 0.25s ease;
-  letter-spacing: 0.02em;
 }
-
 .btn-primary {
   background: var(--teal);
   color: var(--bg-dark);
   border: 1px solid var(--teal);
 }
-
 .btn-primary:hover {
   background: transparent;
   color: var(--teal);
-  box-shadow: 0 0 20px rgba(125, 207, 255, 0.15);
+  box-shadow: 0 0 24px rgba(125, 207, 255, 0.15);
 }
 
-/* Feature grids */
+/* ── Feature grid ────────────────────────────── */
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-top: 32px;
+  gap: 24px;
+  margin-top: 40px;
 }
 
 .feature-card {
-  background: var(--bg-dark);
-  border: 1px solid rgba(61, 122, 138, 0.2);
-  border-radius: 8px;
-  padding: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 28px;
   transition: all 0.25s ease;
 }
-
 .feature-card:hover {
   border-color: var(--border);
   transform: translateY(-2px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
-
 .feature-card h3 {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--yellow);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
-
 .feature-card p {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--dim);
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
-/* Split layout (Section 3) */
+/* ── Split layout ────────────────────────────── */
 .split {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 40px;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
   align-items: start;
 }
 
-.callout-list { list-style: none; }
-
-.callout-list li {
-  padding: 16px 0;
-  border-bottom: 1px solid rgba(61, 122, 138, 0.15);
+.split pre.code {
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  line-height: 1.9;
 }
 
+.callout-list { list-style: none; }
+.callout-list li {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
 .callout-list li:last-child { border-bottom: none; }
-
 .callout-list h3 {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--yellow);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
-
 .callout-list p {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--dim);
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
-/* Terminal demo blocks — slightly smaller to fit long commands */
-.terminal-block {
-  font-size: 0.8rem;
-}
-
-/* Agent cards (Section 5) */
+/* ── Agent cards ─────────────────────────────── */
 .agent-cards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin: 32px 0;
-  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 40px 0;
 }
 
 .agent-card {
-  background: var(--bg-dark);
-  border: 1px solid rgba(61, 122, 138, 0.2);
-  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
   overflow: hidden;
   transition: all 0.25s ease;
 }
-
 .agent-card:hover {
   border-color: var(--border);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-.agent-card-header {
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(61, 122, 138, 0.15);
-  font-size: 0.85rem;
+.agent-card-top {
+  display: flex;
+  align-items: stretch;
+}
+
+.agent-card-label {
+  flex: 0 0 180px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--teal);
+  border-right: 1px solid var(--border-subtle);
+  background: rgba(125, 207, 255, 0.03);
 }
 
-.agent-card .codeblock {
+.agent-card-cmd {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-card-cmd pre.code {
   margin: 0;
   border-left: none;
   border-radius: 0;
-  font-size: 0.8rem;
-  padding: 16px 20px;
+  font-size: 0.85rem;
+  padding: 18px 24px;
+  line-height: 1.8;
 }
 
 .agent-card-note {
-  padding: 12px 20px;
-  font-size: 0.75rem;
+  padding: 14px 24px;
+  font-size: 0.8rem;
   color: var(--dim);
-  line-height: 1.7;
-  border-top: 1px solid rgba(61, 122, 138, 0.1);
+  line-height: 1.75;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .bottom-note {
-  margin-top: 24px;
-  font-size: 0.78rem;
+  margin-top: 32px;
+  font-size: 0.85rem;
   color: var(--dim);
   line-height: 1.8;
   text-align: center;
   font-style: italic;
 }
 
-/* Section dividers */
-section + section {
-  border-top: 1px solid rgba(61, 122, 138, 0.1);
-}
-
-/* Footer */
+/* ── Footer ──────────────────────────────────── */
 footer {
-  padding: 60px 0;
+  padding: 72px 0;
   text-align: center;
-  border-top: 1px solid rgba(61, 122, 138, 0.1);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .footer-install {
   display: inline-block;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   text-align: left;
 }
+.footer-install pre.code { margin-bottom: 0; }
 
 .footer-links {
   display: flex;
   justify-content: center;
-  gap: 24px;
-  flex-wrap: wrap;
-  margin: 20px 0;
+  gap: 32px;
+  margin: 24px 0;
 }
-
 .footer-links a {
   color: var(--dim);
   text-decoration: none;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   transition: color 0.2s ease;
 }
-
 .footer-links a:hover { color: var(--teal); }
 
 .footer-attr {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--dim);
-  margin-top: 16px;
-  opacity: 0.6;
+  margin-top: 20px;
+  opacity: 0.5;
 }
 
-/* ── Responsive ─────────────────────────────── */
+/* ── Responsive ──────────────────────────────── */
 @media (max-width: 768px) {
-  section { padding: 48px 0; }
+  section { padding: 64px 0; }
+  .wrap { padding: 0 24px; }
+  h2 { font-size: 1.5rem; }
 
-  h2 { font-size: 1.4rem; }
+  .feature-grid { grid-template-columns: 1fr; }
 
-  .feature-grid,
-  .agent-cards {
-    grid-template-columns: 1fr;
+  .split { grid-template-columns: 1fr; gap: 32px; }
+
+  .agent-card-top { flex-direction: column; }
+  .agent-card-label {
+    flex: none;
+    padding: 14px 24px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
   }
 
-  .split {
-    grid-template-columns: 1fr;
-  }
-
-  .codeblock {
-    font-size: 0.7rem;
-    padding: 16px;
-  }
+  pre.code { font-size: 0.8rem; padding: 20px; }
 
   .hero { min-height: auto; padding: 100px 0 60px; }
 }
 
 @media (max-width: 480px) {
-  .hero-title { font-size: 2.5rem; }
+  .hero-title { font-size: 2.8rem; }
   .wrap { padding: 0 16px; }
+  .feature-grid { gap: 16px; }
 }
 </style>
 </head>
@@ -440,8 +429,9 @@ footer {
 
 <canvas id="hexbg"></canvas>
 
-<!-- ── Hero ──────────────────────────────────── -->
 <main>
+
+<!-- ── Hero ──────────────────────────────────── -->
 <section class="hero" id="hero">
 <div class="wrap">
 <div class="hero-inner">
@@ -449,10 +439,8 @@ footer {
   <p class="hero-tagline">your AI, your terminal, your rules</p>
   <p class="hero-desc">A composable CLI that chains shell commands and LLMs into workflows you own.</p>
 
-  <div class="install-block">
-    <div class="codeblock copyable" data-copy="brew install 8op-org/tap/glitch">
-      <code><span class="prompt">$</span> brew install 8op-org/tap/glitch</code>
-    </div>
+  <div class="hero-install">
+    <pre class="code copyable" data-copy="brew install 8op-org/tap/glitch"><span class="p">$</span> brew install 8op-org/tap/glitch</pre>
   </div>
 
   <a href="https://github.com/8op-org/gl1tch" class="btn btn-primary">View on GitHub</a>
@@ -466,29 +454,27 @@ footer {
   <h2>Ask anything</h2>
   <p class="section-copy">One command. gl1tch routes your question to the right workflow &mdash; PR URLs go to review, natural language gets matched by your local LLM.</p>
 
-  <div class="codeblock terminal-block">
-    <code><span class="prompt">$</span> glitch ask "review PR github.com/org/repo/pull/42"
-<span class="route">&rarr; routes to github-pr-review workflow</span>
+  <pre class="code"><span class="p">$</span> glitch ask "review PR github.com/org/repo/pull/42"
+<span class="r">&rarr; routes to github-pr-review workflow</span>
 
-<span class="prompt">$</span> glitch ask "what issues are open"
-<span class="route">&rarr; routes to github-issues workflow</span>
+<span class="p">$</span> glitch ask "what issues are open"
+<span class="r">&rarr; routes to github-issues workflow</span>
 
-<span class="prompt">$</span> glitch ask "CI status"
-<span class="route">&rarr; routes to github-actions workflow</span></code>
-  </div>
+<span class="p">$</span> glitch ask "CI status"
+<span class="r">&rarr; routes to github-actions workflow</span></pre>
 
   <div class="feature-grid">
     <div class="feature-card">
       <h3>Smart routing</h3>
-      <p>URL patterns detected instantly, freeform questions matched via Ollama</p>
+      <p>URL patterns detected instantly, freeform questions matched via Ollama.</p>
     </div>
     <div class="feature-card">
       <h3>Local-first</h3>
-      <p>Your local LLM picks the workflow, nothing leaves your machine unless you say so</p>
+      <p>Your local LLM picks the workflow. Nothing leaves your machine unless you say so.</p>
     </div>
     <div class="feature-card">
       <h3>Zero config</h3>
-      <p>Works out of the box with built-in workflows</p>
+      <p>Works out of the box with built-in workflows.</p>
     </div>
   </div>
 </div>
@@ -501,42 +487,43 @@ footer {
   <p class="section-copy">Shell commands fetch the data. LLMs make sense of it. Chain them together in plain YAML.</p>
 
   <div class="split">
-    <div class="codeblock">
-      <code><span class="key">name:</span> <span class="str">github-pr-review</span>
-<span class="key">steps:</span>
-  - <span class="key">id:</span> <span class="str">fetch-pr</span>
-    <span class="key">run:</span> <span class="str">|</span>
-      gh pr view "{{.input}}" --json title,body,reviews
-  - <span class="key">id:</span> <span class="str">fetch-diff</span>
-    <span class="key">run:</span> <span class="str">|</span>
+    <pre class="code"><span class="k">name:</span> <span class="s">github-pr-review</span>
+<span class="k">steps:</span>
+  - <span class="k">id:</span> <span class="s">fetch-pr</span>
+    <span class="k">run:</span> <span class="s">|</span>
+      gh pr view "{{.input}}" \
+        --json title,body,reviews
+
+  - <span class="k">id:</span> <span class="s">fetch-diff</span>
+    <span class="k">run:</span> <span class="s">|</span>
       gh pr diff "{{.input}}"
-  - <span class="key">id:</span> <span class="str">review</span>
-    <span class="key">llm:</span>
-      <span class="key">provider:</span> <span class="str">claude</span>
-      <span class="key">model:</span> <span class="str">claude-haiku-4-5-20251001</span>
-      <span class="key">prompt:</span> <span class="str">|</span>
+
+  - <span class="k">id:</span> <span class="s">review</span>
+    <span class="k">llm:</span>
+      <span class="k">provider:</span> <span class="s">claude</span>
+      <span class="k">model:</span> <span class="s">claude-haiku-4-5-20251001</span>
+      <span class="k">prompt:</span> <span class="s">|</span>
         PR: {{step "fetch-pr"}}
         Diff: {{step "fetch-diff"}}
         Review as a senior engineer.
-        Flag bugs and security issues.</code>
-    </div>
+        Flag bugs and security issues.</pre>
 
     <ul class="callout-list">
       <li>
         <h3>Shell steps own data</h3>
-        <p><code>gh</code>, <code>git</code>, <code>curl</code>, anything on your PATH</p>
+        <p><code>gh</code>, <code>git</code>, <code>curl</code> &mdash; anything on your PATH.</p>
       </li>
       <li>
         <h3>LLM steps own reasoning</h3>
-        <p>Claude, Ollama, swap providers per step</p>
+        <p>Claude, Ollama &mdash; swap providers per step.</p>
       </li>
       <li>
         <h3>Go templates</h3>
-        <p>Chain outputs with <code>{{step "id"}}</code>, pass input with <code>{{.input}}</code></p>
+        <p>Chain outputs with <code>{{step "id"}}</code>, pass input with <code>{{.input}}</code>.</p>
       </li>
       <li>
         <h3>Your workflows, your repo</h3>
-        <p>Drop YAML in <code>.glitch/workflows/</code> and they're live</p>
+        <p>Drop YAML in <code>.glitch/workflows/</code> and they're live.</p>
       </li>
     </ul>
   </div>
@@ -549,27 +536,25 @@ footer {
   <h2>Extend with plugins</h2>
   <p class="section-copy">Any binary on your PATH named <code>glitch-*</code> becomes a command. No registry, no config, no approval process.</p>
 
-  <div class="codeblock terminal-block">
-    <code><span class="prompt">$</span> glitch plugin list
+  <pre class="code"><span class="p">$</span> glitch plugin list
   glitch-summarize
   glitch-deploy
 
-<span class="prompt">$</span> glitch summarize README.md
-<span class="comment"># runs glitch-summarize, passes args through</span></code>
-  </div>
+<span class="p">$</span> glitch summarize README.md
+<span class="r"># runs glitch-summarize, passes args through</span></pre>
 
   <div class="feature-grid">
     <div class="feature-card">
       <h3>Zero ceremony</h3>
-      <p>Drop a binary, it's a command</p>
+      <p>Drop a binary on PATH and it's a command.</p>
     </div>
     <div class="feature-card">
       <h3>Any language</h3>
-      <p>Go, Python, Bash, Rust &mdash; if it runs, it's a plugin</p>
+      <p>Go, Python, Bash, Rust &mdash; if it runs, it's a plugin.</p>
     </div>
     <div class="feature-card">
       <h3>First-class args</h3>
-      <p>stdin/stdout/stderr pass through, flags are yours</p>
+      <p>stdin / stdout / stderr pass through. Flags are yours.</p>
     </div>
   </div>
 </div>
@@ -582,35 +567,41 @@ footer {
   <p class="section-copy">Install a skill and your AI coding agent can run gl1tch workflows directly in your project.</p>
 
   <div class="agent-cards">
+
     <div class="agent-card">
-      <div class="agent-card-header">Claude Code</div>
-      <div class="codeblock copyable" data-copy="npx @anthropic-ai/superpower install gl1tch">
-        <code><span class="prompt">$</span> npx @anthropic-ai/superpower install gl1tch</code>
+      <div class="agent-card-top">
+        <div class="agent-card-label">Claude Code</div>
+        <div class="agent-card-cmd">
+          <pre class="code copyable" data-copy="npx @anthropic-ai/superpower install gl1tch"><span class="p">$</span> npx @anthropic-ai/superpower install gl1tch</pre>
+        </div>
       </div>
       <div class="agent-card-note">Your agent gets glitch ask, workflow authoring, and pipeline execution as native skills.</div>
     </div>
 
     <div class="agent-card">
-      <div class="agent-card-header">Cursor / Copilot</div>
-      <div class="codeblock copyable" data-copy="curl -sLo .cursorrules https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules">
-        <code><span class="comment"># Add to your project root:</span>
-<span class="prompt">$</span> curl -sLo .cursorrules \
-    https://raw.githubusercontent.com/\
-    8op-org/gl1tch/main/skills/cursor/.cursorrules</code>
+      <div class="agent-card-top">
+        <div class="agent-card-label">Cursor / Copilot</div>
+        <div class="agent-card-cmd">
+          <pre class="code copyable" data-copy="curl -sLo .cursorrules https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules"><span class="r"># Add .cursorrules to your project root</span>
+<span class="p">$</span> curl -sLo .cursorrules <span class="s">https://raw.githubusercontent.com/
+  8op-org/gl1tch/main/skills/cursor/.cursorrules</span></pre>
+        </div>
       </div>
       <div class="agent-card-note">Drops a .cursorrules file your agent picks up automatically.</div>
     </div>
 
     <div class="agent-card">
-      <div class="agent-card-header">Any agent</div>
-      <div class="codeblock copyable" data-copy="curl -sLo AGENTS.md https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md">
-        <code><span class="comment"># Add to your project root:</span>
-<span class="prompt">$</span> curl -sLo AGENTS.md \
-    https://raw.githubusercontent.com/\
-    8op-org/gl1tch/main/skills/generic/AGENTS.md</code>
+      <div class="agent-card-top">
+        <div class="agent-card-label">Any agent</div>
+        <div class="agent-card-cmd">
+          <pre class="code copyable" data-copy="curl -sLo AGENTS.md https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md"><span class="r"># Add AGENTS.md to your project root</span>
+<span class="p">$</span> curl -sLo AGENTS.md <span class="s">https://raw.githubusercontent.com/
+  8op-org/gl1tch/main/skills/generic/AGENTS.md</span></pre>
+        </div>
       </div>
       <div class="agent-card-note">Generic instructions any LLM coding tool can follow.</div>
     </div>
+
   </div>
 
   <p class="bottom-note">Skills let your agent compose and run workflows without you typing a thing. Author once, delegate forever.</p>
@@ -623,9 +614,7 @@ footer {
 <footer>
 <div class="wrap">
   <div class="footer-install">
-    <div class="codeblock copyable" data-copy="brew install 8op-org/tap/glitch">
-      <code><span class="prompt">$</span> brew install 8op-org/tap/glitch</code>
-    </div>
+    <pre class="code copyable" data-copy="brew install 8op-org/tap/glitch"><span class="p">$</span> brew install 8op-org/tap/glitch</pre>
   </div>
 
   <div class="footer-links">
@@ -639,7 +628,7 @@ footer {
 
 <script>
 /* ── Hex-rain canvas ────────────────────────── */
-(function initHexCanvas() {
+(function() {
   var canvas = document.getElementById('hexbg');
   if (!canvas) return;
   var ctx = canvas.getContext('2d');
@@ -690,20 +679,17 @@ footer {
 })();
 
 /* ── Click-to-copy ──────────────────────────── */
-(function initCopy() {
+(function() {
   document.querySelectorAll('.copyable').forEach(function(block) {
     var btn = document.createElement('button');
     btn.className = 'copy-btn';
     btn.textContent = 'copy';
     btn.addEventListener('click', function() {
-      var text = block.getAttribute('data-copy') || block.querySelector('code').textContent.trim();
+      var text = block.getAttribute('data-copy') || block.textContent.trim();
       navigator.clipboard.writeText(text).then(function() {
         btn.textContent = 'copied';
         btn.classList.add('copied');
-        setTimeout(function() {
-          btn.textContent = 'copy';
-          btn.classList.remove('copied');
-        }, 2000);
+        setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
       }).catch(function() {
         btn.textContent = 'failed';
         setTimeout(function() { btn.textContent = 'copy'; }, 2000);
