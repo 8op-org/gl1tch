@@ -1,0 +1,710 @@
+=== MISSING: docs/ai-agents/github-copilot/cli/07-skills.md ===
+=== FILE: docs/ai-agents/labs/copilot/lab-05.2/README.md ===
+# Lab 05.2 - Skills: Example Files
+
+This folder contains the example files used in the
+[Skills lab guide](../../../github-copilot/cli/05-2-skills.md).
+
+## Folder Structure
+
+```
+lab-05.2/
+├── README.md
+├── .github/
+│   └── skills/
+│       ├── ci-debug/
+│       │   ├── SKILL.md              ← Phase 2: CI Debug skill
+│       │   └── scripts/
+│       │       └── extract-errors.sh ← Optional log filter script
+│       ├── pr-review/
+│       │   └── SKILL.md             ← Extra: PR Review skill
+│       └── release-notes/
+│           └── SKILL.md             ← Extra: Release Notes skill
+├── logs/
+│   └── runner.log                   ← Phase 3: Sample CI failure log
+└── src/
+    └── payment/
+        └── processor.go             ← Phase 3: Sample Go file for PR review
+```
+
+## Usage
+
+Copy `.github/skills/` into your own repository. Start a Copilot CLI session
+from that directory -- skills are discovered automatically.
+
+```bash
+copilot
+```
+
+Verify the skills are loaded:
+
+```
+/skills list
+```
+
+Invoke a skill explicitly:
+
+```
+Use the /ci-debug skill to analyze @logs/runner.log
+Use the /pr-review skill on @src/payment/processor.go
+/release-notes draft release notes for the last sprint
+```
+
+Or let Copilot auto-detect based on the skill description:
+
+```
+The CI run just failed. The log is at @logs/runner.log
+```
+
+## Files
+
+| Skill directory | Skill name | Auto-triggers on | Purpose |
+|----------------|-----------|------------------|---------|
+| ci-debug/ | /ci-debug | CI failures, runner logs, workflow errors | Diagnose failures and draft a GitHub issue |
+| pr-review/ | /pr-review | Code review requests | Security, correctness, readability, tests |
+| release-notes/ | /release-notes | Release notes or changelog requests | Generate user-facing release notes |
+| logs/runner.log | - | - | Sample JSON CI failure log for testing /ci-debug |
+| src/payment/processor.go | - | - | Sample Go file for testing /pr-review |
+
+=== END: docs/ai-agents/labs/copilot/lab-05.2/README.md ===
+
+=== FILE: docs/teams/ci/dependencies/updatecli.md ===
+# Updatecli
+
+[Updatecli](https://www.updatecli.io/docs/prologue/quick-start/) is our preferred tool for bumping dependencies or running some adhoc automation
+when `Dependabot` cannot be the tool.
+
+## Structure
+
+> TBC
+
+## Share and reuse
+
+We have created a shared library of Updatecli manifests, called policies in this case, that can
+be used in any repository at Elastic.
+
+You can read more about how the [share and reuse](https://www.updatecli.io/docs/core/shareandreuse/) works in `updatecli`.
+
+In our case, https://github.com/elastic/oblt-updatecli-policies is the repository we use for sharing
+common updates. And the shared policies can be found at https://github.com/elastic/oblt-updatecli-policies/tree/main/updatecli/policies.
+
+## GitHub actions
+
+### Quick start
+
+`updatecli` runs locally and in the CI, for such, it's well integrated with GitHub actions.
+If you use GitHub actions as your primary CI in your GitHub repository, then you need to
+use [github ephemeral tokens](../secrets/github-ephemeral-tokens.md).
+
+There is a good recipe explaining how to use `updatecli` in the GitHub actions docs, see the [updatecli](../github-actions/github-actions-recipes.md#updatecli) section.
+
+Here is an example of an `updatecli` manifest named `updatecli/bump.yml` that runs on GitHub Actions and utilises the GitHub ephemeral tokens app.
+
+<details>
+<summary>Code</summary>
+
+```yaml
+---
+name: bump
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron:  '0 20 * * 6'
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    # If you don't use GitHub actions in your github repository as the primary CI
+    # If you do then remove the below permissions.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # NOTE: Keep the below step if you use GitHub actions in your github repository
+      # as the primary CI. Otherwise, remove the below permissions.
+      - name: Get token
+        id: get_token
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+        with:
+          app_id: ${{ secrets.OBS_AUTOMATION_APP_ID }}
+          private_key: ${{ secrets.OBS_AUTOMATION_APP_PEM }}
+          permissions: >-
+            {
+              "contents": "write",
+              "pull_requests": "write"
+            }
+          repositories: >-
+            [ "elastic-agent" ]
+
+      - uses: elastic/oblt-actions/updatecli/run@v1
+        with:
+          command: apply --config updatecli/bump.yml
+        # NOTE: Keep the below step if you use GitHub actions in your github repository
+        # as the primary CI. Otherwise, remove the below permissions.
+        env:
+          GITHUB_TOKEN: ${{ steps.get_token.outputs.token }}
+```
+
+</details>
+
+### Support Unified Release branches
+
+If you need to update multiple branches, then you can use the below github workflow:
+
+<details>
+<summary>Code</summary>
+
+```yaml
+---
+name: bump-elastic-stack-snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 15 * * 1-5'
+
+permissions:
+  contents: read
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      matrix: ${{ steps.generator.outputs.matrix }}
+    steps:
+      - id: generator
+        uses: elastic/oblt-actions/elastic/active-branches@v1
+
+  bump-elastic-stack:
+    runs-on: ubuntu-latest
+    needs: [filter]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.filter.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Get token
+        id: get_token
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+        with:
+          app_id: ${{ secrets.OBS_AUTOMATION_APP_ID }}
+          private_key: ${{ secrets.OBS_AUTOMATION_APP_PEM }}
+          permissions: >-
+            {
+              "contents": "write",
+              "pull_requests": "write"
+            }
+          repositories: >-
+            [ "elastic-agent" ]
+
+      - uses: elastic/oblt-actions/updatecli/run@v1
+        with:
+          command: --config .ci/updatecli/bump-elastic-stack-snapshot.yml --values .ci/updatecli/values.d/scm.yml
+        env:
+          BRANCH: ${{ matrix.branch }}
+          GITHUB_TOKEN: ${{ steps.get_token.outputs.token }}
+
+```
+
+</details>
+
+## Local development
+
+> TBC
+
+=== END: docs/teams/ci/dependencies/updatecli.md ===
+
+=== FILE: docs/teams/ci/keyless/gh-ephemeral-tokens-gcp.md ===
+# Ephemeral GitHub Tokens with OpenID Connect
+
+## 1. Overview
+
+This document outlines our solution for generating ephemeral GitHub tokens using OpenID Connect (OIDC) and a GitHub App to enhance security by eliminating long-lived credentials.
+
+## 2. Motivation
+
+### 2.1 Problem Statement
+
+- Manual token rotation is operationally expensive
+- Long-lived credentials pose security risks if compromised
+
+### 2.2 Solution Benefits
+
+- **Eliminates long-lived credentials**: No more static tokens stored in GitHub Secrets.
+- **Automated rotation**: Tokens automatically refresh every 30 minutes.
+- **Reduced attack surface**: Shorter token lifetimes minimize exposure.
+- **GitHub Actions native**: No external services or complex infrastructure required.
+
+## 3. Architecture
+
+```mermaid
+sequenceDiagram
+    participant GA as GitHub Action
+    participant GH as GitHub OIDC
+    participant GCP as Google Cloud
+    participant Sec as Secret Manager
+
+    GA->>GH: Request OIDC Token
+    GH-->>GA: Issue JWT Token
+    GA->>GCP: Exchange JWT for GCP Creds
+    GCP-->>GA: Temporary GCP Credentials
+    GA->>Sec: Store New Token
+    Sec-->>GA: Confirm Storage
+    loop Every 30 minutes
+        GA->>GH: Generate New Token
+        GH-->>GA: New JWT
+        GA->>Sec: Rotate Token
+    end
+```
+
+## 4. Implementation Details
+
+### 4.1 GitHub secrets
+
+Create GitHub secret request using the [GitHub issue automation](https://github.com/elastic/observability-github-secrets/issues/new?template=new-secret-issue.yaml).
+
+Then review and merge.
+
+### 4.2 GitHub actions
+
+We use https://github.com/tibdex/github-app-token to generate ephemeral tokens using our existing [github-apps](../../../machine-user.md).
+```yaml
+---
+## Workflow to generate and store an ephemeral GitHub token in Google Cloud Secret Manager.
+name: ephemeral-github-token
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      GCP_PROJECT: elastic-observability-ci
+      GCSM_SECRET_NAME: your-repo-secret_github-token
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: elastic/oblt-actions/google/auth@v1
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a
+
+      - name: Get token from GitHub App
+        id: get_token_from_app
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+        with:
+          app_id: ${{ secrets.OBS_AUTOMATION_APP_ID }}
+          private_key: ${{ secrets.OBS_AUTOMATION_APP_PEM }}
+          # We don't revoke the token automatically, its TTL is 60 minutes
+          revoke: false
+          permissions: >-
+            {
+              "contents": "write",
+              "issues": "write",
+              "pull_requests": "write",
+              "members": "read",
+              "checks": "read"
+            }
+          repositories: >-
+            ["your-repo"]
+
+      - name: Write GCSM secret Token
+        env:
+          GITHUB_TOKEN: ${{ steps.get_token_from_app.outputs.token }}
+        run: |
+           echo -n "${GITHUB_TOKEN}" | gcloud secrets versions add "${GCSM_SECRET_NAME}" \
+                  --data-file=- \
+                  --quiet \
+                  --project "${GCP_PROJECT}"
+```
+
+### 4.3 Terraform
+
+See [docs](./index.md)
+
+```terraform
+data "google_project" "elastic_observability_ci" {
+    project = google_project.observability-ci
+}
+
+locals {
+  workflow_filenames = toset([
+    "ephemeral-github-token.yml",
+  ])
+}
+
+module "google-github-actions-workflow-identity-provider" {
+  source             = "../../../../modules/google-github-actions-workflow-identity-provider"
+  repository         = "your-repo"
+  workflow_filenames = local.workflow_filenames
+  project_id         = data.google_project.elastic_observability_ci.project_id
+}
+
+module "google-oblt-cluster-secrets-access" {
+  source  = "../../../../modules/google-oblt-cluster-secrets-access"
+  members = values(module.google-github-actions-workflow-identity-provider.principals)
+}
+
+/*
+@description Grant access to the your-repo-secret_github-token GCSM secret
+*/
+resource "google_project_iam_member" "secretsmanager_secret_version_adder" {
+  project = data.google_project.elastic_observability_ci.project_id
+  role    = "roles/secretmanager.admin"
+  member  = module.google-github-actions-workflow-identity-provider.principals["ephemeral-github-token.yml"]
+  condition {
+    title      = "Allow access to secrets for observability-bi_github-token workflow"
+    expression = "resource.name.startsWith(\"projects/${data.google_project.elastic_observability_ci.number}/secrets/your-repo-secret_github-token\")"
+  }
+}
+```
+
+## 5. Security Considerations
+
+### 5.1 Trust Model
+- Relies on GitHub's OIDC provider for identity assertion
+- Google Cloud's Workload Identity Federation for secure credential exchange
+- Fine-grained IAM policies control access to secrets
+
+### 5.2 Risk Mitigation
+- **Short-lived tokens**: 30-minute rotation limits exposure
+- **Least privilege**: GitHub App has minimal required permissions
+- **Audit logging**: All secret access is logged
+- **No long-term credentials**: Eliminates risk of credential leakage
+
+### 5.3 Monitoring
+
+TBC
+
+## 6. Operational Considerations
+
+### 6.1 Setup Requirements
+
+1. GitHub App with required permissions. See [github-apps](../../../machine-user.md)
+2. Google Cloud Project with Secret Manager enabled
+3. GitHub secrets for the GitHub app stored in the target GitHub repository.
+3. Workload Identity Federation configuration.
+4. IAM policies for least privilege access.
+
+### 6.2 Maintenance
+
+- Regular review of GitHub App permissions
+- Monitoring of token rotation
+- Audit log reviews
+
+## 7. Conclusion
+
+This solution provides a secure, maintainable approach to GitHub App token management by leveraging OIDC and Workload Identity Federation. It eliminates long-lived credentials while maintaining automation capabilities through GitHub Actions.
+
+## 8. References
+
+- [Obs11 OIDC implementation](./index.md)
+- [GitHub OIDC Documentation](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
+- [Google Cloud Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation)
+- [GitHub App Token Action](https://github.com/marketplace/actions/github-app-token)
+
+=== END: docs/teams/ci/keyless/gh-ephemeral-tokens-gcp.md ===
+
+=== FILE: docs/teams/ci/macos/index.md ===
+---
+navigation_title: "macOS Runners"
+description: "Documentation for using macOS runners in CI/CD pipelines."
+applies_to:
+  teams: ci
+---
+
+# MacOS Runners for the CI/CD
+
+> TBC
+
+=== END: docs/teams/ci/macos/index.md ===
+
+=== FILE: docs/teams/ci/secrets-security-incident-runbook.md ===
+# Security Incident Runbook: Secrets Compromise
+
+This runbook provides step-by-step procedures for responding to security incidents involving compromised secrets managed by the Observability CI team.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Secrets Inventory](#secrets-inventory)
+- [Incident Severity Classification](#incident-severity-classification)
+- [Immediate Response Procedures](#immediate-response-procedures)
+- [Secret-Specific Response Procedures](#secret-specific-response-procedures)
+- [Prevention and Monitoring](#prevention-and-monitoring)
+- [Contact Information](#contact-information)
+
+## Overview
+
+The Observability CI team manages secrets across multiple platforms for CI/CD operations. This runbook outlines the procedures to follow when a secret is suspected to be compromised or exposed.
+
+**Key Principles:**
+- Act quickly to minimize exposure window
+- Document all actions taken
+- Coordinate with Security team for critical incidents
+- Rotate secrets even if compromise is only suspected
+
+## Secrets Inventory
+
+### Current Secret Storage Systems
+
+| System | Usage | Access Method | Rotation Capability |
+|--------|-------|---------------|---------------------|
+| **Vault CI** | Shared secrets for Buildkite pipelines | `vault-secrets-buildkite-plugin` | Manual/Automated |
+| **Google Secret Manager** | GCP secrets for Buildkite | `oblt-google-secrets-buildkite-plugin` | Manual/Automated |
+| **GitHub Secrets** | Repository and organization secrets | Infrastructure as Code (Terrazzo) | Automated via IaC |
+| **GitHub Apps** | Ephemeral tokens for CI/CD | `elastic-observability` and `elastic-observability-automation` apps | Automatic (ephemeral) |
+| **OIDC/Keyless** | AWS, GCP, Azure authentication | Workload Identity Federation | N/A (no long-lived secrets) |
+
+### Types of Secrets We Manage
+
+1. **GitHub Tokens**
+   - GitHub App credentials (App ID + Private Key)
+   - Personal Access Tokens (PATs) - `deprecated`
+   - Machine user tokens - `deprecated`
+
+2. **Cloud Provider Credentials**
+   - AWS credentials (via OIDC preferred)
+   - GCP service account keys (via OIDC preferred)
+   - Azure credentials (via OIDC preferred)
+
+3. **CI/CD Platform Secrets**
+   - Buildkite API tokens
+   - GitHub Actions secrets
+
+## Incident Severity Classification
+
+### Critical (P1)
+- **Ideal Response Time:** Immediate (within 15 minutes)
+- **Criteria:**
+  - Production secrets exposed publicly (e.g., committed to public repository)
+  - Active exploitation detected
+  - Secrets with write access to production systems
+  - Cloud provider credentials with broad permissions
+
+### High (P2)
+- **Ideal Response Time:** Within 1 hour
+- **Criteria:**
+  - Secrets exposed in private repository accessible to many users
+  - Secrets with read access to sensitive data
+  - CI/CD credentials that could disrupt operations
+
+### Medium (P3)
+- **Ideal Response Time:** Within 4 hours
+- **Criteria:**
+  - Secrets exposed to limited trusted audience
+  - Deprecated secrets that might still be active
+  - Test/development environment credentials
+
+### Low (P4)
+- **Ideal Response Time:** Within 24 hours
+- **Criteria:**
+  - Expired secrets found in logs
+  - Secrets already rotated but found in historical data
+  - Non-functional or dummy credentials
+
+## Immediate Response Procedures
+
+### Step 1: Incident Detection and Assessment (0-5 minutes)
+
+1. **Identify the compromised secret:**
+   - Document exactly what was exposed (secret type, name, scope)
+   - Note when and where the exposure occurred
+   - Determine the exposure method (git commit, logs, error message, etc.)
+
+2. **Assess the scope:**
+   - What systems does this secret provide access to?
+   - What permissions does this secret grant?
+   - How long has the secret been exposed?
+   - Who had access to the exposed location?
+
+3. **Classify the incident severity** using the table above
+
+4. **Create an incident ticket:**
+   - See https://elasticco.atlassian.net/wiki/spaces/EN/pages/48868654/How+to+Report+an+Event
+
+### Step 2: Immediate Containment (5-15 minutes)
+
+#### For Public Exposure
+1. **Remove the exposed secret immediately:**
+
+2. **Notify the security team:**
+   - Slack: `#security-team`
+   - Email: `infosec@elastic.pagerduty.com`
+   - Include incident ticket number
+
+3. **For GitHub exposures, use GitHub's secret scanning alerts:**
+   - GitHub automatically detects some secret types
+   - Follow GitHub's recommended actions for exposed tokens
+
+#### For Private Exposure
+1. **Limit access:**
+   - Review who has access to the exposure location
+   - Consider revoking access temporarily if necessary
+
+2. **Document access logs:**
+   - Check who accessed the secret location during exposure window
+   - Save relevant logs for investigation
+
+3. **Notify the security team:**
+   - Slack: `#security-team`
+   - Email: `security@elastic.co`
+   - Include incident ticket number
+
+### Step 3: Notify Stakeholders (15-30 minutes)
+
+1. **Notify the Observability CI team:**
+   - Slack: `#observability-robots`
+
+2. **For critical incidents, notify:**
+   - Engineering Manager
+   - Director of Engineering (for P1 incidents)
+   - Security team lead
+
+3. **Prepare initial communication:**
+   ```
+   🚨 Security Incident: Secret Compromise
+
+   Severity: [P1/P2/P3/P4]
+   Secret Type: [type]
+   Affected Systems: [list]
+   Status: Containment in progress
+   ETA for Resolution: [estimate]
+
+   Actions taken:
+   - [list immediate actions]
+
+   Next steps:
+   - [list planned actions]
+   ```
+
+## Secret-Specific Response Procedures
+
+### GitHub Tokens
+
+#### GitHub App Credentials (Preferred Method)
+**Location:** Managed via `observability-github-secrets` repository
+
+**Rotation Procedure:** See [github-app-rotation.md](../../../.github/workflows/rotate-girthub-app-creds-reminder.yml)
+
+### Vault CI Secrets
+
+**Location:** Managed via Vault CI at https://vault-ci.elastic.dev
+
+**Rotation Procedure:** `TBC`
+
+### Google Secret Manager Secrets
+
+**Location:** GCP Secret Manager for use with `oblt-google-secrets-buildkite-plugin`
+
+**Rotation Procedure:**
+
+### GitHub Repository Secrets (IaC-managed)
+
+**Location:** Managed via `observability-github-secrets` with Terrazzo
+
+**Rotation Procedure:** [github-secrets.md](./secrets/github-secrets.md)
+
+### Cloud Provider Credentials
+
+#### Preferred: OIDC/Keyless (No Secret Rotation Needed)
+**These use short-lived tokens and don't require rotation.**
+
+**Reference**: [Keyless documentation](./keyless/index.md)
+
+#### Legacy: Service Account Keys (If Still in Use)
+
+**AWS:** `TBC`
+
+**GCP:** `TBC`
+
+## Prevention and Monitoring
+
+### Proactive Measures
+
+1. **Use Preferred Secret Methods:**
+   - **OIDC/Keyless:** No long-lived secrets
+   - **Platform Productivity Ephemeral tokens:** Ephemeral GitHub tokens, scoped permissions.
+   - **GitHub Apps:** Ephemeral tokens, scoped permissions
+   - **Vault CI Shared Secrets:** Centralized management
+   - **Infrastructure as Code:** Version controlled, auditable
+
+2. **Avoid Deprecated Methods:**
+   - ❌ Personal Access Tokens (PATs)
+   - ❌ Machine user accounts
+   - ❌ Hardcoded credentials
+   - ❌ Credentials in code repositories
+
+3. **Regular Secret Audits:**
+   - Yearly rotation of long-lived secrets
+   - Annual access review for stalled secrets
+
+4. **Automated Detection:**
+   - GitHub secret scanning (automatic)
+   - Pre-commit hooks with secret scanners
+   - CI/CD pipeline scanning
+   - Log monitoring for exposed credentials
+
+### Monitoring and Alerting
+
+> [!NOTE]
+> Likely something we don't need to be part of as it's already audited by
+> infosec.
+
+### Secret Lifecycle Best Practices
+
+| Stage | Best Practice | Responsibility |
+|-------|--------------|----------------|
+| **Creation** | Use most secure method available (OIDC > Ephemeral > Long-lived) | Developer |
+| **Storage** | Store in approved secret stores only (Vault CI, GSM, GitHub Secrets) | CI Team |
+| **Access** | Principle of least privilege, scope to minimum required | Developer |
+| **Usage** | Never log or print secrets, use in memory only | Developer |
+| **Rotation** | Yearly for long-lived, automatic for ephemeral | CI Team |
+| **Revocation** | Immediate upon compromise or deprecation | CI Team |
+| **Audit** | Yearly review of all secrets | CI Team |
+
+## Contact Information
+
+### Primary Contacts
+
+- **Observability CI Team:** `#observability-robots` (Slack)
+- **On-Call Engineer:** `@observability-robots-oncall` (Slack)
+- **Security Team:** `#security-team` (Slack) or `security@elastic.co`
+
+### Escalation Path
+
+1. **First Response:** Observability CI on-call engineer
+2. **P1/P2 Escalation:** Engineering Manager
+3. **Security Escalation:** Security team lead
+4. **Executive Escalation:** Director of Engineering
+
+### Related Documentation
+
+- [Secret Management](./secrets/secret-management.md)
+- [GitHub Secrets](./secrets/github-secrets.md)
+- [GitHub Ephemeral Tokens](./secrets/github-ephemeral-tokens.md)
+- [Keyless/OIDC Documentation](./keyless/index.md)
+- [Buildkite Guidelines](./buildkite/buildkite-guidelines.md)
+- [Secrets Management Best Practices](https://elasticco.atlassian.net/wiki/spaces/EN/pages/387711041/Secrets+Management+Best+Practices)
+- [How to report an event](https://elasticco.atlassian.net/wiki/spaces/EN/pages/48868654/How+to+Report+an+Event)
+
+=== END: docs/teams/ci/secrets-security-incident-runbook.md ===

@@ -15,11 +15,13 @@ type Workflow struct {
 	Steps       []Step `yaml:"steps"`
 }
 
-// Step is a single unit of work — either a shell command or an LLM call.
+// Step is a single unit of work — either a shell command, an LLM call, or a save-to-file.
 type Step struct {
-	ID  string   `yaml:"id"`
-	Run string   `yaml:"run,omitempty"` // shell command
-	LLM *LLMStep `yaml:"llm,omitempty"` // LLM call
+	ID       string   `yaml:"id"`
+	Run      string   `yaml:"run,omitempty"`       // shell command
+	LLM      *LLMStep `yaml:"llm,omitempty"`       // LLM call
+	Save     string   `yaml:"save,omitempty"`      // write to file path (template-rendered)
+	SaveStep string   `yaml:"save_step,omitempty"` // which step's output to save (default: previous)
 }
 
 // LLMStep configures an LLM invocation.

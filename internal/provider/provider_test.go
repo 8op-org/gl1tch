@@ -103,14 +103,14 @@ func TestRenderProviderCommand_NotFound(t *testing.T) {
 func TestRunProvider_ExecsCommand(t *testing.T) {
 	reg := &ProviderRegistry{
 		providers: map[string]*Provider{
-			"echo": {
-				Name:    "echo",
-				Command: `echo "{{.prompt}}"`,
+			"cat-stdin": {
+				Name:    "cat-stdin",
+				Command: `cat`,
 			},
 		},
 	}
 
-	got, err := reg.RunProvider("echo", "hello world")
+	got, err := reg.RunProvider("cat-stdin", "hello world")
 	if err != nil {
 		t.Fatalf("RunProvider: %v", err)
 	}

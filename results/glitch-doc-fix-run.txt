@@ -1,0 +1,213 @@
+>> doc-fix
+  > fetch-issue
+  > find-affected-files
+  > read-affected-files
+  > analyze
+  > write-results
+Error: step write-results: shell: exit status 2
+=== MISSING: docs/ai-agents/github-copilot/cli/07-skills.md ===
+=== FILE: docs/ai-agents/labs/copilot/lab-05.2/README.md ===
+# Lab 05.2 - Skills: Example Files
+
+This folder contains the example files used in the
+[Skills lab guide](../../../github-copilot/cli/05-2-skills.md).
+
+## Folder Structure
+
+```
+lab-05.2/
+├── README.md
+├── .github/
+│   └── skills/
+│       ├── ci-debug/
+│       │   ├── SKILL.md              ← Phase 2: CI Debug skill
+│       │   └── scripts/
+│       │       └── extract-errors.sh ← Optional log filter script
+│       ├── pr-review/
+│       │   └── SKILL.md             ← Extra: PR Review skill
+│       └── release-notes/
+│           └── SKILL.md             ← Extra: Release Notes skill
+├── logs/
+│   └── runner.log                   ← Phase 3: Sample CI failure log
+└── src/
+    └── payment/
+        └── processor.go             ← Phase 3: Sample Go file for PR review
+```
+
+## Usage
+
+Copy `.github/skills/` into your own repository. Start a Copilot CLI session
+from that directory -- skills are discovered automatically.
+
+```bash
+copilot
+```
+
+Verify the skills are loaded:
+
+```
+/skills list
+```
+
+Invoke a skill explicitly:
+
+```
+Use the /ci-debug skill to analyze @logs/runner.log
+Use the /pr-review skill on @src/payment/processor.go
+/release-notes draft release notes for the last sprint
+```
+
+Or let Copilot auto-detect based on the skill description:
+
+```
+The CI run just failed. The log is at @logs/runner.log
+```
+
+## Files
+
+| Skill directory | Skill name | Auto-triggers on | Purpose |
+|----------------|-----------|------------------|---------|
+| ci-debug/ | /ci-debug | CI failures, runner logs, workflow errors | Diagnose failures and draft a GitHub issue |
+| pr-review/ | /pr-review | Code review requests | Security, correctness, readability, tests |
+| release-notes/ | /release-notes | Release notes or changelog requests | Generate user-facing release notes |
+| logs/runner.log | - | - | Sample JSON CI failure log for testing /ci-debug |
+| src/payment/processor.go | - | - | Sample Go file for testing /pr-review |
+
+=== END: docs/ai-agents/labs/copilot/lab-05.2/README.md ===
+
+=== FILE: docs/teams/ci/dependencies/updatecli.md ===
+# Updatecli
+
+[Updatecli](https://www.updatecli.io/docs/prologue/quick-start/) is our preferred tool for bumping dependencies or running some adhoc automation
+when `Dependabot` cannot be the tool.
+
+## Structure
+
+> TBC
+
+## Share and reuse
+
+We have created a shared library of Updatecli manifests, called policies in this case, that can
+be used in any repository at Elastic.
+
+You can read more about how the [share and reuse](https://www.updatecli.io/docs/core/shareandreuse/) works in `updatecli`.
+
+In our case, https://github.com/elastic/oblt-updatecli-policies is the repository we use for sharing
+common updates. And the shared policies can be found at https://github.com/elastic/oblt-updatecli-policies/tree/main/updatecli/policies.
+
+## GitHub actions
+
+### Quick start
+
+`updatecli` runs locally and in the CI, for such, its well integrated with GitHub actions.
+sh: line 130: If: command not found
+sh: -c: line 131: syntax error near unexpected token `('
+sh: -c: line 131: `use [github ephemeral tokens](../secrets/github-ephemeral-tokens.md).'
+
+Usage:
+  glitch ask [input] [flags]
+
+Flags:
+  -h, --help          help for ask
+  -C, --path string   run against this directory instead of cwd
+
+step write-results: shell: exit status 2
+=== MISSING: docs/ai-agents/github-copilot/cli/07-skills.md ===
+=== FILE: docs/ai-agents/labs/copilot/lab-05.2/README.md ===
+# Lab 05.2 - Skills: Example Files
+
+This folder contains the example files used in the
+[Skills lab guide](../../../github-copilot/cli/05-2-skills.md).
+
+## Folder Structure
+
+```
+lab-05.2/
+├── README.md
+├── .github/
+│   └── skills/
+│       ├── ci-debug/
+│       │   ├── SKILL.md              ← Phase 2: CI Debug skill
+│       │   └── scripts/
+│       │       └── extract-errors.sh ← Optional log filter script
+│       ├── pr-review/
+│       │   └── SKILL.md             ← Extra: PR Review skill
+│       └── release-notes/
+│           └── SKILL.md             ← Extra: Release Notes skill
+├── logs/
+│   └── runner.log                   ← Phase 3: Sample CI failure log
+└── src/
+    └── payment/
+        └── processor.go             ← Phase 3: Sample Go file for PR review
+```
+
+## Usage
+
+Copy `.github/skills/` into your own repository. Start a Copilot CLI session
+from that directory -- skills are discovered automatically.
+
+```bash
+copilot
+```
+
+Verify the skills are loaded:
+
+```
+/skills list
+```
+
+Invoke a skill explicitly:
+
+```
+Use the /ci-debug skill to analyze @logs/runner.log
+Use the /pr-review skill on @src/payment/processor.go
+/release-notes draft release notes for the last sprint
+```
+
+Or let Copilot auto-detect based on the skill description:
+
+```
+The CI run just failed. The log is at @logs/runner.log
+```
+
+## Files
+
+| Skill directory | Skill name | Auto-triggers on | Purpose |
+|----------------|-----------|------------------|---------|
+| ci-debug/ | /ci-debug | CI failures, runner logs, workflow errors | Diagnose failures and draft a GitHub issue |
+| pr-review/ | /pr-review | Code review requests | Security, correctness, readability, tests |
+| release-notes/ | /release-notes | Release notes or changelog requests | Generate user-facing release notes |
+| logs/runner.log | - | - | Sample JSON CI failure log for testing /ci-debug |
+| src/payment/processor.go | - | - | Sample Go file for testing /pr-review |
+
+=== END: docs/ai-agents/labs/copilot/lab-05.2/README.md ===
+
+=== FILE: docs/teams/ci/dependencies/updatecli.md ===
+# Updatecli
+
+[Updatecli](https://www.updatecli.io/docs/prologue/quick-start/) is our preferred tool for bumping dependencies or running some adhoc automation
+when `Dependabot` cannot be the tool.
+
+## Structure
+
+> TBC
+
+## Share and reuse
+
+We have created a shared library of Updatecli manifests, called policies in this case, that can
+be used in any repository at Elastic.
+
+You can read more about how the [share and reuse](https://www.updatecli.io/docs/core/shareandreuse/) works in `updatecli`.
+
+In our case, https://github.com/elastic/oblt-updatecli-policies is the repository we use for sharing
+common updates. And the shared policies can be found at https://github.com/elastic/oblt-updatecli-policies/tree/main/updatecli/policies.
+
+## GitHub actions
+
+### Quick start
+
+`updatecli` runs locally and in the CI, for such, its well integrated with GitHub actions.
+sh: line 130: If: command not found
+sh: -c: line 131: syntax error near unexpected token `('
+sh: -c: line 131: `use [github ephemeral tokens](../secrets/github-ephemeral-tokens.md).'
+

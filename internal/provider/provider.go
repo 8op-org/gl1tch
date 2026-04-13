@@ -86,14 +86,29 @@ func (r *ProviderRegistry) RenderCommand(name, prompt string) (string, error) {
 	return buf.String(), nil
 }
 
-// RunProvider looks up a provider by name, renders the command template, and
-// executes it via RunShell.
+// RunProvider looks up a provider by name and executes the command with the
+// prompt piped via stdin. This avoids shell escaping issues with complex prompts.
 func (r *ProviderRegistry) RunProvider(name, prompt string) (string, error) {
-	cmd, err := r.RenderCommand(name, prompt)
-	if err != nil {
-		return "", err
+	p, ok := r.providers[name]
+	if !ok {
+		avail := make([]string, 0)
+		for n := range r.providers {
+			avail = append(avail, n)
+		}
+		return "", fmt.Errorf("provider %q not found (available: %s)", name, strings.Join(avail, ", "))
 	}
-	return RunShell(cmd)
+	return RunShellWithStdin(p.Command, prompt)
+}
+
+// RunShellWithStdin executes a shell command with prompt piped via stdin.
+func RunShellWithStdin(command, stdin string) (string, error) {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("shell: %w\n%s", err, out)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // RunShell executes a shell command and returns its stdout.

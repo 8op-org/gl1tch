@@ -15,6 +15,7 @@ const defaultOrg = "elastic"
 
 var reIssueRef = regexp.MustCompile(`^(?:(?:([a-zA-Z0-9_.-]+)/)?([a-zA-Z0-9_.-]+)#)?(\d+)$`)
 var reWorkOnIssue = regexp.MustCompile(`(?i)work on issue\s+(.+)`)
+var reFixIssue = regexp.MustCompile(`(?i)fix\s+(?:issue\s+)?(.+)`)
 
 // ParseIssueRef parses an issue reference into repo and issue number.
 // Returns ("", issue, true) for bare numbers — caller resolves repo from git remote.
@@ -41,6 +42,15 @@ func ParseIssueRef(ref string) (repo, issue string, ok bool) {
 // MatchWorkOnIssue checks if input matches "work on issue <ref>".
 func MatchWorkOnIssue(input string) (ref string, ok bool) {
 	m := reWorkOnIssue.FindStringSubmatch(input)
+	if m == nil {
+		return "", false
+	}
+	return strings.TrimSpace(m[1]), true
+}
+
+// MatchFixIssue checks if input matches "fix <ref>" or "fix issue <ref>".
+func MatchFixIssue(input string) (ref string, ok bool) {
+	m := reFixIssue.FindStringSubmatch(input)
 	if m == nil {
 		return "", false
 	}
@@ -83,6 +93,22 @@ var reGitHubIssue = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/issues/
 // Match picks the best workflow for the user's input.
 // It tries fast URL-based matching first, then falls back to Ollama.
 func Match(input string, workflows map[string]*pipeline.Workflow, model string) (*pipeline.Workflow, string, map[string]string) {
+	// Fast path: fix issue <ref> → doc-fix workflow
+	if ref, ok := MatchFixIssue(input); ok {
+		if w, ok := workflows["doc-fix"]; ok {
+			repo, issue, ok := ParseIssueRef(ref)
+			if ok {
+				resolved, err := ResolveRepo(repo)
+				if err == nil {
+					return w, input, map[string]string{
+						"repo":  resolved,
+						"issue": issue,
+					}
+				}
+			}
+		}
+	}
+
 	// Fast path: work on issue <ref>
 	if ref, ok := MatchWorkOnIssue(input); ok {
 		if w, ok := workflows["work-on-issue"]; ok {

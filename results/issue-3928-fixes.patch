@@ -1,0 +1,177 @@
+diff --git a/docs/ai-agents/labs/copilot/lab-05.2/README.md b/docs/ai-agents/labs/copilot/lab-05.2/README.md
+index ae88ab5..6f9ce03 100644
+--- a/docs/ai-agents/labs/copilot/lab-05.2/README.md
++++ b/docs/ai-agents/labs/copilot/lab-05.2/README.md
+@@ -1,7 +1,7 @@
+ # Lab 05.2 - Skills: Example Files
+ 
+ This folder contains the example files used in the
+-[Skills lab guide](../../../github-copilot/cli/05-2-skills.md).
++[Skills lab guide](../../../github-copilot/cli/07-skills.md).
+ 
+ ## Folder Structure
+ 
+diff --git a/docs/teams/ci/dependencies/updatecli.md b/docs/teams/ci/dependencies/updatecli.md
+index 144cf92..03bcf42 100644
+--- a/docs/teams/ci/dependencies/updatecli.md
++++ b/docs/teams/ci/dependencies/updatecli.md
+@@ -5,7 +5,24 @@ when `Dependabot` cannot be the tool.
+ 
+ ## Structure
+ 
+-> TBC
++Updatecli manifests follow a standard layout within each repository:
++
++```
++repo/
++├── updatecli/
++│   ├── bump.yml              # Main dependency bump manifest
++│   ├── values.d/
++│   │   └── scm.yml           # SCM configuration values
++│   └── policies/             # Local policies (if not using shared)
++└── .github/workflows/
++    └── updatecli.yml          # GitHub Actions workflow trigger
++```
++
++- **Manifests** (`updatecli/*.yml`) define what to update, using `sources`, `conditions`, and `targets`
++- **Values files** (`values.d/`) provide environment-specific configuration (e.g., SCM tokens, branch names)
++- **The workflow** triggers updatecli via `elastic/oblt-actions/updatecli/run@v1`
++
++For shared policies used across multiple repositories, see the [elastic/oblt-updatecli-policies](https://github.com/elastic/oblt-updatecli-policies) repository.
+ 
+ ## Share and reuse
+ 
+@@ -149,4 +166,31 @@ jobs:
+ 
+ ## Local development
+ 
+-> TBC
++To test updatecli manifests locally before pushing to CI:
++
++1. **Install updatecli:**
++
++   ```bash
++   brew install updatecli/updatecli/updatecli
++   ```
++
++2. **Run in diff mode** (dry run — shows what would change without applying):
++
++   ```bash
++   export GITHUB_TOKEN=$(gh auth token)
++   updatecli diff --config updatecli/bump.yml
++   ```
++
++3. **Apply changes locally** (creates PRs or commits):
++
++   ```bash
++   updatecli apply --config updatecli/bump.yml
++   ```
++
++4. **Test with values files:**
++
++   ```bash
++   updatecli diff --config updatecli/bump.yml --values updatecli/values.d/scm.yml
++   ```
++
++Refer to the [Updatecli quick start](https://www.updatecli.io/docs/prologue/quick-start/) for more details.
+diff --git a/docs/teams/ci/keyless/gh-ephemeral-tokens-gcp.md b/docs/teams/ci/keyless/gh-ephemeral-tokens-gcp.md
+index 24e7349..5ebe758 100644
+--- a/docs/teams/ci/keyless/gh-ephemeral-tokens-gcp.md
++++ b/docs/teams/ci/keyless/gh-ephemeral-tokens-gcp.md
+@@ -166,7 +166,15 @@ resource "google_project_iam_member" "secretsmanager_secret_version_adder" {
+ 
+ ### 5.3 Monitoring
+ 
+-TBC
++Monitor the health of the ephemeral token pipeline using these signals:
++
++- **GitHub Actions workflow logs**: Check for token exchange failures in the `Get token` step. Common errors include expired OIDC tokens or misconfigured Workload Identity Federation bindings.
++- **GCP Audit Logs**: Review `google.iam.credentials.v1.IAMCredentials.GenerateAccessToken` events in Cloud Logging for the target project. Failed attempts indicate IAM policy or federation issues.
++- **Secret Manager access logs**: Enable data access audit logs on Secret Manager to track which workflows are reading secrets and how often.
++- **Alert conditions**: Set up alerts for:
++  - Workflow failure rate exceeding baseline on the `Get token` step
++  - Unexpected service accounts accessing Secret Manager
++  - Token generation latency exceeding 30 seconds
+ 
+ ## 6. Operational Considerations
+ 
+diff --git a/docs/teams/ci/macos/index.md b/docs/teams/ci/macos/index.md
+index 7fffa84..5894b95 100644
+--- a/docs/teams/ci/macos/index.md
++++ b/docs/teams/ci/macos/index.md
+@@ -5,6 +5,23 @@ applies_to:
+   teams: ci
+ ---
+ 
+-# MacOS Runners for the CI/CD
++# macOS Runners for the CI/CD
+ 
+-> TBC
++macOS runners are used for building and testing projects that require Apple hardware — primarily Beats and Agent on macOS/ARM.
++
++## Available Environments
++
++| Environment | Use Case | Documentation |
++|-------------|----------|---------------|
++| Orka (self-managed) | General macOS CI workloads | [Orka setup](orka.md) |
++| Orka for Beats | Beats-specific macOS builds | [Orka for Beats](orka-for-beats.md) |
++
++## When to Use macOS Runners
++
++- Building or testing macOS-specific binaries (`.pkg`, `.dmg`)
++- Running integration tests that require Apple hardware or macOS APIs
++- Validating ARM64 (Apple Silicon) compatibility
++
++## Getting Access
++
++macOS runner access is managed through the Observability CI team. See the [Orka setup guide](orka.md) for VPN and credential requirements.
+diff --git a/docs/teams/ci/secrets-security-incident-runbook.md b/docs/teams/ci/secrets-security-incident-runbook.md
+index 65dd2cd..676432b 100644
+--- a/docs/teams/ci/secrets-security-incident-runbook.md
++++ b/docs/teams/ci/secrets-security-incident-runbook.md
+@@ -169,7 +169,14 @@ The Observability CI team manages secrets across multiple platforms for CI/CD op
+ 
+ **Location:** Managed via Vault CI at https://vault-ci.elastic.dev
+ 
+-**Rotation Procedure:** `TBC`
++**Rotation Procedure:**
++
++To rotate a Vault CI secret:
++1. Log in to [Vault CI](https://vault-ci.elastic.dev) with your Elastic SSO credentials
++2. Navigate to the secret path under `secret/observability-team/ci/`
++3. Generate a new secret value and update the entry
++4. Verify dependent CI pipelines pass with the rotated credential
++5. Revoke the old credential at the source system
+ 
+ ### Google Secret Manager Secrets
+ 
+@@ -192,9 +199,27 @@ The Observability CI team manages secrets across multiple platforms for CI/CD op
+ 
+ #### Legacy: Service Account Keys (If Still in Use)
+ 
+-**AWS:** `TBC`
++**AWS:**
++
++To rotate legacy AWS service account keys:
++1. Log in to the AWS Console for the affected account
++2. Navigate to IAM > Users > select the service account
++3. Create a new access key under Security credentials
++4. Update the key in Vault CI or the relevant secret store
++5. Verify dependent pipelines pass, then deactivate and delete the old key
++
++**Preferred alternative:** Migrate to OIDC/Keyless authentication to eliminate long-lived credentials entirely. See [Keyless documentation](./keyless/index.md).
++
++**GCP:**
++
++To rotate legacy GCP service account keys:
++1. Open the [GCP Console](https://console.cloud.google.com/iam-admin/serviceaccounts) for the project
++2. Select the service account, go to Keys tab
++3. Create a new JSON key and download it
++4. Update the key in Vault CI or the relevant secret store
++5. Verify dependent pipelines pass, then delete the old key from GCP
+ 
+-**GCP:** `TBC`
++**Preferred alternative:** Migrate to Workload Identity Federation for keyless authentication. See [GCP ephemeral tokens](./keyless/gh-ephemeral-tokens-gcp.md).
+ 
+ ## Prevention and Monitoring
+ 
