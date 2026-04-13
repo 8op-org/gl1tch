@@ -98,9 +98,9 @@ func TestAllIndices(t *testing.T) {
 	indices := allIndices()
 	want := []string{
 		esearch.IndexEvents,
-		esearch.IndexSummaries,
-		esearch.IndexPipelines,
-		esearch.IndexInsights,
+		esearch.IndexResearchRuns,
+		esearch.IndexToolCalls,
+		esearch.IndexLLMCalls,
 	}
 	if len(indices) != len(want) {
 		t.Fatalf("allIndices: got %d indices, want %d", len(indices), len(want))

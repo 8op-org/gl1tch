@@ -36,7 +36,7 @@ func (e *ESActivityResearcher) Gather(ctx context.Context, q ResearchQuery, _ Ev
 		}
 	}`, jsonString(q.Question)))
 
-	indices := []string{esearch.IndexEvents, esearch.IndexPipelines, esearch.IndexSummaries}
+	indices := []string{esearch.IndexEvents, esearch.IndexResearchRuns, esearch.IndexToolCalls, esearch.IndexLLMCalls}
 	resp, err := e.client.Search(ctx, indices, queryJSON)
 	if err != nil {
 		return Evidence{}, fmt.Errorf("es-activity gather: %w", err)

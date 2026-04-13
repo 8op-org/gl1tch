@@ -33,9 +33,9 @@ func NewQueryEngine(es *esearch.Client, model string) *QueryEngine {
 func allIndices() []string {
 	return []string{
 		esearch.IndexEvents,
-		esearch.IndexSummaries,
-		esearch.IndexPipelines,
-		esearch.IndexInsights,
+		esearch.IndexResearchRuns,
+		esearch.IndexToolCalls,
+		esearch.IndexLLMCalls,
 	}
 }
 
