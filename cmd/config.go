@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/8op-org/gl1tch/internal/provider"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -16,8 +17,9 @@ func init() {
 }
 
 type Config struct {
-	DefaultModel    string `yaml:"default_model"`
-	DefaultProvider string `yaml:"default_provider"`
+	DefaultModel    string                `yaml:"default_model"`
+	DefaultProvider string                `yaml:"default_provider"`
+	Tiers           []provider.TierConfig `yaml:"tiers,omitempty"`
 }
 
 var configCmd = &cobra.Command{
@@ -69,13 +71,17 @@ func loadConfig() (*Config, error) {
 	data, err := os.ReadFile(configPath())
 	if err != nil {
 		return &Config{
-			DefaultModel:    "qwen2.5:7b",
+			DefaultModel:    "qwen3:8b",
 			DefaultProvider: "ollama",
+			Tiers:           provider.DefaultTiers(),
 		}, nil
 	}
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
+	}
+	if len(cfg.Tiers) == 0 {
+		cfg.Tiers = provider.DefaultTiers()
 	}
 	return &cfg, nil
 }

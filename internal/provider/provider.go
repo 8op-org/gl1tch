@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -149,5 +150,58 @@ func RunOllama(model, prompt string) (string, error) {
 		return "", fmt.Errorf("ollama: parse: %w", err)
 	}
 	return strings.TrimSpace(result.Response), nil
+}
+
+// RunOllamaWithResult sends a prompt to Ollama and returns a full LLMResult
+// with token counts parsed from the Ollama response metadata.
+func RunOllamaWithResult(model, prompt string) (LLMResult, error) {
+	start := time.Now()
+
+	body, _ := json.Marshal(map[string]any{
+		"model":  model,
+		"prompt": prompt,
+		"stream": false,
+	})
+	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return LLMResult{}, fmt.Errorf("ollama: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return LLMResult{}, fmt.Errorf("ollama: read: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return LLMResult{}, fmt.Errorf("ollama: %s\n%s", resp.Status, data)
+	}
+
+	var raw struct {
+		Response        string `json:"response"`
+		PromptEvalCount int    `json:"prompt_eval_count"`
+		EvalCount       int    `json:"eval_count"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return LLMResult{}, fmt.Errorf("ollama: parse: %w", err)
+	}
+
+	tokIn := raw.PromptEvalCount
+	if tokIn == 0 {
+		tokIn = EstimateTokens(prompt)
+	}
+	tokOut := raw.EvalCount
+	if tokOut == 0 {
+		tokOut = EstimateTokens(raw.Response)
+	}
+
+	return LLMResult{
+		Provider:  "ollama",
+		Model:     model,
+		Response:  strings.TrimSpace(raw.Response),
+		TokensIn:  tokIn,
+		TokensOut: tokOut,
+		Latency:   time.Since(start),
+		CostUSD:   0,
+	}, nil
 }
 
