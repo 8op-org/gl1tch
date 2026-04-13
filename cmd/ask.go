@@ -4,20 +4,29 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/8op-org/gl1tch/internal/pipeline"
-	"github.com/8op-org/gl1tch/internal/provider"
 	"github.com/8op-org/gl1tch/internal/research"
 	"github.com/8op-org/gl1tch/internal/router"
 )
 
+var reGitHubIssueURL = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/issues/\d+`)
+var reGitHubPRURL = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/pull/\d+`)
+var reGoogleDocURL = regexp.MustCompile(`https?://docs\.google\.com/document/d/`)
+
 func init() {
 	askCmd.Flags().StringVarP(&targetPath, "path", "C", "", "run against this directory instead of cwd")
 	rootCmd.AddCommand(askCmd)
+}
+
+func isResearchInput(input string) bool {
+	return reGitHubIssueURL.MatchString(input) ||
+		reGitHubPRURL.MatchString(input) ||
+		reGoogleDocURL.MatchString(input)
 }
 
 var askCmd = &cobra.Command{
@@ -30,15 +39,25 @@ var askCmd = &cobra.Command{
 				return fmt.Errorf("chdir %s: %w", targetPath, err)
 			}
 		}
-
 		input := strings.Join(args, " ")
 
+		// Research inputs skip the workflow router
+		if isResearchInput(input) {
+			return runResearch(input, research.GoalSummarize)
+		}
+
+		// Check for "implement" intent
+		if strings.Contains(strings.ToLower(input), "implement") {
+			if url := reGitHubIssueURL.FindString(input); url != "" {
+				return runResearch(url, research.GoalImplement)
+			}
+		}
+
+		// Tier 1: workflow match
 		workflows, err := loadWorkflows()
 		if err != nil {
 			return err
 		}
-
-		// Tier 1: workflow match
 		w, resolved, params := router.Match(input, workflows, "")
 		if w != nil {
 			fmt.Printf(">> %s\n", w.Name)
@@ -50,80 +69,67 @@ var askCmd = &cobra.Command{
 			return nil
 		}
 
-		// Tier 2: research loop
-		if loop := buildResearchLoop(); loop != nil {
-			fmt.Fprintln(os.Stderr, ">> researching...")
-			ctx := context.Background()
-			q := research.ResearchQuery{Question: input, Context: map[string]string{}}
-
-			// Resolve repo from question and ensure it's available locally
-			if org, repo := research.ParseRepoFromQuestion(input); org != "" && repo != "" {
-				repoPath, err := research.EnsureRepo(org, repo, "")
-				if err != nil {
-					fmt.Fprintf(os.Stderr, ">> could not resolve %s/%s: %v\n", org, repo, err)
-				} else {
-					fmt.Fprintf(os.Stderr, ">> repo: %s\n", repoPath)
-					q.Context["repo_path"] = repoPath
-					q.Context["repo_org"] = org
-					q.Context["repo_name"] = repo
-				}
-			}
-			res, err := loop.Run(ctx, q, research.DefaultBudget())
-			if err == nil && res.Draft != "" {
-				fmt.Println(res.Draft)
-
-				// Print feedback
-				printFeedback(res.Feedback)
-
-				// Save results if substantive
-				if research.IsSubstantive(res.Draft) {
-					dir := resultsDir(input)
-					if saveErr := research.SaveResults(dir, res); saveErr != nil {
-						fmt.Fprintf(os.Stderr, ">> warning: could not save results: %v\n", saveErr)
-					} else {
-						fmt.Fprintf(os.Stderr, ">> results saved to %s/\n", dir)
-					}
-				}
-
-				return nil
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stderr, ">> research error: %v\n", err)
-			}
-		}
-
-		// Tier 3: direct ollama fallback
-		fmt.Fprintln(os.Stderr, ">> asking ollama...")
-		answer, err := provider.RunOllama("qwen2.5:7b", input)
-		if err != nil {
-			return err
-		}
-		fmt.Println(answer)
-		return nil
+		// Tier 2: research loop for non-URL questions
+		return runResearch(input, research.GoalSummarize)
 	},
 }
 
-// loadWorkflows loads from ~/.config/glitch/workflows/ then .glitch/workflows/.
-// Project-local workflows override global ones.
+func runResearch(input string, goal research.Goal) error {
+	fmt.Fprintln(os.Stderr, ">> adapting input...")
+	doc, err := research.Adapt(input)
+	if err != nil {
+		return fmt.Errorf("adapt: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, ">> source: %s\n", doc.Source)
+	if doc.Repo != "" {
+		fmt.Fprintf(os.Stderr, ">> repo: %s\n", doc.Repo)
+	}
+
+	repoPath := doc.RepoPath
+	if repoPath == "" {
+		repoPath, _ = os.Getwd()
+	}
+
+	fmt.Fprintln(os.Stderr, ">> researching...")
+	loop, err := buildToolLoop(repoPath)
+	if err != nil {
+		return fmt.Errorf("build loop: %w", err)
+	}
+
+	result, err := loop.Run(context.Background(), doc, goal)
+	if err != nil {
+		return fmt.Errorf("research: %w", err)
+	}
+
+	fmt.Println(result.Output)
+
+	// Save results
+	if saveErr := research.SaveLoopResult("results", result); saveErr != nil {
+		fmt.Fprintf(os.Stderr, ">> warning: could not save results: %v\n", saveErr)
+	} else {
+		fmt.Fprintf(os.Stderr, ">> results saved to results/\n")
+	}
+
+	fmt.Fprintf(os.Stderr, ">> %d tool calls, %d LLM calls, ~$%.4f\n",
+		len(result.ToolCalls), result.LLMCalls, result.CostUSD)
+
+	return nil
+}
+
 func loadWorkflows() (map[string]*pipeline.Workflow, error) {
 	workflows := make(map[string]*pipeline.Workflow)
-
-	// 1. User-global: ~/.config/glitch/workflows/
 	if home, err := os.UserHomeDir(); err == nil {
-		globalDir := filepath.Join(home, ".config", "glitch", "workflows")
+		globalDir := home + "/.config/glitch/workflows"
 		if m, err := pipeline.LoadDir(globalDir); err == nil {
 			for k, v := range m {
 				workflows[k] = v
 			}
 		}
 	}
-
-	// 2. Project-local: .glitch/workflows/
 	if m, err := pipeline.LoadDir(".glitch/workflows"); err == nil {
 		for k, v := range m {
 			workflows[k] = v
 		}
 	}
-
 	return workflows, nil
 }
