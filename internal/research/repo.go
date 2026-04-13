@@ -9,7 +9,11 @@ import (
 	"strings"
 )
 
-var reRepoRef = regexp.MustCompile(`(?:([a-zA-Z0-9_.-]+)/)?([a-zA-Z0-9_.-]+)(?:#\d+)?`)
+// reExplicitRepo matches org/repo (requires the slash)
+var reExplicitRepo = regexp.MustCompile(`([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)`)
+
+// reIssueRepo matches repo#number (requires the hash+number)
+var reIssueRepo = regexp.MustCompile(`([a-zA-Z0-9_.-]+)#(\d+)`)
 
 // RepoDir returns the standard clone path for a repo.
 func RepoDir(org, repo string) string {
@@ -54,28 +58,22 @@ func EnsureRepo(org, repo, localPath string) (string, error) {
 }
 
 // ParseRepoFromQuestion extracts org/repo from a question string.
+// Prioritizes explicit org/repo patterns, then repo#number patterns.
+// Single bare words are never matched — requires a slash or hash.
 func ParseRepoFromQuestion(question string) (org, repo string) {
-	skip := map[string]bool{
-		"the": true, "this": true, "that": true, "what": true, "fix": true,
-		"check": true, "show": true, "find": true, "how": true, "why": true,
-		"are": true, "there": true, "does": true, "have": true, "been": true,
-		"code": true,
-	}
+	// Pass 1: look for explicit org/repo (e.g., "elastic/observability-robots")
 	for _, word := range strings.Fields(question) {
 		word = strings.Trim(word, "?.,!\"'")
-		m := reRepoRef.FindStringSubmatch(word)
-		if m == nil {
-			continue
+		if m := reExplicitRepo.FindStringSubmatch(word); m != nil {
+			return m[1], m[2]
 		}
-		r := m[2]
-		if skip[strings.ToLower(r)] || len(r) < 3 {
-			continue
+	}
+	// Pass 2: look for repo#number (e.g., "observability-robots#3928")
+	for _, word := range strings.Fields(question) {
+		word = strings.Trim(word, "?.,!\"'")
+		if m := reIssueRepo.FindStringSubmatch(word); m != nil {
+			return "elastic", m[1] // default org
 		}
-		o := m[1]
-		if o == "" {
-			o = "elastic"
-		}
-		return o, r
 	}
 	return "", ""
 }

@@ -3,10 +3,10 @@
 **Evidence Quality:** insufficient
 
 **Missing:**
-- actual file contents or grep results from the observability-robots repo
-- a local clone or GitHub API scan of elastic/observability-robots docs directory
+- grep/scan results from the actual elastic/observability-robots repository (local clone or GitHub API content search)
+- file listing of observability-robots docs/ directory
 
 **Useful:**
-- the spec confirmed that TBC scanning is an intended use case for the research loop
+- results/elastic/TBC/drafts.md confirming the gap was already identified
 
-**Suggestion:** use the fs researcher to scan the observability-robots repo directly (clone if not local), or use a github researcher to search file contents in the remote repo for the pattern TBC
+**Suggestion:** clone elastic/observability-robots locally (or use GitHub code search API) and grep for TBC/TBD patterns in *.md files before feeding evidence

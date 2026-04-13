@@ -54,7 +54,20 @@ var askCmd = &cobra.Command{
 		if loop := buildResearchLoop(); loop != nil {
 			fmt.Fprintln(os.Stderr, ">> researching...")
 			ctx := context.Background()
-			q := research.ResearchQuery{Question: input}
+			q := research.ResearchQuery{Question: input, Context: map[string]string{}}
+
+			// Resolve repo from question and ensure it's available locally
+			if org, repo := research.ParseRepoFromQuestion(input); org != "" && repo != "" {
+				repoPath, err := research.EnsureRepo(org, repo, "")
+				if err != nil {
+					fmt.Fprintf(os.Stderr, ">> could not resolve %s/%s: %v\n", org, repo, err)
+				} else {
+					fmt.Fprintf(os.Stderr, ">> repo: %s\n", repoPath)
+					q.Context["repo_path"] = repoPath
+					q.Context["repo_org"] = org
+					q.Context["repo_name"] = repo
+				}
+			}
 			res, err := loop.Run(ctx, q, research.DefaultBudget())
 			if err == nil && res.Draft != "" {
 				fmt.Println(res.Draft)

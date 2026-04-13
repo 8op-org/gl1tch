@@ -18,6 +18,11 @@ func (g *GitResearcher) Describe() string {
 }
 
 func (g *GitResearcher) Gather(ctx context.Context, q ResearchQuery, _ EvidenceBundle) (Evidence, error) {
+	// Use repo path from query context if available
+	if rp, ok := q.Context["repo_path"]; ok && rp != "" {
+		g.RepoPath = rp
+	}
+
 	var sections []string
 
 	if out := g.run("log", "--oneline", "-30"); out != "" {

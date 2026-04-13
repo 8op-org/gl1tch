@@ -24,6 +24,10 @@ func (f *FSResearcher) Describe() string {
 
 func (f *FSResearcher) Gather(ctx context.Context, q ResearchQuery, prior EvidenceBundle) (Evidence, error) {
 	root := f.RootPath
+	// Use repo path from query context if available
+	if rp, ok := q.Context["repo_path"]; ok && rp != "" {
+		root = rp
+	}
 	if root == "" {
 		root, _ = os.Getwd()
 	}
