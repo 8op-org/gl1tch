@@ -6,9 +6,95 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
+	"text/template"
+
+	"gopkg.in/yaml.v3"
 )
+
+// Provider is a YAML-defined command template for an LLM tool.
+type Provider struct {
+	Name    string `yaml:"name"`
+	Command string `yaml:"command"`
+}
+
+// ProviderRegistry holds loaded provider definitions.
+type ProviderRegistry struct {
+	providers map[string]*Provider
+}
+
+// LoadProviders reads all .yaml files from dir, parses them into Provider
+// structs, and returns a registry. If dir doesn't exist, returns an empty
+// registry (not an error).
+func LoadProviders(dir string) (*ProviderRegistry, error) {
+	reg := &ProviderRegistry{providers: make(map[string]*Provider)}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return reg, nil
+		}
+		return nil, fmt.Errorf("read provider dir: %w", err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".yaml" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", e.Name(), err)
+		}
+		var p Provider
+		if err := yaml.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", e.Name(), err)
+		}
+		if p.Name == "" {
+			continue
+		}
+		reg.providers[p.Name] = &p
+	}
+	return reg, nil
+}
+
+// RenderCommand looks up a provider by name and renders its command template
+// with {{.prompt}} replaced by the given prompt. Returns an error listing
+// available providers if name is not found.
+func (r *ProviderRegistry) RenderCommand(name, prompt string) (string, error) {
+	p, ok := r.providers[name]
+	if !ok {
+		available := make([]string, 0, len(r.providers))
+		for k := range r.providers {
+			available = append(available, k)
+		}
+		sort.Strings(available)
+		return "", fmt.Errorf("provider %q not found; available: %s", name, strings.Join(available, ", "))
+	}
+
+	tmpl, err := template.New("cmd").Parse(p.Command)
+	if err != nil {
+		return "", fmt.Errorf("bad template for provider %q: %w", name, err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, map[string]string{"prompt": prompt}); err != nil {
+		return "", fmt.Errorf("render provider %q: %w", name, err)
+	}
+	return buf.String(), nil
+}
+
+// RunProvider looks up a provider by name, renders the command template, and
+// executes it via RunShell.
+func (r *ProviderRegistry) RunProvider(name, prompt string) (string, error) {
+	cmd, err := r.RenderCommand(name, prompt)
+	if err != nil {
+		return "", err
+	}
+	return RunShell(cmd)
+}
 
 // RunShell executes a shell command and returns its stdout.
 func RunShell(command string) (string, error) {
@@ -50,17 +136,3 @@ func RunOllama(model, prompt string) (string, error) {
 	return strings.TrimSpace(result.Response), nil
 }
 
-// RunClaude sends a prompt to Claude via the CLI and returns the response.
-func RunClaude(model, prompt string) (string, error) {
-	args := []string{"-p", "--output-format", "text"}
-	if model != "" {
-		args = append(args, "--model", model)
-	}
-	args = append(args, prompt)
-	cmd := exec.Command("claude", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("claude: %w\n%s", err, out)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
