@@ -81,7 +81,7 @@ var workflowRunCmd = &cobra.Command{
 		}
 
 		fmt.Printf(">> %s\n", w.Name)
-		result, err := pipeline.Run(w, input, "")
+		result, err := pipeline.Run(w, input, "", nil, providerReg)
 		if err != nil {
 			return err
 		}

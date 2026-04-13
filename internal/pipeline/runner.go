@@ -17,12 +17,13 @@ type Result struct {
 
 // Run executes a workflow with the given input string.
 // Templates use {{.input}} for user input and {{step "id"}} for prior step output.
-func Run(w *Workflow, input string, defaultModel string) (*Result, error) {
+func Run(w *Workflow, input string, defaultModel string, params map[string]string, reg *provider.ProviderRegistry) (*Result, error) {
 	steps := make(map[string]string) // step ID → output
 
 	for _, step := range w.Steps {
 		data := map[string]any{
 			"input": input,
+			"param": params,
 		}
 
 		if step.Run != "" {
@@ -52,13 +53,13 @@ func Run(w *Workflow, input string, defaultModel string) (*Result, error) {
 
 			var out string
 			switch prov {
-			case "claude":
-				out, err = provider.RunClaude(model, rendered)
-			default: // ollama
+			case "ollama", "":
 				if model == "" {
 					model = "qwen2.5:7b"
 				}
 				out, err = provider.RunOllama(model, rendered)
+			default:
+				out, err = reg.RunProvider(prov, rendered)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("step %s: %w", step.ID, err)

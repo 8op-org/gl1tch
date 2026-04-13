@@ -46,7 +46,7 @@ var askCmd = &cobra.Command{
 		}
 
 		fmt.Printf(">> %s\n", w.Name)
-		result, err := pipeline.Run(w, resolved, "")
+		result, err := pipeline.Run(w, resolved, "", nil, providerReg)
 		if err != nil {
 			return err
 		}
