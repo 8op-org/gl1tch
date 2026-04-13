@@ -23,30 +23,6 @@ func TestExtractFiles(t *testing.T) {
 	}
 }
 
-func TestSaveResults(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "results")
-	result := Result{
-		Draft: "--- FILE: docs/test.md ---\n# Test\n--- END FILE ---",
-		Feedback: Feedback{
-			Quality:    "good",
-			Suggestion: "test suggestion",
-		},
-	}
-	err := SaveResults(dir, result)
-	if err != nil {
-		t.Fatalf("SaveResults: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "drafts.md")); err != nil {
-		t.Fatal("drafts.md not created")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "docs", "test.md")); err != nil {
-		t.Fatal("extracted file not created")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "feedback.md")); err != nil {
-		t.Fatal("feedback.md not created")
-	}
-}
-
 func TestIsSubstantive(t *testing.T) {
 	if IsSubstantive("short answer") {
 		t.Fatal("short answer should not be substantive")

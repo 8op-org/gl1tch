@@ -41,61 +41,6 @@ func IsSubstantive(draft string) bool {
 	return false
 }
 
-// SaveResults writes the full result to a results directory.
-func SaveResults(dir string, result Result) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("results: mkdir: %w", err)
-	}
-
-	// Write full draft
-	if err := os.WriteFile(filepath.Join(dir, "drafts.md"), []byte(result.Draft), 0o644); err != nil {
-		return fmt.Errorf("results: write drafts: %w", err)
-	}
-
-	// Extract and write individual files
-	files := ExtractFiles(result.Draft)
-	for _, f := range files {
-		target := filepath.Join(dir, f.Path)
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return fmt.Errorf("results: mkdir %s: %w", f.Path, err)
-		}
-		if err := os.WriteFile(target, []byte(f.Content), 0o644); err != nil {
-			return fmt.Errorf("results: write %s: %w", f.Path, err)
-		}
-	}
-
-	// Write feedback if present
-	if result.Feedback.Quality != "" || result.Feedback.Suggestion != "" {
-		var fb strings.Builder
-		fmt.Fprintf(&fb, "# Research Feedback\n\n")
-		if result.Feedback.Quality != "" {
-			fmt.Fprintf(&fb, "**Evidence Quality:** %s\n\n", result.Feedback.Quality)
-		}
-		if len(result.Feedback.Missing) > 0 {
-			fb.WriteString("**Missing:**\n")
-			for _, m := range result.Feedback.Missing {
-				fmt.Fprintf(&fb, "- %s\n", m)
-			}
-			fb.WriteString("\n")
-		}
-		if len(result.Feedback.Useful) > 0 {
-			fb.WriteString("**Useful:**\n")
-			for _, u := range result.Feedback.Useful {
-				fmt.Fprintf(&fb, "- %s\n", u)
-			}
-			fb.WriteString("\n")
-		}
-		if result.Feedback.Suggestion != "" {
-			fmt.Fprintf(&fb, "**Suggestion:** %s\n", result.Feedback.Suggestion)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "feedback.md"), []byte(fb.String()), 0o644); err != nil {
-			return fmt.Errorf("results: write feedback: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // runJSON is the metadata structure written to run.json.
 type runJSON struct {
 	RunID       string  `json:"run_id"`

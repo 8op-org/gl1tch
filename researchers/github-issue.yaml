@@ -1,5 +1,0 @@
-name: github-issue
-description: fetch a specific GitHub issue with full body and comments
-steps:
-  - id: gather
-    run: gh issue view {{.input}} --json number,title,body,comments,labels
