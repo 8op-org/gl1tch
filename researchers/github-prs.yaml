@@ -1,0 +1,6 @@
+name: github-prs
+description: open and recently merged pull requests
+
+steps:
+  - id: gather
+    run: gh pr list --limit 20 --state all --json number,title,state,author,updatedAt,baseRefName

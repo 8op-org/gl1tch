@@ -1,0 +1,6 @@
+name: github-issues
+description: open issues and recently closed issues
+
+steps:
+  - id: gather
+    run: gh issue list --limit 20 --state all --json number,title,state,author,updatedAt,labels
