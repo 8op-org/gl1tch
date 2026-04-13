@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -56,13 +57,16 @@ func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(st
 			}
 
 			model := tier.Model
+			fmt.Fprintf(os.Stderr, ">> tier %d: trying %s\n", tierIdx, name)
 			result, err := tr.callProvider(name, model, prompt)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, ">> tier %d: %s error: %v\n", tierIdx, name, err)
 				lastReason = ReasonProviderError
 				continue // next provider in same tier
 			}
 
 			if reason := validate(result.Response); reason != "" {
+				fmt.Fprintf(os.Stderr, ">> tier %d: %s rejected (%s), escalating\n", tierIdx, name, reason)
 				lastReason = reason
 				break // escalate to next tier
 			}

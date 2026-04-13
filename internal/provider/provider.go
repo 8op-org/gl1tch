@@ -87,8 +87,9 @@ func (r *ProviderRegistry) RenderCommand(name, prompt string) (string, error) {
 	return buf.String(), nil
 }
 
-// RunProvider looks up a provider by name and executes the command with the
-// prompt piped via stdin. This avoids shell escaping issues with complex prompts.
+// RunProvider looks up a provider by name and executes the command.
+// If the command template contains {{.prompt}}, the prompt is rendered inline.
+// Otherwise the prompt is piped via stdin (avoids shell escaping for long prompts).
 func (r *ProviderRegistry) RunProvider(name, prompt string) (string, error) {
 	p, ok := r.providers[name]
 	if !ok {
@@ -97,6 +98,14 @@ func (r *ProviderRegistry) RunProvider(name, prompt string) (string, error) {
 			avail = append(avail, n)
 		}
 		return "", fmt.Errorf("provider %q not found (available: %s)", name, strings.Join(avail, ", "))
+	}
+
+	if strings.Contains(p.Command, "{{.prompt}}") {
+		rendered, err := r.RenderCommand(name, prompt)
+		if err != nil {
+			return "", err
+		}
+		return RunShell(rendered)
 	}
 	return RunShellWithStdin(p.Command, prompt)
 }
