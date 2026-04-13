@@ -71,7 +71,8 @@ func (q *QueryEngine) searchWithFallback(ctx context.Context, question string) (
 		fallbackRaw, _ := json.Marshal(defaultQuery(question))
 		resp, err = q.es.Search(ctx, allIndices(), json.RawMessage(fallbackRaw))
 		if err != nil {
-			return nil, err
+			// Index-not-found or similar — return empty results
+			return &esearch.SearchResponse{}, nil
 		}
 	}
 	return resp, nil
