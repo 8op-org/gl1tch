@@ -78,7 +78,8 @@ func LoadDir(dir string) (map[string]*Workflow, error) {
 		}
 		w, err := LoadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
-			return nil, err
+			fmt.Fprintf(os.Stderr, "warning: skipping %s: %v\n", e.Name(), err)
+			continue
 		}
 		workflows[w.Name] = w
 	}
