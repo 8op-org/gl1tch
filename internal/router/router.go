@@ -78,7 +78,7 @@ func ResolveRepo(repo string) (string, error) {
 }
 
 var reGitHubPR = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/pull/\d+`)
-var reGitHubIssue = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/issues/\d+`)
+
 
 // Match picks the best workflow for the user's input.
 // It tries fast URL-based matching first, then falls back to Ollama.
@@ -105,11 +105,8 @@ func Match(input string, workflows map[string]*pipeline.Workflow, model string) 
 			return w, url, nil
 		}
 	}
-	if url := reGitHubIssue.FindString(input); url != "" {
-		if w, ok := workflows["github-issues"]; ok {
-			return w, url, nil
-		}
-	}
+	// GitHub issue URLs fall through to the research loop — no fast-path.
+	// Use "work on issue <ref>" for the work-on-issue workflow.
 
 	// Build a numbered menu for the LLM.
 	var menu []string

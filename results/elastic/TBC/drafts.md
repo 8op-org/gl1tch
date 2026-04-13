@@ -1,3 +1,0 @@
-I don't have enough evidence. The evidence contains no actual scan results from the `elastic/observability-robots` repository. Every match comes from gl1tch's own planning and spec documents (`docs/superpowers/plans/`, `docs/superpowers/specs/`), which describe the *capability* to find TBC placeholders — not the placeholders themselves. The previous draft at `results/elastic/TBC/drafts.md` reached the same conclusion.
-
-To answer this question, the filesystem researcher would need to scan a local clone of `elastic/observability-robots`, or a GitHub content search would need to be performed against that remote repository.

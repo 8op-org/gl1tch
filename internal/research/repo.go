@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// reGitHubURL matches https://github.com/org/repo (with optional path)
+var reGitHubURL = regexp.MustCompile(`https?://github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)`)
+
 // reExplicitRepo matches org/repo (requires the slash)
 var reExplicitRepo = regexp.MustCompile(`([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)`)
 
@@ -61,6 +64,10 @@ func EnsureRepo(org, repo, localPath string) (string, error) {
 // Prioritizes explicit org/repo patterns, then repo#number patterns.
 // Single bare words are never matched — requires a slash or hash.
 func ParseRepoFromQuestion(question string) (org, repo string) {
+	// Pass 0: GitHub URL (e.g., "https://github.com/elastic/ensemble/issues/872")
+	if m := reGitHubURL.FindStringSubmatch(question); m != nil {
+		return m[1], m[2]
+	}
 	// Pass 1: look for explicit org/repo (e.g., "elastic/observability-robots")
 	for _, word := range strings.Fields(question) {
 		word = strings.Trim(word, "?.,!\"'")

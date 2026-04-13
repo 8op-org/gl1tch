@@ -66,7 +66,11 @@ func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(st
 			}
 
 			if reason := validate(result.Response); reason != "" {
-				fmt.Fprintf(os.Stderr, ">> tier %d: %s rejected (%s), escalating\n", tierIdx, name, reason)
+				preview := result.Response
+				if len(preview) > 500 {
+					preview = preview[:500]
+				}
+				fmt.Fprintf(os.Stderr, ">> tier %d: %s rejected (%s), escalating\n>> response preview: [%s]\n", tierIdx, name, reason, preview)
 				lastReason = reason
 				break // escalate to next tier
 			}

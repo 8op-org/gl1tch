@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,8 +23,17 @@ const (
 
 // ToolCall is the JSON structure the LLM emits to invoke a tool.
 type ToolCall struct {
-	Tool   string            `json:"tool"`
-	Params map[string]string `json:"params"`
+	Tool      string         `json:"tool"`
+	RawParams map[string]any `json:"params"`
+}
+
+// Params returns all param values as strings (LLMs may emit ints, bools, etc.).
+func (tc ToolCall) Params() map[string]string {
+	out := make(map[string]string, len(tc.RawParams))
+	for k, v := range tc.RawParams {
+		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
 }
 
 // LoopResult captures everything that happened during a tool-use research run.
@@ -50,6 +60,38 @@ type ToolLoop struct {
 }
 
 const maxToolCalls = 15
+
+// stripThinkTags removes qwen3-style <think>...</think> blocks from LLM output.
+var reThinkBlock = regexp.MustCompile(`(?s)<think>.*?</think>\s*`)
+
+// stripCLINoise removes CLI tool preamble/footer from provider output.
+// Handles codex ("OpenAI Codex v..."), gemini headers, and "tokens used\nN" footers.
+var reCLIPreamble = regexp.MustCompile(`(?s)^.*?--------\n`)
+var reTokensFooter = regexp.MustCompile(`(?s)\ntokens used\n[\d,]+\n.*$`)
+
+func stripCLINoise(s string) string {
+	// Strip codex/gemini-style preamble (everything up to last "--------\n")
+	if idx := strings.LastIndex(s, "--------\n"); idx >= 0 {
+		s = s[idx+len("--------\n"):]
+	}
+	// Strip "tokens used\nN\n..." footer
+	s = reTokensFooter.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
+
+func cleanLLMResponse(s string) string {
+	s = reThinkBlock.ReplaceAllString(s, "")
+	s = strings.TrimSpace(s)
+	// Strip markdown code fences around JSON
+	if strings.HasPrefix(s, "```") {
+		lines := strings.Split(s, "\n")
+		if len(lines) >= 3 && strings.HasPrefix(lines[len(lines)-1], "```") {
+			s = strings.Join(lines[1:len(lines)-1], "\n")
+			s = strings.TrimSpace(s)
+		}
+	}
+	return s
+}
 
 // NewToolLoop creates a ToolLoop with the given tools, tiered runner, and telemetry sink.
 func NewToolLoop(tools *ToolSet, runner *provider.TieredRunner, tel *esearch.Telemetry) *ToolLoop {
@@ -120,17 +162,17 @@ func (tl *ToolLoop) Run(ctx context.Context, doc ResearchDocument, goal Goal) (L
 		prompt := strings.Join(conversation, "\n\n")
 
 		rr, err := tl.runner.Run(ctx, prompt, func(response string) provider.EscalationReason {
-			trimmed := strings.TrimSpace(response)
-			if trimmed == "" {
+			cleaned := cleanLLMResponse(response)
+			if cleaned == "" {
 				return provider.ReasonEmpty
 			}
 			// If it doesn't look like JSON, accept as final output.
-			if !strings.HasPrefix(trimmed, "{") {
+			if !strings.HasPrefix(cleaned, "{") {
 				return ""
 			}
 			// Try to parse as a tool call.
 			var tc ToolCall
-			if err := json.Unmarshal([]byte(trimmed), &tc); err != nil {
+			if err := json.Unmarshal([]byte(cleaned), &tc); err != nil {
 				return provider.ReasonMalformed
 			}
 			if tc.Tool == "" {
@@ -174,11 +216,11 @@ func (tl *ToolLoop) Run(ctx context.Context, doc ResearchDocument, goal Goal) (L
 		})
 
 		// Try to parse as tool call.
-		trimmed := strings.TrimSpace(rr.Response)
+		cleaned := cleanLLMResponse(rr.Response)
 		var tc ToolCall
 		isToolCall := false
-		if strings.HasPrefix(trimmed, "{") {
-			if err := json.Unmarshal([]byte(trimmed), &tc); err == nil && tc.Tool != "" {
+		if strings.HasPrefix(cleaned, "{") {
+			if err := json.Unmarshal([]byte(cleaned), &tc); err == nil && tc.Tool != "" {
 				isToolCall = true
 			}
 		}
@@ -187,14 +229,14 @@ func (tl *ToolLoop) Run(ctx context.Context, doc ResearchDocument, goal Goal) (L
 			fmt.Fprintf(os.Stderr, "  > %s\n", tc.Tool)
 
 			toolStart := time.Now()
-			tr := tl.tools.Execute(ctx, tc.Tool, tc.Params)
+			tr := tl.tools.Execute(ctx, tc.Tool, tc.Params())
 			toolLatency := time.Since(toolStart)
 
 			result.ToolCalls = append(result.ToolCalls, tr)
 			toolCallCount++
 
 			// Index tool call telemetry.
-			inputSummary, _ := json.Marshal(tc.Params)
+			inputSummary, _ := json.Marshal(tc.Params())
 			tl.telemetry.IndexToolCall(ctx, esearch.ToolCallDoc{
 				RunID:           runID,
 				ToolName:        tc.Tool,
@@ -219,8 +261,8 @@ func (tl *ToolLoop) Run(ctx context.Context, doc ResearchDocument, goal Goal) (L
 			continue
 		}
 
-		// Not a tool call — final output.
-		result.Output = rr.Response
+		// Not a tool call — final output. Strip CLI preamble/footer noise.
+		result.Output = stripCLINoise(cleaned)
 		break
 	}
 

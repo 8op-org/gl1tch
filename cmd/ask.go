@@ -41,16 +41,16 @@ var askCmd = &cobra.Command{
 		}
 		input := strings.Join(args, " ")
 
-		// Research inputs skip the workflow router
-		if isResearchInput(input) {
-			return runResearch(input, research.GoalSummarize)
-		}
-
-		// Check for "implement" intent
+		// Check for "implement" intent first (before generic research routing)
 		if strings.Contains(strings.ToLower(input), "implement") {
 			if url := reGitHubIssueURL.FindString(input); url != "" {
 				return runResearch(url, research.GoalImplement)
 			}
+		}
+
+		// Research inputs skip the workflow router
+		if isResearchInput(input) {
+			return runResearch(input, research.GoalSummarize)
 		}
 
 		// Tier 1: workflow match
