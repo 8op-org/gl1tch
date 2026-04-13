@@ -32,6 +32,7 @@ var skipDirs = map[string]bool{
 	".venv":        true,
 	"venv":         true,
 	".tox":         true,
+	".worktrees":   true,
 }
 
 // skipExts are file extensions to skip.
