@@ -1,0 +1,3 @@
+{"type":"index-pattern","id":"glitch-research-runs","attributes":{"title":"glitch-research-runs","timeFieldName":"timestamp"}}
+{"type":"index-pattern","id":"glitch-tool-calls","attributes":{"title":"glitch-tool-calls","timeFieldName":"timestamp"}}
+{"type":"index-pattern","id":"glitch-llm-calls","attributes":{"title":"glitch-llm-calls","timeFieldName":"timestamp"}}
