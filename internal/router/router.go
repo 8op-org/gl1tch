@@ -127,10 +127,11 @@ func Match(input string, workflows map[string]*pipeline.Workflow, model string) 
 
 	prompt := fmt.Sprintf(`Given these available workflows:
 %s
+0. none — the question does not match any workflow above
 
 The user asked: %q
 
-Which workflow number best matches? Reply with ONLY the number, nothing else.`, strings.Join(menu, "\n"), input)
+Which workflow number best matches? Reply with ONLY the number, nothing else. Reply 0 if the question is general or does not match a specific workflow.`, strings.Join(menu, "\n"), input)
 
 	if model == "" {
 		model = "qwen2.5:7b"
@@ -150,7 +151,7 @@ Which workflow number best matches? Reply with ONLY the number, nothing else.`, 
 	}
 	n, err := strconv.Atoi(numStr)
 	if err != nil || n < 1 || n > len(keys) {
-		return nil, input, nil
+		return nil, input, nil // 0 or out of range = no match, fall through to research loop
 	}
 
 	name := keys[n-1]
