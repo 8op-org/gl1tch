@@ -350,7 +350,7 @@ The workflow produces `.glitch/results/<issue-number>/` in the target repo:
 - `~/.config/glitch/providers/claude.yaml` — Claude provider template
 - `~/.config/glitch/providers/codex.yaml` — Codex provider template  
 - `~/.config/glitch/providers/copilot.yaml` — Copilot provider template
-- `~/.config/glitch/workflows/work-on-issue.yaml` — The workflow
+- `~/Projects/stokagent/workflows/work-on-issue.yaml` — The workflow (symlinked into `~/.config/glitch/workflows/`)
 
 ### Modified files
 - `internal/provider/provider.go` — Add `LoadProviders()`, `RunProvider(name, prompt)`. Remove `RunClaude`.
