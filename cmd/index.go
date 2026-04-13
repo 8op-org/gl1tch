@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/indexer"
 )
 
@@ -19,7 +20,7 @@ var indexCmd = &cobra.Command{
 		if len(args) > 0 {
 			path = args[0]
 		}
-		esURL := "http://localhost:9200" // could be a flag later
-		return indexer.IndexRepo(path, esURL)
+		es := esearch.NewClient("http://localhost:9200")
+		return indexer.IndexRepo(path, es)
 	},
 }

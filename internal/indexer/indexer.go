@@ -1,17 +1,18 @@
 package indexer
 
 import (
-	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/8op-org/gl1tch/internal/esearch"
 )
 
 const (
@@ -176,80 +177,8 @@ var esMapping = `{
   }
 }`
 
-// ensureIndex creates the ES index if it doesn't exist.
-func ensureIndex(esURL, index string) error {
-	resp, err := http.Head(esURL + "/" + index)
-	if err != nil {
-		return fmt.Errorf("ES unreachable: %w", err)
-	}
-	resp.Body.Close()
-
-	if resp.StatusCode == 200 {
-		return nil // index exists
-	}
-
-	req, err := http.NewRequest("PUT", esURL+"/"+index, strings.NewReader(esMapping))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("create index: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		var buf bytes.Buffer
-		buf.ReadFrom(resp.Body)
-		return fmt.Errorf("create index %s: %s — %s", index, resp.Status, buf.String())
-	}
-	return nil
-}
-
-// bulkIndex sends a batch of docs to the ES bulk API.
-func bulkIndex(esURL, index string, docs []bulkItem) error {
-	var buf bytes.Buffer
-	for _, d := range docs {
-		meta := fmt.Sprintf(`{"index":{"_index":"%s","_id":"%s"}}`, index, d.id)
-		buf.WriteString(meta)
-		buf.WriteByte('\n')
-		body, err := json.Marshal(d.doc)
-		if err != nil {
-			return err
-		}
-		buf.Write(body)
-		buf.WriteByte('\n')
-	}
-
-	req, err := http.NewRequest("POST", esURL+"/_bulk", &buf)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-ndjson")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("bulk index: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode > 299 {
-		var respBuf bytes.Buffer
-		respBuf.ReadFrom(resp.Body)
-		return fmt.Errorf("bulk index: %s — %s", resp.Status, respBuf.String())
-	}
-	return nil
-}
-
-type bulkItem struct {
-	id  string
-	doc CodeDoc
-}
-
 // IndexRepo walks a repo, chunks files, and indexes them into ES.
-func IndexRepo(root, esURL string) error {
+func IndexRepo(root string, es *esearch.Client) error {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return err
@@ -260,12 +189,12 @@ func IndexRepo(root, esURL string) error {
 
 	fmt.Fprintf(os.Stderr, "Indexing %s → %s...\n", absRoot, index)
 
-	if err := ensureIndex(esURL, index); err != nil {
+	if err := es.EnsureIndex(context.Background(), index, esMapping); err != nil {
 		return err
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	var batch []bulkItem
+	var batch []esearch.BulkDoc
 	filesProcessed := 0
 	chunksTotal := 0
 
@@ -316,17 +245,21 @@ func IndexRepo(root, esURL string) error {
 				docID = fmt.Sprintf("%s:chunk%d", relPath, i)
 			}
 
-			batch = append(batch, bulkItem{
-				id: docID,
-				doc: CodeDoc{
-					Path:      relPath,
-					Content:   chunk,
-					Repo:      repoName,
-					Language:  lang,
-					Hash:      hash,
-					Symbols:   symbols,
-					IndexedAt: now,
-				},
+			bodyJSON, err := json.Marshal(CodeDoc{
+				Path:      relPath,
+				Content:   chunk,
+				Repo:      repoName,
+				Language:  lang,
+				Hash:      hash,
+				Symbols:   symbols,
+				IndexedAt: now,
+			})
+			if err != nil {
+				return err
+			}
+			batch = append(batch, esearch.BulkDoc{
+				ID:   docID,
+				Body: bodyJSON,
 			})
 			chunksTotal++
 		}
@@ -337,7 +270,7 @@ func IndexRepo(root, esURL string) error {
 		}
 
 		if len(batch) >= bulkBatch {
-			if err := bulkIndex(esURL, index, batch); err != nil {
+			if err := es.BulkIndex(context.Background(), index, batch); err != nil {
 				return err
 			}
 			batch = batch[:0]
@@ -351,7 +284,7 @@ func IndexRepo(root, esURL string) error {
 
 	// flush remaining
 	if len(batch) > 0 {
-		if err := bulkIndex(esURL, index, batch); err != nil {
+		if err := es.BulkIndex(context.Background(), index, batch); err != nil {
 			return err
 		}
 	}
