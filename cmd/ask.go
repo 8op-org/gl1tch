@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/8op-org/gl1tch/internal/pipeline"
+	"github.com/8op-org/gl1tch/internal/provider"
+	"github.com/8op-org/gl1tch/internal/research"
 	"github.com/8op-org/gl1tch/internal/router"
 )
 
@@ -35,22 +38,37 @@ var askCmd = &cobra.Command{
 			return err
 		}
 
+		// Tier 1: workflow match
 		w, resolved, params := router.Match(input, workflows, "")
-		if w == nil {
-			fmt.Fprintf(os.Stderr, "no matching workflow for: %s\n", input)
-			fmt.Fprintln(os.Stderr, "available workflows:")
-			for name := range workflows {
-				fmt.Fprintf(os.Stderr, "  - %s\n", name)
+		if w != nil {
+			fmt.Printf(">> %s\n", w.Name)
+			result, err := pipeline.Run(w, resolved, "", params, providerReg)
+			if err != nil {
+				return err
 			}
+			fmt.Println(result.Output)
 			return nil
 		}
 
-		fmt.Printf(">> %s\n", w.Name)
-		result, err := pipeline.Run(w, resolved, "", params, providerReg)
+		// Tier 2: research loop
+		if loop := buildResearchLoop(); loop != nil {
+			fmt.Fprintln(os.Stderr, ">> researching...")
+			ctx := context.Background()
+			q := research.ResearchQuery{Question: input}
+			res, err := loop.Run(ctx, q, research.DefaultBudget())
+			if err == nil && res.Draft != "" {
+				fmt.Println(res.Draft)
+				return nil
+			}
+		}
+
+		// Tier 3: direct ollama fallback
+		fmt.Fprintln(os.Stderr, ">> asking ollama...")
+		answer, err := provider.RunOllama("qwen2.5:7b", input)
 		if err != nil {
 			return err
 		}
-		fmt.Println(result.Output)
+		fmt.Println(answer)
 		return nil
 	},
 }
