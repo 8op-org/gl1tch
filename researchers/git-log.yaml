@@ -1,6 +1,0 @@
-name: git-log
-description: recent commit history for the current repo
-
-steps:
-  - id: gather
-    run: git log --oneline -50
