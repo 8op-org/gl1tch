@@ -58,7 +58,24 @@ var askCmd = &cobra.Command{
 			res, err := loop.Run(ctx, q, research.DefaultBudget())
 			if err == nil && res.Draft != "" {
 				fmt.Println(res.Draft)
+
+				// Print feedback
+				printFeedback(res.Feedback)
+
+				// Save results if substantive
+				if research.IsSubstantive(res.Draft) {
+					dir := resultsDir(input)
+					if saveErr := research.SaveResults(dir, res); saveErr != nil {
+						fmt.Fprintf(os.Stderr, ">> warning: could not save results: %v\n", saveErr)
+					} else {
+						fmt.Fprintf(os.Stderr, ">> results saved to %s/\n", dir)
+					}
+				}
+
 				return nil
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, ">> research error: %v\n", err)
 			}
 		}
 
