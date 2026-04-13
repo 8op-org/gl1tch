@@ -107,6 +107,14 @@ func Float(p *float64) float64 {
 	return *p
 }
 
+// Feedback captures the paid model's assessment of evidence quality.
+type Feedback struct {
+	Quality    string   `json:"quality"`
+	Missing    []string `json:"missing"`
+	Useful     []string `json:"useful"`
+	Suggestion string   `json:"suggestion"`
+}
+
 type Result struct {
 	Query      ResearchQuery  `json:"query"`
 	Draft      string         `json:"draft"`
@@ -114,4 +122,5 @@ type Result struct {
 	Score      Score          `json:"score"`
 	Reason     Reason         `json:"reason"`
 	Iterations int            `json:"iterations"`
+	Feedback   Feedback       `json:"feedback,omitempty"`
 }

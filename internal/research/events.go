@@ -13,8 +13,9 @@ import (
 type EventType string
 
 const (
-	EventTypeAttempt EventType = "research_attempt"
-	EventTypeScore   EventType = "research_score"
+	EventTypeAttempt  EventType = "research_attempt"
+	EventTypeScore    EventType = "research_score"
+	EventTypeFeedback EventType = "research_feedback"
 )
 
 // Event captures a single research loop occurrence.
