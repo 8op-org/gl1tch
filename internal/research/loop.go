@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -136,6 +137,11 @@ func (l *Loop) Run(ctx context.Context, q ResearchQuery, budget Budget) (Result,
 			continue
 		}
 
+		// Parse feedback from draft
+		draftContent, _ := SplitDraftAndFeedback(draft)
+		feedback, _ := ParseFeedback(draft)
+		draft = draftContent
+
 		// Score
 		score, crit := ComputeScore(ctx, l.llm, q.Question, draft, bundle)
 
@@ -145,6 +151,7 @@ func (l *Loop) Run(ctx context.Context, q ResearchQuery, budget Budget) (Result,
 			Bundle:     bundle,
 			Score:      score,
 			Iterations: iter,
+			Feedback:   feedback,
 		}
 
 		if !haveBest || score.Composite > bestResult.Score.Composite {
@@ -193,14 +200,17 @@ func (l *Loop) plan(ctx context.Context, question string, already map[string]str
 		return nil, fmt.Errorf("plan parse: %w", err)
 	}
 
-	// Validate against registry and filter already picked.
 	var valid []string
 	for _, name := range names {
 		if _, ok := l.registry.Lookup(name); !ok {
-			l.logger.Warn("plan: unknown researcher", "name", name)
+			fmt.Fprintf(os.Stderr, ">> missing researcher: %s — add ~/.config/glitch/researchers/%s.yaml\n", name, name)
 			continue
 		}
 		valid = append(valid, name)
+	}
+
+	if len(valid) > 0 {
+		fmt.Fprintf(os.Stderr, ">> using: %s\n", strings.Join(valid, ", "))
 	}
 
 	return filterPicked(valid, already), nil

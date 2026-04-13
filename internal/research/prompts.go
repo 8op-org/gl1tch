@@ -30,10 +30,11 @@ func PlanPrompt(question string, researchers []Researcher, hints string) string 
 	return b.String()
 }
 
-// DraftPrompt builds a prompt that instructs the LLM to answer using only evidence.
+// DraftPrompt builds a prompt that instructs the LLM to answer using only evidence,
+// and to provide structured feedback on evidence quality.
 func DraftPrompt(question string, bundle EvidenceBundle) string {
 	var b strings.Builder
-	b.WriteString("You are a research assistant. Answer the question using ONLY the evidence provided below.\n\n")
+	b.WriteString("You are a research assistant with full autonomy. Answer the question using the evidence provided below.\n\n")
 	b.WriteString("Question: ")
 	b.WriteString(question)
 	b.WriteString("\n\nEvidence:\n")
@@ -46,9 +47,19 @@ func DraftPrompt(question string, bundle EvidenceBundle) string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\nRules:\n")
+	b.WriteString("- If the answer involves file changes, output each changed file as:\n")
+	b.WriteString("  --- FILE: path/to/file.md ---\n")
+	b.WriteString("  (complete file content)\n")
+	b.WriteString("  --- END FILE ---\n")
 	b.WriteString("- Cite only verbatim identifiers from the evidence\n")
 	b.WriteString("- Say \"I don't have enough evidence\" if nothing relevant is provided\n")
-	b.WriteString("- Never suggest commands to run\n")
+	b.WriteString("- Never suggest commands to run — just produce the output\n\n")
+	b.WriteString("After your answer, append a feedback section rating the evidence you received:\n\n")
+	b.WriteString("--- FEEDBACK ---\n")
+	b.WriteString("- evidence_quality: good|adequate|insufficient\n")
+	b.WriteString("- missing: [\"what evidence you needed but didn't get\"]\n")
+	b.WriteString("- useful: [\"what evidence was most helpful\"]\n")
+	b.WriteString("- suggestion: \"how to improve evidence gathering next time\"\n")
 	return b.String()
 }
 
