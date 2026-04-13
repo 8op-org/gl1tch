@@ -1,3 +1,4 @@
 glitch
 dist/
 .env
+.worktrees/
