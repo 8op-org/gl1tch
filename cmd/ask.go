@@ -35,7 +35,7 @@ var askCmd = &cobra.Command{
 			return err
 		}
 
-		w, resolved := router.Match(input, workflows, "")
+		w, resolved, params := router.Match(input, workflows, "")
 		if w == nil {
 			fmt.Fprintf(os.Stderr, "no matching workflow for: %s\n", input)
 			fmt.Fprintln(os.Stderr, "available workflows:")
@@ -46,7 +46,7 @@ var askCmd = &cobra.Command{
 		}
 
 		fmt.Printf(">> %s\n", w.Name)
-		result, err := pipeline.Run(w, resolved, "", nil, providerReg)
+		result, err := pipeline.Run(w, resolved, "", params, providerReg)
 		if err != nil {
 			return err
 		}
