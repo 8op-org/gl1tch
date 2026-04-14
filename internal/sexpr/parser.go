@@ -50,10 +50,16 @@ func (p *parser) parseNode() (*Node, error) {
 	case TokenLParen:
 		return p.parseList()
 
+	case TokenLBrace:
+		return p.parseMap()
+
 	case TokenRParen:
 		return nil, fmt.Errorf("line %d: unexpected )", tok.Line)
 
-	case TokenString, TokenKeyword:
+	case TokenRBrace:
+		return nil, fmt.Errorf("line %d: unexpected }", tok.Line)
+
+	case TokenString, TokenKeyword, TokenSymbol:
 		p.pos++
 		return &Node{Atom: &tok, Line: tok.Line}, nil
 
@@ -74,6 +80,29 @@ func (p *parser) parseList() (*Node, error) {
 		if p.tokens[p.pos].Type == TokenRParen {
 			p.pos++ // skip )
 			return &Node{Children: children, Line: open.Line}, nil
+		}
+		child, err := p.parseNode()
+		if err != nil {
+			return nil, err
+		}
+		if child != nil {
+			children = append(children, child)
+		}
+	}
+}
+
+func (p *parser) parseMap() (*Node, error) {
+	open := p.tokens[p.pos]
+	p.pos++ // skip {
+
+	children := make([]*Node, 0)
+	for {
+		if p.pos >= len(p.tokens) {
+			return nil, fmt.Errorf("line %d: unterminated map", open.Line)
+		}
+		if p.tokens[p.pos].Type == TokenRBrace {
+			p.pos++ // skip }
+			return &Node{Children: children, IsMap: true, Line: open.Line}, nil
 		}
 		child, err := p.parseNode()
 		if err != nil {

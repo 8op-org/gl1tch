@@ -37,6 +37,12 @@ func (l *lexer) lexAll() ([]Token, error) {
 		case ch == ')':
 			tokens = append(tokens, Token{Type: TokenRParen, Pos: l.pos, Line: l.line})
 			l.pos++
+		case ch == '{':
+			tokens = append(tokens, Token{Type: TokenLBrace, Pos: l.pos, Line: l.line})
+			l.pos++
+		case ch == '}':
+			tokens = append(tokens, Token{Type: TokenRBrace, Pos: l.pos, Line: l.line})
+			l.pos++
 		case ch == '"':
 			tok, err := l.lexString()
 			if err != nil {
@@ -199,10 +205,11 @@ func (l *lexer) lexBareWord() Token {
 	for l.pos < len(l.src) && isWordChar(l.src[l.pos]) {
 		l.pos++
 	}
-	return Token{Type: TokenString, Val: string(l.src[start:l.pos]), Pos: start, Line: line}
+	return Token{Type: TokenSymbol, Val: string(l.src[start:l.pos]), Pos: start, Line: line}
 }
 
 func isWordChar(ch byte) bool {
-	return ch != '(' && ch != ')' && ch != '"' && ch != ';' &&
+	return ch != '(' && ch != ')' && ch != '{' && ch != '}' &&
+		ch != '"' && ch != ';' &&
 		ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' && ch != ','
 }

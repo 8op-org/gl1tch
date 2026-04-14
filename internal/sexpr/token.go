@@ -9,6 +9,9 @@ const (
 	TokenString                   // "..." or ```...```
 	TokenKeyword                  // :name
 	TokenDiscard                  // #_
+	TokenSymbol                   // bare word (workflow, step, run, ...)
+	TokenLBrace                   // {
+	TokenRBrace                   // }
 )
 
 type Token struct {

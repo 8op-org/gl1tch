@@ -115,6 +115,35 @@ func TestLex_CommasAreWhitespace(t *testing.T) {
 	}
 }
 
+func TestLex_Symbol(t *testing.T) {
+	tokens, err := Lex([]byte("workflow"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 1 || tokens[0].Type != TokenSymbol {
+		t.Fatalf("expected 1 Symbol token, got %d tokens, type=%v", len(tokens), tokens[0].Type)
+	}
+	if tokens[0].Val != "workflow" {
+		t.Fatalf("expected %q, got %q", "workflow", tokens[0].Val)
+	}
+}
+
+func TestLex_MapBraces(t *testing.T) {
+	tokens, err := Lex([]byte(`{:a "b"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 4 {
+		t.Fatalf("expected 4 tokens, got %d", len(tokens))
+	}
+	if tokens[0].Type != TokenLBrace {
+		t.Fatalf("expected LBrace, got %v", tokens[0].Type)
+	}
+	if tokens[3].Type != TokenRBrace {
+		t.Fatalf("expected RBrace, got %v", tokens[3].Type)
+	}
+}
+
 func TestLex_FullWorkflow(t *testing.T) {
 	src := `
 ;; example workflow
@@ -129,10 +158,10 @@ func TestLex_FullWorkflow(t *testing.T) {
 	}
 	// ( workflow "test" :description "a test" ( step "s1" ( run "echo hello" ) ) )
 	expected := []TokenType{
-		TokenLParen, TokenString, TokenString,
+		TokenLParen, TokenSymbol, TokenString,
 		TokenKeyword, TokenString,
-		TokenLParen, TokenString, TokenString,
-		TokenLParen, TokenString, TokenString,
+		TokenLParen, TokenSymbol, TokenString,
+		TokenLParen, TokenSymbol, TokenString,
 		TokenRParen, TokenRParen, TokenRParen,
 	}
 	if len(tokens) != len(expected) {

@@ -5,7 +5,8 @@ package sexpr
 type Node struct {
 	// Exactly one of Atom or Children is set.
 	Atom     *Token  // non-nil for leaf nodes (string, keyword)
-	Children []*Node // non-nil for list nodes (...)
+	Children []*Node // non-nil for list nodes (...) or map nodes {...}
+	IsMap    bool    // true if this node is a map (children are key/value pairs)
 	Line     int     // source line for error messages
 }
 
@@ -15,9 +16,9 @@ func (n *Node) IsAtom() bool { return n.Atom != nil }
 // IsList returns true if this node has children.
 func (n *Node) IsList() bool { return n.Children != nil }
 
-// StringVal returns the string value of a string atom, or empty string.
+// StringVal returns the string value of a string or symbol atom, or empty string.
 func (n *Node) StringVal() string {
-	if n.Atom != nil && n.Atom.Type == TokenString {
+	if n.Atom != nil && (n.Atom.Type == TokenString || n.Atom.Type == TokenSymbol) {
 		return n.Atom.Val
 	}
 	return ""
@@ -27,6 +28,14 @@ func (n *Node) StringVal() string {
 func (n *Node) KeywordVal() string {
 	if n.Atom != nil && n.Atom.Type == TokenKeyword {
 		return n.Atom.Val[1:] // strip leading ':'
+	}
+	return ""
+}
+
+// SymbolVal returns the symbol name, or empty string.
+func (n *Node) SymbolVal() string {
+	if n.Atom != nil && n.Atom.Type == TokenSymbol {
+		return n.Atom.Val
 	}
 	return ""
 }
