@@ -100,6 +100,9 @@ const WorkflowRunsMapping = `{
       "total_cost_usd":   { "type": "float" },
       "total_latency_ms": { "type": "long" },
       "review_pass":      { "type": "boolean" },
+      "confidence":       { "type": "float" },
+      "criteria_passed":  { "type": "integer" },
+      "criteria_total":   { "type": "integer" },
       "timestamp":        { "type": "date" }
     }
   }

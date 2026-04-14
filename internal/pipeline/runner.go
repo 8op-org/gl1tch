@@ -219,6 +219,30 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		// Strip markdown bold/italic markers before checking review verdict
 		stripped := strings.ReplaceAll(strings.ToUpper(lastLLMOutput), "*", "")
 		reviewPass := strings.Contains(stripped, "OVERALL: PASS")
+
+		// Parse per-criterion PASS/FAIL for confidence score
+		passed, total := 0, 0
+		for _, line := range strings.Split(stripped, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "PASS") {
+				passed++
+				total++
+			} else if strings.HasPrefix(line, "FAIL") {
+				total++
+			}
+		}
+		// Don't count the OVERALL line itself
+		if total > 0 && strings.Contains(stripped, "OVERALL:") {
+			total--
+			if reviewPass {
+				passed--
+			}
+		}
+		confidence := 0.0
+		if total > 0 {
+			confidence = float64(passed) / float64(total)
+		}
+
 		tel.IndexWorkflowRun(context.Background(), esearch.WorkflowRunDoc{
 			RunID:           runID,
 			WorkflowName:    w.Name,
@@ -231,6 +255,9 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			TotalCostUSD:    totalCostUSD,
 			TotalLatencyMS:  totalLatencyMS,
 			ReviewPass:      reviewPass,
+			Confidence:      confidence,
+			CriteriaPassed:  passed,
+			CriteriaTotal:   total,
 			Timestamp:       time.Now().UTC().Format(time.RFC3339),
 		})
 	}

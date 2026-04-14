@@ -71,6 +71,9 @@ type WorkflowRunDoc struct {
 	TotalCostUSD    float64 `json:"total_cost_usd"`
 	TotalLatencyMS  int64   `json:"total_latency_ms"`
 	ReviewPass      bool    `json:"review_pass"`
+	Confidence      float64 `json:"confidence"`
+	CriteriaPassed  int     `json:"criteria_passed"`
+	CriteriaTotal   int     `json:"criteria_total"`
 	Timestamp       string  `json:"timestamp"`
 }
 
