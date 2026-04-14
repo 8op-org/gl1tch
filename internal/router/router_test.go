@@ -89,6 +89,68 @@ func TestResolveRepo_FromGitRemote(t *testing.T) {
 	}
 }
 
+func TestParseMultiIssue_SingleBare(t *testing.T) {
+	issues, repo, ok := ParseMultiIssue("3643")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if len(issues) != 1 || issues[0] != "3643" {
+		t.Fatalf("expected [3643], got %v", issues)
+	}
+	if repo != "" {
+		t.Fatalf("expected empty repo, got %q", repo)
+	}
+}
+
+func TestParseMultiIssue_MultipleBare(t *testing.T) {
+	issues, repo, ok := ParseMultiIssue("3642 3643 3644")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if len(issues) != 3 {
+		t.Fatalf("expected 3 issues, got %d", len(issues))
+	}
+	if issues[0] != "3642" || issues[1] != "3643" || issues[2] != "3644" {
+		t.Fatalf("expected [3642 3643 3644], got %v", issues)
+	}
+	if repo != "" {
+		t.Fatalf("expected empty repo, got %q", repo)
+	}
+}
+
+func TestParseMultiIssue_QualifiedRef(t *testing.T) {
+	issues, repo, ok := ParseMultiIssue("elastic/observability-robots#3643")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if len(issues) != 1 || issues[0] != "3643" {
+		t.Fatalf("expected [3643], got %v", issues)
+	}
+	if repo != "elastic/observability-robots" {
+		t.Fatalf("expected elastic/observability-robots, got %q", repo)
+	}
+}
+
+func TestParseMultiIssue_NotIssues(t *testing.T) {
+	_, _, ok := ParseMultiIssue("what workflows do I have")
+	if ok {
+		t.Fatal("expected not ok for non-issue input")
+	}
+}
+
+func TestParseMultiIssue_MixedQualifiedAndBare(t *testing.T) {
+	issues, repo, ok := ParseMultiIssue("elastic/observability-robots#3642 3643 3644")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if len(issues) != 3 {
+		t.Fatalf("expected 3 issues, got %d", len(issues))
+	}
+	if repo != "elastic/observability-robots" {
+		t.Fatalf("expected elastic/observability-robots, got %q", repo)
+	}
+}
+
 func TestResolveRepo_WithExplicitRepo(t *testing.T) {
 	repo, err := ResolveRepo("elastic/ensemble")
 	if err != nil {

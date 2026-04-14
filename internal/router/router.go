@@ -77,6 +77,27 @@ func ResolveRepo(repo string) (string, error) {
 	return "", fmt.Errorf("could not parse owner/repo from remote: %s", remote)
 }
 
+// ParseMultiIssue parses space-separated issue refs.
+// Returns the list of issue numbers and a repo (from the first qualified ref, or empty).
+// Returns ok=false if the input doesn't look like issue refs at all.
+func ParseMultiIssue(input string) (issues []string, repo string, ok bool) {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return nil, "", false
+	}
+	for _, part := range parts {
+		r, issue, matched := ParseIssueRef(part)
+		if !matched {
+			return nil, "", false
+		}
+		issues = append(issues, issue)
+		if r != "" && repo == "" {
+			repo = r
+		}
+	}
+	return issues, repo, len(issues) > 0
+}
+
 var reGitHubPR = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/pull/\d+`)
 var reGitHubIssueURL = regexp.MustCompile(`https?://github\.com/([^/]+)/([^/]+)/issues/(\d+)`)
 
