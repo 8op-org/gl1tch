@@ -53,6 +53,13 @@ func Seed(ctx context.Context, kibanaURL string) error {
 	}
 
 	for _, dv := range dataViews {
+		// Delete existing data view first (ensures timeFieldName is set correctly)
+		delReq, _ := http.NewRequestWithContext(ctx, "DELETE", kibanaURL+"/api/data_views/data_view/"+dv.ID, nil)
+		delReq.Header.Set("kbn-xsrf", "true")
+		if delResp, err := client.Do(delReq); err == nil && delResp != nil {
+			delResp.Body.Close()
+		}
+
 		body, _ := json.Marshal(map[string]any{
 			"data_view": map[string]any{
 				"id":            dv.ID,
