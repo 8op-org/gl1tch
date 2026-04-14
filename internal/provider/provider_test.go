@@ -71,7 +71,7 @@ func TestRenderProviderCommand(t *testing.T) {
 		},
 	}
 
-	got, err := reg.RenderCommand("claude", "hello world")
+	got, err := reg.RenderCommand("claude", map[string]string{"prompt": "hello world"})
 	if err != nil {
 		t.Fatalf("RenderCommand: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRenderProviderCommand_NotFound(t *testing.T) {
 		},
 	}
 
-	_, err := reg.RenderCommand("gpt", "hello")
+	_, err := reg.RenderCommand("gpt", map[string]string{"prompt": "hello"})
 	if err == nil {
 		t.Fatal("expected error for missing provider")
 	}
@@ -110,7 +110,7 @@ func TestRunProvider_ExecsCommand(t *testing.T) {
 		},
 	}
 
-	got, err := reg.RunProvider("cat-stdin", "hello world")
+	got, err := reg.RunProvider("cat-stdin", "", "hello world")
 	if err != nil {
 		t.Fatalf("RunProvider: %v", err)
 	}
