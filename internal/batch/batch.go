@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultVariants is the list of variant suffixes for comparison mode.
-var DefaultVariants = []string{"local", "claude", "copilot", "gemma", "llama"}
+var DefaultVariants = []string{"local", "claude", "copilot", "gemma", "grok"}
 
 // RunOpts configures a batch run.
 type RunOpts struct {
