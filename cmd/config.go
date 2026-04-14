@@ -17,9 +17,32 @@ func init() {
 }
 
 type Config struct {
-	DefaultModel    string                `yaml:"default_model"`
-	DefaultProvider string                `yaml:"default_provider"`
-	Tiers           []provider.TierConfig `yaml:"tiers,omitempty"`
+	DefaultModel    string                    `yaml:"default_model"`
+	DefaultProvider string                    `yaml:"default_provider"`
+	Tiers           []provider.TierConfig     `yaml:"tiers,omitempty"`
+	Providers       map[string]ProviderConfig `yaml:"providers,omitempty"`
+}
+
+// ProviderConfig defines a named LLM provider endpoint.
+type ProviderConfig struct {
+	Type         string `yaml:"type"`
+	BaseURL      string `yaml:"base_url"`
+	APIKeyEnv    string `yaml:"api_key_env,omitempty"`
+	APIKey       string `yaml:"api_key,omitempty"`
+	DefaultModel string `yaml:"default_model,omitempty"`
+}
+
+// ResolveAPIKey returns the API key, checking the environment variable first.
+func (pc *ProviderConfig) ResolveAPIKey() (string, error) {
+	if pc.APIKeyEnv != "" {
+		if v := os.Getenv(pc.APIKeyEnv); v != "" {
+			return v, nil
+		}
+	}
+	if pc.APIKey != "" {
+		return pc.APIKey, nil
+	}
+	return "", fmt.Errorf("no API key: set %s env var or api_key in config", pc.APIKeyEnv)
 }
 
 var configCmd = &cobra.Command{
@@ -67,8 +90,8 @@ func configPath() string {
 	return filepath.Join(home, ".config", "glitch", "config.yaml")
 }
 
-func loadConfig() (*Config, error) {
-	data, err := os.ReadFile(configPath())
+func loadConfigFrom(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return &Config{
 			DefaultModel:    "qwen3:8b",
@@ -84,6 +107,10 @@ func loadConfig() (*Config, error) {
 		cfg.Tiers = provider.DefaultTiers()
 	}
 	return &cfg, nil
+}
+
+func loadConfig() (*Config, error) {
+	return loadConfigFrom(configPath())
 }
 
 func saveConfig(cfg *Config) error {
