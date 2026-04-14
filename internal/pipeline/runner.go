@@ -224,18 +224,16 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		passed, total := 0, 0
 		for _, line := range strings.Split(stripped, "\n") {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "PASS") {
+			if strings.Contains(line, "OVERALL") {
+				continue // skip the summary line
+			}
+			hasPass := strings.Contains(line, "PASS")
+			hasFail := strings.Contains(line, "FAIL")
+			if hasPass && !hasFail {
 				passed++
 				total++
-			} else if strings.HasPrefix(line, "FAIL") {
+			} else if hasFail {
 				total++
-			}
-		}
-		// Don't count the OVERALL line itself
-		if total > 0 && strings.Contains(stripped, "OVERALL:") {
-			total--
-			if reviewPass {
-				passed--
 			}
 		}
 		confidence := 0.0
