@@ -65,8 +65,13 @@ func LoadDir(dir string) (map[string]*Workflow, error) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil, nil
 	}
+	// Resolve symlinks so WalkDir traverses the real target
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		resolved = dir
+	}
 	workflows := make(map[string]*Workflow)
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
