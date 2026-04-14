@@ -101,13 +101,24 @@ func (r *ProviderRegistry) RunProvider(name, model, prompt string) (string, erro
 	}
 
 	data := map[string]string{"prompt": prompt, "model": model}
+	hasPromptTpl := strings.Contains(p.Command, "{{.prompt}}")
+	hasModelTpl := strings.Contains(p.Command, "{{.model}}")
 
-	if strings.Contains(p.Command, "{{.prompt}}") || strings.Contains(p.Command, "{{.model}}") {
+	if hasPromptTpl {
+		// Both prompt and model rendered inline
 		rendered, err := r.RenderCommand(name, data)
 		if err != nil {
 			return "", err
 		}
 		return RunShell(rendered)
+	}
+	if hasModelTpl {
+		// Render model into command, pipe prompt via stdin
+		rendered, err := r.RenderCommand(name, data)
+		if err != nil {
+			return "", err
+		}
+		return RunShellWithStdin(rendered, prompt)
 	}
 	return RunShellWithStdin(p.Command, prompt)
 }
