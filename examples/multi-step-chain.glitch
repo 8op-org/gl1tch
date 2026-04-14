@@ -1,0 +1,37 @@
+;; multi-step-chain.glitch — chain shell + LLM steps with step references
+;;
+;; Run with: glitch pipeline run examples/multi-step-chain.glitch
+
+(def model "qwen2.5:7b")
+
+(workflow "multi-step-chain"
+  :description "Gather system info, analyze it, then produce recommendations"
+
+  ;; shell steps collect raw data
+  (step "disk"
+    (run "df -h / | tail -1"))
+
+  (step "memory"
+    (run "vm_stat | head -5"))
+
+  (step "processes"
+    (run "ps aux --sort=-%mem | head -10"))
+
+  ;; LLM step references all three
+  (step "analyze"
+    (llm
+      :model model
+      :prompt ```
+        Analyze this system snapshot:
+
+        Disk usage:
+        {{step "disk"}}
+
+        Memory:
+        {{step "memory"}}
+
+        Top processes by memory:
+        {{step "processes"}}
+
+        Give a brief health assessment and flag anything concerning.
+        ```)))

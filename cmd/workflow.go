@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 )
 
@@ -81,7 +83,16 @@ var workflowRunCmd = &cobra.Command{
 		}
 
 		fmt.Printf(">> %s\n", w.Name)
-		result, err := pipeline.Run(w, input, "", nil, providerReg)
+
+		// Wire ES telemetry for workflow LLM calls
+		var tel *esearch.Telemetry
+		esClient := esearch.NewClient("http://localhost:9200")
+		if err := esClient.Ping(context.Background()); err == nil {
+			tel = esearch.NewTelemetry(esClient)
+			tel.EnsureIndices(context.Background())
+		}
+
+		result, err := pipeline.Run(w, input, "", nil, providerReg, pipeline.RunOpts{Telemetry: tel})
 		if err != nil {
 			return err
 		}

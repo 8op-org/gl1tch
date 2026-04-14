@@ -1,0 +1,29 @@
+;; parameterized.glitch — use {{.param.*}} for runtime inputs
+;;
+;; Run with: glitch pipeline run examples/parameterized.glitch --param repo=gl1tch
+
+(def model "qwen2.5:7b")
+
+(workflow "parameterized"
+  :description "Show how to pass runtime parameters into a workflow"
+
+  (step "info"
+    (run "echo 'Analyzing repo: {{.param.repo}}'"))
+
+  (step "structure"
+    (run "find {{.param.repo}} -maxdepth 2 -type f | head -30"))
+
+  (step "summary"
+    (llm
+      :model model
+      :prompt ```
+        Here is the file tree for {{.param.repo}}:
+
+        {{step "structure"}}
+
+        Describe the project structure in 3-4 sentences.
+        What kind of project is this?
+        ```))
+
+  (step "save-it"
+    (save "results/{{.param.repo}}/summary.md" :from "summary")))

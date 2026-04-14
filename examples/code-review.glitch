@@ -1,0 +1,34 @@
+;; code-review.glitch — review staged changes before committing
+;;
+;; Run with: glitch pipeline run examples/code-review.glitch
+
+(def model "qwen2.5:7b")
+
+(workflow "code-review"
+  :description "Review staged git changes and flag issues"
+
+  (step "diff"
+    (run "git diff --cached"))
+
+  (step "files"
+    (run "git diff --cached --name-only"))
+
+  (step "review"
+    (llm
+      :model model
+      :prompt ```
+        You are a code reviewer. Review this diff carefully.
+
+        Files changed:
+        {{step "files"}}
+
+        Diff:
+        {{step "diff"}}
+
+        For each file, note:
+        - Bugs or logic errors
+        - Security concerns
+        - Naming or style issues
+
+        If everything looks good, say so. Be concise.
+        ```)))

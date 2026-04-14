@@ -2,12 +2,15 @@ package pipeline
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
+	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/provider"
 )
 
@@ -17,10 +20,21 @@ type Result struct {
 	Output   string // output of the last step
 }
 
+// RunOpts holds optional dependencies for a workflow run.
+type RunOpts struct {
+	Telemetry *esearch.Telemetry
+}
+
 // Run executes a workflow with the given input string.
 // Templates use {{.input}} for user input and {{step "id"}} for prior step output.
-func Run(w *Workflow, input string, defaultModel string, params map[string]string, reg *provider.ProviderRegistry) (*Result, error) {
+func Run(w *Workflow, input string, defaultModel string, params map[string]string, reg *provider.ProviderRegistry, opts ...RunOpts) (*Result, error) {
 	steps := make(map[string]string) // step ID → output
+
+	var tel *esearch.Telemetry
+	if len(opts) > 0 {
+		tel = opts[0].Telemetry
+	}
+	runID := esearch.NewRunID()
 
 	for i, step := range w.Steps {
 		data := map[string]any{
@@ -77,11 +91,46 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			switch prov {
 			case "ollama", "":
 				if model == "" {
-					model = "qwen2.5:7b"
+					model = "qwen3:8b"
 				}
-				out, err = provider.RunOllama(model, rendered)
+				result, llmErr := provider.RunOllamaWithResult(model, rendered)
+				if llmErr != nil {
+					err = llmErr
+				} else {
+					out = result.Response
+					// Index telemetry
+					if tel != nil {
+						tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
+							RunID:     runID,
+							Step:      fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+							Tier:      0,
+							Provider:  "ollama",
+							Model:     model,
+							TokensIn:  int64(result.TokensIn),
+							TokensOut: int64(result.TokensOut),
+							CostUSD:   0,
+							LatencyMS: result.Latency.Milliseconds(),
+							Timestamp: time.Now().UTC().Format(time.RFC3339),
+						})
+					}
+				}
 			default:
+				start := time.Now()
 				out, err = reg.RunProvider(prov, rendered)
+				if err == nil && tel != nil {
+					tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
+						RunID:     runID,
+						Step:      fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+						Tier:      2,
+						Provider:  prov,
+						Model:     model,
+						TokensIn:  int64(provider.EstimateTokens(rendered)),
+						TokensOut: int64(provider.EstimateTokens(out)),
+						CostUSD:   provider.EstimateCost(prov, provider.EstimateTokens(rendered), provider.EstimateTokens(out)),
+						LatencyMS: time.Since(start).Milliseconds(),
+						Timestamp: time.Now().UTC().Format(time.RFC3339),
+					})
+				}
 			}
 			if err != nil {
 				return nil, fmt.Errorf("step %s: %w", step.ID, err)

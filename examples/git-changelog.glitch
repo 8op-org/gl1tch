@@ -1,0 +1,26 @@
+;; git-changelog.glitch — generate a changelog from recent commits
+;;
+;; Run with: glitch pipeline run examples/git-changelog.glitch
+
+(def model "qwen2.5:7b")
+
+(workflow "git-changelog"
+  :description "Summarize recent git commits into a human-readable changelog"
+
+  (step "commits"
+    (run "git log --oneline --no-decorate -20"))
+
+  (step "changelog"
+    (llm
+      :model model
+      :prompt ```
+        Here are the last 20 git commits:
+
+        {{step "commits"}}
+
+        Write a concise changelog grouped by theme (features, fixes, chores).
+        Use markdown. No preamble.
+        ```))
+
+  (step "save-it"
+    (save "results/changelog.md" :from "changelog")))
