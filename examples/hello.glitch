@@ -1,0 +1,22 @@
+;; hello.glitch — example gl1tch s-expression workflow
+;;
+;; Run with: glitch pipeline run examples/hello.glitch
+
+(workflow "hello-sexpr"
+  :description "Demo s-expression workflow format"
+
+  (step "gather"
+    (run "echo 'hello from a .glitch workflow'"))
+
+  (step "respond"
+    (llm
+      :prompt ```
+        You received this message from a shell command:
+        {{step "gather"}}
+
+        Respond with a short, enthusiastic acknowledgment.
+        ```))
+
+  ;; disable the save step for now
+  #_(step "save-it"
+    (save "results/hello.md" :from "respond")))
