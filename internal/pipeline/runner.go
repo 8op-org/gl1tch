@@ -182,7 +182,9 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 				if providerResolver != nil {
 					if fn, ok := providerResolver(prov); ok {
 						resolved = true
-						result, llmErr := fn(model, rendered)
+						// Pass the step's original model (may be empty);
+						// the provider's DefaultModel handles the fallback.
+						result, llmErr := fn(step.LLM.Model, rendered)
 						if llmErr != nil {
 							err = llmErr
 						} else {
