@@ -113,6 +113,27 @@ func loadConfig() (*Config, error) {
 	return loadConfigFrom(configPath())
 }
 
+// BuildProviderResolver creates a ResolverFunc from the config's Providers map.
+func (cfg *Config) BuildProviderResolver() provider.ResolverFunc {
+	return func(name string) (provider.ProviderFunc, bool) {
+		pc, ok := cfg.Providers[name]
+		if !ok || pc.Type != "openai-compatible" {
+			return nil, false
+		}
+		key, err := pc.ResolveAPIKey()
+		if err != nil {
+			return nil, false
+		}
+		p := &provider.OpenAICompatibleProvider{
+			Name:         name,
+			BaseURL:      pc.BaseURL,
+			APIKey:       key,
+			DefaultModel: pc.DefaultModel,
+		}
+		return p.Chat, true
+	}
+}
+
 func saveConfig(cfg *Config) error {
 	path := configPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -105,7 +105,11 @@ var workflowRunCmd = &cobra.Command{
 			params[parts[0]] = parts[1]
 		}
 
-		result, err := pipeline.Run(w, input, "", params, providerReg, pipeline.RunOpts{Telemetry: tel})
+		cfg, _ := loadConfig()
+		result, err := pipeline.Run(w, input, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
+			Telemetry:        tel,
+			ProviderResolver: cfg.BuildProviderResolver(),
+		})
 		if err != nil {
 			return err
 		}

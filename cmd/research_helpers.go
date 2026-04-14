@@ -33,6 +33,7 @@ func buildToolLoop(repoPath string) (*research.ToolLoop, error) {
 		tiers = provider.DefaultTiers()
 	}
 	runner := provider.NewTieredRunner(tiers, providerReg)
+	runner.Resolver = cfg.BuildProviderResolver()
 
 	return research.NewToolLoop(tools, runner, tel), nil
 }

@@ -58,7 +58,11 @@ var askCmd = &cobra.Command{
 				tel.EnsureIndices(context.Background())
 			}
 
-			result, err := pipeline.Run(w, resolved, "", params, providerReg, pipeline.RunOpts{Telemetry: tel})
+			cfg, _ := loadConfig()
+			result, err := pipeline.Run(w, resolved, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
+				Telemetry:        tel,
+				ProviderResolver: cfg.BuildProviderResolver(),
+			})
 			if err != nil {
 				return err
 			}
