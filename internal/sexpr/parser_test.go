@@ -86,6 +86,44 @@ func TestParse_UnmatchedRParen(t *testing.T) {
 	}
 }
 
+func TestParse_Map(t *testing.T) {
+	nodes, err := Parse([]byte(`{:name "test" :count "10"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	m := nodes[0]
+	if !m.IsMap {
+		t.Fatal("expected map node")
+	}
+	if len(m.Children) != 4 {
+		t.Fatalf("expected 4 children (2 key-value pairs), got %d", len(m.Children))
+	}
+	if m.Children[0].KeywordVal() != "name" {
+		t.Fatalf("expected keyword 'name', got %q", m.Children[0].KeywordVal())
+	}
+}
+
+func TestParse_Symbol(t *testing.T) {
+	nodes, err := Parse([]byte(`(workflow model)`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := nodes[0]
+	if list.Children[0].SymbolVal() != "workflow" {
+		t.Fatalf("expected symbol 'workflow', got %q", list.Children[0].SymbolVal())
+	}
+	if list.Children[1].SymbolVal() != "model" {
+		t.Fatalf("expected symbol 'model', got %q", list.Children[1].SymbolVal())
+	}
+	// StringVal should also work on symbols
+	if list.Children[0].StringVal() != "workflow" {
+		t.Fatalf("StringVal should work on symbols too")
+	}
+}
+
 func TestParse_UnmatchedLParen(t *testing.T) {
 	_, err := Parse([]byte("("))
 	if err == nil {
