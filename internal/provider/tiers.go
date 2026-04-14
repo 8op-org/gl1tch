@@ -34,7 +34,12 @@ const (
 	ReasonEmpty         EscalationReason = "empty_response"
 	ReasonHallucinated  EscalationReason = "hallucinated_tool"
 	ReasonProviderError EscalationReason = "provider_error"
+	ReasonStructural    EscalationReason = "structural"
+	ReasonEval          EscalationReason = "eval"
 )
+
+// EvalFunc calls the local LLM to evaluate a response.
+type EvalFunc func(model, prompt string) (LLMResult, error)
 
 // RunResult wraps an LLMResult with escalation metadata.
 type RunResult struct {
@@ -128,6 +133,84 @@ func (tr *TieredRunner) callProvider(name, model, prompt string) (LLMResult, err
 		Latency:   time.Since(start),
 		CostUSD:   EstimateCost(name, tokIn, tokOut),
 	}, nil
+}
+
+// RunSmart tries providers in tier order with structural validation and self-evaluation.
+// format is the expected output format ("json", "yaml", or "").
+// threshold is the minimum eval score (1-5) to accept a response.
+// evalFn is called to run the self-evaluation (typically a local Ollama call).
+// At the final tier, no eval is performed — the response is accepted as-is.
+func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, threshold int, evalFn EvalFunc) (RunResult, error) {
+	var chain []int
+	var scores []int
+	var lastReason EscalationReason
+	lastTier := len(tr.tiers) - 1
+
+	for tierIdx, tier := range tr.tiers {
+		for _, name := range tier.Providers {
+			select {
+			case <-ctx.Done():
+				return RunResult{}, ctx.Err()
+			default:
+			}
+
+			model := tier.Model
+			fmt.Fprintf(os.Stderr, ">> smart tier %d: trying %s\n", tierIdx, name)
+			result, err := tr.callProvider(name, model, prompt)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s error: %v\n", tierIdx, name, err)
+				lastReason = ReasonProviderError
+				continue // next provider in same tier
+			}
+
+			chain = append(chain, tierIdx)
+
+			// Structural check
+			if !CheckStructure(format, result.Response) {
+				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s structural fail, escalating\n", tierIdx, name)
+				scores = append(scores, 0)
+				lastReason = ReasonStructural
+				break // escalate to next tier
+			}
+
+			// Final tier: accept without eval
+			if tierIdx == lastTier {
+				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s accepted (final tier)\n", tierIdx, name)
+				return RunResult{
+					LLMResult:       result,
+					Tier:            tierIdx,
+					Escalated:       tierIdx > 0,
+					EscalationChain: chain,
+					EvalScores:      scores,
+				}, nil
+			}
+
+			// Self-eval via local model
+			evalPrompt := BuildEvalPrompt(prompt, result.Response)
+			evalResult, evalErr := evalFn(model, evalPrompt)
+			score := 0
+			if evalErr == nil {
+				score = ParseEvalScore(evalResult.Response)
+			}
+			scores = append(scores, score)
+
+			if score >= threshold {
+				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s accepted (score %d >= %d)\n", tierIdx, name, score, threshold)
+				return RunResult{
+					LLMResult:       result,
+					Tier:            tierIdx,
+					Escalated:       tierIdx > 0,
+					EscalationChain: chain,
+					EvalScores:      scores,
+				}, nil
+			}
+
+			fmt.Fprintf(os.Stderr, ">> smart tier %d: %s rejected (score %d < %d), escalating\n", tierIdx, name, score, threshold)
+			lastReason = ReasonEval
+			break // escalate to next tier
+		}
+	}
+	return RunResult{}, fmt.Errorf("all tiers exhausted (last reason: %s)", lastReason)
 }
 
 // DefaultTiers returns the standard 3-tier escalation chain:
