@@ -1,6 +1,9 @@
 package pipeline
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRender_WithParams(t *testing.T) {
 	steps := map[string]string{}
@@ -57,5 +60,29 @@ func TestRender_WithStepRefs(t *testing.T) {
 	expected := `Issue: {"title": "fix bug"}`
 	if result != expected {
 		t.Fatalf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestRunWithParams(t *testing.T) {
+	w := &Workflow{
+		Name: "test-params",
+		Steps: []Step{
+			{
+				ID:  "echo-param",
+				Run: `echo "issue={{.param.issue}} repo={{.param.repo}}"`,
+			},
+		},
+	}
+	params := map[string]string{
+		"issue": "3642",
+		"repo":  "elastic/observability-robots",
+	}
+	result, err := Run(w, "", "", params, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := "issue=3642 repo=elastic/observability-robots"
+	if strings.TrimSpace(result.Output) != expected {
+		t.Fatalf("expected %q, got %q", expected, strings.TrimSpace(result.Output))
 	}
 }

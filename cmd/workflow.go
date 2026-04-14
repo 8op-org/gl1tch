@@ -14,8 +14,11 @@ import (
 	"github.com/8op-org/gl1tch/internal/pipeline"
 )
 
+var workflowParams []string
+
 func init() {
 	workflowRunCmd.Flags().StringVarP(&targetPath, "path", "C", "", "run against this directory instead of cwd")
+	workflowRunCmd.Flags().StringArrayVar(&workflowParams, "set", nil, "set workflow param (key=value), repeatable")
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
@@ -92,7 +95,17 @@ var workflowRunCmd = &cobra.Command{
 			tel.EnsureIndices(context.Background())
 		}
 
-		result, err := pipeline.Run(w, input, "", nil, providerReg, pipeline.RunOpts{Telemetry: tel})
+		// Parse --set params
+		params := make(map[string]string)
+		for _, p := range workflowParams {
+			parts := strings.SplitN(p, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid --set value %q (expected key=value)", p)
+			}
+			params[parts[0]] = parts[1]
+		}
+
+		result, err := pipeline.Run(w, input, "", params, providerReg, pipeline.RunOpts{Telemetry: tel})
 		if err != nil {
 			return err
 		}
