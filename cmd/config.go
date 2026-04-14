@@ -19,6 +19,7 @@ func init() {
 type Config struct {
 	DefaultModel    string                    `yaml:"default_model"`
 	DefaultProvider string                    `yaml:"default_provider"`
+	EvalThreshold   int                       `yaml:"eval_threshold,omitempty"`
 	Tiers           []provider.TierConfig     `yaml:"tiers,omitempty"`
 	Providers       map[string]ProviderConfig `yaml:"providers,omitempty"`
 }
@@ -105,6 +106,9 @@ func loadConfigFrom(path string) (*Config, error) {
 	}
 	if len(cfg.Tiers) == 0 {
 		cfg.Tiers = provider.DefaultTiers()
+	}
+	if cfg.EvalThreshold == 0 {
+		cfg.EvalThreshold = 4
 	}
 	return &cfg, nil
 }

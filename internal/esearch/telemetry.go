@@ -52,6 +52,9 @@ type LLMCallDoc struct {
 	LatencyMS        int64   `json:"latency_ms"`
 	Escalated        bool    `json:"escalated"`
 	EscalationReason string  `json:"escalation_reason"`
+	EscalationChain  []int   `json:"escalation_chain,omitempty"`
+	EvalScores       []int   `json:"eval_scores,omitempty"`
+	FinalTier        int     `json:"final_tier"`
 	WorkflowName     string  `json:"workflow_name"`
 	Issue            string  `json:"issue"`
 	ComparisonGroup  string  `json:"comparison_group"`

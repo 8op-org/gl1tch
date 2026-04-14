@@ -30,6 +30,8 @@ type LLMStep struct {
 	Provider string `yaml:"provider,omitempty"` // "ollama" or "claude" (default: config)
 	Model    string `yaml:"model,omitempty"`
 	Prompt   string `yaml:"prompt"`
+	Tier     *int   `yaml:"tier,omitempty"`
+	Format   string `yaml:"format,omitempty"`
 }
 
 // LoadFile reads a single workflow file (YAML or sexpr).

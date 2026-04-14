@@ -39,9 +39,11 @@ const (
 // RunResult wraps an LLMResult with escalation metadata.
 type RunResult struct {
 	LLMResult
-	Tier             int              `json:"tier"`
-	Escalated        bool             `json:"escalated"`
-	EscalationReason EscalationReason `json:"escalation_reason,omitempty"`
+	Tier              int                `json:"tier"`
+	Escalated         bool               `json:"escalated"`
+	EscalationReason  EscalationReason   `json:"escalation_reason,omitempty"`
+	EscalationChain   []int              `json:"escalation_chain,omitempty"`
+	EvalScores        []int              `json:"eval_scores,omitempty"`
 }
 
 // NewTieredRunner creates a runner that walks through tiers in order.
