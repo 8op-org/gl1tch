@@ -78,7 +78,16 @@ func ResolveRepo(repo string) (string, error) {
 }
 
 var reGitHubPR = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/pull/\d+`)
+var reGitHubIssueURL = regexp.MustCompile(`https?://github\.com/([^/]+)/([^/]+)/issues/(\d+)`)
 
+// ParseIssueURL extracts org, repo, and issue number from a GitHub issue URL.
+func ParseIssueURL(input string) (repo, issue string, ok bool) {
+	m := reGitHubIssueURL.FindStringSubmatch(input)
+	if m == nil {
+		return "", "", false
+	}
+	return m[1] + "/" + m[2], m[3], true
+}
 
 // Match picks the best workflow for the user's input.
 // It tries fast URL-based matching first, then falls back to Ollama.
@@ -105,8 +114,29 @@ func Match(input string, workflows map[string]*pipeline.Workflow, model string) 
 			return w, url, nil
 		}
 	}
-	// GitHub issue URLs fall through to the research loop — no fast-path.
-	// Use "work on issue <ref>" for the work-on-issue workflow.
+
+	// Fast path: GitHub issue URLs → issue-to-pr workflow.
+	if repo, issue, ok := ParseIssueURL(input); ok {
+		if w, wOK := workflows["issue-to-pr"]; wOK {
+			return w, input, map[string]string{
+				"repo":  repo,
+				"issue": issue,
+			}
+		}
+	}
+
+	// Fast path: bare issue ref (e.g. "3339", "observability-robots#3339", "elastic/observability-robots#3339")
+	if repo, issue, ok := ParseIssueRef(input); ok {
+		if w, wOK := workflows["issue-to-pr"]; wOK {
+			resolved, err := ResolveRepo(repo)
+			if err == nil {
+				return w, input, map[string]string{
+					"repo":  resolved,
+					"issue": issue,
+				}
+			}
+		}
+	}
 
 	// Build a numbered menu for the LLM.
 	var menu []string

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/research"
 	"github.com/8op-org/gl1tch/internal/router"
@@ -24,8 +25,7 @@ func init() {
 }
 
 func isResearchInput(input string) bool {
-	return reGitHubIssueURL.MatchString(input) ||
-		reGitHubPRURL.MatchString(input) ||
+	return reGitHubPRURL.MatchString(input) ||
 		reGoogleDocURL.MatchString(input)
 }
 
@@ -41,19 +41,7 @@ var askCmd = &cobra.Command{
 		}
 		input := strings.Join(args, " ")
 
-		// Check for "implement" intent first (before generic research routing)
-		if strings.Contains(strings.ToLower(input), "implement") {
-			if url := reGitHubIssueURL.FindString(input); url != "" {
-				return runResearch(url, research.GoalImplement)
-			}
-		}
-
-		// Research inputs skip the workflow router
-		if isResearchInput(input) {
-			return runResearch(input, research.GoalSummarize)
-		}
-
-		// Tier 1: workflow match
+		// Tier 1: workflow match (handles issue URLs, PR URLs, "work on issue", and LLM routing)
 		workflows, err := loadWorkflows()
 		if err != nil {
 			return err
@@ -61,7 +49,16 @@ var askCmd = &cobra.Command{
 		w, resolved, params := router.Match(input, workflows, "")
 		if w != nil {
 			fmt.Printf(">> %s\n", w.Name)
-			result, err := pipeline.Run(w, resolved, "", params, providerReg)
+
+			// Wire ES telemetry for workflow runs
+			var tel *esearch.Telemetry
+			esClient := esearch.NewClient("http://localhost:9200")
+			if err := esClient.Ping(context.Background()); err == nil {
+				tel = esearch.NewTelemetry(esClient)
+				tel.EnsureIndices(context.Background())
+			}
+
+			result, err := pipeline.Run(w, resolved, "", params, providerReg, pipeline.RunOpts{Telemetry: tel})
 			if err != nil {
 				return err
 			}
@@ -69,7 +66,21 @@ var askCmd = &cobra.Command{
 			return nil
 		}
 
-		// Tier 2: research loop for non-URL questions
+		// Tier 2: research loop for URLs not matched by a workflow and general questions
+		if reGitHubIssueURL.MatchString(input) {
+			return runResearch(input, research.GoalSummarize)
+		}
+		if isResearchInput(input) {
+			return runResearch(input, research.GoalSummarize)
+		}
+
+		// Check for "implement" intent
+		if strings.Contains(strings.ToLower(input), "implement") {
+			if url := reGitHubIssueURL.FindString(input); url != "" {
+				return runResearch(url, research.GoalImplement)
+			}
+		}
+
 		return runResearch(input, research.GoalSummarize)
 	},
 }
