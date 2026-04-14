@@ -47,11 +47,31 @@ type LLMCallDoc struct {
 	Model            string  `json:"model"`
 	TokensIn         int64   `json:"tokens_in"`
 	TokensOut        int64   `json:"tokens_out"`
+	TokensTotal      int64   `json:"tokens_total"`
 	CostUSD          float64 `json:"cost_usd"`
 	LatencyMS        int64   `json:"latency_ms"`
 	Escalated        bool    `json:"escalated"`
 	EscalationReason string  `json:"escalation_reason"`
+	WorkflowName     string  `json:"workflow_name"`
+	Issue            string  `json:"issue"`
+	ComparisonGroup  string  `json:"comparison_group"`
 	Timestamp        string  `json:"timestamp"`
+}
+
+// WorkflowRunDoc represents a complete workflow execution for ES indexing.
+type WorkflowRunDoc struct {
+	RunID           string  `json:"run_id"`
+	WorkflowName    string  `json:"workflow_name"`
+	Issue           string  `json:"issue"`
+	ComparisonGroup string  `json:"comparison_group"`
+	TotalSteps      int     `json:"total_steps"`
+	LLMSteps        int     `json:"llm_steps"`
+	TotalTokensIn   int64   `json:"total_tokens_in"`
+	TotalTokensOut  int64   `json:"total_tokens_out"`
+	TotalCostUSD    float64 `json:"total_cost_usd"`
+	TotalLatencyMS  int64   `json:"total_latency_ms"`
+	ReviewPass      bool    `json:"review_pass"`
+	Timestamp       string  `json:"timestamp"`
 }
 
 // Telemetry provides nil-safe methods for indexing research telemetry into ES.
@@ -109,6 +129,14 @@ func (t *Telemetry) IndexLLMCall(ctx context.Context, doc LLMCallDoc) error {
 		return nil
 	}
 	return t.indexDoc(ctx, IndexLLMCalls, "", doc)
+}
+
+// IndexWorkflowRun indexes a workflow run summary document.
+func (t *Telemetry) IndexWorkflowRun(ctx context.Context, doc WorkflowRunDoc) error {
+	if t == nil {
+		return nil
+	}
+	return t.indexDoc(ctx, IndexWorkflowRuns, doc.RunID, doc)
 }
 
 func (t *Telemetry) indexDoc(ctx context.Context, index, id string, doc any) error {

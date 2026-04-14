@@ -5,6 +5,7 @@ const (
 	IndexResearchRuns = "glitch-research-runs"
 	IndexToolCalls    = "glitch-tool-calls"
 	IndexLLMCalls     = "glitch-llm-calls"
+	IndexWorkflowRuns = "glitch-workflow-runs"
 )
 
 const EventsMapping = `{
@@ -71,11 +72,35 @@ const LLMCallsMapping = `{
       "model":              { "type": "keyword" },
       "tokens_in":          { "type": "long" },
       "tokens_out":         { "type": "long" },
+      "tokens_total":       { "type": "long" },
       "cost_usd":           { "type": "float" },
       "latency_ms":         { "type": "long" },
       "escalated":          { "type": "boolean" },
       "escalation_reason":  { "type": "keyword" },
+      "workflow_name":      { "type": "keyword" },
+      "issue":              { "type": "keyword" },
+      "comparison_group":   { "type": "keyword" },
       "timestamp":          { "type": "date" }
+    }
+  }
+}`
+
+const WorkflowRunsMapping = `{
+  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": {
+    "properties": {
+      "run_id":           { "type": "keyword" },
+      "workflow_name":    { "type": "keyword" },
+      "issue":            { "type": "keyword" },
+      "comparison_group": { "type": "keyword" },
+      "total_steps":      { "type": "integer" },
+      "llm_steps":        { "type": "integer" },
+      "total_tokens_in":  { "type": "long" },
+      "total_tokens_out": { "type": "long" },
+      "total_cost_usd":   { "type": "float" },
+      "total_latency_ms": { "type": "long" },
+      "review_pass":      { "type": "boolean" },
+      "timestamp":        { "type": "date" }
     }
   }
 }`
@@ -87,5 +112,6 @@ func AllIndices() map[string]string {
 		IndexResearchRuns: ResearchRunsMapping,
 		IndexToolCalls:    ToolCallsMapping,
 		IndexLLMCalls:     LLMCallsMapping,
+		IndexWorkflowRuns: WorkflowRunsMapping,
 	}
 }
