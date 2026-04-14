@@ -22,7 +22,31 @@ type Result struct {
 
 // RunOpts holds optional dependencies for a workflow run.
 type RunOpts struct {
-	Telemetry *esearch.Telemetry
+	Telemetry       *esearch.Telemetry
+	Issue           string
+	ComparisonGroup string
+}
+
+// parseWorkflowName extracts issue number and comparison group from a workflow name.
+// Convention: "3918-wrapper-curl-local" → issue="3918", group="local"
+func parseWorkflowName(name string) (issue, compGroup string) {
+	wname := name
+	if strings.HasSuffix(wname, "-local") {
+		compGroup = "local"
+		wname = strings.TrimSuffix(wname, "-local")
+	} else if strings.HasSuffix(wname, "-claude") {
+		compGroup = "claude"
+		wname = strings.TrimSuffix(wname, "-claude")
+	}
+	for i, c := range wname {
+		if c < '0' || c > '9' {
+			if i > 0 {
+				issue = wname[:i]
+			}
+			break
+		}
+	}
+	return
 }
 
 // Run executes a workflow with the given input string.
@@ -31,10 +55,30 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	steps := make(map[string]string) // step ID → output
 
 	var tel *esearch.Telemetry
+	var issue, compGroup string
 	if len(opts) > 0 {
 		tel = opts[0].Telemetry
+		issue = opts[0].Issue
+		compGroup = opts[0].ComparisonGroup
 	}
+	if issue == "" || compGroup == "" {
+		parsedIssue, parsedGroup := parseWorkflowName(w.Name)
+		if issue == "" {
+			issue = parsedIssue
+		}
+		if compGroup == "" {
+			compGroup = parsedGroup
+		}
+	}
+
 	runID := esearch.NewRunID()
+
+	// Accumulators for workflow run summary
+	var totalTokensIn, totalTokensOut int64
+	var totalCostUSD float64
+	var totalLatencyMS int64
+	var llmSteps int
+	var lastLLMOutput string
 
 	for i, step := range w.Steps {
 		data := map[string]any{
@@ -48,7 +92,6 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 				return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 			}
 			fmt.Printf("  > %s (save → %s)\n", step.ID, rendered)
-			// Determine which step's output to save
 			sourceStep := step.SaveStep
 			if sourceStep == "" && i > 0 {
 				sourceStep = w.Steps[i-1].ID
@@ -98,38 +141,64 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 					err = llmErr
 				} else {
 					out = result.Response
-					// Index telemetry
+					tokIn := int64(result.TokensIn)
+					tokOut := int64(result.TokensOut)
+					totalTokensIn += tokIn
+					totalTokensOut += tokOut
+					totalLatencyMS += result.Latency.Milliseconds()
+					llmSteps++
+					lastLLMOutput = out
 					if tel != nil {
 						tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
-							RunID:     runID,
-							Step:      fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-							Tier:      0,
-							Provider:  "ollama",
-							Model:     model,
-							TokensIn:  int64(result.TokensIn),
-							TokensOut: int64(result.TokensOut),
-							CostUSD:   0,
-							LatencyMS: result.Latency.Milliseconds(),
-							Timestamp: time.Now().UTC().Format(time.RFC3339),
+							RunID:           runID,
+							Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+							Tier:            0,
+							Provider:        "ollama",
+							Model:           model,
+							TokensIn:        tokIn,
+							TokensOut:       tokOut,
+							TokensTotal:     tokIn + tokOut,
+							CostUSD:         0,
+							LatencyMS:       result.Latency.Milliseconds(),
+							WorkflowName:    w.Name,
+							Issue:           issue,
+							ComparisonGroup: compGroup,
+							Timestamp:       time.Now().UTC().Format(time.RFC3339),
 						})
 					}
 				}
 			default:
 				start := time.Now()
 				out, err = reg.RunProvider(prov, model, rendered)
-				if err == nil && tel != nil {
-					tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
-						RunID:     runID,
-						Step:      fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-						Tier:      2,
-						Provider:  prov,
-						Model:     model,
-						TokensIn:  int64(provider.EstimateTokens(rendered)),
-						TokensOut: int64(provider.EstimateTokens(out)),
-						CostUSD:   provider.EstimateCost(prov, provider.EstimateTokens(rendered), provider.EstimateTokens(out)),
-						LatencyMS: time.Since(start).Milliseconds(),
-						Timestamp: time.Now().UTC().Format(time.RFC3339),
-					})
+				if err == nil {
+					tokIn := int64(provider.EstimateTokens(rendered))
+					tokOut := int64(provider.EstimateTokens(out))
+					cost := provider.EstimateCost(prov, int(tokIn), int(tokOut))
+					latency := time.Since(start).Milliseconds()
+					totalTokensIn += tokIn
+					totalTokensOut += tokOut
+					totalCostUSD += cost
+					totalLatencyMS += latency
+					llmSteps++
+					lastLLMOutput = out
+					if tel != nil {
+						tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
+							RunID:           runID,
+							Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+							Tier:            2,
+							Provider:        prov,
+							Model:           model,
+							TokensIn:        tokIn,
+							TokensOut:       tokOut,
+							TokensTotal:     tokIn + tokOut,
+							CostUSD:         cost,
+							LatencyMS:       latency,
+							WorkflowName:    w.Name,
+							Issue:           issue,
+							ComparisonGroup: compGroup,
+							Timestamp:       time.Now().UTC().Format(time.RFC3339),
+						})
+					}
 				}
 			}
 			if err != nil {
@@ -142,7 +211,25 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		}
 	}
 
-	// Find the last step's output.
+	// Index workflow run summary
+	if tel != nil {
+		reviewPass := strings.Contains(strings.ToUpper(lastLLMOutput), "OVERALL: PASS")
+		tel.IndexWorkflowRun(context.Background(), esearch.WorkflowRunDoc{
+			RunID:           runID,
+			WorkflowName:    w.Name,
+			Issue:           issue,
+			ComparisonGroup: compGroup,
+			TotalSteps:      len(w.Steps),
+			LLMSteps:        llmSteps,
+			TotalTokensIn:   totalTokensIn,
+			TotalTokensOut:  totalTokensOut,
+			TotalCostUSD:    totalCostUSD,
+			TotalLatencyMS:  totalLatencyMS,
+			ReviewPass:      reviewPass,
+			Timestamp:       time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
 	last := w.Steps[len(w.Steps)-1]
 	return &Result{
 		Workflow: w.Name,
