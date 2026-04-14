@@ -20,6 +20,12 @@ const defaultModel = "qwen2.5:7b"
 type QueryEngine struct {
 	es    *esearch.Client
 	model string
+	repo  string
+}
+
+// WithRepo returns a copy of the engine scoped to a specific repository.
+func (q *QueryEngine) WithRepo(repo string) *QueryEngine {
+	return &QueryEngine{es: q.es, model: q.model, repo: repo}
 }
 
 // NewQueryEngine returns a new QueryEngine. If model is empty, defaultModel is used.
@@ -57,18 +63,18 @@ func (q *QueryEngine) Answer(ctx context.Context, question string) (string, erro
 func (q *QueryEngine) searchWithFallback(ctx context.Context, question string) (*esearch.SearchResponse, error) {
 	esQuery, err := q.generateQuery(ctx, question)
 	if err != nil {
-		esQuery = defaultQuery(question)
+		esQuery = defaultQueryWithRepo(question, q.repo)
 	}
 
 	raw, err := json.Marshal(esQuery)
 	if err != nil {
-		raw, _ = json.Marshal(defaultQuery(question))
+		raw, _ = json.Marshal(defaultQueryWithRepo(question, q.repo))
 	}
 
 	resp, err := q.es.Search(ctx, allIndices(), json.RawMessage(raw))
 	if err != nil {
 		// Retry with the plain default query
-		fallbackRaw, _ := json.Marshal(defaultQuery(question))
+		fallbackRaw, _ := json.Marshal(defaultQueryWithRepo(question, q.repo))
 		resp, err = q.es.Search(ctx, allIndices(), json.RawMessage(fallbackRaw))
 		if err != nil {
 			// Index-not-found or similar — return empty results
@@ -105,6 +111,29 @@ func defaultQuery(question string) map[string]any {
 			},
 		},
 	}
+}
+
+// defaultQueryWithRepo returns a default query scoped to a repo when non-empty.
+func defaultQueryWithRepo(question, repo string) map[string]any {
+	q := defaultQuery(question)
+	if repo == "" {
+		return q
+	}
+
+	// Add a bool filter for repo/source fields.
+	boolClause := q["query"].(map[string]any)["bool"].(map[string]any)
+	boolClause["filter"] = []any{
+		map[string]any{
+			"bool": map[string]any{
+				"should": []any{
+					map[string]any{"term": map[string]any{"repo": repo}},
+					map[string]any{"term": map[string]any{"source": repo}},
+				},
+				"minimum_should_match": 1,
+			},
+		},
+	}
+	return q
 }
 
 // generateQuery asks the LLM to produce an Elasticsearch query JSON for the
@@ -156,6 +185,28 @@ JSON:`, now.Format(time.RFC3339), weekAgo.Format(time.RFC3339), question)
 func (q *QueryEngine) synthesize(ctx context.Context, question string, results *esearch.SearchResponse) (string, error) {
 	formatted := formatResults(results)
 
+	// Build optional context sections.
+	var contextLines []string
+
+	// Index stats (best-effort — don't fail the whole answer if ES is flaky).
+	if stats, err := q.es.IndexStats(ctx); err == nil && len(stats) > 0 {
+		var sb strings.Builder
+		sb.WriteString("Available indices:\n")
+		for _, s := range stats {
+			sb.WriteString(fmt.Sprintf("  %s  docs=%s  size=%s\n", s.Index, s.DocCount, s.StoreSize))
+		}
+		contextLines = append(contextLines, sb.String())
+	}
+
+	if q.repo != "" {
+		contextLines = append(contextLines, fmt.Sprintf("Repo context: %s", q.repo))
+	}
+
+	contextBlock := ""
+	if len(contextLines) > 0 {
+		contextBlock = strings.Join(contextLines, "\n") + "\n\n"
+	}
+
 	prompt := fmt.Sprintf(`You are an observability assistant. Answer the question based ONLY on the data below.
 
 Rules:
@@ -163,13 +214,14 @@ Rules:
 - Cite specific repos, timestamps, or pipeline names from the data.
 - Never fabricate information not present in the data.
 - Only reference data shown below.
+- If the data doesn't contain what was asked about, say so clearly and suggest what to index.
 
-Observed data:
+%sObserved data:
 %s
 
 Question: %s
 
-Answer:`, formatted, question)
+Answer:`, contextBlock, formatted, question)
 
 	answer, err := ollamaGenerate(ctx, q.model, prompt)
 	if err != nil {

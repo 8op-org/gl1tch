@@ -128,6 +128,30 @@ func TestEnsureIndexAlreadyExists(t *testing.T) {
 	}
 }
 
+func TestParseIndexStats(t *testing.T) {
+	raw := `[
+		{"index":"glitch-events","docs.count":"150","store.size":"1mb"},
+		{"index":"glitch-llm-calls","docs.count":"42","store.size":"512kb"},
+		{"index":".kibana_1","docs.count":"10","store.size":"100kb"}
+	]`
+
+	stats := parseIndexStats([]byte(raw))
+
+	if len(stats) != 2 {
+		t.Fatalf("expected 2 glitch indices, got %d", len(stats))
+	}
+
+	found := false
+	for _, s := range stats {
+		if s.Index == "glitch-events" && s.DocCount == "150" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected glitch-events with 150 docs")
+	}
+}
+
 func TestTruncate(t *testing.T) {
 	tests := []struct {
 		s    string

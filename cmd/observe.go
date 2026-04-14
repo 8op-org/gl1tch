@@ -11,7 +11,10 @@ import (
 	"github.com/8op-org/gl1tch/internal/observer"
 )
 
+var observeRepo string
+
 func init() {
+	observeCmd.Flags().StringVar(&observeRepo, "repo", "", "scope query to a specific repository (e.g. elastic/kibana)")
 	rootCmd.AddCommand(observeCmd)
 }
 
@@ -28,6 +31,9 @@ var observeCmd = &cobra.Command{
 		}
 
 		engine := observer.NewQueryEngine(es, "")
+		if observeRepo != "" {
+			engine = engine.WithRepo(observeRepo)
+		}
 		answer, err := engine.Answer(cmd.Context(), question)
 		if err != nil {
 			return err

@@ -12,6 +12,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/batch"
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
+	"github.com/8op-org/gl1tch/internal/research"
 	"github.com/8op-org/gl1tch/internal/router"
 )
 
@@ -145,18 +146,57 @@ var askCmd = &cobra.Command{
 			return nil
 		}
 
-		// No match — list available workflows
-		fmt.Println("No matching workflow found. Available workflows:")
-		fmt.Println()
-		for name, w := range workflows {
-			desc := w.Description
-			if len(desc) > 60 {
-				desc = desc[:57] + "..."
-			}
-			fmt.Printf("  %-30s %s\n", name, desc)
+		// No match — fall through to research loop
+		fmt.Println(">> research (no workflow matched)")
+
+		org, repoName := research.ParseRepoFromQuestion(input)
+		repoPath := ""
+		if repoName != "" {
+			repoPath, _ = research.EnsureRepo(org, repoName, "")
 		}
-		fmt.Println()
-		fmt.Println("Tip: glitch ask <issue-number> to work on an issue")
+		if repoPath == "" {
+			cwd, _ := os.Getwd()
+			repoPath = cwd
+		}
+
+		tl, err := buildToolLoop(repoPath)
+		if err != nil {
+			return fmt.Errorf("research loop: %w", err)
+		}
+
+		repoSlug := ""
+		if org != "" && repoName != "" {
+			repoSlug = org + "/" + repoName
+		}
+
+		doc := research.ResearchDocument{
+			Source:   "question",
+			Title:    input,
+			Body:     input,
+			Repo:     repoSlug,
+			RepoPath: repoPath,
+		}
+
+		result, err := tl.Run(context.Background(), doc, research.GoalSummarize)
+		if err != nil {
+			return fmt.Errorf("research loop: %w", err)
+		}
+
+		fmt.Println(result.Output)
+
+		if research.IsSubstantive(result.Output) {
+			resultsBase := askResultsDir
+			if resultsBase == "" {
+				cwd, _ := os.Getwd()
+				resultsBase = filepath.Join(cwd, "results")
+			}
+			if err := research.SaveLoopResult(resultsBase, result); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: save results: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "\nResults saved to: %s/\n", resultsBase)
+			}
+		}
+
 		return nil
 	},
 }
@@ -202,6 +242,8 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 		fmt.Printf("\nResults: %s/\n", singleResultsDir)
 		fmt.Printf("\nTo create the PR:\n")
 		fmt.Printf("  claude \"Create a PR for %s#%s using the plan and PR body in %s/\"\n", repo, issue, singleResultsDir)
+		fmt.Printf("\nAfter creating the PR, run post-impl review:\n")
+		fmt.Printf("  glitch workflow run post-impl-review --param repo=%s --param issue=%s --param pr=<PR_NUMBER>\n", repo, issue)
 	}
 
 	return nil

@@ -163,6 +163,52 @@ func (c *Client) EnsureIndex(ctx context.Context, index, mapping string) error {
 	return nil
 }
 
+// IndexStat holds basic metadata about an ES index.
+type IndexStat struct {
+	Index     string `json:"index"`
+	DocCount  string `json:"docs.count"`
+	StoreSize string `json:"store.size"`
+}
+
+// IndexStats returns doc counts for all glitch-* indices.
+func (c *Client) IndexStats(ctx context.Context) ([]IndexStat, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/_cat/indices/glitch-*?format=json&h=index,docs.count,store.size", nil)
+	if err != nil {
+		return nil, fmt.Errorf("index stats: build request: %w", err)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("index stats: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("index stats: status %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("index stats: read body: %w", err)
+	}
+
+	return parseIndexStats(body), nil
+}
+
+// parseIndexStats parses /_cat/indices JSON, filtering to glitch-* indices.
+func parseIndexStats(data []byte) []IndexStat {
+	var raw []IndexStat
+	json.Unmarshal(data, &raw)
+
+	var filtered []IndexStat
+	for _, s := range raw {
+		if strings.HasPrefix(s.Index, "glitch-") {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
 // truncate returns at most n bytes of s, appending "…" if truncated.
 func truncate(s string, n int) string {
 	if len(s) <= n {

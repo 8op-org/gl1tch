@@ -2,6 +2,7 @@ package observer
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
@@ -92,6 +93,39 @@ func TestNewQueryEngine(t *testing.T) {
 	if qe2.model != "llama3:8b" {
 		t.Errorf("NewQueryEngine with explicit model: got %q, want %q", qe2.model, "llama3:8b")
 	}
+}
+
+func TestDefaultQueryWithRepo(t *testing.T) {
+	q := defaultQueryWithRepo("what broke", "elastic/kibana")
+	raw, err := json.Marshal(q)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	s := string(raw)
+
+	// Must contain the repo filter term.
+	if !contains(s, `"repo":"elastic/kibana"`) {
+		t.Errorf("expected repo filter, got: %s", s)
+	}
+	if !contains(s, `"source":"elastic/kibana"`) {
+		t.Errorf("expected source filter, got: %s", s)
+	}
+}
+
+func TestDefaultQueryWithRepoEmpty(t *testing.T) {
+	withRepo := defaultQueryWithRepo("what broke", "")
+	plain := defaultQuery("what broke")
+
+	a, _ := json.Marshal(withRepo)
+	b, _ := json.Marshal(plain)
+
+	if string(a) != string(b) {
+		t.Errorf("empty repo should equal plain default query\ngot:  %s\nwant: %s", a, b)
+	}
+}
+
+func contains(haystack, needle string) bool {
+	return len(haystack) > 0 && len(needle) > 0 && strings.Contains(haystack, needle)
 }
 
 func TestAllIndices(t *testing.T) {
