@@ -37,6 +37,9 @@ func parseWorkflowName(name string) (issue, compGroup string) {
 	} else if strings.HasSuffix(wname, "-claude") {
 		compGroup = "claude"
 		wname = strings.TrimSuffix(wname, "-claude")
+	} else if strings.HasSuffix(wname, "-copilot") {
+		compGroup = "copilot"
+		wname = strings.TrimSuffix(wname, "-copilot")
 	}
 	for i, c := range wname {
 		if c < '0' || c > '9' {
