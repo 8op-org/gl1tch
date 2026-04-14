@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
@@ -52,6 +53,8 @@ func Run(ctx context.Context, opts RunOpts) error {
 		fmt.Printf("=========================================\n")
 
 		for _, issue := range opts.Issues {
+			// Run all variants in parallel
+			var wg sync.WaitGroup
 			for _, variant := range opts.Variants {
 				wfName := fmt.Sprintf("issue-to-pr-%s", variant)
 				w, ok := opts.Workflows[wfName]
@@ -60,25 +63,30 @@ func Run(ctx context.Context, opts RunOpts) error {
 					continue
 				}
 
-				fmt.Printf("\n>>> #%s (%s, iter %d)\n", issue, variant, iter)
-				params := map[string]string{
-					"issue":     issue,
-					"repo":      opts.Repo,
-					"iteration": fmt.Sprintf("%d", iter),
-				}
-				result, err := pipeline.Run(w, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
-					Telemetry:        opts.Config.Telemetry,
-					ProviderResolver: opts.Config.ProviderResolver,
-					Tiers:            opts.Config.Tiers,
-					EvalThreshold:    opts.Config.EvalThreshold,
-				})
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARN: #%s (%s, iter %d) failed: %v\n", issue, variant, iter, err)
-				} else {
-					saveResults(resultsBase, issue, variant, iter, opts.Repo, result)
-				}
-				fmt.Printf(">>> #%s (%s, iter %d) complete\n", issue, variant, iter)
+				wg.Add(1)
+				go func(v string, wf *pipeline.Workflow) {
+					defer wg.Done()
+					fmt.Printf("\n>>> #%s (%s, iter %d)\n", issue, v, iter)
+					params := map[string]string{
+						"issue":     issue,
+						"repo":      opts.Repo,
+						"iteration": fmt.Sprintf("%d", iter),
+					}
+					result, err := pipeline.Run(wf, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
+						Telemetry:        opts.Config.Telemetry,
+						ProviderResolver: opts.Config.ProviderResolver,
+						Tiers:            opts.Config.Tiers,
+						EvalThreshold:    opts.Config.EvalThreshold,
+					})
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "WARN: #%s (%s, iter %d) failed: %v\n", issue, v, iter, err)
+					} else {
+						saveResults(resultsBase, issue, v, iter, opts.Repo, result)
+					}
+					fmt.Printf(">>> #%s (%s, iter %d) complete\n", issue, v, iter)
+				}(variant, w)
 			}
+			wg.Wait()
 
 			// Cross-review
 			if crW, ok := opts.Workflows["cross-review"]; ok {
