@@ -89,6 +89,7 @@ func runResearch(input string, goal research.Goal) error {
 	if repoPath == "" {
 		repoPath, _ = os.Getwd()
 	}
+	fmt.Fprintf(os.Stderr, ">> repo path: %s\n", repoPath)
 
 	fmt.Fprintln(os.Stderr, ">> researching...")
 	loop, err := buildToolLoop(repoPath)

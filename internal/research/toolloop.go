@@ -90,6 +90,15 @@ func cleanLLMResponse(s string) string {
 			s = strings.TrimSpace(s)
 		}
 	}
+	// Strip "[tool: name]\n" prefix that some models add before JSON
+	if strings.HasPrefix(s, "[tool:") {
+		if idx := strings.Index(s, "\n"); idx >= 0 {
+			rest := strings.TrimSpace(s[idx+1:])
+			if strings.HasPrefix(rest, "{") {
+				s = rest
+			}
+		}
+	}
 	return s
 }
 
@@ -106,6 +115,8 @@ func NewToolLoop(tools *ToolSet, runner *provider.TieredRunner, tel *esearch.Tel
 func buildSystemPrompt(doc ResearchDocument, goal Goal, tools []Tool) string {
 	var sb strings.Builder
 
+	sb.WriteString("You are a research assistant investigating a codebase. You MUST call multiple tools to gather real evidence before producing your answer. Do not guess or speculate.\n\n")
+
 	sb.WriteString("## Input\n")
 	sb.WriteString(fmt.Sprintf("Source: %s\n", doc.Source))
 	sb.WriteString(fmt.Sprintf("Title: %s\n", doc.Title))
@@ -117,25 +128,29 @@ func buildSystemPrompt(doc ResearchDocument, goal Goal, tools []Tool) string {
 	sb.WriteString("\n## Goal\n")
 	switch goal {
 	case GoalImplement:
-		sb.WriteString("Produce an implementation plan with concrete file paths, code changes, and a patch if possible.\n")
+		sb.WriteString("Produce an implementation plan with concrete file paths, specific code changes, and a diff/patch. You MUST read the actual source files before proposing changes.\n")
 	default:
-		sb.WriteString("Produce a thorough summary of the issue, root cause analysis, and affected components.\n")
+		sb.WriteString("Produce a thorough research summary: root cause analysis, affected files with line numbers, and concrete next steps. Every claim must cite a file:line from tool output.\n")
 	}
 
 	sb.WriteString("\n## Tools\n")
-	sb.WriteString("You may call tools by responding with a single JSON object:\n")
-	sb.WriteString("```\n{\"tool\": \"tool_name\", \"params\": {\"key\": \"value\"}}\n```\n\n")
+	sb.WriteString("All tools operate on the repo root directory. Paths are relative (e.g. \"cmd/run.go\", not \"/Users/.../cmd/run.go\" or \"elastic/ensemble/cmd/run.go\").\n\n")
+	sb.WriteString("To call a tool, respond with ONLY this JSON (no markdown, no explanation):\n")
+	sb.WriteString("{\"tool\": \"tool_name\", \"params\": {\"key\": \"value\"}}\n\n")
 	sb.WriteString("Available tools:\n")
 	for _, t := range tools {
-		sb.WriteString(fmt.Sprintf("- **%s**: %s  \n  Params: %s\n", t.Name, t.Description, t.Params))
+		sb.WriteString(fmt.Sprintf("- %s: %s. Params: %s\n", t.Name, t.Description, t.Params))
 	}
 
 	sb.WriteString("\n## Rules\n")
-	sb.WriteString("- Call tools first to gather evidence before answering.\n")
-	sb.WriteString("- Cite sources as file:line where possible.\n")
-	sb.WriteString("- Do not guess — use tools to verify.\n")
+	sb.WriteString("- You MUST call at least 3 tools before producing your final answer.\n")
+	sb.WriteString("- Start with list_files to understand the project structure.\n")
+	sb.WriteString("- Then use grep_code to find relevant code.\n")
+	sb.WriteString("- Then use read_file to examine specific files.\n")
+	sb.WriteString("- Cite every finding as file:line from tool output.\n")
+	sb.WriteString("- Do not embed tool calls in your final answer — call them one at a time.\n")
 	sb.WriteString(fmt.Sprintf("- You have a budget of %d tool calls.\n", maxToolCalls))
-	sb.WriteString("- When done, respond with your final output (not a JSON tool call).\n")
+	sb.WriteString("- When you have enough evidence, respond with your final answer as plain text.\n")
 
 	return sb.String()
 }

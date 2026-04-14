@@ -1,0 +1,14 @@
+{
+  "run_id": "run-1776126160592976000-6ad6340c6c454da9",
+  "source": "github_issue",
+  "source_url": "https://github.com/elastic/ensemble/issues/872",
+  "goal": "summarize",
+  "tool_calls": 1,
+  "llm_calls": 2,
+  "tokens_in": 3128,
+  "tokens_out": 1396,
+  "cost_usd": 0.019910999999999998,
+  "max_tier": 2,
+  "escalations": 1,
+  "duration_ms": 252646
+}

@@ -30,9 +30,11 @@ func TestBuildSystemPrompt(t *testing.T) {
 		{"repo", "elastic/kibana"},
 		{"tool grep_code", "grep_code"},
 		{"tool read_file", "read_file"},
-		{"goal summary", "summary"},
+		{"goal summary", "root cause"},
 		{"json format", `"tool"`},
 		{"budget", "15"},
+		{"relative paths", "relative"},
+		{"min tool calls", "at least 3"},
 	}
 
 	for _, c := range checks {

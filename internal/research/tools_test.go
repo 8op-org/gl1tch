@@ -59,7 +59,7 @@ func TestReadFileWorks(t *testing.T) {
 	}
 
 	ts := NewToolSet(dir, nil)
-	res := ts.Execute(context.Background(), "read_file", map[string]string{"path": path})
+	res := ts.Execute(context.Background(), "read_file", map[string]string{"path": "test.txt"})
 
 	if res.Err != "" {
 		t.Fatalf("unexpected error: %s", res.Err)
@@ -82,7 +82,7 @@ func TestListFilesWorks(t *testing.T) {
 	}
 
 	ts := NewToolSet(dir, nil)
-	res := ts.Execute(context.Background(), "list_files", map[string]string{"path": dir, "depth": "3"})
+	res := ts.Execute(context.Background(), "list_files", map[string]string{"depth": "3"})
 
 	if res.Err != "" {
 		t.Fatalf("unexpected error: %s", res.Err)

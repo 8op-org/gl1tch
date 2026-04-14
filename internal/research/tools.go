@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
@@ -123,7 +124,7 @@ func (ts *ToolSet) grepCode(ctx context.Context, params map[string]string) ToolR
 
 	searchPath := ts.repoPath
 	if p, ok := params["path"]; ok && p != "" {
-		searchPath = p
+		searchPath = filepath.Join(ts.repoPath, p)
 	}
 
 	args := []string{"-rn", "--max-count=5"}
@@ -139,7 +140,9 @@ func (ts *ToolSet) grepCode(ctx context.Context, params map[string]string) ToolR
 			return ToolResult{Tool: "grep_code", Output: "(no matches)"}
 		}
 	}
-	return ToolResult{Tool: "grep_code", Output: truncateOutput(string(out), 8000)}
+	// Strip absolute repo path prefix so LLM sees relative paths
+	result := strings.ReplaceAll(string(out), ts.repoPath+"/", "")
+	return ToolResult{Tool: "grep_code", Output: truncateOutput(strings.TrimSpace(result), 8000)}
 }
 
 func (ts *ToolSet) readFile(ctx context.Context, params map[string]string) ToolResult {
@@ -244,7 +247,7 @@ func (ts *ToolSet) searchES(ctx context.Context, params map[string]string) ToolR
 func (ts *ToolSet) listFiles(ctx context.Context, params map[string]string) ToolResult {
 	searchPath := ts.repoPath
 	if p, ok := params["path"]; ok && p != "" {
-		searchPath = p
+		searchPath = filepath.Join(ts.repoPath, p)
 	}
 
 	depth := params["depth"]
@@ -259,13 +262,24 @@ func (ts *ToolSet) listFiles(ctx context.Context, params map[string]string) Tool
 		"-not", "-path", "*/.git/*",
 		"-not", "-path", "*/node_modules/*",
 		"-not", "-path", "*/vendor/*",
+		"-not", "-path", "*/__pycache__/*",
+		"-not", "-path", "*/.ruff_cache/*",
+		"-not", "-path", "*/.pytest_cache/*",
+		"-not", "-path", "*/.mypy_cache/*",
+		"-not", "-path", "*/.venv/*",
+		"-not", "-path", "*/dist/*",
+		"-not", "-path", "*/.next/*",
+		"-not", "-path", "*/.worktrees/*",
 	}
 
 	out, err := exec.CommandContext(ctx, "find", args...).CombinedOutput()
 	if err != nil {
 		return ToolResult{Tool: "list_files", Err: fmt.Sprintf("list_files: %s", string(out))}
 	}
-	return ToolResult{Tool: "list_files", Output: truncateOutput(string(out), 8000)}
+	// Strip absolute repo path prefix so LLM sees relative paths
+	result := strings.ReplaceAll(string(out), searchPath+"/", "")
+	result = strings.ReplaceAll(result, ts.repoPath+"/", "")
+	return ToolResult{Tool: "list_files", Output: truncateOutput(strings.TrimSpace(result), 8000)}
 }
 
 func (ts *ToolSet) fetchIssue(ctx context.Context, params map[string]string) ToolResult {
