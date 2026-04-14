@@ -27,6 +27,8 @@ type RunOpts struct {
 	Issue            string
 	ComparisonGroup  string
 	ProviderResolver provider.ResolverFunc
+	Tiers            []provider.TierConfig
+	EvalThreshold    int
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -62,11 +64,18 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	var tel *esearch.Telemetry
 	var issue, compGroup string
 	var providerResolver provider.ResolverFunc
+	var tiers []provider.TierConfig
+	var evalThreshold int
 	if len(opts) > 0 {
 		tel = opts[0].Telemetry
 		issue = opts[0].Issue
 		compGroup = opts[0].ComparisonGroup
 		providerResolver = opts[0].ProviderResolver
+		tiers = opts[0].Tiers
+		evalThreshold = opts[0].EvalThreshold
+	}
+	if evalThreshold == 0 {
+		evalThreshold = 4
 	}
 	if issue == "" || compGroup == "" {
 		parsedIssue, parsedGroup := parseWorkflowName(w.Name)
@@ -142,121 +151,136 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			}
 
 			var out string
-			switch prov {
-			case "ollama", "":
-				if model == "" {
-					model = "qwen3:8b"
+			var stepTier int
+			var stepEscalated bool
+			var stepEscalationChain []int
+			var stepEvalScores []int
+			var stepCost float64
+			var stepTokensIn, stepTokensOut int
+
+			// Smart routing: no provider AND no pinned tier AND tiers available
+			useSmart := prov == "" && step.LLM.Tier == nil && len(tiers) > 0
+			// Pinned tier: explicit tier set
+			usePinned := step.LLM.Tier != nil && len(tiers) > 0
+
+			if useSmart || usePinned {
+				activeTiers := tiers
+				if usePinned {
+					tierIdx := *step.LLM.Tier
+					if tierIdx >= 0 && tierIdx < len(tiers) {
+						// Single-tier slice — RunSmart treats it as final tier (no eval)
+						activeTiers = tiers[tierIdx : tierIdx+1]
+					}
 				}
-				result, llmErr := provider.RunOllamaWithResult(model, rendered)
+
+				runner := provider.NewTieredRunner(activeTiers, reg)
+				runner.Resolver = providerResolver
+
+				format := step.LLM.Format
+				evalFn := func(evalModel, evalPrompt string) (provider.LLMResult, error) {
+					return provider.RunOllamaWithResult(defaultModel, evalPrompt)
+				}
+
+				rr, llmErr := runner.RunSmart(context.Background(), rendered, format, evalThreshold, evalFn)
 				if llmErr != nil {
 					err = llmErr
 				} else {
-					out = result.Response
-					tokIn := int64(result.TokensIn)
-					tokOut := int64(result.TokensOut)
-					totalTokensIn += tokIn
-					totalTokensOut += tokOut
-					totalLatencyMS += result.Latency.Milliseconds()
-					llmSteps++
-					lastLLMOutput = out
-					if tel != nil {
-						tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
-							RunID:           runID,
-							Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-							Tier:            0,
-							Provider:        "ollama",
-							Model:           model,
-							TokensIn:        tokIn,
-							TokensOut:       tokOut,
-							TokensTotal:     tokIn + tokOut,
-							CostUSD:         0,
-							LatencyMS:       result.Latency.Milliseconds(),
-							WorkflowName:    w.Name,
-							Issue:           issue,
-							ComparisonGroup: compGroup,
-							Timestamp:       time.Now().UTC().Format(time.RFC3339),
-						})
+					out = rr.Response
+					stepTier = rr.Tier
+					if usePinned {
+						stepTier = *step.LLM.Tier
 					}
+					stepEscalated = rr.Escalated
+					stepEscalationChain = rr.EscalationChain
+					stepEvalScores = rr.EvalScores
+					stepCost = rr.CostUSD
+					stepTokensIn = rr.TokensIn
+					stepTokensOut = rr.TokensOut
 				}
-			default:
-				var resolved bool
-				if providerResolver != nil {
-					if fn, ok := providerResolver(prov); ok {
-						resolved = true
-						// Pass the step's original model (may be empty);
-						// the provider's DefaultModel handles the fallback.
-						result, llmErr := fn(step.LLM.Model, rendered)
-						if llmErr != nil {
-							err = llmErr
-						} else {
-							out = result.Response
-							tokIn := int64(result.TokensIn)
-							tokOut := int64(result.TokensOut)
-							totalTokensIn += tokIn
-							totalTokensOut += tokOut
-							totalCostUSD += result.CostUSD
-							totalLatencyMS += result.Latency.Milliseconds()
-							llmSteps++
-							lastLLMOutput = out
-							if tel != nil {
-								tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
-									RunID:           runID,
-									Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-									Tier:            1,
-									Provider:        prov,
-									Model:           model,
-									TokensIn:        tokIn,
-									TokensOut:       tokOut,
-									TokensTotal:     tokIn + tokOut,
-									CostUSD:         result.CostUSD,
-									LatencyMS:       result.Latency.Milliseconds(),
-									WorkflowName:    w.Name,
-									Issue:           issue,
-									ComparisonGroup: compGroup,
-									Timestamp:       time.Now().UTC().Format(time.RFC3339),
-								})
+			} else {
+				// Original dispatch: explicit provider or no tiers configured
+				switch prov {
+				case "ollama", "":
+					if model == "" {
+						model = "qwen3:8b"
+					}
+					result, llmErr := provider.RunOllamaWithResult(model, rendered)
+					if llmErr != nil {
+						err = llmErr
+					} else {
+						out = result.Response
+						stepTokensIn = result.TokensIn
+						stepTokensOut = result.TokensOut
+					}
+				default:
+					var resolved bool
+					if providerResolver != nil {
+						if fn, ok := providerResolver(prov); ok {
+							resolved = true
+							result, llmErr := fn(step.LLM.Model, rendered)
+							if llmErr != nil {
+								err = llmErr
+							} else {
+								out = result.Response
+								stepTokensIn = result.TokensIn
+								stepTokensOut = result.TokensOut
+								stepCost = result.CostUSD
 							}
 						}
 					}
-				}
-				if !resolved {
-					result, provErr := reg.RunProviderWithResult(prov, model, rendered)
-					if provErr != nil {
-						err = provErr
-					} else {
-						out = result.Response
-						tokIn := int64(result.TokensIn)
-						tokOut := int64(result.TokensOut)
-						totalTokensIn += tokIn
-						totalTokensOut += tokOut
-						totalCostUSD += result.CostUSD
-						totalLatencyMS += result.Latency.Milliseconds()
-						llmSteps++
-						lastLLMOutput = out
-						if tel != nil {
-							tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
-								RunID:           runID,
-								Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-								Tier:            2,
-								Provider:        prov,
-								Model:           model,
-								TokensIn:        tokIn,
-								TokensOut:       tokOut,
-								TokensTotal:     tokIn + tokOut,
-								CostUSD:         result.CostUSD,
-								LatencyMS:       result.Latency.Milliseconds(),
-								WorkflowName:    w.Name,
-								Issue:           issue,
-								ComparisonGroup: compGroup,
-								Timestamp:       time.Now().UTC().Format(time.RFC3339),
-							})
+					if !resolved {
+						result, provErr := reg.RunProviderWithResult(prov, model, rendered)
+						if provErr != nil {
+							err = provErr
+						} else {
+							out = result.Response
+							stepTokensIn = result.TokensIn
+							stepTokensOut = result.TokensOut
+							stepCost = result.CostUSD
 						}
 					}
 				}
 			}
+
 			if err != nil {
 				return nil, fmt.Errorf("step %s: %w", step.ID, err)
 			}
+
+			tokIn := int64(stepTokensIn)
+			tokOut := int64(stepTokensOut)
+			totalTokensIn += tokIn
+			totalTokensOut += tokOut
+			totalCostUSD += stepCost
+			llmSteps++
+			lastLLMOutput = out
+
+			if tel != nil {
+				reason := ""
+				if stepEscalated {
+					reason = "eval"
+				}
+				tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
+					RunID:            runID,
+					Step:             fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+					Tier:             stepTier,
+					Provider:         prov,
+					Model:            model,
+					TokensIn:         tokIn,
+					TokensOut:        tokOut,
+					TokensTotal:      tokIn + tokOut,
+					CostUSD:          stepCost,
+					Escalated:        stepEscalated,
+					EscalationReason: reason,
+					EscalationChain:  stepEscalationChain,
+					EvalScores:       stepEvalScores,
+					FinalTier:        stepTier,
+					WorkflowName:     w.Name,
+					Issue:            issue,
+					ComparisonGroup:  compGroup,
+					Timestamp:        time.Now().UTC().Format(time.RFC3339),
+				})
+			}
+
 			steps[step.ID] = out
 
 		} else {

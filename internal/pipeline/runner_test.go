@@ -134,3 +134,102 @@ func TestRun_OpenAICompatibleProvider(t *testing.T) {
 		t.Errorf("output = %q, want llm-output", result.Output)
 	}
 }
+
+func TestRun_SmartRouting_NoProvider(t *testing.T) {
+	callLog := []string{}
+	resolver := func(name string) (provider.ProviderFunc, bool) {
+		return func(model, prompt string) (provider.LLMResult, error) {
+			callLog = append(callLog, name)
+			return provider.LLMResult{
+				Provider: name,
+				Model:    model,
+				Response: "smart-routed response",
+				TokensIn: 10, TokensOut: 5,
+			}, nil
+		}, true
+	}
+
+	w := &Workflow{
+		Name: "test-smart",
+		Steps: []Step{
+			{
+				ID: "classify",
+				LLM: &LLMStep{
+					Prompt: "classify this issue",
+				},
+			},
+		},
+	}
+
+	tiers := []provider.TierConfig{
+		{Providers: []string{"fake-local"}, Model: "local-model"},
+		{Providers: []string{"fake-cloud"}, Model: "cloud-model"},
+	}
+
+	reg, _ := provider.LoadProviders(t.TempDir())
+	result, err := Run(w, "", "qwen3:8b", nil, reg, RunOpts{
+		ProviderResolver: resolver,
+		Tiers:            tiers,
+		EvalThreshold:    4,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if result.Output != "smart-routed response" {
+		t.Errorf("output = %q, want smart-routed response", result.Output)
+	}
+	if len(callLog) < 1 {
+		t.Fatal("expected at least one provider call")
+	}
+}
+
+func TestRun_PinnedTier(t *testing.T) {
+	callLog := []string{}
+	resolver := func(name string) (provider.ProviderFunc, bool) {
+		return func(model, prompt string) (provider.LLMResult, error) {
+			callLog = append(callLog, name)
+			return provider.LLMResult{
+				Provider: name,
+				Model:    model,
+				Response: "tier-2 response",
+				TokensIn: 10, TokensOut: 5,
+			}, nil
+		}, true
+	}
+
+	tier := 2
+	w := &Workflow{
+		Name: "test-pinned",
+		Steps: []Step{
+			{
+				ID: "analyze",
+				LLM: &LLMStep{
+					Tier:   &tier,
+					Prompt: "deep analysis",
+				},
+			},
+		},
+	}
+
+	tiers := []provider.TierConfig{
+		{Providers: []string{"fake-local"}, Model: "local-model"},
+		{Providers: []string{"fake-cloud"}, Model: "cloud-model"},
+		{Providers: []string{"fake-premium"}, Model: "premium-model"},
+	}
+
+	reg, _ := provider.LoadProviders(t.TempDir())
+	result, err := Run(w, "", "qwen3:8b", nil, reg, RunOpts{
+		ProviderResolver: resolver,
+		Tiers:            tiers,
+		EvalThreshold:    4,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if result.Output != "tier-2 response" {
+		t.Errorf("output = %q, want tier-2 response", result.Output)
+	}
+	if len(callLog) != 1 || callLog[0] != "fake-premium" {
+		t.Errorf("callLog = %v, want [fake-premium]", callLog)
+	}
+}
