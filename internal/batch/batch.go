@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
@@ -20,6 +21,7 @@ type RunOpts struct {
 	Issues     []string
 	Repo       string
 	RepoPath   string
+	ResultsDir string // explicit results dir; empty = CWD/.glitch/results
 	Variants   []string
 	Iterations int
 	Workflows  map[string]*pipeline.Workflow
@@ -36,18 +38,10 @@ type BatchConfig struct {
 
 // Run executes the full batch: issues x variants x iterations + cross-reviews + manifests.
 func Run(ctx context.Context, opts RunOpts) error {
-	resultsBase := filepath.Join(opts.RepoPath, ".glitch", "results")
-
-	// Ensure .glitch/results is gitignored
-	gitignorePath := filepath.Join(opts.RepoPath, ".gitignore")
-	if data, err := os.ReadFile(gitignorePath); err == nil {
-		if !strings.Contains(string(data), ".glitch/results") {
-			f, _ := os.OpenFile(gitignorePath, os.O_APPEND|os.O_WRONLY, 0o644)
-			if f != nil {
-				f.WriteString("\n.glitch/results/\n")
-				f.Close()
-			}
-		}
+	resultsBase := opts.ResultsDir
+	if resultsBase == "" {
+		cwd, _ := os.Getwd()
+		resultsBase = filepath.Join(cwd, ".glitch", "results")
 	}
 
 	for iter := 1; iter <= opts.Iterations; iter++ {
@@ -70,12 +64,14 @@ func Run(ctx context.Context, opts RunOpts) error {
 					"repo":      opts.Repo,
 					"iteration": fmt.Sprintf("%d", iter),
 				}
-				_, err := pipeline.Run(w, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
+				result, err := pipeline.Run(w, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 					Telemetry:        opts.Config.Telemetry,
 					ProviderResolver: opts.Config.ProviderResolver,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: #%s (%s, iter %d) failed: %v\n", issue, variant, iter, err)
+				} else {
+					saveResults(resultsBase, issue, variant, iter, opts.Repo, result)
 				}
 				fmt.Printf(">>> #%s (%s, iter %d) complete\n", issue, variant, iter)
 			}
@@ -88,12 +84,16 @@ func Run(ctx context.Context, opts RunOpts) error {
 					"repo":      opts.Repo,
 					"iteration": fmt.Sprintf("%d", iter),
 				}
-				_, err := pipeline.Run(crW, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
+				result, err := pipeline.Run(crW, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 					Telemetry:        opts.Config.Telemetry,
 					ProviderResolver: opts.Config.ProviderResolver,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: #%s cross-review iter %d failed: %v\n", issue, iter, err)
+				} else if cr, ok := result.Steps["cross-review"]; ok {
+					crDir := filepath.Join(resultsBase, issue, fmt.Sprintf("iteration-%d", iter))
+					os.MkdirAll(crDir, 0o755)
+					os.WriteFile(filepath.Join(crDir, "cross-review.md"), []byte(cr), 0o644)
 				}
 			}
 		}
@@ -119,4 +119,53 @@ func Run(ctx context.Context, opts RunOpts) error {
 	}
 
 	return nil
+}
+
+// saveResults writes workflow step outputs to the results directory.
+func saveResults(resultsBase, issue, variant string, iter int, repo string, result *pipeline.Result) {
+	dir := filepath.Join(resultsBase, issue, fmt.Sprintf("iteration-%d", iter), variant)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "WARN: mkdir %s: %v\n", dir, err)
+		return
+	}
+
+	// Save known step outputs
+	stepFiles := map[string]string{
+		"classify": "classification.json",
+		"research": "plan.md",
+		"review":   "review.md",
+	}
+	for stepID, filename := range stepFiles {
+		if content, ok := result.Steps[stepID]; ok {
+			os.WriteFile(filepath.Join(dir, filename), []byte(content), 0o644)
+		}
+	}
+
+	// Extract PR sections from build-pr step
+	if prContent, ok := result.Steps["build-pr"]; ok {
+		extractSection(prContent, "---PR_TITLE---", "---END_PR_TITLE---", filepath.Join(dir, "pr-title.txt"))
+		extractSection(prContent, "---PR_BODY---", "---END_PR_BODY---", filepath.Join(dir, "pr-body.md"))
+		extractSection(prContent, "---NEXT_STEPS---", "---END_NEXT_STEPS---", filepath.Join(dir, "next-steps.md"))
+		// Fallback: save full PR output if title extraction got nothing
+		if data, err := os.ReadFile(filepath.Join(dir, "pr-title.txt")); err != nil || len(strings.TrimSpace(string(data))) == 0 {
+			os.WriteFile(filepath.Join(dir, "pr-artifacts.md"), []byte(prContent), 0o644)
+		}
+	}
+
+	// Write run metadata
+	runJSON := fmt.Sprintf(`{"repo":"%s","issue":"%s","iteration":%d,"variant":"%s","timestamp":"%s"}`,
+		repo, issue, iter, variant, time.Now().UTC().Format(time.RFC3339))
+	os.WriteFile(filepath.Join(dir, "run.json"), []byte(runJSON), 0o644)
+
+	fmt.Printf("  Results saved: %s/\n", dir)
+}
+
+// extractSection pulls text between start/end delimiters and writes to path.
+func extractSection(content, startDelim, endDelim, path string) {
+	start := strings.Index(content, startDelim)
+	end := strings.Index(content, endDelim)
+	if start >= 0 && end > start {
+		section := strings.TrimSpace(content[start+len(startDelim) : end])
+		os.WriteFile(path, []byte(section), 0o644)
+	}
 }

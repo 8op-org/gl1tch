@@ -17,7 +17,8 @@ import (
 // Result holds the output of a completed workflow run.
 type Result struct {
 	Workflow string
-	Output   string // output of the last step
+	Output   string            // output of the last step
+	Steps    map[string]string // all step outputs keyed by step ID
 }
 
 // RunOpts holds optional dependencies for a workflow run.
@@ -313,6 +314,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	return &Result{
 		Workflow: w.Name,
 		Output:   steps[last.ID],
+		Steps:    steps,
 	}, nil
 }
 

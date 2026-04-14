@@ -19,6 +19,7 @@ var (
 	askCompare    bool
 	askIterations int
 	askVariant    string
+	askResultsDir string
 )
 
 func init() {
@@ -26,6 +27,7 @@ func init() {
 	askCmd.Flags().BoolVar(&askCompare, "compare", false, "run all variants and cross-review")
 	askCmd.Flags().IntVarP(&askIterations, "iterations", "n", 1, "number of iterations for learning loop")
 	askCmd.Flags().StringVarP(&askVariant, "variant", "v", "", "specific variant (default: use issue-to-pr workflow)")
+	askCmd.Flags().StringVar(&askResultsDir, "results-dir", "", "directory for results (default: CWD/.glitch/results)")
 	rootCmd.AddCommand(askCmd)
 }
 
@@ -90,6 +92,7 @@ var askCmd = &cobra.Command{
 					Issues:     issues,
 					Repo:       resolved,
 					RepoPath:   repoPath,
+					ResultsDir: askResultsDir,
 					Variants:   variants,
 					Iterations: iterations,
 					Workflows:  workflows,
@@ -105,10 +108,14 @@ var askCmd = &cobra.Command{
 				}
 
 				// Print handoff
+				rdir := askResultsDir
+				if rdir == "" {
+					cwd, _ := os.Getwd()
+					rdir = filepath.Join(cwd, ".glitch", "results")
+				}
 				fmt.Printf("\nResults ready:\n")
 				for _, issue := range issues {
-					resultsDir := filepath.Join(repoPath, ".glitch", "results", issue)
-					fmt.Printf("  #%s: %s/manifest.md\n", issue, resultsDir)
+					fmt.Printf("  #%s: %s/%s/manifest.md\n", issue, rdir, issue)
 				}
 				fmt.Printf("\nDashboard: http://localhost:5601/app/dashboards#/view/glitch-llm-dashboard\n")
 				return nil
@@ -179,11 +186,16 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 	fmt.Println(result.Output)
 
 	// Print handoff
-	resultsDir := filepath.Join(repoPath, ".glitch", "results", issue)
-	if _, err := os.Stat(resultsDir); err == nil {
-		fmt.Printf("\nResults: %s/\n", resultsDir)
+	rdir := askResultsDir
+	if rdir == "" {
+		cwd, _ := os.Getwd()
+		rdir = filepath.Join(cwd, ".glitch", "results")
+	}
+	singleResultsDir := filepath.Join(rdir, issue)
+	if _, err := os.Stat(singleResultsDir); err == nil {
+		fmt.Printf("\nResults: %s/\n", singleResultsDir)
 		fmt.Printf("\nTo create the PR:\n")
-		fmt.Printf("  claude \"Create a PR for %s#%s using the plan and PR body in %s/\"\n", repo, issue, resultsDir)
+		fmt.Printf("  claude \"Create a PR for %s#%s using the plan and PR body in %s/\"\n", repo, issue, singleResultsDir)
 	}
 
 	return nil
