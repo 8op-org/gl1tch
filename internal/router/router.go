@@ -101,6 +101,17 @@ func ParseMultiIssue(input string) (issues []string, repo string, ok bool) {
 var reGitHubPR = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/pull/\d+`)
 var reGitHubIssueURL = regexp.MustCompile(`https?://github\.com/([^/]+)/([^/]+)/issues/(\d+)`)
 
+var reGitHubPRURL = regexp.MustCompile(`https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)`)
+
+// ParsePRURL extracts org, repo, and PR number from a GitHub PR URL.
+func ParsePRURL(input string) (repo, pr string, ok bool) {
+	m := reGitHubPRURL.FindStringSubmatch(input)
+	if m == nil {
+		return "", "", false
+	}
+	return m[1] + "/" + m[2], m[3], true
+}
+
 // ParseIssueURL extracts org, repo, and issue number from a GitHub issue URL.
 func ParseIssueURL(input string) (repo, issue string, ok bool) {
 	m := reGitHubIssueURL.FindStringSubmatch(input)
@@ -129,10 +140,39 @@ func Match(input string, workflows map[string]*pipeline.Workflow, model string) 
 		}
 	}
 
-	// Fast path: detect GitHub URLs.
+	// Fast path: detect GitHub PR URLs → parse into repo + pr number.
 	if url := reGitHubPR.FindString(input); url != "" {
-		if w, ok := workflows["github-pr-review"]; ok {
-			return w, url, nil
+		if repo, pr, ok := ParsePRURL(url); ok {
+			// Try pr-review first, then github-pr-review for backwards compat
+			for _, name := range []string{"pr-review", "github-pr-review"} {
+				if w, wOK := workflows[name]; wOK {
+					return w, url, map[string]string{
+						"repo": repo,
+						"pr":   pr,
+					}
+				}
+			}
+		}
+	}
+
+	// Fast path: "review <number>" or "review <url>"
+	if strings.HasPrefix(strings.ToLower(input), "review ") {
+		rest := strings.TrimSpace(input[7:])
+		if repo, pr, ok := ParsePRURL(rest); ok {
+			if w, wOK := workflows["pr-review"]; wOK {
+				return w, input, map[string]string{"repo": repo, "pr": pr}
+			}
+		}
+		// Bare PR number — resolve repo from git remote
+		if reIssueRef.MatchString(rest) {
+			if _, num, ok := ParseIssueRef(rest); ok {
+				resolved, err := ResolveRepo("")
+				if err == nil {
+					if w, wOK := workflows["pr-review"]; wOK {
+						return w, input, map[string]string{"repo": resolved, "pr": num}
+					}
+				}
+			}
 		}
 	}
 
