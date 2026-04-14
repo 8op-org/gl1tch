@@ -4,34 +4,34 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/8op-org/gl1tch/internal/batch"
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
-	"github.com/8op-org/gl1tch/internal/research"
 	"github.com/8op-org/gl1tch/internal/router"
 )
 
-var reGitHubIssueURL = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/issues/\d+`)
-var reGitHubPRURL = regexp.MustCompile(`https?://github\.com/[^/]+/[^/]+/pull/\d+`)
-var reGoogleDocURL = regexp.MustCompile(`https?://docs\.google\.com/document/d/`)
+var (
+	askCompare    bool
+	askIterations int
+	askVariant    string
+)
 
 func init() {
 	askCmd.Flags().StringVarP(&targetPath, "path", "C", "", "run against this directory instead of cwd")
+	askCmd.Flags().BoolVar(&askCompare, "compare", false, "run all variants and cross-review")
+	askCmd.Flags().IntVarP(&askIterations, "iterations", "n", 1, "number of iterations for learning loop")
+	askCmd.Flags().StringVarP(&askVariant, "variant", "v", "", "specific variant (default: use issue-to-pr workflow)")
 	rootCmd.AddCommand(askCmd)
-}
-
-func isResearchInput(input string) bool {
-	return reGitHubPRURL.MatchString(input) ||
-		reGoogleDocURL.MatchString(input)
 }
 
 var askCmd = &cobra.Command{
 	Use:   "ask [input]",
-	Short: "route a question or URL to the best workflow",
+	Short: "route a question or issue to the best workflow",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if targetPath != "" {
@@ -41,24 +41,88 @@ var askCmd = &cobra.Command{
 		}
 		input := strings.Join(args, " ")
 
-		// Tier 1: workflow match (handles issue URLs, PR URLs, "work on issue", and LLM routing)
+		cfg, _ := loadConfig()
 		workflows, err := loadWorkflows()
 		if err != nil {
 			return err
 		}
-		w, resolved, params := router.Match(input, workflows, "")
-		if w != nil {
-			fmt.Printf(">> %s\n", w.Name)
 
-			// Wire ES telemetry for workflow runs
-			var tel *esearch.Telemetry
-			esClient := esearch.NewClient("http://localhost:9200")
-			if err := esClient.Ping(context.Background()); err == nil {
-				tel = esearch.NewTelemetry(esClient)
-				tel.EnsureIndices(context.Background())
+		// Wire ES telemetry
+		var tel *esearch.Telemetry
+		esClient := esearch.NewClient("http://localhost:9200")
+		if err := esClient.Ping(context.Background()); err == nil {
+			tel = esearch.NewTelemetry(esClient)
+			tel.EnsureIndices(context.Background())
+		}
+
+		// Try multi-issue parse first
+		issues, repo, isMultiIssue := router.ParseMultiIssue(input)
+		if isMultiIssue {
+			resolved, err := router.ResolveRepo(repo)
+			if err != nil {
+				return fmt.Errorf("could not resolve repo: %w", err)
+			}
+			repoPath := resolveRepoPath(resolved)
+
+			if askCompare || len(issues) > 1 {
+				// Batch mode
+				variants := batch.DefaultVariants
+				if askVariant != "" {
+					variants = []string{askVariant}
+				}
+				iterations := askIterations
+				if iterations < 1 {
+					iterations = 1
+				}
+				if !askCompare && len(issues) > 1 {
+					// Multiple issues without --compare: run sequentially with default workflow
+					iterations = 1
+					variants = []string{"local"}
+					if askVariant != "" {
+						variants = []string{askVariant}
+					}
+				}
+
+				fmt.Printf("Batch: %d issues × %d variants × %d iterations\n", len(issues), len(variants), iterations)
+				fmt.Printf("Repo: %s (%s)\n\n", resolved, repoPath)
+
+				err := batch.Run(context.Background(), batch.RunOpts{
+					Issues:     issues,
+					Repo:       resolved,
+					RepoPath:   repoPath,
+					Variants:   variants,
+					Iterations: iterations,
+					Workflows:  workflows,
+					Config: batch.BatchConfig{
+						DefaultModel:     cfg.DefaultModel,
+						ProviderRegistry: providerReg,
+						ProviderResolver: cfg.BuildProviderResolver(),
+						Telemetry:        tel,
+					},
+				})
+				if err != nil {
+					return err
+				}
+
+				// Print handoff
+				fmt.Printf("\nResults ready:\n")
+				for _, issue := range issues {
+					resultsDir := filepath.Join(repoPath, ".glitch", "results", issue)
+					fmt.Printf("  #%s: %s/manifest.md\n", issue, resultsDir)
+				}
+				fmt.Printf("\nDashboard: http://localhost:5601/app/dashboards#/view/glitch-llm-dashboard\n")
+				return nil
 			}
 
-			cfg, _ := loadConfig()
+			// Single issue — run the default workflow
+			issue := issues[0]
+			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel)
+		}
+
+		// Not an issue ref — try workflow routing
+		w, resolved, params := router.Match(input, workflows, cfg.DefaultModel)
+		if w != nil {
+			fmt.Printf(">> %s\n", w.Name)
 			result, err := pipeline.Run(w, resolved, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 				Telemetry:        tel,
 				ProviderResolver: cfg.BuildProviderResolver(),
@@ -70,66 +134,73 @@ var askCmd = &cobra.Command{
 			return nil
 		}
 
-		// Tier 2: research loop for URLs not matched by a workflow and general questions
-		if reGitHubIssueURL.MatchString(input) {
-			return runResearch(input, research.GoalSummarize)
-		}
-		if isResearchInput(input) {
-			return runResearch(input, research.GoalSummarize)
-		}
-
-		// Check for "implement" intent
-		if strings.Contains(strings.ToLower(input), "implement") {
-			if url := reGitHubIssueURL.FindString(input); url != "" {
-				return runResearch(url, research.GoalImplement)
+		// No match — list available workflows
+		fmt.Println("No matching workflow found. Available workflows:")
+		fmt.Println()
+		for name, w := range workflows {
+			desc := w.Description
+			if len(desc) > 60 {
+				desc = desc[:57] + "..."
 			}
+			fmt.Printf("  %-30s %s\n", name, desc)
 		}
-
-		return runResearch(input, research.GoalSummarize)
+		fmt.Println()
+		fmt.Println("Tip: glitch ask <issue-number> to work on an issue")
+		return nil
 	},
 }
 
-func runResearch(input string, goal research.Goal) error {
-	fmt.Fprintln(os.Stderr, ">> adapting input...")
-	doc, err := research.Adapt(input)
+// runSingleIssue runs the issue-to-pr workflow for one issue.
+func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry) error {
+	// Pick the workflow
+	wfName := "issue-to-pr"
+	if askVariant != "" {
+		wfName = fmt.Sprintf("issue-to-pr-%s", askVariant)
+	}
+	w, ok := workflows[wfName]
+	if !ok {
+		return fmt.Errorf("workflow %q not found", wfName)
+	}
+
+	fmt.Printf(">> %s (#%s in %s)\n", w.Name, issue, repo)
+
+	params := map[string]string{
+		"issue":     issue,
+		"repo":      repo,
+		"iteration": "1",
+	}
+	result, err := pipeline.Run(w, "", cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
+		Telemetry:        tel,
+		ProviderResolver: cfg.BuildProviderResolver(),
+	})
 	if err != nil {
-		return fmt.Errorf("adapt: %w", err)
+		return err
 	}
-	fmt.Fprintf(os.Stderr, ">> source: %s\n", doc.Source)
-	if doc.Repo != "" {
-		fmt.Fprintf(os.Stderr, ">> repo: %s\n", doc.Repo)
-	}
-
-	repoPath := doc.RepoPath
-	if repoPath == "" {
-		repoPath, _ = os.Getwd()
-	}
-	fmt.Fprintf(os.Stderr, ">> repo path: %s\n", repoPath)
-
-	fmt.Fprintln(os.Stderr, ">> researching...")
-	loop, err := buildToolLoop(repoPath)
-	if err != nil {
-		return fmt.Errorf("build loop: %w", err)
-	}
-
-	result, err := loop.Run(context.Background(), doc, goal)
-	if err != nil {
-		return fmt.Errorf("research: %w", err)
-	}
-
 	fmt.Println(result.Output)
 
-	// Save results
-	if saveErr := research.SaveLoopResult("results", result); saveErr != nil {
-		fmt.Fprintf(os.Stderr, ">> warning: could not save results: %v\n", saveErr)
-	} else {
-		fmt.Fprintf(os.Stderr, ">> results saved to results/\n")
+	// Print handoff
+	resultsDir := filepath.Join(repoPath, ".glitch", "results", issue)
+	if _, err := os.Stat(resultsDir); err == nil {
+		fmt.Printf("\nResults: %s/\n", resultsDir)
+		fmt.Printf("\nTo create the PR:\n")
+		fmt.Printf("  claude \"Create a PR for %s#%s using the plan and PR body in %s/\"\n", repo, issue, resultsDir)
 	}
 
-	fmt.Fprintf(os.Stderr, ">> %d tool calls, %d LLM calls, ~$%.4f\n",
-		len(result.ToolCalls), result.LLMCalls, result.CostUSD)
-
 	return nil
+}
+
+// resolveRepoPath finds the local filesystem path for an org/repo.
+func resolveRepoPath(repo string) string {
+	parts := strings.Split(repo, "/")
+	repoName := parts[len(parts)-1]
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, "Projects", repoName)
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	// Fallback to cwd
+	cwd, _ := os.Getwd()
+	return cwd
 }
 
 func loadWorkflows() (map[string]*pipeline.Workflow, error) {
