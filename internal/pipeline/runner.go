@@ -216,7 +216,9 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 
 	// Index workflow run summary
 	if tel != nil {
-		reviewPass := strings.Contains(strings.ToUpper(lastLLMOutput), "OVERALL: PASS")
+		// Strip markdown bold/italic markers before checking review verdict
+		stripped := strings.ReplaceAll(strings.ToUpper(lastLLMOutput), "*", "")
+		reviewPass := strings.Contains(stripped, "OVERALL: PASS")
 		tel.IndexWorkflowRun(context.Background(), esearch.WorkflowRunDoc{
 			RunID:           runID,
 			WorkflowName:    w.Name,
