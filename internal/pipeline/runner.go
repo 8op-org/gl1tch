@@ -73,6 +73,10 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			compGroup = parsedGroup
 		}
 	}
+	// Fall back to params for issue if not derived from workflow name
+	if issue == "" && params != nil {
+		issue = params["issue"]
+	}
 
 	runID := esearch.NewRunID()
 
