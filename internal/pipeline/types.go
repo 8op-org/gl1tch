@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,32 +32,31 @@ type LLMStep struct {
 	Prompt   string `yaml:"prompt"`
 }
 
-// LoadFile reads a single workflow YAML file.
+// LoadFile reads a single workflow file (YAML or sexpr).
 func LoadFile(path string) (*Workflow, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var w Workflow
-	if err := yaml.Unmarshal(data, &w); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	if w.Name == "" {
-		w.Name = filepath.Base(path)
-	}
-	return &w, nil
+	return LoadBytes(data, filepath.Base(path))
 }
 
-// LoadBytes parses a workflow from raw YAML bytes.
+// LoadBytes parses a workflow from raw bytes, dispatching on file extension.
 func LoadBytes(data []byte, filename string) (*Workflow, error) {
-	var w Workflow
-	if err := yaml.Unmarshal(data, &w); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", filename, err)
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".glitch":
+		return parseSexprWorkflow(data)
+	default:
+		var w Workflow
+		if err := yaml.Unmarshal(data, &w); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", filename, err)
+		}
+		if w.Name == "" {
+			w.Name = filename
+		}
+		return &w, nil
 	}
-	if w.Name == "" {
-		w.Name = filename
-	}
-	return &w, nil
 }
 
 // LoadDir reads all .yaml files from a directory, keyed by workflow name.
@@ -75,7 +75,7 @@ func LoadDir(dir string) (map[string]*Workflow, error) {
 			continue
 		}
 		ext := filepath.Ext(e.Name())
-		if ext != ".yaml" && ext != ".yml" {
+		if ext != ".yaml" && ext != ".yml" && ext != ".glitch" {
 			continue
 		}
 		w, err := LoadFile(filepath.Join(dir, e.Name()))
