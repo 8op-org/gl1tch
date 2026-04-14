@@ -12,15 +12,40 @@ func parseSexprWorkflow(src []byte) (*Workflow, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Collect defs
+	defs := make(map[string]string)
+	for _, n := range nodes {
+		if n.IsList() && len(n.Children) >= 3 && n.Children[0].SymbolVal() == "def" {
+			name := n.Children[1].SymbolVal()
+			if name == "" {
+				name = n.Children[1].StringVal()
+			}
+			val := resolveVal(n.Children[2], defs)
+			defs[name] = val
+		}
+	}
+
+	// Find workflow
 	for _, n := range nodes {
 		if n.IsList() && len(n.Children) > 0 && n.Children[0].StringVal() == "workflow" {
-			return convertWorkflow(n)
+			return convertWorkflow(n, defs)
 		}
 	}
 	return nil, fmt.Errorf("no (workflow ...) form found")
 }
 
-func convertWorkflow(n *sexpr.Node) (*Workflow, error) {
+// resolveVal returns the string value of a node, substituting def bindings for symbols.
+func resolveVal(n *sexpr.Node, defs map[string]string) string {
+	if n.Atom != nil && n.Atom.Type == sexpr.TokenSymbol {
+		if v, ok := defs[n.Atom.Val]; ok {
+			return v
+		}
+	}
+	return n.StringVal()
+}
+
+func convertWorkflow(n *sexpr.Node, defs map[string]string) (*Workflow, error) {
 	children := n.Children[1:] // skip "workflow" symbol
 	if len(children) == 0 {
 		return nil, fmt.Errorf("line %d: workflow missing name", n.Line)
@@ -48,7 +73,7 @@ func convertWorkflow(n *sexpr.Node) (*Workflow, error) {
 			val := children[i]
 			switch key {
 			case "description":
-				w.Description = val.StringVal()
+				w.Description = resolveVal(val, defs)
 			default:
 				return nil, fmt.Errorf("line %d: unknown workflow keyword :%s", child.Line, key)
 			}
@@ -56,7 +81,7 @@ func convertWorkflow(n *sexpr.Node) (*Workflow, error) {
 			continue
 		}
 		if child.IsList() && len(child.Children) > 0 && child.Children[0].StringVal() == "step" {
-			step, err := convertStep(child)
+			step, err := convertStep(child, defs)
 			if err != nil {
 				return nil, err
 			}
@@ -69,7 +94,7 @@ func convertWorkflow(n *sexpr.Node) (*Workflow, error) {
 	return w, nil
 }
 
-func convertStep(n *sexpr.Node) (Step, error) {
+func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 	children := n.Children[1:] // skip "step"
 	if len(children) == 0 {
 		return Step{}, fmt.Errorf("line %d: step missing id", n.Line)
@@ -92,9 +117,9 @@ func convertStep(n *sexpr.Node) (Step, error) {
 			if len(child.Children) < 2 {
 				return s, fmt.Errorf("line %d: (run) missing command", child.Line)
 			}
-			s.Run = child.Children[1].StringVal()
+			s.Run = resolveVal(child.Children[1], defs)
 		case "llm":
-			llm, err := convertLLM(child)
+			llm, err := convertLLM(child, defs)
 			if err != nil {
 				return s, err
 			}
@@ -103,14 +128,14 @@ func convertStep(n *sexpr.Node) (Step, error) {
 			if len(child.Children) < 2 {
 				return s, fmt.Errorf("line %d: (save) missing path", child.Line)
 			}
-			s.Save = child.Children[1].StringVal()
+			s.Save = resolveVal(child.Children[1], defs)
 			// Check for :from keyword
 			rest := child.Children[2:]
 			for j := 0; j < len(rest); j++ {
 				if rest[j].IsAtom() && rest[j].Atom.Type == sexpr.TokenKeyword && rest[j].KeywordVal() == "from" {
 					j++
 					if j < len(rest) {
-						s.SaveStep = rest[j].StringVal()
+						s.SaveStep = resolveVal(rest[j], defs)
 					}
 				}
 			}
@@ -121,7 +146,7 @@ func convertStep(n *sexpr.Node) (Step, error) {
 	return s, nil
 }
 
-func convertLLM(n *sexpr.Node) (*LLMStep, error) {
+func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
 	children := n.Children[1:] // skip "llm"
 	llm := &LLMStep{}
 
@@ -137,11 +162,11 @@ func convertLLM(n *sexpr.Node) (*LLMStep, error) {
 			val := children[i]
 			switch key {
 			case "prompt":
-				llm.Prompt = val.StringVal()
+				llm.Prompt = resolveVal(val, defs)
 			case "provider":
-				llm.Provider = val.StringVal()
+				llm.Provider = resolveVal(val, defs)
 			case "model":
-				llm.Model = val.StringVal()
+				llm.Model = resolveVal(val, defs)
 			default:
 				return nil, fmt.Errorf("line %d: unknown llm keyword :%s", child.Line, key)
 			}

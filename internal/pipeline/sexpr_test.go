@@ -139,3 +139,78 @@ func TestSexprWorkflow_MissingName(t *testing.T) {
 		t.Fatal("expected error for missing name")
 	}
 }
+
+func TestSexprWorkflow_DefBindings(t *testing.T) {
+	src := []byte(`
+(def model "qwen2.5:7b")
+(def provider "ollama")
+
+(workflow "test"
+  (step "s1"
+    (llm
+      :provider provider
+      :model model
+      :prompt "hello")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.LLM.Provider != "ollama" {
+		t.Fatalf("expected provider %q, got %q", "ollama", s.LLM.Provider)
+	}
+	if s.LLM.Model != "qwen2.5:7b" {
+		t.Fatalf("expected model %q, got %q", "qwen2.5:7b", s.LLM.Model)
+	}
+}
+
+func TestSexprWorkflow_DefChaining(t *testing.T) {
+	src := []byte(`
+(def base-model "qwen2.5")
+(def model "qwen2.5:7b")
+
+(workflow "test"
+  (step "s1"
+    (llm :model model :prompt "hello")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].LLM.Model != "qwen2.5:7b" {
+		t.Fatalf("expected %q, got %q", "qwen2.5:7b", w.Steps[0].LLM.Model)
+	}
+}
+
+func TestSexprWorkflow_DefInRun(t *testing.T) {
+	src := []byte(`
+(def cmd "echo hello")
+
+(workflow "test"
+  (step "s1"
+    (run cmd)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].Run != "echo hello" {
+		t.Fatalf("expected %q, got %q", "echo hello", w.Steps[0].Run)
+	}
+}
+
+func TestSexprWorkflow_UnresolvedSymbolPassesThrough(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (llm :model unknown-thing :prompt "hello")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].LLM.Model != "unknown-thing" {
+		t.Fatalf("expected %q, got %q", "unknown-thing", w.Steps[0].LLM.Model)
+	}
+}
