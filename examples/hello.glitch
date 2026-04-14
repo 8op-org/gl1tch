@@ -2,6 +2,10 @@
 ;;
 ;; Run with: glitch pipeline run examples/hello.glitch
 
+;; def bindings — DRY config, resolved at parse time
+(def model "qwen2.5:7b")
+(def provider "ollama")
+
 (workflow "hello-sexpr"
   :description "Demo s-expression workflow format"
 
@@ -10,6 +14,8 @@
 
   (step "respond"
     (llm
+      :provider provider
+      :model model
       :prompt ```
         You received this message from a shell command:
         {{step "gather"}}
