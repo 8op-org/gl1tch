@@ -123,6 +123,107 @@ func (r *ProviderRegistry) RunProvider(name, model, prompt string) (string, erro
 	return RunShellWithStdin(p.Command, prompt)
 }
 
+// RunProviderWithResult runs a provider and returns a structured LLMResult.
+// It parses copilot-style footers to extract token counts and premium requests.
+func (r *ProviderRegistry) RunProviderWithResult(name, model, prompt string) (LLMResult, error) {
+	start := time.Now()
+	raw, err := r.RunProvider(name, model, prompt)
+	if err != nil {
+		return LLMResult{}, err
+	}
+
+	result := LLMResult{
+		Provider: name,
+		Model:    model,
+		Latency:  time.Since(start),
+	}
+
+	// Parse copilot-style footer: "Changes +N -N\nRequests N Premium\nTokens ..."
+	if idx := strings.Index(raw, "\nChanges "); idx >= 0 {
+		footer := raw[idx:]
+		result.Response = strings.TrimSpace(raw[:idx])
+		result.TokensIn, result.TokensOut, result.CostUSD = parseCopilotFooter(footer, name)
+	} else {
+		result.Response = raw
+		result.TokensIn = EstimateTokens(prompt)
+		result.TokensOut = EstimateTokens(raw)
+		result.CostUSD = EstimateCost(name, result.TokensIn, result.TokensOut)
+	}
+
+	return result, nil
+}
+
+// parseCopilotFooter extracts token counts and premium request cost from
+// copilot CLI footer output like:
+//
+//	Changes   +0 -0
+//	Requests  1 Premium (4s)
+//	Tokens    ↑ 16.6k • ↓ 21 • 15.7k (cached)
+func parseCopilotFooter(footer, providerName string) (tokIn, tokOut int, cost float64) {
+	for _, line := range strings.Split(footer, "\n") {
+		line = strings.TrimSpace(line)
+
+		// Parse "Requests  N Premium"
+		if strings.HasPrefix(line, "Requests") {
+			parts := strings.Fields(line)
+			for i, p := range parts {
+				if p == "Premium" && i > 0 {
+					n := 0
+					fmt.Sscanf(parts[i-1], "%d", &n)
+					// GitHub Copilot premium request pricing
+					cost = float64(n) * premiumRequestCost(providerName)
+				}
+			}
+		}
+
+		// Parse "Tokens  ↑ 16.6k • ↓ 21 • ..."
+		if strings.HasPrefix(line, "Tokens") {
+			// Find input tokens (after ↑) and output tokens (after ↓)
+			// The line uses unicode arrows and k-suffixes
+			parts := strings.Split(line, "•")
+			for _, part := range parts {
+				part = strings.TrimSpace(part)
+				if strings.Contains(part, "↑") || strings.Contains(part, "\u2191") {
+					tokIn = parseTokenCount(part)
+				} else if strings.Contains(part, "↓") || strings.Contains(part, "\u2193") {
+					tokOut = parseTokenCount(part)
+				}
+			}
+		}
+	}
+	return
+}
+
+// parseTokenCount extracts a number from strings like "↑ 16.6k" or "↓ 21"
+func parseTokenCount(s string) int {
+	// Strip everything that's not a digit, dot, or 'k'
+	var numStr string
+	hasK := false
+	for _, c := range s {
+		if (c >= '0' && c <= '9') || c == '.' {
+			numStr += string(c)
+		} else if c == 'k' || c == 'K' {
+			hasK = true
+		}
+	}
+	if numStr == "" {
+		return 0
+	}
+	var n float64
+	fmt.Sscanf(numStr, "%f", &n)
+	if hasK {
+		n *= 1000
+	}
+	return int(n)
+}
+
+// premiumRequestCost returns the cost per premium request for a provider.
+func premiumRequestCost(provider string) float64 {
+	// GitHub Copilot Business: premium requests are ~$0.04 each
+	// (based on $4/100 premium requests overage pricing)
+	return 0.04
+}
+
 // RunShellWithStdin executes a shell command with prompt piped via stdin.
 func RunShellWithStdin(command, stdin string) (string, error) {
 	cmd := exec.Command("sh", "-c", command)

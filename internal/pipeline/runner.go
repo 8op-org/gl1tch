@@ -171,17 +171,17 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 					}
 				}
 			default:
-				start := time.Now()
-				out, err = reg.RunProvider(prov, model, rendered)
-				if err == nil {
-					tokIn := int64(provider.EstimateTokens(rendered))
-					tokOut := int64(provider.EstimateTokens(out))
-					cost := provider.EstimateCost(prov, int(tokIn), int(tokOut))
-					latency := time.Since(start).Milliseconds()
+				result, provErr := reg.RunProviderWithResult(prov, model, rendered)
+				if provErr != nil {
+					err = provErr
+				} else {
+					out = result.Response
+					tokIn := int64(result.TokensIn)
+					tokOut := int64(result.TokensOut)
 					totalTokensIn += tokIn
 					totalTokensOut += tokOut
-					totalCostUSD += cost
-					totalLatencyMS += latency
+					totalCostUSD += result.CostUSD
+					totalLatencyMS += result.Latency.Milliseconds()
 					llmSteps++
 					lastLLMOutput = out
 					if tel != nil {
@@ -194,8 +194,8 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 							TokensIn:        tokIn,
 							TokensOut:       tokOut,
 							TokensTotal:     tokIn + tokOut,
-							CostUSD:         cost,
-							LatencyMS:       latency,
+							CostUSD:         result.CostUSD,
+							LatencyMS:       result.Latency.Milliseconds(),
 							WorkflowName:    w.Name,
 							Issue:           issue,
 							ComparisonGroup: compGroup,
