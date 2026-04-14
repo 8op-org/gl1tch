@@ -22,9 +22,10 @@ type Result struct {
 
 // RunOpts holds optional dependencies for a workflow run.
 type RunOpts struct {
-	Telemetry       *esearch.Telemetry
-	Issue           string
-	ComparisonGroup string
+	Telemetry        *esearch.Telemetry
+	Issue            string
+	ComparisonGroup  string
+	ProviderResolver provider.ResolverFunc
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -59,10 +60,12 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 
 	var tel *esearch.Telemetry
 	var issue, compGroup string
+	var providerResolver provider.ResolverFunc
 	if len(opts) > 0 {
 		tel = opts[0].Telemetry
 		issue = opts[0].Issue
 		compGroup = opts[0].ComparisonGroup
+		providerResolver = opts[0].ProviderResolver
 	}
 	if issue == "" || compGroup == "" {
 		parsedIssue, parsedGroup := parseWorkflowName(w.Name)
@@ -175,36 +178,76 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 					}
 				}
 			default:
-				result, provErr := reg.RunProviderWithResult(prov, model, rendered)
-				if provErr != nil {
-					err = provErr
-				} else {
-					out = result.Response
-					tokIn := int64(result.TokensIn)
-					tokOut := int64(result.TokensOut)
-					totalTokensIn += tokIn
-					totalTokensOut += tokOut
-					totalCostUSD += result.CostUSD
-					totalLatencyMS += result.Latency.Milliseconds()
-					llmSteps++
-					lastLLMOutput = out
-					if tel != nil {
-						tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
-							RunID:           runID,
-							Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-							Tier:            2,
-							Provider:        prov,
-							Model:           model,
-							TokensIn:        tokIn,
-							TokensOut:       tokOut,
-							TokensTotal:     tokIn + tokOut,
-							CostUSD:         result.CostUSD,
-							LatencyMS:       result.Latency.Milliseconds(),
-							WorkflowName:    w.Name,
-							Issue:           issue,
-							ComparisonGroup: compGroup,
-							Timestamp:       time.Now().UTC().Format(time.RFC3339),
-						})
+				var resolved bool
+				if providerResolver != nil {
+					if fn, ok := providerResolver(prov); ok {
+						resolved = true
+						result, llmErr := fn(model, rendered)
+						if llmErr != nil {
+							err = llmErr
+						} else {
+							out = result.Response
+							tokIn := int64(result.TokensIn)
+							tokOut := int64(result.TokensOut)
+							totalTokensIn += tokIn
+							totalTokensOut += tokOut
+							totalCostUSD += result.CostUSD
+							totalLatencyMS += result.Latency.Milliseconds()
+							llmSteps++
+							lastLLMOutput = out
+							if tel != nil {
+								tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
+									RunID:           runID,
+									Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+									Tier:            1,
+									Provider:        prov,
+									Model:           model,
+									TokensIn:        tokIn,
+									TokensOut:       tokOut,
+									TokensTotal:     tokIn + tokOut,
+									CostUSD:         result.CostUSD,
+									LatencyMS:       result.Latency.Milliseconds(),
+									WorkflowName:    w.Name,
+									Issue:           issue,
+									ComparisonGroup: compGroup,
+									Timestamp:       time.Now().UTC().Format(time.RFC3339),
+								})
+							}
+						}
+					}
+				}
+				if !resolved {
+					result, provErr := reg.RunProviderWithResult(prov, model, rendered)
+					if provErr != nil {
+						err = provErr
+					} else {
+						out = result.Response
+						tokIn := int64(result.TokensIn)
+						tokOut := int64(result.TokensOut)
+						totalTokensIn += tokIn
+						totalTokensOut += tokOut
+						totalCostUSD += result.CostUSD
+						totalLatencyMS += result.Latency.Milliseconds()
+						llmSteps++
+						lastLLMOutput = out
+						if tel != nil {
+							tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
+								RunID:           runID,
+								Step:            fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
+								Tier:            2,
+								Provider:        prov,
+								Model:           model,
+								TokensIn:        tokIn,
+								TokensOut:       tokOut,
+								TokensTotal:     tokIn + tokOut,
+								CostUSD:         result.CostUSD,
+								LatencyMS:       result.Latency.Milliseconds(),
+								WorkflowName:    w.Name,
+								Issue:           issue,
+								ComparisonGroup: compGroup,
+								Timestamp:       time.Now().UTC().Format(time.RFC3339),
+							})
+						}
 					}
 				}
 			}

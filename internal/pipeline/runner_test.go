@@ -3,6 +3,8 @@ package pipeline
 import (
 	"strings"
 	"testing"
+
+	"github.com/8op-org/gl1tch/internal/provider"
 )
 
 func TestRender_WithParams(t *testing.T) {
@@ -84,5 +86,51 @@ func TestRunWithParams(t *testing.T) {
 	expected := "issue=3642 repo=elastic/observability-robots"
 	if strings.TrimSpace(result.Output) != expected {
 		t.Fatalf("expected %q, got %q", expected, strings.TrimSpace(result.Output))
+	}
+}
+
+func TestRun_OpenAICompatibleProvider(t *testing.T) {
+	called := false
+	resolver := func(name string) (provider.ProviderFunc, bool) {
+		if name == "openrouter" {
+			return func(model, prompt string) (provider.LLMResult, error) {
+				called = true
+				return provider.LLMResult{
+					Provider: "openrouter",
+					Model:    model,
+					Response: "llm-output",
+					TokensIn: 10, TokensOut: 5,
+				}, nil
+			}, true
+		}
+		return nil, false
+	}
+
+	w := &Workflow{
+		Name: "test-openai",
+		Steps: []Step{
+			{
+				ID: "ask",
+				LLM: &LLMStep{
+					Provider: "openrouter",
+					Model:    "meta-llama/llama-4-scout:free",
+					Prompt:   "say hello",
+				},
+			},
+		},
+	}
+
+	reg, _ := provider.LoadProviders(t.TempDir())
+	result, err := Run(w, "", "qwen3:8b", nil, reg, RunOpts{
+		ProviderResolver: resolver,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !called {
+		t.Fatal("resolver was not called for openrouter provider")
+	}
+	if result.Output != "llm-output" {
+		t.Errorf("output = %q, want llm-output", result.Output)
 	}
 }
