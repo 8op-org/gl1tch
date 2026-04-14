@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,8 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+
+	"github.com/8op-org/gl1tch/internal/dashboard"
 )
 
 func init() {
@@ -19,7 +22,14 @@ var upCmd = &cobra.Command{
 	Use:   "up",
 	Short: "start Elasticsearch and Kibana via Docker Compose",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return dockerCompose("up", "-d")
+		if err := dockerCompose("up", "-d"); err != nil {
+			return err
+		}
+		fmt.Println(">> seeding Kibana dashboards...")
+		if err := dashboard.Seed(context.Background(), "http://localhost:5601"); err != nil {
+			fmt.Fprintf(os.Stderr, ">> dashboard seed: %v (Kibana may still be starting — run 'glitch up' again)\n", err)
+		}
+		return nil
 	},
 }
 
