@@ -116,7 +116,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 				}
 			default:
 				start := time.Now()
-				out, err = reg.RunProvider(prov, rendered)
+				out, err = reg.RunProvider(prov, model, rendered)
 				if err == nil && tel != nil {
 					tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
 						RunID:     runID,

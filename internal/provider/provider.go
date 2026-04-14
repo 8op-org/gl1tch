@@ -65,7 +65,7 @@ func LoadProviders(dir string) (*ProviderRegistry, error) {
 // RenderCommand looks up a provider by name and renders its command template
 // with {{.prompt}} replaced by the given prompt. Returns an error listing
 // available providers if name is not found.
-func (r *ProviderRegistry) RenderCommand(name, prompt string) (string, error) {
+func (r *ProviderRegistry) RenderCommand(name string, data map[string]string) (string, error) {
 	p, ok := r.providers[name]
 	if !ok {
 		available := make([]string, 0, len(r.providers))
@@ -81,7 +81,7 @@ func (r *ProviderRegistry) RenderCommand(name, prompt string) (string, error) {
 		return "", fmt.Errorf("bad template for provider %q: %w", name, err)
 	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, map[string]string{"prompt": prompt}); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("render provider %q: %w", name, err)
 	}
 	return buf.String(), nil
@@ -90,7 +90,7 @@ func (r *ProviderRegistry) RenderCommand(name, prompt string) (string, error) {
 // RunProvider looks up a provider by name and executes the command.
 // If the command template contains {{.prompt}}, the prompt is rendered inline.
 // Otherwise the prompt is piped via stdin (avoids shell escaping for long prompts).
-func (r *ProviderRegistry) RunProvider(name, prompt string) (string, error) {
+func (r *ProviderRegistry) RunProvider(name, model, prompt string) (string, error) {
 	p, ok := r.providers[name]
 	if !ok {
 		avail := make([]string, 0)
@@ -100,8 +100,10 @@ func (r *ProviderRegistry) RunProvider(name, prompt string) (string, error) {
 		return "", fmt.Errorf("provider %q not found (available: %s)", name, strings.Join(avail, ", "))
 	}
 
-	if strings.Contains(p.Command, "{{.prompt}}") {
-		rendered, err := r.RenderCommand(name, prompt)
+	data := map[string]string{"prompt": prompt, "model": model}
+
+	if strings.Contains(p.Command, "{{.prompt}}") || strings.Contains(p.Command, "{{.model}}") {
+		rendered, err := r.RenderCommand(name, data)
 		if err != nil {
 			return "", err
 		}

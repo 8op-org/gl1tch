@@ -96,7 +96,7 @@ func (tr *TieredRunner) callProvider(name, model, prompt string) (LLMResult, err
 		return RunOllamaWithResult(model, prompt)
 	}
 
-	raw, err := tr.reg.RunProvider(name, prompt)
+	raw, err := tr.reg.RunProvider(name, model, prompt)
 	if err != nil {
 		return LLMResult{}, err
 	}
