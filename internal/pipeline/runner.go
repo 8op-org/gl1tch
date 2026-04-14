@@ -32,23 +32,17 @@ type RunOpts struct {
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
-// Convention: "3918-wrapper-curl-local" → issue="3918", group="local"
+// Convention: "issue-to-pr-local" → group="local", "3918-wrapper-curl-copilot" → issue="3918", group="copilot"
+// The last hyphen-separated segment is the comparison group.
 func parseWorkflowName(name string) (issue, compGroup string) {
-	wname := name
-	if strings.HasSuffix(wname, "-local") {
-		compGroup = "local"
-		wname = strings.TrimSuffix(wname, "-local")
-	} else if strings.HasSuffix(wname, "-claude") {
-		compGroup = "claude"
-		wname = strings.TrimSuffix(wname, "-claude")
-	} else if strings.HasSuffix(wname, "-copilot") {
-		compGroup = "copilot"
-		wname = strings.TrimSuffix(wname, "-copilot")
+	if idx := strings.LastIndex(name, "-"); idx > 0 {
+		compGroup = name[idx+1:]
+		name = name[:idx]
 	}
-	for i, c := range wname {
+	for i, c := range name {
 		if c < '0' || c > '9' {
 			if i > 0 {
-				issue = wname[:i]
+				issue = name[:i]
 			}
 			break
 		}
