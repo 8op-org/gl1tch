@@ -332,6 +332,33 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			CriteriaTotal:   total,
 			Timestamp:       time.Now().UTC().Format(time.RFC3339),
 		})
+
+		// If this is a cross-review workflow, parse and index per-variant scores
+		if strings.Contains(w.Name, "cross-review") {
+			crossScores := ParseCrossReview(lastLLMOutput)
+			iteration := ""
+			if params != nil {
+				iteration = params["iteration"]
+			}
+			for _, cs := range crossScores {
+				conf := 0.0
+				if cs.Total > 0 {
+					conf = float64(cs.Passed) / float64(cs.Total)
+				}
+				tel.IndexCrossReview(context.Background(), esearch.CrossReviewDoc{
+					RunID:        runID,
+					Issue:        issue,
+					Iteration:    iteration,
+					Variant:      cs.Variant,
+					Passed:       cs.Passed,
+					Total:        cs.Total,
+					Confidence:   conf,
+					Winner:       cs.Winner,
+					WorkflowName: w.Name,
+					Timestamp:    time.Now().UTC().Format(time.RFC3339),
+				})
+			}
+		}
 	}
 
 	last := w.Steps[len(w.Steps)-1]
@@ -340,6 +367,95 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		Output:   steps[last.ID],
 		Steps:    steps,
 	}, nil
+}
+
+// CrossReviewScore holds a parsed per-variant score from a cross-review.
+type CrossReviewScore struct {
+	Variant string
+	Passed  int
+	Total   int
+	Winner  bool
+}
+
+// ParseCrossReview extracts per-variant scores from cross-review LLM output.
+func ParseCrossReview(output string) []CrossReviewScore {
+	var scores []CrossReviewScore
+	upper := strings.ToUpper(strings.ReplaceAll(output, "*", ""))
+	lines := strings.Split(upper, "\n")
+
+	// Find WINNER line
+	winner := ""
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "WINNER:") {
+			winner = strings.TrimSpace(strings.TrimPrefix(line, "WINNER:"))
+			break
+		}
+	}
+
+	// Parse --- VARIANT --- sections
+	currentVariant := ""
+	passed, total := 0, 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Detect variant header: --- LOCAL --- or --- CLAUDE --- etc
+		if strings.HasPrefix(line, "---") && strings.HasSuffix(line, "---") {
+			// Save previous variant if any
+			if currentVariant != "" && total > 0 {
+				isWinner := strings.Contains(strings.ToUpper(winner), strings.ToUpper(currentVariant))
+				scores = append(scores, CrossReviewScore{
+					Variant: strings.ToLower(currentVariant),
+					Passed:  passed,
+					Total:   total,
+					Winner:  isWinner,
+				})
+			}
+			// Extract variant name
+			name := strings.Trim(line, "- ")
+			if name != "" {
+				currentVariant = name
+				passed = 0
+				total = 0
+			}
+			continue
+		}
+
+		// Skip SCORE: lines (we count from PASS/FAIL)
+		if strings.HasPrefix(line, "SCORE:") {
+			continue
+		}
+
+		// Skip OVERALL and WINNER lines
+		if strings.HasPrefix(line, "OVERALL") || strings.HasPrefix(line, "WINNER") {
+			continue
+		}
+
+		// Count PASS/FAIL within current variant section
+		if currentVariant != "" {
+			hasPass := strings.Contains(line, "PASS")
+			hasFail := strings.Contains(line, "FAIL")
+			if hasPass && !hasFail {
+				passed++
+				total++
+			} else if hasFail {
+				total++
+			}
+		}
+	}
+
+	// Don't forget the last variant
+	if currentVariant != "" && total > 0 {
+		isWinner := strings.Contains(strings.ToUpper(winner), strings.ToUpper(currentVariant))
+		scores = append(scores, CrossReviewScore{
+			Variant: strings.ToLower(currentVariant),
+			Passed:  passed,
+			Total:   total,
+			Winner:  isWinner,
+		})
+	}
+
+	return scores
 }
 
 func render(tmpl string, data map[string]any, steps map[string]string) (string, error) {

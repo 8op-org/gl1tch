@@ -80,6 +80,20 @@ type WorkflowRunDoc struct {
 	Timestamp       string  `json:"timestamp"`
 }
 
+// CrossReviewDoc represents one variant's score from a cross-review.
+type CrossReviewDoc struct {
+	RunID        string  `json:"run_id"`
+	Issue        string  `json:"issue"`
+	Iteration    string  `json:"iteration"`
+	Variant      string  `json:"variant"`
+	Passed       int     `json:"passed"`
+	Total        int     `json:"total"`
+	Confidence   float64 `json:"confidence"`
+	Winner       bool    `json:"winner"`
+	WorkflowName string  `json:"workflow_name"`
+	Timestamp    string  `json:"timestamp"`
+}
+
 // Telemetry provides nil-safe methods for indexing research telemetry into ES.
 type Telemetry struct {
 	client *Client
@@ -143,6 +157,14 @@ func (t *Telemetry) IndexWorkflowRun(ctx context.Context, doc WorkflowRunDoc) er
 		return nil
 	}
 	return t.indexDoc(ctx, IndexWorkflowRuns, doc.RunID, doc)
+}
+
+// IndexCrossReview indexes a cross-review per-variant score document.
+func (t *Telemetry) IndexCrossReview(ctx context.Context, doc CrossReviewDoc) error {
+	if t == nil {
+		return nil
+	}
+	return t.indexDoc(ctx, IndexCrossReviews, "", doc)
 }
 
 func (t *Telemetry) indexDoc(ctx context.Context, index, id string, doc any) error {

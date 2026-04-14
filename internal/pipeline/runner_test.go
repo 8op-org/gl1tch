@@ -183,6 +183,97 @@ func TestRun_SmartRouting_NoProvider(t *testing.T) {
 	}
 }
 
+func TestParseCrossReview(t *testing.T) {
+	output := `--- LOCAL ---
+1. Specificity — PASS — good paths
+2. Completeness — FAIL — missing IDE
+3. Feasibility — PASS — clear steps
+4. Testing — PASS — has tests
+5. PR Quality — PASS — clean
+SCORE: 4/5
+
+--- CLAUDE ---
+1. Specificity — PASS — real paths
+2. Completeness — PASS — all covered
+3. Feasibility — PASS — detailed
+4. Testing — PASS — thorough
+5. PR Quality — PASS — excellent
+SCORE: 5/5
+
+--- COPILOT ---
+1. Specificity — PASS — searched repo
+2. Completeness — PASS — complete
+3. Feasibility — PASS — actionable
+4. Testing — FAIL — weak
+5. PR Quality — PASS — good
+SCORE: 4/5
+
+WINNER: CLAUDE
+OVERALL: PASS`
+
+	scores := ParseCrossReview(output)
+	if len(scores) != 3 {
+		t.Fatalf("expected 3 variants, got %d", len(scores))
+	}
+
+	// Check LOCAL
+	if scores[0].Variant != "local" || scores[0].Passed != 4 || scores[0].Total != 5 {
+		t.Fatalf("local: expected 4/5, got %d/%d", scores[0].Passed, scores[0].Total)
+	}
+	if scores[0].Winner {
+		t.Fatal("local should not be winner")
+	}
+
+	// Check CLAUDE
+	if scores[1].Variant != "claude" || scores[1].Passed != 5 || scores[1].Total != 5 {
+		t.Fatalf("claude: expected 5/5, got %d/%d", scores[1].Passed, scores[1].Total)
+	}
+	if !scores[1].Winner {
+		t.Fatal("claude should be winner")
+	}
+
+	// Check COPILOT
+	if scores[2].Variant != "copilot" || scores[2].Passed != 4 || scores[2].Total != 5 {
+		t.Fatalf("copilot: expected 4/5, got %d/%d", scores[2].Passed, scores[2].Total)
+	}
+}
+
+func TestParseCrossReview_TwoVariants(t *testing.T) {
+	output := `--- LOCAL ---
+1. Specificity — PASS — ok
+2. Completeness — PASS — ok
+SCORE: 2/2
+
+--- CLAUDE ---
+1. Specificity — FAIL — vague
+2. Completeness — PASS — ok
+SCORE: 1/2
+
+WINNER: LOCAL
+OVERALL: PASS`
+
+	scores := ParseCrossReview(output)
+	if len(scores) != 2 {
+		t.Fatalf("expected 2 variants, got %d", len(scores))
+	}
+	if scores[0].Variant != "local" || scores[0].Passed != 2 || scores[0].Total != 2 {
+		t.Fatalf("local: expected 2/2, got %d/%d", scores[0].Passed, scores[0].Total)
+	}
+	if !scores[0].Winner {
+		t.Fatal("local should be winner")
+	}
+	if scores[1].Winner {
+		t.Fatal("claude should not be winner")
+	}
+}
+
+func TestParseCrossReview_Empty(t *testing.T) {
+	scores := ParseCrossReview("no structured output here")
+	if len(scores) != 0 {
+		t.Fatalf("expected 0 variants, got %d", len(scores))
+	}
+}
+
 func TestRun_PinnedTier(t *testing.T) {
 	callLog := []string{}
 	resolver := func(name string) (provider.ProviderFunc, bool) {

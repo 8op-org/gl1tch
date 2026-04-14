@@ -5,7 +5,8 @@ const (
 	IndexResearchRuns = "glitch-research-runs"
 	IndexToolCalls    = "glitch-tool-calls"
 	IndexLLMCalls     = "glitch-llm-calls"
-	IndexWorkflowRuns = "glitch-workflow-runs"
+	IndexWorkflowRuns  = "glitch-workflow-runs"
+	IndexCrossReviews  = "glitch-cross-reviews"
 )
 
 const EventsMapping = `{
@@ -108,6 +109,24 @@ const WorkflowRunsMapping = `{
   }
 }`
 
+const CrossReviewsMapping = `{
+  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": {
+    "properties": {
+      "run_id":        { "type": "keyword" },
+      "issue":         { "type": "keyword" },
+      "iteration":     { "type": "keyword" },
+      "variant":       { "type": "keyword" },
+      "passed":        { "type": "integer" },
+      "total":         { "type": "integer" },
+      "confidence":    { "type": "float" },
+      "winner":        { "type": "boolean" },
+      "workflow_name": { "type": "keyword" },
+      "timestamp":     { "type": "date" }
+    }
+  }
+}`
+
 // AllIndices returns a map of index name → mapping JSON for all managed indices.
 func AllIndices() map[string]string {
 	return map[string]string{
@@ -115,6 +134,7 @@ func AllIndices() map[string]string {
 		IndexResearchRuns: ResearchRunsMapping,
 		IndexToolCalls:    ToolCallsMapping,
 		IndexLLMCalls:     LLMCallsMapping,
-		IndexWorkflowRuns: WorkflowRunsMapping,
+		IndexWorkflowRuns:  WorkflowRunsMapping,
+		IndexCrossReviews:  CrossReviewsMapping,
 	}
 }

@@ -167,6 +167,13 @@ func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
 				llm.Provider = resolveVal(val, defs)
 			case "model":
 				llm.Model = resolveVal(val, defs)
+			case "tier":
+				n := 0
+				valStr := resolveVal(val, defs)
+				fmt.Sscanf(valStr, "%d", &n)
+				llm.Tier = &n
+			case "format":
+				llm.Format = resolveVal(val, defs)
 			default:
 				return nil, fmt.Errorf("line %d: unknown llm keyword :%s", child.Line, key)
 			}

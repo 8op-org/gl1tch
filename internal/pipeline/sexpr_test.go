@@ -214,3 +214,50 @@ func TestSexprWorkflow_UnresolvedSymbolPassesThrough(t *testing.T) {
 		t.Fatalf("expected %q, got %q", "unknown-thing", w.Steps[0].LLM.Model)
 	}
 }
+
+func TestLoadBytes_Sexpr_LLMTierAndFormat(t *testing.T) {
+	src := []byte(`
+(workflow "test-tier"
+  :description "test tier and format"
+  (step "classify"
+    (llm
+      :tier 1
+      :format "json"
+      :prompt "classify this")))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	llm := w.Steps[0].LLM
+	if llm == nil {
+		t.Fatal("expected LLM step")
+	}
+	if llm.Tier == nil || *llm.Tier != 1 {
+		t.Errorf("tier = %v, want 1", llm.Tier)
+	}
+	if llm.Format != "json" {
+		t.Errorf("format = %q, want json", llm.Format)
+	}
+}
+
+func TestLoadBytes_Sexpr_LLMNoTier(t *testing.T) {
+	src := []byte(`
+(workflow "test-no-tier"
+  :description "no tier set"
+  (step "ask"
+    (llm
+      :prompt "hello")))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	llm := w.Steps[0].LLM
+	if llm.Tier != nil {
+		t.Errorf("tier should be nil when not set, got %v", *llm.Tier)
+	}
+}
