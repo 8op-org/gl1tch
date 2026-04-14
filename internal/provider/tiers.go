@@ -13,10 +13,17 @@ type TierConfig struct {
 	Model     string   `yaml:"model,omitempty"`
 }
 
+// ProviderFunc calls an LLM provider and returns a result.
+type ProviderFunc func(model, prompt string) (LLMResult, error)
+
+// ResolverFunc looks up a provider by name. Returns the call function and true if found.
+type ResolverFunc func(name string) (ProviderFunc, bool)
+
 // TieredRunner tries providers in tier order, escalating on failure or validation rejection.
 type TieredRunner struct {
-	tiers []TierConfig
-	reg   *ProviderRegistry
+	tiers    []TierConfig
+	reg      *ProviderRegistry
+	Resolver ResolverFunc
 }
 
 // EscalationReason describes why a tier was skipped.
@@ -94,6 +101,13 @@ func (tr *TieredRunner) callProvider(name, model, prompt string) (LLMResult, err
 			model = "qwen3:8b"
 		}
 		return RunOllamaWithResult(model, prompt)
+	}
+
+	// Check resolver (openai-compatible providers from config)
+	if tr.Resolver != nil {
+		if fn, ok := tr.Resolver(name); ok {
+			return fn(model, prompt)
+		}
 	}
 
 	raw, err := tr.reg.RunProvider(name, model, prompt)
