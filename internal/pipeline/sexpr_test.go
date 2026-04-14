@@ -1,10 +1,10 @@
-package sexpr
+package pipeline
 
 import (
 	"testing"
 )
 
-func TestWorkflow_Basic(t *testing.T) {
+func TestSexprWorkflow_Basic(t *testing.T) {
 	src := []byte(`
 (workflow "my-pipeline"
   :description "a test pipeline"
@@ -13,7 +13,7 @@ func TestWorkflow_Basic(t *testing.T) {
   (step "analyze"
     (llm :prompt "summarize: {{step \"fetch\"}}")))
 `)
-	w, err := ParseWorkflow(src)
+	w, err := parseSexprWorkflow(src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestWorkflow_Basic(t *testing.T) {
 	}
 }
 
-func TestWorkflow_LLMWithProviderAndModel(t *testing.T) {
+func TestSexprWorkflow_LLMWithProviderAndModel(t *testing.T) {
 	src := []byte(`
 (workflow "test"
   (step "s1"
@@ -56,7 +56,7 @@ func TestWorkflow_LLMWithProviderAndModel(t *testing.T) {
       :model "opus"
       :prompt "hello")))
 `)
-	w, err := ParseWorkflow(src)
+	w, err := parseSexprWorkflow(src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestWorkflow_LLMWithProviderAndModel(t *testing.T) {
 	}
 }
 
-func TestWorkflow_Save(t *testing.T) {
+func TestSexprWorkflow_Save(t *testing.T) {
 	src := []byte(`
 (workflow "test"
   (step "gen"
@@ -77,7 +77,7 @@ func TestWorkflow_Save(t *testing.T) {
   (step "write"
     (save "output/{{.param.repo}}/result.md" :from "gen")))
 `)
-	w, err := ParseWorkflow(src)
+	w, err := parseSexprWorkflow(src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,9 +90,9 @@ func TestWorkflow_Save(t *testing.T) {
 	}
 }
 
-func TestWorkflow_MultilinePrompt(t *testing.T) {
+func TestSexprWorkflow_MultilinePrompt(t *testing.T) {
 	src := "(workflow \"test\"\n  (step \"s1\"\n    (llm :prompt ```\n      hello\n      world\n      ```)))"
-	w, err := ParseWorkflow([]byte(src))
+	w, err := parseSexprWorkflow([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestWorkflow_MultilinePrompt(t *testing.T) {
 	}
 }
 
-func TestWorkflow_DiscardedStep(t *testing.T) {
+func TestSexprWorkflow_DiscardedStep(t *testing.T) {
 	src := []byte(`
 (workflow "test"
   (step "keep"
@@ -111,7 +111,7 @@ func TestWorkflow_DiscardedStep(t *testing.T) {
   (step "also-keep"
     (run "echo yes2")))
 `)
-	w, err := ParseWorkflow(src)
+	w, err := parseSexprWorkflow(src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,15 +126,15 @@ func TestWorkflow_DiscardedStep(t *testing.T) {
 	}
 }
 
-func TestWorkflow_NotAWorkflow(t *testing.T) {
-	_, err := ParseWorkflow([]byte(`(notworkflow "test")`))
+func TestSexprWorkflow_NotAWorkflow(t *testing.T) {
+	_, err := parseSexprWorkflow([]byte(`(notworkflow "test")`))
 	if err == nil {
 		t.Fatal("expected error for non-workflow form")
 	}
 }
 
-func TestWorkflow_MissingName(t *testing.T) {
-	_, err := ParseWorkflow([]byte(`(workflow)`))
+func TestSexprWorkflow_MissingName(t *testing.T) {
+	_, err := parseSexprWorkflow([]byte(`(workflow)`))
 	if err == nil {
 		t.Fatal("expected error for missing name")
 	}

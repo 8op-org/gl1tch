@@ -21,6 +21,28 @@ func TestRender_WithParams(t *testing.T) {
 	}
 }
 
+func TestLoadBytes_Sexpr(t *testing.T) {
+	src := []byte(`
+(workflow "test-sexpr"
+  :description "loaded from sexpr"
+  (step "s1"
+    (run "echo hello")))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Name != "test-sexpr" {
+		t.Fatalf("expected name %q, got %q", "test-sexpr", w.Name)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	if w.Steps[0].Run != "echo hello" {
+		t.Fatalf("expected run %q, got %q", "echo hello", w.Steps[0].Run)
+	}
+}
+
 func TestRender_WithStepRefs(t *testing.T) {
 	steps := map[string]string{
 		"fetch": `{"title": "fix bug"}`,

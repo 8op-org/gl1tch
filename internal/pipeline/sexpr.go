@@ -1,14 +1,14 @@
-package sexpr
+package pipeline
 
 import (
 	"fmt"
 
-	"github.com/8op-org/gl1tch/internal/pipeline"
+	"github.com/8op-org/gl1tch/internal/sexpr"
 )
 
-// ParseWorkflow parses s-expression source into a pipeline.Workflow.
-func ParseWorkflow(src []byte) (*pipeline.Workflow, error) {
-	nodes, err := Parse(src)
+// parseSexprWorkflow parses s-expression source into a Workflow.
+func parseSexprWorkflow(src []byte) (*Workflow, error) {
+	nodes, err := sexpr.Parse(src)
 	if err != nil {
 		return nil, err
 	}
@@ -20,13 +20,13 @@ func ParseWorkflow(src []byte) (*pipeline.Workflow, error) {
 	return nil, fmt.Errorf("no (workflow ...) form found")
 }
 
-func convertWorkflow(n *Node) (*pipeline.Workflow, error) {
+func convertWorkflow(n *sexpr.Node) (*Workflow, error) {
 	children := n.Children[1:] // skip "workflow" symbol
 	if len(children) == 0 {
 		return nil, fmt.Errorf("line %d: workflow missing name", n.Line)
 	}
 
-	w := &pipeline.Workflow{}
+	w := &Workflow{}
 
 	// First child must be the name
 	w.Name = children[0].StringVal()
@@ -39,7 +39,7 @@ func convertWorkflow(n *Node) (*pipeline.Workflow, error) {
 	i := 0
 	for i < len(children) {
 		child := children[i]
-		if child.IsAtom() && child.Atom.Type == TokenKeyword {
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
 			key := child.KeywordVal()
 			i++
 			if i >= len(children) {
@@ -69,13 +69,13 @@ func convertWorkflow(n *Node) (*pipeline.Workflow, error) {
 	return w, nil
 }
 
-func convertStep(n *Node) (pipeline.Step, error) {
+func convertStep(n *sexpr.Node) (Step, error) {
 	children := n.Children[1:] // skip "step"
 	if len(children) == 0 {
-		return pipeline.Step{}, fmt.Errorf("line %d: step missing id", n.Line)
+		return Step{}, fmt.Errorf("line %d: step missing id", n.Line)
 	}
 
-	s := pipeline.Step{}
+	s := Step{}
 	s.ID = children[0].StringVal()
 	if s.ID == "" {
 		return s, fmt.Errorf("line %d: step id must be a string", children[0].Line)
@@ -107,7 +107,7 @@ func convertStep(n *Node) (pipeline.Step, error) {
 			// Check for :from keyword
 			rest := child.Children[2:]
 			for j := 0; j < len(rest); j++ {
-				if rest[j].IsAtom() && rest[j].Atom.Type == TokenKeyword && rest[j].KeywordVal() == "from" {
+				if rest[j].IsAtom() && rest[j].Atom.Type == sexpr.TokenKeyword && rest[j].KeywordVal() == "from" {
 					j++
 					if j < len(rest) {
 						s.SaveStep = rest[j].StringVal()
@@ -121,14 +121,14 @@ func convertStep(n *Node) (pipeline.Step, error) {
 	return s, nil
 }
 
-func convertLLM(n *Node) (*pipeline.LLMStep, error) {
+func convertLLM(n *sexpr.Node) (*LLMStep, error) {
 	children := n.Children[1:] // skip "llm"
-	llm := &pipeline.LLMStep{}
+	llm := &LLMStep{}
 
 	i := 0
 	for i < len(children) {
 		child := children[i]
-		if child.IsAtom() && child.Atom.Type == TokenKeyword {
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
 			key := child.KeywordVal()
 			i++
 			if i >= len(children) {
