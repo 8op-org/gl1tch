@@ -136,6 +136,16 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			if err != nil {
 				return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 			}
+
+			// Prepend skill content to prompt if specified
+			if step.LLM.Skill != "" {
+				skillContent, skillErr := loadSkill(step.LLM.Skill)
+				if skillErr != nil {
+					return nil, fmt.Errorf("step %s: skill %q: %w", step.ID, step.LLM.Skill, skillErr)
+				}
+				rendered = skillContent + "\n\n---\n\n" + rendered
+			}
+
 			fmt.Printf("  > %s\n", step.ID)
 
 			prov := strings.ToLower(step.LLM.Provider)
@@ -208,7 +218,24 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 					}
 				default:
 					var resolved bool
-					if providerResolver != nil {
+
+					// Agent providers (claude, copilot, gemini) — full tool-using agents
+					if provider.IsAgent(prov) {
+						agent := provider.KnownAgents[prov]
+						result, llmErr := agent.Run(step.LLM.Model, rendered)
+						if llmErr != nil {
+							err = llmErr
+						} else {
+							resolved = true
+							out = result.Response
+							stepTokensIn = result.TokensIn
+							stepTokensOut = result.TokensOut
+							stepCost = result.CostUSD
+						}
+					}
+
+					// Config-defined providers (openai-compatible, etc.)
+					if !resolved && providerResolver != nil {
 						if fn, ok := providerResolver(prov); ok {
 							resolved = true
 							result, llmErr := fn(step.LLM.Model, rendered)
@@ -222,6 +249,8 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 							}
 						}
 					}
+
+					// Shell-template providers from ~/.config/glitch/providers/
 					if !resolved {
 						result, provErr := reg.RunProviderWithResult(prov, model, rendered)
 						if provErr != nil {
@@ -483,4 +512,45 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// loadSkill resolves a skill name or path to its content.
+//
+// Resolution order:
+//  1. Absolute or relative file path (if the string contains "/" or ends in ".md")
+//  2. Skill name looked up in standard locations:
+//     - .claude/skills/<name>/SKILL.md (project-local)
+//     - ~/.config/glitch/skills/<name>/SKILL.md (user-global)
+//     - skills/<name>/SKILL.md (gl1tch built-in)
+func loadSkill(nameOrPath string) (string, error) {
+	// Direct file path
+	if strings.Contains(nameOrPath, "/") || strings.HasSuffix(nameOrPath, ".md") {
+		data, err := os.ReadFile(nameOrPath)
+		if err != nil {
+			return "", fmt.Errorf("read skill file: %w", err)
+		}
+		return string(data), nil
+	}
+
+	// Search standard skill locations
+	searchPaths := []string{
+		filepath.Join(".claude", "skills", nameOrPath, "SKILL.md"),
+		filepath.Join(".cursor", "skills", nameOrPath, "SKILL.md"),
+	}
+
+	// User-global location
+	if home, err := os.UserHomeDir(); err == nil {
+		searchPaths = append(searchPaths,
+			filepath.Join(home, ".config", "glitch", "skills", nameOrPath, "SKILL.md"),
+		)
+	}
+
+	for _, p := range searchPaths {
+		data, err := os.ReadFile(p)
+		if err == nil {
+			return string(data), nil
+		}
+	}
+
+	return "", fmt.Errorf("skill %q not found in: %s", nameOrPath, strings.Join(searchPaths, ", "))
 }

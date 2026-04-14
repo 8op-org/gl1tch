@@ -27,9 +27,10 @@ type Step struct {
 
 // LLMStep configures an LLM invocation.
 type LLMStep struct {
-	Provider string `yaml:"provider,omitempty"` // "ollama" or "claude" (default: config)
+	Provider string `yaml:"provider,omitempty"` // "ollama", "claude", "copilot", "gemini" (default: config)
 	Model    string `yaml:"model,omitempty"`
 	Prompt   string `yaml:"prompt"`
+	Skill    string `yaml:"skill,omitempty"` // skill name or path — prepended to prompt as system context
 	Tier     *int   `yaml:"tier,omitempty"`
 	Format   string `yaml:"format,omitempty"`
 }

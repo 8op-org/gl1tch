@@ -1,0 +1,14 @@
+(workflow "agent-with-skill"
+  :description "Demonstrates the agent executor with skill injection in s-expression format."
+
+  (step "diff"
+    (run "git diff --cached --stat && git diff --cached"))
+
+  (step "review"
+    (llm
+      :provider "claude"
+      :skill "reviewer-verify"
+      :prompt "Review these staged changes for correctness, security, and style:\n\n{{step \"diff\"}}"))
+
+  (step "save-review"
+    (save "review-output.md" :from "review")))

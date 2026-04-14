@@ -172,6 +172,8 @@ func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
 				valStr := resolveVal(val, defs)
 				fmt.Sscanf(valStr, "%d", &n)
 				llm.Tier = &n
+			case "skill":
+				llm.Skill = resolveVal(val, defs)
 			case "format":
 				llm.Format = resolveVal(val, defs)
 			default:
