@@ -62,28 +62,25 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 // LoadDir reads all .yaml files from a directory, keyed by workflow name.
 // Later entries overwrite earlier ones (allows local overrides).
 func LoadDir(dir string) (map[string]*Workflow, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil, nil
 	}
 	workflows := make(map[string]*Workflow)
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
 		}
-		ext := filepath.Ext(e.Name())
+		ext := filepath.Ext(d.Name())
 		if ext != ".yaml" && ext != ".yml" && ext != ".glitch" {
-			continue
+			return nil
 		}
-		w, err := LoadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: skipping %s: %v\n", e.Name(), err)
-			continue
+		w, loadErr := LoadFile(path)
+		if loadErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: skipping %s: %v\n", path, loadErr)
+			return nil
 		}
 		workflows[w.Name] = w
-	}
+		return nil
+	})
 	return workflows, nil
 }
