@@ -77,6 +77,8 @@ func Run(ctx context.Context, opts RunOpts) error {
 						ProviderResolver: opts.Config.ProviderResolver,
 						Tiers:            opts.Config.Tiers,
 						EvalThreshold:    opts.Config.EvalThreshold,
+						Issue:            issue,
+						ComparisonGroup:  v,
 					})
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "WARN: #%s (%s, iter %d) failed: %v\n", issue, v, iter, err)
