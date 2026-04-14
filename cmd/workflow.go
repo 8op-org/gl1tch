@@ -109,6 +109,8 @@ var workflowRunCmd = &cobra.Command{
 		result, err := pipeline.Run(w, input, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 			Telemetry:        tel,
 			ProviderResolver: cfg.BuildProviderResolver(),
+			Tiers:            cfg.Tiers,
+			EvalThreshold:    cfg.EvalThreshold,
 		})
 		if err != nil {
 			return err

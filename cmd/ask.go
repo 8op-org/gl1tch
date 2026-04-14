@@ -101,6 +101,8 @@ var askCmd = &cobra.Command{
 						ProviderRegistry: providerReg,
 						ProviderResolver: cfg.BuildProviderResolver(),
 						Telemetry:        tel,
+						Tiers:            cfg.Tiers,
+						EvalThreshold:    cfg.EvalThreshold,
 					},
 				})
 				if err != nil {
@@ -133,6 +135,8 @@ var askCmd = &cobra.Command{
 			result, err := pipeline.Run(w, resolved, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 				Telemetry:        tel,
 				ProviderResolver: cfg.BuildProviderResolver(),
+				Tiers:            cfg.Tiers,
+				EvalThreshold:    cfg.EvalThreshold,
 			})
 			if err != nil {
 				return err
@@ -179,6 +183,8 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 	result, err := pipeline.Run(w, "", cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 		Telemetry:        tel,
 		ProviderResolver: cfg.BuildProviderResolver(),
+		Tiers:            cfg.Tiers,
+		EvalThreshold:    cfg.EvalThreshold,
 	})
 	if err != nil {
 		return err

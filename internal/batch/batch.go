@@ -34,6 +34,8 @@ type BatchConfig struct {
 	ProviderRegistry *provider.ProviderRegistry
 	ProviderResolver provider.ResolverFunc
 	Telemetry        *esearch.Telemetry
+	Tiers            []provider.TierConfig
+	EvalThreshold    int
 }
 
 // Run executes the full batch: issues x variants x iterations + cross-reviews + manifests.
@@ -67,6 +69,8 @@ func Run(ctx context.Context, opts RunOpts) error {
 				result, err := pipeline.Run(w, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 					Telemetry:        opts.Config.Telemetry,
 					ProviderResolver: opts.Config.ProviderResolver,
+					Tiers:            opts.Config.Tiers,
+					EvalThreshold:    opts.Config.EvalThreshold,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: #%s (%s, iter %d) failed: %v\n", issue, variant, iter, err)
@@ -87,6 +91,8 @@ func Run(ctx context.Context, opts RunOpts) error {
 				result, err := pipeline.Run(crW, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 					Telemetry:        opts.Config.Telemetry,
 					ProviderResolver: opts.Config.ProviderResolver,
+					Tiers:            opts.Config.Tiers,
+					EvalThreshold:    opts.Config.EvalThreshold,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: #%s cross-review iter %d failed: %v\n", issue, iter, err)
