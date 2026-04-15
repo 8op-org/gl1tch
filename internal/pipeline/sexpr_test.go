@@ -886,6 +886,54 @@ func TestSexprWorkflow_PhaseNoName(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_Metadata(t *testing.T) {
+	src := []byte(`
+(workflow "pr-review"
+  :description "Review PRs"
+  :tags ("review" "ci" "code-quality")
+  :author "adam"
+  :version "1.0"
+  :created "2026-04-01"
+  (step "s1" (run "echo hi")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Name != "pr-review" {
+		t.Errorf("name: %q", w.Name)
+	}
+	if len(w.Tags) != 3 {
+		t.Fatalf("expected 3 tags, got %d", len(w.Tags))
+	}
+	if w.Tags[0] != "review" || w.Tags[1] != "ci" || w.Tags[2] != "code-quality" {
+		t.Errorf("tags: %v", w.Tags)
+	}
+	if w.Author != "adam" {
+		t.Errorf("author: %q", w.Author)
+	}
+	if w.Version != "1.0" {
+		t.Errorf("version: %q", w.Version)
+	}
+	if w.Created != "2026-04-01" {
+		t.Errorf("created: %q", w.Created)
+	}
+}
+
+func TestSexprWorkflow_NoMetadata(t *testing.T) {
+	src := []byte(`(workflow "bare" (step "s1" (run "echo hi")))`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Tags) != 0 {
+		t.Errorf("expected no tags, got %v", w.Tags)
+	}
+	if w.Author != "" {
+		t.Errorf("expected empty author, got %q", w.Author)
+	}
+}
+
 func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 	src := []byte(`
 (workflow "old-style"

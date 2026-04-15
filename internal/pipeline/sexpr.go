@@ -54,6 +54,7 @@ func convertWorkflow(n *sexpr.Node, defs map[string]string) (*Workflow, error) {
 	}
 
 	w := &Workflow{}
+	w.Tags = []string{}
 
 	// First child must be the name
 	w.Name = children[0].StringVal()
@@ -76,6 +77,20 @@ func convertWorkflow(n *sexpr.Node, defs map[string]string) (*Workflow, error) {
 			switch key {
 			case "description":
 				w.Description = resolveVal(val, defs)
+			case "author":
+				w.Author = resolveVal(val, defs)
+			case "version":
+				w.Version = resolveVal(val, defs)
+			case "created":
+				w.Created = resolveVal(val, defs)
+			case "tags":
+				if val.IsList() {
+					for _, t := range val.Children {
+						w.Tags = append(w.Tags, resolveVal(t, defs))
+					}
+				} else {
+					w.Tags = append(w.Tags, resolveVal(val, defs))
+				}
 			default:
 				return nil, fmt.Errorf("line %d: unknown workflow keyword :%s", child.Line, key)
 			}

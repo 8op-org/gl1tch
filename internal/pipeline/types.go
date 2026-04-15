@@ -13,6 +13,10 @@ import (
 type Workflow struct {
 	Name        string         `yaml:"name"`
 	Description string         `yaml:"description"`
+	Tags        []string       `yaml:"tags,omitempty"`
+	Author      string         `yaml:"author,omitempty"`
+	Version     string         `yaml:"version,omitempty"`
+	Created     string         `yaml:"created,omitempty"`
 	Steps       []Step         `yaml:"steps"`
 	Items       []WorkflowItem `yaml:"-"`
 }
