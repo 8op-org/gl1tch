@@ -107,7 +107,7 @@ func Run(ctx context.Context, opts RunOpts) error {
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: #%s cross-review iter %d failed: %v\n", issue, iter, err)
 				} else if cr, ok := result.Steps["cross-review"]; ok {
-					crDir := filepath.Join(resultsBase, issue, fmt.Sprintf("iteration-%d", iter))
+					crDir := resultPath(resultsBase, opts.Repo, issue, "", iter)
 					os.MkdirAll(crDir, 0o755)
 					os.WriteFile(filepath.Join(crDir, "cross-review.md"), []byte(cr), 0o644)
 				}
@@ -121,7 +121,13 @@ func Run(ctx context.Context, opts RunOpts) error {
 	fmt.Printf("=========================================\n")
 
 	for _, issue := range opts.Issues {
-		issueDir := filepath.Join(resultsBase, issue)
+		parts := strings.SplitN(opts.Repo, "/", 2)
+		org := parts[0]
+		repoName := "general"
+		if len(parts) > 1 {
+			repoName = parts[1]
+		}
+		issueDir := filepath.Join(resultsBase, org, repoName, "issue-"+issue)
 		m, err := GenerateManifest(issueDir, issue, opts.Variants, opts.Iterations)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "WARN: manifest for #%s: %v\n", issue, err)
@@ -137,9 +143,26 @@ func Run(ctx context.Context, opts RunOpts) error {
 	return nil
 }
 
+// resultPath computes the result directory for a batch issue run.
+// Pattern: baseDir/<org>/<repo>/issue-<number>/iteration-<n>[/<variant>]
+func resultPath(baseDir, repo, issue, variant string, iter int) string {
+	parts := strings.SplitN(repo, "/", 2)
+	org := parts[0]
+	repoName := "general"
+	if len(parts) > 1 {
+		repoName = parts[1]
+	}
+
+	dir := filepath.Join(baseDir, org, repoName, "issue-"+issue, fmt.Sprintf("iteration-%d", iter))
+	if variant != "" {
+		dir = filepath.Join(dir, variant)
+	}
+	return dir
+}
+
 // saveResults writes workflow step outputs to the results directory.
 func saveResults(resultsBase, issue, variant string, iter int, repo string, result *pipeline.Result) {
-	dir := filepath.Join(resultsBase, issue, fmt.Sprintf("iteration-%d", iter), variant)
+	dir := resultPath(resultsBase, repo, issue, variant, iter)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: mkdir %s: %v\n", dir, err)
 		return

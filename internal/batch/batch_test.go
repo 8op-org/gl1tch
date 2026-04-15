@@ -107,6 +107,24 @@ func TestWriteManifest(t *testing.T) {
 	}
 }
 
+func TestResultPath_Convention(t *testing.T) {
+	dir := t.TempDir()
+	got := resultPath(dir, "elastic/observability-robots", "3920", "claude", 1)
+	want := filepath.Join(dir, "elastic", "observability-robots", "issue-3920", "iteration-1", "claude")
+	if got != want {
+		t.Fatalf("resultPath: got %q, want %q", got, want)
+	}
+}
+
+func TestResultPath_NoVariant(t *testing.T) {
+	dir := t.TempDir()
+	got := resultPath(dir, "elastic/ensemble", "100", "", 1)
+	want := filepath.Join(dir, "elastic", "ensemble", "issue-100", "iteration-1")
+	if got != want {
+		t.Fatalf("resultPath: got %q, want %q", got, want)
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && searchString(s, sub)
 }
