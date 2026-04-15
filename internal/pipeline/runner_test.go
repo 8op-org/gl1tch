@@ -276,6 +276,7 @@ OVERALL: PASS`
 
 func TestRunSingleStep_Lines(t *testing.T) {
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{"list": "alpha\nbeta\ngamma"},
 		params: map[string]string{},
 	}
@@ -292,6 +293,7 @@ func TestRunSingleStep_Lines(t *testing.T) {
 
 func TestRunSingleStep_Merge(t *testing.T) {
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps: map[string]string{
 			"a": `{"x":1}`,
 			"b": `{"y":2}`,
@@ -314,6 +316,7 @@ func TestRunSingleStep_ReadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{},
 		params: map[string]string{},
 	}
@@ -330,6 +333,7 @@ func TestRunSingleStep_ReadFile(t *testing.T) {
 func TestRunSingleStep_WriteFile(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "sub", "out.txt")
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{"gen": "hello world"},
 		params: map[string]string{},
 	}
@@ -361,6 +365,7 @@ func TestRunSingleStep_Glob(t *testing.T) {
 		}
 	}
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{},
 		params: map[string]string{},
 	}
@@ -383,6 +388,7 @@ func TestRunSingleStep_JsonPick(t *testing.T) {
 		t.Skip("jq not on PATH")
 	}
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{"data": `{"name":"alice","age":30}`},
 		params: map[string]string{},
 	}
@@ -536,6 +542,7 @@ func TestExecutePhase_AllGatesPass(t *testing.T) {
 	}
 
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  make(map[string]string),
 		params: map[string]string{},
 	}
@@ -562,6 +569,7 @@ func TestExecutePhase_GateFailsNoRetry(t *testing.T) {
 	}
 
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  make(map[string]string),
 		params: map[string]string{},
 	}
@@ -602,6 +610,7 @@ func TestExecutePhase_GateFailsThenPassesOnRetry(t *testing.T) {
 	}
 
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  make(map[string]string),
 		params: map[string]string{},
 	}

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -35,6 +36,7 @@ type stepOutcome struct {
 
 // runCtx bundles per-run state needed by executeStep and compound forms.
 type runCtx struct {
+	ctx              context.Context
 	input            string
 	params           map[string]string
 	defaultModel     string
@@ -44,6 +46,7 @@ type runCtx struct {
 	evalThreshold    int
 	steps            map[string]string
 	prevStepID       string
+	mu               sync.Mutex
 }
 
 // Result holds the output of a completed workflow run.
@@ -135,6 +138,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	}
 
 	rctx := &runCtx{
+		ctx:              context.Background(),
 		input:            input,
 		params:           params,
 		defaultModel:     defaultModel,
@@ -152,7 +156,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			return nil
 		}
 
-		outcome, err := executeStep(rctx, step)
+		outcome, err := executeStep(rctx.ctx, rctx, step)
 		if err != nil {
 			return err
 		}
@@ -217,7 +221,9 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 				report, err := executePhase(rctx, *item.Phase)
 				if err != nil {
 					if report != nil {
+						rctx.mu.Lock()
 						rctx.steps["_verification_report"] = report.FormatReport()
+						rctx.mu.Unlock()
 					}
 					return nil, err
 				}
@@ -341,6 +347,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 func PreRunSharedSteps(w *Workflow, params map[string]string) (map[string]string, error) {
 	steps := make(map[string]string)
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		params: params,
 		steps:  steps,
 	}
@@ -352,7 +359,7 @@ func PreRunSharedSteps(w *Workflow, params map[string]string) (map[string]string
 			rctx.prevStepID = w.Steps[i-1].ID
 		}
 		fmt.Printf("  > %s (shared pre-run)\n", step.ID)
-		outcome, err := executeStep(rctx, step)
+		outcome, err := executeStep(rctx.ctx, rctx, step)
 		if err != nil {
 			return nil, fmt.Errorf("shared step %s: %w", step.ID, err)
 		}
@@ -592,16 +599,15 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 
 // executeStep handles control-flow forms (retry, timeout, catch, cond, map)
 // and delegates to runSingleStep for actual execution.
-func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
+func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	switch step.Form {
 	case "cond":
-		return executeCond(rctx, step)
+		return executeCond(ctx, rctx, step)
 	case "map":
-		return executeMap(rctx, step)
+		return executeMap(ctx, rctx, step)
 	}
 
 	// Determine timeout context
-	ctx := context.Background()
 	if step.Timeout != "" {
 		dur, err := time.ParseDuration(step.Timeout)
 		if err != nil {
@@ -622,7 +628,9 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 		outcome, err := runSingleStep(ctx, rctx, step)
 		if err == nil {
 			// catch form: step succeeded, store output normally
+			rctx.mu.Lock()
 			rctx.steps[step.ID] = outcome.output
+			rctx.mu.Unlock()
 			return outcome, nil
 		}
 		lastErr = err
@@ -636,12 +644,14 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 	// All retries exhausted — try fallback if catch form
 	if step.Form == "catch" && step.Fallback != nil {
 		fmt.Printf("  > %s (fallback → %s)\n", step.ID, step.Fallback.ID)
-		outcome, err := runSingleStep(context.Background(), rctx, *step.Fallback)
+		outcome, err := runSingleStep(ctx, rctx, *step.Fallback)
 		if err != nil {
 			return nil, fmt.Errorf("step %s fallback %s: %w", step.ID, step.Fallback.ID, err)
 		}
+		rctx.mu.Lock()
 		rctx.steps[step.Fallback.ID] = outcome.output
 		rctx.steps[step.ID] = outcome.output // catch step ID also gets the fallback output
+		rctx.mu.Unlock()
 		return outcome, nil
 	}
 
@@ -649,10 +659,10 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 }
 
 // executeCond evaluates predicate branches in order and runs the first matching step.
-func executeCond(rctx *runCtx, step Step) (*stepOutcome, error) {
+func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	for _, branch := range step.Branches {
 		if branch.Pred == "else" {
-			return executeStep(rctx, branch.Step)
+			return executeStep(ctx, rctx, branch.Step)
 		}
 		// Render predicate template
 		data := map[string]any{"input": rctx.input, "param": rctx.params}
@@ -663,16 +673,18 @@ func executeCond(rctx *runCtx, step Step) (*stepOutcome, error) {
 		cmd := exec.Command("sh", "-c", rendered)
 		if err := cmd.Run(); err == nil {
 			// Predicate succeeded (exit 0)
-			return executeStep(rctx, branch.Step)
+			return executeStep(ctx, rctx, branch.Step)
 		}
 	}
 	// No branch matched — return empty outcome
+	rctx.mu.Lock()
 	rctx.steps[step.ID] = ""
+	rctx.mu.Unlock()
 	return &stepOutcome{}, nil
 }
 
 // executeMap splits a prior step's output by newlines and runs the body step for each item.
-func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
+func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	source, ok := rctx.steps[step.MapOver]
 	if !ok {
 		return nil, fmt.Errorf("map %s: source step %q has no output", step.ID, step.MapOver)
@@ -699,7 +711,7 @@ func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
 		mapParams["item_index"] = fmt.Sprintf("%d", idx)
 		rctx.params = mapParams
 
-		outcome, err := executeStep(rctx, body)
+		outcome, err := executeStep(ctx, rctx, body)
 		rctx.params = origParams
 		if err != nil {
 			return nil, fmt.Errorf("map %s item %d: %w", step.ID, idx, err)
@@ -708,7 +720,9 @@ func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
 	}
 
 	combined := strings.Join(outputs, "\n")
+	rctx.mu.Lock()
 	rctx.steps[step.ID] = combined
+	rctx.mu.Unlock()
 	return &stepOutcome{output: combined}, nil
 }
 
@@ -1140,11 +1154,13 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 		// Run all work steps
 		for _, step := range p.Steps {
 			fmt.Printf("  > %s\n", step.ID)
-			outcome, err := executeStep(rctx, step)
+			outcome, err := executeStep(rctx.ctx, rctx, step)
 			if err != nil {
 				return nil, fmt.Errorf("phase %q step %q: %w", p.ID, step.ID, err)
 			}
+			rctx.mu.Lock()
 			rctx.steps[step.ID] = outcome.output
+			rctx.mu.Unlock()
 		}
 
 		// Run gates in order, stop on first failure
@@ -1153,11 +1169,13 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 
 		for gi, gate := range p.Gates {
 			fmt.Printf("  > gate %s\n", gate.ID)
-			outcome, execErr := executeStep(rctx, gate)
+			outcome, execErr := executeStep(rctx.ctx, rctx, gate)
 
 			if execErr != nil {
 				// Shell gate execution failure
+				rctx.mu.Lock()
 				rctx.steps[gate.ID] = execErr.Error()
+				rctx.mu.Unlock()
 				lastGateResults[gi] = GateResult{ID: gate.ID, Passed: false, Detail: execErr.Error()}
 				allPassed = false
 				for ski := gi + 1; ski < len(p.Gates); ski++ {
@@ -1166,7 +1184,9 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 				break
 			}
 
+			rctx.mu.Lock()
 			rctx.steps[gate.ID] = outcome.output
+			rctx.mu.Unlock()
 			passed, detail := evaluateGate(gate, outcome, nil)
 			lastGateResults[gi] = GateResult{ID: gate.ID, Passed: passed, Detail: detail}
 
