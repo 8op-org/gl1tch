@@ -77,7 +77,12 @@ func resultDir(baseDir string, result LoopResult) string {
 	if number == "" {
 		return filepath.Join(baseDir, org, repoName)
 	}
-	return filepath.Join(baseDir, org, repoName, number)
+
+	prefix := "issue"
+	if result.Document.Source == "github_pr" {
+		prefix = "pr"
+	}
+	return filepath.Join(baseDir, org, repoName, prefix+"-"+number)
 }
 
 // SaveLoopResult saves a LoopResult to a structured directory layout:

@@ -65,7 +65,7 @@ func TestSaveLoopResult(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	dir := filepath.Join(base, "elastic", "ensemble", "872")
+	dir := filepath.Join(base, "elastic", "ensemble", "issue-872")
 
 	// Verify summary.md exists
 	if _, err := os.Stat(filepath.Join(dir, "summary.md")); err != nil {
@@ -97,6 +97,51 @@ func TestSaveLoopResult(t *testing.T) {
 	}
 }
 
+func TestResultDir_IssuePrefix(t *testing.T) {
+	result := LoopResult{
+		Document: ResearchDocument{
+			Source:   "github_issue",
+			Repo:     "elastic/ensemble",
+			Metadata: map[string]string{"number": "872"},
+		},
+	}
+	got := resultDir("/base", result)
+	want := "/base/elastic/ensemble/issue-872"
+	if got != want {
+		t.Fatalf("resultDir: got %q, want %q", got, want)
+	}
+}
+
+func TestResultDir_PRPrefix(t *testing.T) {
+	result := LoopResult{
+		Document: ResearchDocument{
+			Source:   "github_pr",
+			Repo:     "elastic/ensemble",
+			Metadata: map[string]string{"number": "100"},
+		},
+	}
+	got := resultDir("/base", result)
+	want := "/base/elastic/ensemble/pr-100"
+	if got != want {
+		t.Fatalf("resultDir: got %q, want %q", got, want)
+	}
+}
+
+func TestResultDir_NoSourceFallback(t *testing.T) {
+	result := LoopResult{
+		Document: ResearchDocument{
+			Source:   "text",
+			Repo:     "elastic/ensemble",
+			Metadata: map[string]string{"number": "50"},
+		},
+	}
+	got := resultDir("/base", result)
+	want := "/base/elastic/ensemble/issue-50"
+	if got != want {
+		t.Fatalf("resultDir: got %q, want %q", got, want)
+	}
+}
+
 func TestSaveLoopResultImplement(t *testing.T) {
 	base := filepath.Join(t.TempDir(), "results")
 
@@ -121,7 +166,7 @@ func TestSaveLoopResultImplement(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	dir := filepath.Join(base, "elastic", "ensemble", "100")
+	dir := filepath.Join(base, "elastic", "ensemble", "issue-100")
 
 	// Verify implementation/plan.md exists
 	if _, err := os.Stat(filepath.Join(dir, "implementation", "plan.md")); err != nil {
