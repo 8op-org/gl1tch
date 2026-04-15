@@ -25,6 +25,7 @@ type stepOutcome struct {
 	tokensIn   int
 	tokensOut  int
 	cost       float64
+	latencyMs  int64
 	tier       int
 	escalated  bool
 	escChain   []int
@@ -179,6 +180,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 					TokensOut:        tokOut,
 					TokensTotal:      tokIn + tokOut,
 					CostUSD:          outcome.cost,
+					LatencyMS:        outcome.latencyMs,
 					Escalated:        outcome.escalated,
 					EscalationReason: reason,
 					EscalationChain:  outcome.escChain,
@@ -695,6 +697,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		var stepEvalScores []int
 		var stepCost float64
 		var stepTokensIn, stepTokensOut int
+		llmStart := time.Now()
 
 		useSmart := prov == "" && step.LLM.Tier == nil && len(rctx.tiers) > 0
 		usePinned := step.LLM.Tier != nil && len(rctx.tiers) > 0
@@ -787,11 +790,17 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			}
 		}
 
+		// Estimate cost if provider didn't report it
+		if stepCost == 0 && (stepTokensIn+stepTokensOut) > 0 {
+			stepCost = estimateCost(prov, model, stepTokensIn, stepTokensOut)
+		}
+
 		return &stepOutcome{
 			output:     out,
 			tokensIn:   stepTokensIn,
 			tokensOut:  stepTokensOut,
 			cost:       stepCost,
+			latencyMs:  time.Since(llmStart).Milliseconds(),
 			tier:       stepTier,
 			escalated:  stepEscalated,
 			escChain:   stepEscalationChain,
@@ -978,6 +987,32 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)
+}
+
+// estimateCost approximates USD cost per token for known providers/models.
+// Returns 0 for local/free models.
+func estimateCost(prov, model string, tokensIn, tokensOut int) float64 {
+	// Pricing per 1M tokens (input/output)
+	type pricing struct{ in, out float64 }
+	prices := map[string]pricing{
+		"claude:sonnet":                  {3.0, 15.0},
+		"claude:opus":                    {15.0, 75.0},
+		"claude:haiku":                   {0.25, 1.25},
+		"copilot:":                       {2.0, 8.0}, // estimate
+		"openrouter:x-ai/grok-4.20":     {2.0, 10.0},
+		"openrouter:google/gemma-4-31b-it:free": {0, 0},
+	}
+
+	key := prov + ":" + model
+	if p, ok := prices[key]; ok {
+		return (float64(tokensIn)*p.in + float64(tokensOut)*p.out) / 1_000_000
+	}
+	// Try provider-only match
+	key = prov + ":"
+	if p, ok := prices[key]; ok {
+		return (float64(tokensIn)*p.in + float64(tokensOut)*p.out) / 1_000_000
+	}
+	return 0
 }
 
 // loadSkill resolves a skill name or path to its content.
