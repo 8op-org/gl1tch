@@ -84,14 +84,22 @@ func TestFormatResultsCap(t *testing.T) {
 
 func TestNewQueryEngine(t *testing.T) {
 	es := esearch.NewClient("http://localhost:9200")
-	qe := NewQueryEngine(es, "")
-	if qe.model != defaultModel {
-		t.Errorf("NewQueryEngine with empty model: got %q, want %q", qe.model, defaultModel)
+	called := false
+	llm := func(prompt string) (string, error) {
+		called = true
+		return "test response", nil
 	}
-
-	qe2 := NewQueryEngine(es, "llama3:8b")
-	if qe2.model != "llama3:8b" {
-		t.Errorf("NewQueryEngine with explicit model: got %q, want %q", qe2.model, "llama3:8b")
+	qe := NewQueryEngine(es, llm)
+	if qe.es == nil {
+		t.Error("NewQueryEngine: es should not be nil")
+	}
+	if qe.llm == nil {
+		t.Error("NewQueryEngine: llm should not be nil")
+	}
+	// Verify the function is wired correctly
+	_, _ = qe.llm("test")
+	if !called {
+		t.Error("NewQueryEngine: llm function was not called")
 	}
 }
 

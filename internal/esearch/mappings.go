@@ -1,12 +1,13 @@
 package esearch
 
 const (
-	IndexEvents       = "glitch-events"
-	IndexResearchRuns = "glitch-research-runs"
-	IndexToolCalls    = "glitch-tool-calls"
-	IndexLLMCalls     = "glitch-llm-calls"
-	IndexWorkflowRuns  = "glitch-workflow-runs"
-	IndexCrossReviews  = "glitch-cross-reviews"
+	IndexEvents          = "glitch-events"
+	IndexResearchRuns    = "glitch-research-runs"
+	IndexToolCalls       = "glitch-tool-calls"
+	IndexLLMCalls        = "glitch-llm-calls"
+	IndexWorkflowRuns    = "glitch-workflow-runs"
+	IndexCrossReviews    = "glitch-cross-reviews"
+	IndexKnowledgePrefix = "glitch-knowledge-"
 )
 
 const EventsMapping = `{

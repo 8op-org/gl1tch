@@ -1,39 +1,35 @@
 package observer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
 )
 
-const defaultModel = "qwen2.5:7b"
+// LLMFunc generates text from a prompt. The observer doesn't care how — it
+// could be Ollama, Copilot, Claude, or any other provider.
+type LLMFunc func(prompt string) (string, error)
 
 // QueryEngine bridges natural language questions to Elasticsearch and
-// synthesizes answers via a local Ollama model.
+// synthesizes answers via an LLM.
 type QueryEngine struct {
-	es    *esearch.Client
-	model string
-	repo  string
+	es   *esearch.Client
+	llm  LLMFunc
+	repo string
 }
 
 // WithRepo returns a copy of the engine scoped to a specific repository.
 func (q *QueryEngine) WithRepo(repo string) *QueryEngine {
-	return &QueryEngine{es: q.es, model: q.model, repo: repo}
+	return &QueryEngine{es: q.es, llm: q.llm, repo: repo}
 }
 
-// NewQueryEngine returns a new QueryEngine. If model is empty, defaultModel is used.
-func NewQueryEngine(es *esearch.Client, model string) *QueryEngine {
-	if model == "" {
-		model = defaultModel
-	}
-	return &QueryEngine{es: es, model: model}
+// NewQueryEngine returns a new QueryEngine using the given LLM function.
+func NewQueryEngine(es *esearch.Client, llm LLMFunc) *QueryEngine {
+	return &QueryEngine{es: es, llm: llm}
 }
 
 func allIndices() []string {
@@ -43,6 +39,16 @@ func allIndices() []string {
 		esearch.IndexToolCalls,
 		esearch.IndexLLMCalls,
 	}
+}
+
+// knowledgeIndex returns the knowledge index name for a repo (e.g. "elastic/oblt-cli" → "glitch-knowledge-oblt-cli").
+func knowledgeIndex(repo string) string {
+	parts := strings.SplitN(repo, "/", 2)
+	name := repo
+	if len(parts) == 2 {
+		name = parts[1]
+	}
+	return esearch.IndexKnowledgePrefix + name
 }
 
 // Answer takes a natural language question, searches Elasticsearch, and
@@ -78,10 +84,65 @@ func (q *QueryEngine) searchWithFallback(ctx context.Context, question string) (
 		resp, err = q.es.Search(ctx, allIndices(), json.RawMessage(fallbackRaw))
 		if err != nil {
 			// Index-not-found or similar — return empty results
-			return &esearch.SearchResponse{}, nil
+			resp = &esearch.SearchResponse{}
 		}
 	}
+
+	// Also search knowledge indices when a repo is scoped.
+	if q.repo != "" {
+		kResp, kErr := q.searchKnowledge(ctx, question)
+		if kErr == nil && kResp != nil {
+			resp = mergeResponses(resp, kResp)
+		}
+	}
+
 	return resp, nil
+}
+
+// searchKnowledge queries the knowledge index for the scoped repo using
+// hybrid BM25 + summary boosting.
+func (q *QueryEngine) searchKnowledge(ctx context.Context, question string) (*esearch.SearchResponse, error) {
+	idx := knowledgeIndex(q.repo)
+	query := map[string]any{
+		"size": 10,
+		"query": map[string]any{
+			"bool": map[string]any{
+				"should": []any{
+					map[string]any{
+						"term": map[string]any{
+							"type": map[string]any{"value": "summary", "boost": 3},
+						},
+					},
+					map[string]any{
+						"multi_match": map[string]any{
+							"query":  question,
+							"fields": []string{"content", "title", "path"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := json.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	return q.es.Search(ctx, []string{idx}, json.RawMessage(raw))
+}
+
+// mergeResponses combines two search responses. Results from different indices
+// so no dedup needed.
+func mergeResponses(a, b *esearch.SearchResponse) *esearch.SearchResponse {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	a.Results = append(a.Results, b.Results...)
+	a.Total += b.Total
+	return a
 }
 
 // defaultQuery returns a safe multi-match query that works against all indices.
@@ -149,6 +210,7 @@ Available indices and their key fields:
 - glitch-summaries:  scope, date, summary, timestamp
 - glitch-pipelines:  name, status, stdout, model, provider, timestamp
 - glitch-insights:   type, pattern, recommendation, timestamp
+- glitch-knowledge-*: type (summary/doc/architecture/pattern/pr_insight/decision), title, content, path, repo, embedding (dense_vector), timestamp
 
 Today: %s
 One week ago: %s
@@ -164,7 +226,7 @@ Question: %s
 
 JSON:`, now.Format(time.RFC3339), weekAgo.Format(time.RFC3339), question)
 
-	raw, err := ollamaGenerate(ctx, q.model, prompt)
+	raw, err := q.llmGenerate(prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +276,7 @@ Rules:
 - Cite specific repos, timestamps, or pipeline names from the data.
 - Never fabricate information not present in the data.
 - Only reference data shown below.
+- If results come from glitch-knowledge-* indices, treat them as curated knowledge (architecture, patterns, guides) — prioritize these over raw event data.
 - If the data doesn't contain what was asked about, say so clearly and suggest what to index.
 
 %sObserved data:
@@ -223,11 +286,16 @@ Question: %s
 
 Answer:`, contextBlock, formatted, question)
 
-	answer, err := ollamaGenerate(ctx, q.model, prompt)
+	answer, err := q.llmGenerate(prompt)
 	if err != nil {
 		return "", fmt.Errorf("synthesize: %w", err)
 	}
 	return strings.TrimSpace(answer), nil
+}
+
+// llmGenerate sends a prompt to the configured LLM and returns the response.
+func (q *QueryEngine) llmGenerate(prompt string) (string, error) {
+	return q.llm(prompt)
 }
 
 // formatResults formats up to 15 search hits as readable text.
@@ -262,41 +330,3 @@ func extractJSON(s string) string {
 	return s[start : end+1]
 }
 
-// ollamaGenerate calls the local Ollama API with stream:false and returns the
-// response field.
-func ollamaGenerate(ctx context.Context, model, prompt string) (string, error) {
-	payload, err := json.Marshal(map[string]any{
-		"model":  model,
-		"prompt": prompt,
-		"stream": false,
-	})
-	if err != nil {
-		return "", fmt.Errorf("ollamaGenerate: marshal: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://localhost:11434/api/generate", bytes.NewReader(payload))
-	if err != nil {
-		return "", fmt.Errorf("ollamaGenerate: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("ollamaGenerate: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("ollamaGenerate: status %s — %s", resp.Status, string(body))
-	}
-
-	var result struct {
-		Response string `json:"response"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("ollamaGenerate: decode: %w", err)
-	}
-	return result.Response, nil
-}
