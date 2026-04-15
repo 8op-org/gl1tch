@@ -58,19 +58,7 @@ func (s *Server) routes() {
 	}
 }
 
-// Stub handlers — will be implemented in Tasks 3-5
-func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handlePutWorkflow(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
+// Stub handlers — will be implemented in Tasks 4-5
 func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not implemented", 501)
 }
