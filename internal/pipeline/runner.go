@@ -947,6 +947,16 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		fmt.Printf("  > %s (plugin %s %s)\n", step.ID, step.PluginCall.Plugin, step.PluginCall.Subcommand)
 		pc := step.PluginCall
 
+		// Render template expressions in plugin args (e.g., {{.param.repo}})
+		renderedArgs := make(map[string]string, len(pc.Args))
+		for k, v := range pc.Args {
+			rendered, err := render(v, data, rctx.steps)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: plugin arg %q: %w", step.ID, k, err)
+			}
+			renderedArgs[k] = rendered
+		}
+
 		// Search order: project-local, then user-global
 		searchDirs := []string{".glitch/plugins"}
 		if home, err := os.UserHomeDir(); err == nil {
@@ -956,7 +966,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		for _, dir := range searchDirs {
 			pluginDir := filepath.Join(dir, pc.Plugin)
 			if _, err := os.Stat(pluginDir); err == nil {
-				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, pc.Args, rctx.reg)
+				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, renderedArgs, rctx.reg)
 				if err != nil {
 					return nil, fmt.Errorf("step %s: %w", step.ID, err)
 				}
