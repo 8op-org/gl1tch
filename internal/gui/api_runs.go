@@ -106,29 +106,39 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		GatePassed *bool  `json:"gate_passed,omitempty"`
 	}
 
-	stepRows, _ := s.store.DB().Query(
+	stepRows, err := s.store.DB().Query(
 		`SELECT step_id, COALESCE(model,''), COALESCE(duration_ms,0),
 		        COALESCE(kind,''), exit_status, COALESCE(tokens_in,0),
 		        COALESCE(tokens_out,0), gate_passed
 		 FROM steps WHERE run_id = ?`, id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer stepRows.Close()
+
 	var steps []stepEntry
-	if stepRows != nil {
-		defer stepRows.Close()
-		for stepRows.Next() {
-			var se stepEntry
-			var exitStatus, gatePassed sql.NullInt64
-			stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs,
-				&se.Kind, &exitStatus, &se.TokensIn, &se.TokensOut, &gatePassed)
-			if exitStatus.Valid {
-				v := int(exitStatus.Int64)
-				se.ExitStatus = &v
-			}
-			if gatePassed.Valid {
-				v := gatePassed.Int64 == 1
-				se.GatePassed = &v
-			}
-			steps = append(steps, se)
+	for stepRows.Next() {
+		var se stepEntry
+		var exitStatus, gatePassed sql.NullInt64
+		if err := stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs,
+			&se.Kind, &exitStatus, &se.TokensIn, &se.TokensOut, &gatePassed); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
 		}
+		if exitStatus.Valid {
+			v := int(exitStatus.Int64)
+			se.ExitStatus = &v
+		}
+		if gatePassed.Valid {
+			v := gatePassed.Int64 == 1
+			se.GatePassed = &v
+		}
+		steps = append(steps, se)
+	}
+	if err := stepRows.Err(); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 	if steps == nil {
 		steps = []stepEntry{}
