@@ -1,5 +1,8 @@
 glitch
+gl1tch
 dist/
 .env
 .worktrees/
 site/generated/
+site/.vscode/
+results/
