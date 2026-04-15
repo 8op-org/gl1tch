@@ -9,8 +9,11 @@
   import Breadcrumb from '../lib/components/Breadcrumb.svelte';
   import SplitPane from '../lib/components/SplitPane.svelte';
   import FileTree from '../lib/components/FileTree.svelte';
+  import ActionBar from '../lib/components/ActionBar.svelte';
+  import RunDialog from './RunDialog.svelte';
 
   let tree = $state([]);
+  let actionWorkflow = $state(null);
   let selectedPath = $state('');
   let fileContent = $state('');
   let mode = $state('preview');
@@ -107,6 +110,7 @@
 {#if loading}<div class="page-content"><p class="text-muted">Loading...</p></div>
 {:else if error}<div class="page-content"><p class="status-fail">{error}</p></div>
 {:else}
+  <ActionBar context="results" resultPath={selectedPath} onrun={(wf) => { actionWorkflow = wf; }} />
   <SplitPane leftWidth={250}>
     <div slot="left" class="tree-pane"><FileTree entries={tree} {selectedPath} onselect={handleSelect} /></div>
     <div slot="right" class="preview-pane">
@@ -125,6 +129,14 @@
       {/if}
     </div>
   </SplitPane>
+{/if}
+
+{#if actionWorkflow}
+  <RunDialog
+    name={actionWorkflow.name}
+    params={actionWorkflow.params || []}
+    onclose={() => { actionWorkflow = null; }}
+  />
 {/if}
 
 <style>
