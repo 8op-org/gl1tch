@@ -3,10 +3,12 @@ package research
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var reFileBlock = regexp.MustCompile(`(?ms)^---\s*FILE:\s*(.+?)\s*---\s*\n(.*?)^---\s*END FILE\s*---`)
@@ -56,8 +58,10 @@ type runJSON struct {
 	TokensOut   int     `json:"tokens_out"`
 	CostUSD     float64 `json:"cost_usd"`
 	MaxTier     int     `json:"max_tier"`
-	Escalations int     `json:"escalations"`
-	DurationMS  int64   `json:"duration_ms"`
+	Escalations   int     `json:"escalations"`
+	DurationMS    int64   `json:"duration_ms"`
+	Workspace     string  `json:"workspace"`
+	WorkspacePath string  `json:"workspace_path"`
 }
 
 // resultDir computes the output directory path from the document metadata.
@@ -88,6 +92,23 @@ func resultDir(baseDir string, result LoopResult) string {
 	return filepath.Join(baseDir, org, repoName, prefix+"-"+number)
 }
 
+// runScopedDir returns a unique run directory under the issue/PR path.
+// Format: <baseDir>/<org>/<repo>/<type>-<number>/<YYYYMMDDTHHMMSS>-<4hex>/
+func runScopedDir(baseDir string, result LoopResult) string {
+	parent := resultDir(baseDir, result)
+	stamp := time.Now().UTC().Format("20060102T150405")
+	suffix := fmt.Sprintf("%04x", rand.Intn(0xFFFF))
+	return filepath.Join(parent, stamp+"-"+suffix)
+}
+
+// updateLatestSymlink creates or replaces a "latest" symlink in parentDir
+// pointing to the given run directory name.
+func updateLatestSymlink(parentDir, runDirName string) error {
+	link := filepath.Join(parentDir, "latest")
+	os.Remove(link)
+	return os.Symlink(runDirName, link)
+}
+
 // SaveLoopResult saves a LoopResult to a structured directory layout:
 //
 //	results/<org>/<repo>/<number>/
@@ -99,7 +120,7 @@ func resultDir(baseDir string, result LoopResult) string {
 //	└── implementation/     # when goal=implement
 //	    └── plan.md
 func SaveLoopResult(baseDir string, result LoopResult) error {
-	dir := resultDir(baseDir, result)
+	dir := runScopedDir(baseDir, result)
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("results: mkdir: %w", err)
@@ -129,8 +150,10 @@ func SaveLoopResult(baseDir string, result LoopResult) error {
 		TokensOut:   result.TokensOut,
 		CostUSD:     result.CostUSD,
 		MaxTier:     result.MaxTier,
-		Escalations: result.Escalations,
-		DurationMS:  result.Duration.Milliseconds(),
+		Escalations:   result.Escalations,
+		DurationMS:    result.Duration.Milliseconds(),
+		Workspace:     result.Workspace,
+		WorkspacePath: result.WorkspacePath,
 	}
 	raw, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
@@ -176,6 +199,13 @@ func SaveLoopResult(baseDir string, result LoopResult) error {
 
 	if err := writeReadme(dir, result); err != nil {
 		return fmt.Errorf("results: write README.md: %w", err)
+	}
+
+	// Create/update the "latest" symlink in the parent directory
+	parentDir := filepath.Dir(dir)
+	runDirName := filepath.Base(dir)
+	if err := updateLatestSymlink(parentDir, runDirName); err != nil {
+		return fmt.Errorf("results: update latest symlink: %w", err)
 	}
 
 	return nil

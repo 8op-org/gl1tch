@@ -65,7 +65,11 @@ func TestSaveLoopResult(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	dir := filepath.Join(base, "elastic", "ensemble", "issue-872")
+	issueDir := filepath.Join(base, "elastic", "ensemble", "issue-872")
+	dir, err := filepath.EvalSymlinks(filepath.Join(issueDir, "latest"))
+	if err != nil {
+		t.Fatalf("latest symlink: %v", err)
+	}
 
 	// Verify summary.md exists
 	if _, err := os.Stat(filepath.Join(dir, "summary.md")); err != nil {
@@ -118,8 +122,12 @@ func TestRunJSON_StandardFields(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	dir := filepath.Join(base, "elastic", "ensemble", "issue-50")
-	data, err := os.ReadFile(filepath.Join(dir, "run.json"))
+	issueDir := filepath.Join(base, "elastic", "ensemble", "issue-50")
+	latestDir, err := filepath.EvalSymlinks(filepath.Join(issueDir, "latest"))
+	if err != nil {
+		t.Fatalf("latest symlink: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(latestDir, "run.json"))
 	if err != nil {
 		t.Fatalf("read run.json: %v", err)
 	}
@@ -165,8 +173,12 @@ func TestSaveLoopResult_WritesReadme(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	dir := filepath.Join(base, "elastic", "ensemble", "issue-42")
-	readme, err := os.ReadFile(filepath.Join(dir, "README.md"))
+	issueDir := filepath.Join(base, "elastic", "ensemble", "issue-42")
+	latestDir, err := filepath.EvalSymlinks(filepath.Join(issueDir, "latest"))
+	if err != nil {
+		t.Fatalf("latest symlink: %v", err)
+	}
+	readme, err := os.ReadFile(filepath.Join(latestDir, "README.md"))
 	if err != nil {
 		t.Fatal("README.md not created")
 	}
@@ -258,7 +270,11 @@ func TestSaveLoopResultImplement(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	dir := filepath.Join(base, "elastic", "ensemble", "issue-100")
+	issueDir := filepath.Join(base, "elastic", "ensemble", "issue-100")
+	dir, err := filepath.EvalSymlinks(filepath.Join(issueDir, "latest"))
+	if err != nil {
+		t.Fatalf("latest symlink: %v", err)
+	}
 
 	// Verify implementation/plan.md exists
 	if _, err := os.Stat(filepath.Join(dir, "implementation", "plan.md")); err != nil {
@@ -268,5 +284,91 @@ func TestSaveLoopResultImplement(t *testing.T) {
 	// Verify summary.md does NOT exist
 	if _, err := os.Stat(filepath.Join(dir, "summary.md")); !os.IsNotExist(err) {
 		t.Fatal("summary.md should not exist for goal=implement")
+	}
+}
+
+func TestSaveLoopResult_RunScopedDir(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "results")
+
+	result := LoopResult{
+		RunID: "test-scoped-001",
+		Document: ResearchDocument{
+			Source:    "github_issue",
+			SourceURL: "https://github.com/elastic/ensemble/issues/55",
+			Repo:      "elastic/ensemble",
+			Metadata:  map[string]string{"number": "55"},
+		},
+		Goal:     GoalSummarize,
+		Output:   "# Summary\n\nTest scoped result." + strings.Repeat(" pad", 200),
+		LLMCalls: 1,
+		Duration: 1 * time.Second,
+	}
+
+	if err := SaveLoopResult(base, result); err != nil {
+		t.Fatalf("SaveLoopResult: %v", err)
+	}
+
+	issueDir := filepath.Join(base, "elastic", "ensemble", "issue-55")
+
+	latestLink := filepath.Join(issueDir, "latest")
+	target, err := os.Readlink(latestLink)
+	if err != nil {
+		t.Fatalf("expected 'latest' symlink: %v", err)
+	}
+
+	if filepath.IsAbs(target) {
+		t.Fatalf("latest symlink should be relative, got %q", target)
+	}
+
+	runDir := filepath.Join(issueDir, target)
+	if _, err := os.Stat(filepath.Join(runDir, "run.json")); err != nil {
+		t.Fatal("run.json not in run-scoped dir")
+	}
+	if _, err := os.Stat(filepath.Join(runDir, "README.md")); err != nil {
+		t.Fatal("README.md not in run-scoped dir")
+	}
+}
+
+func TestRunJSON_WorkspaceFields(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "results")
+
+	result := LoopResult{
+		RunID: "test-ws-001",
+		Document: ResearchDocument{
+			Source:   "github_issue",
+			Repo:     "elastic/ensemble",
+			Metadata: map[string]string{"number": "77"},
+		},
+		Goal:          GoalSummarize,
+		Output:        "summary" + strings.Repeat(" pad", 200),
+		Workspace:     "stokagent",
+		WorkspacePath: "/home/user/stokagent",
+		LLMCalls:      1,
+		Duration:      1 * time.Second,
+	}
+
+	if err := SaveLoopResult(base, result); err != nil {
+		t.Fatalf("SaveLoopResult: %v", err)
+	}
+
+	issueDir := filepath.Join(base, "elastic", "ensemble", "issue-77")
+	latestDir, err := filepath.EvalSymlinks(filepath.Join(issueDir, "latest"))
+	if err != nil {
+		t.Fatalf("latest symlink: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(latestDir, "run.json"))
+	if err != nil {
+		t.Fatalf("read run.json: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if raw["workspace"] != "stokagent" {
+		t.Fatalf("workspace: got %v, want stokagent", raw["workspace"])
+	}
+	if raw["workspace_path"] != "/home/user/stokagent" {
+		t.Fatalf("workspace_path: got %v", raw["workspace_path"])
 	}
 }
