@@ -114,6 +114,96 @@ test('no BubbleTea/SQLite/tmux on any page', async ({ page, }, testInfo) => {
   }
 });
 
+// ── Navigation ─────────────────────────────────────
+
+test('nav bar exists with home link', async ({ page }) => {
+  await page.goto('/');
+  const nav = page.locator('.site-nav');
+  await expect(nav).toBeVisible();
+  const logo = page.locator('.nav-logo');
+  await expect(logo).toHaveAttribute('href', '/');
+  await expect(logo).toHaveText('gl1tch');
+});
+
+test('can navigate from doc page back to home', async ({ page }) => {
+  await page.goto('/docs/getting-started');
+  await page.click('.nav-logo');
+  await expect(page).toHaveURL('/');
+  await expect(page.locator('.hero-title')).toBeVisible();
+});
+
+test('nav has docs and changelog links', async ({ page }) => {
+  await page.goto('/');
+  const navLinks = page.locator('.nav-links a');
+  const texts = await navLinks.allTextContents();
+  expect(texts).toContain('docs');
+  expect(texts).toContain('changelog');
+});
+
+// ── Syntax highlighting ────────────────────────────
+
+test('doc code blocks have syntax highlighting', async ({ page }) => {
+  await page.goto('/docs/getting-started');
+  // Shiki wraps tokens in <span style="color:..."> elements
+  const highlightedSpans = page.locator('.doc-content pre code span[style*="color"]');
+  const count = await highlightedSpans.count();
+  expect(count, 'code blocks should have colored spans from Shiki').toBeGreaterThan(0);
+});
+
+test('glitch code blocks have keyword + string colors', async ({ page }) => {
+  await page.goto('/docs/workflow-syntax');
+  // Shiki should produce blocks with data-language="glitch"
+  const glitchBlocks = page.locator('pre[data-language="glitch"]');
+  const blockCount = await glitchBlocks.count();
+  expect(blockCount, 'should have glitch-language code blocks').toBeGreaterThan(0);
+  // Check the first non-trivial block has multiple distinct token colors
+  const spans = glitchBlocks.nth(1).locator('code span[style*="color"]');
+  const colors = new Set<string>();
+  for (let i = 0; i < await spans.count(); i++) {
+    const style = await spans.nth(i).getAttribute('style');
+    const match = style?.match(/color:(#[A-Fa-f0-9]+)/);
+    if (match) colors.add(match[1]);
+  }
+  expect(colors.size, 'glitch blocks need at least 3 distinct token colors (keyword, string, punctuation)').toBeGreaterThanOrEqual(3);
+});
+
+// ── Card styling ───────────────────────────────────
+
+test('feature cards have distinct background from page', async ({ page }) => {
+  await page.goto('/');
+  const card = page.locator('.feature-card').first();
+  const cardBg = await card.evaluate((el) => getComputedStyle(el).backgroundColor);
+  // Should not be fully transparent or same as page bg
+  expect(cardBg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(cardBg).not.toBe('transparent');
+});
+
+test('feature cards have hover border accent', async ({ page }) => {
+  await page.goto('/');
+  const card = page.locator('.feature-card').first();
+  await card.hover();
+  const borderLeft = await card.evaluate((el) => getComputedStyle(el).borderLeftColor);
+  // After hover, border-left should be teal (not transparent)
+  expect(borderLeft).not.toBe('rgba(0, 0, 0, 0)');
+});
+
+// ── Brew install card ──────────────────────────────
+
+test('brew install text does not clip under copy button', async ({ page }) => {
+  await page.goto('/');
+  const cmd = page.locator('.hero-cmd');
+  const cmdBox = await cmd.boundingBox();
+  // Wait for JS to inject the copy button
+  await page.waitForSelector('.hero-cmd .copy-btn');
+  const btn = page.locator('.hero-cmd .copy-btn');
+  const btnBox = await btn.boundingBox();
+  // The text area (cmd width minus padding-right) should not overlap with button
+  expect(cmdBox).not.toBeNull();
+  expect(btnBox).not.toBeNull();
+  // Verify the cmd block is wide enough for text + button
+  expect(cmdBox!.width).toBeGreaterThan(btnBox!.width + 200);
+});
+
 // ── Visual regression guard ─────────────────────
 
 test('homepage renders without JS errors', async ({ page }) => {

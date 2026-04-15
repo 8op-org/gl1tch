@@ -45,6 +45,50 @@ body::before {
   opacity: 0.04;
 }
 
+/* ── Nav ──────────────────────────────────── */
+.site-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: rgba(12, 13, 20, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 40px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-logo {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--fg);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+  transition: color 0.2s;
+}
+.nav-logo:hover { color: var(--teal); }
+
+.nav-links {
+  display: flex;
+  gap: 24px;
+}
+.nav-links a {
+  font-size: 0.72rem;
+  color: var(--dim);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--teal); }
+
 /* ── Layout ────────────────────────────────── */
 .wrap {
   max-width: 900px;
@@ -150,6 +194,7 @@ code {
   display: flex;
   align-items: center;
   padding: 80px 0;
+  padding-top: 120px;
 }
 
 .hero-wrap {
@@ -224,7 +269,8 @@ code {
 
 .hero-cmd {
   margin-bottom: 0;
-  max-width: 380px;
+  max-width: 460px;
+  white-space: nowrap;
 }
 
 .hero-links {
@@ -293,15 +339,18 @@ code {
   background: var(--bg-card);
   padding: 40px 36px;
   position: relative;
-  transition: background 0.3s ease;
+  transition: all 0.3s ease;
+  border-left: 2px solid transparent;
 }
 
 .feature-card:hover {
-  background: rgba(125, 207, 255, 0.03);
+  background: rgba(125, 207, 255, 0.04);
+  border-left-color: var(--teal);
 }
 
 .feature-hero-card {
   grid-column: span 2;
+  border-left-color: var(--teal);
 }
 
 .feature-number {
@@ -332,8 +381,8 @@ code {
   font-size: 0.75rem;
   line-height: 1.8;
   padding: 16px 20px;
-  background: #0e0f1a;
-  border-color: rgba(125, 207, 255, 0.12);
+  background: rgba(12, 13, 20, 0.6);
+  border-color: rgba(125, 207, 255, 0.15);
 }
 
 /* ── How it works ──────────────────────────── */
@@ -458,6 +507,10 @@ code {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transition: background 0.2s ease;
+}
+.meta-cmd:hover {
+  background: rgba(125, 207, 255, 0.04);
 }
 
 .meta-cmd code {
@@ -610,7 +663,6 @@ footer {
 }
 
 .doc-content pre {
-  background: #1a1b2e;
   border: 1px solid rgba(125, 207, 255, 0.1);
   border-radius: 6px;
   padding: 20px 24px;
@@ -619,7 +671,6 @@ footer {
   line-height: 1.9;
   overflow-x: auto;
   margin-bottom: 24px;
-  color: #a9b1d6;
 }
 
 .doc-content code {
@@ -634,6 +685,7 @@ footer {
 .doc-content pre code {
   background: none;
   padding: 0;
+  color: inherit;
 }
 
 .doc-content ul, .doc-content ol {
