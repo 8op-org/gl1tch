@@ -97,6 +97,49 @@ func TestSaveLoopResult(t *testing.T) {
 	}
 }
 
+func TestRunJSON_StandardFields(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "results")
+
+	result := LoopResult{
+		RunID: "test-std-001",
+		Document: ResearchDocument{
+			Source:    "github_issue",
+			SourceURL: "https://github.com/elastic/ensemble/issues/50",
+			Repo:      "elastic/ensemble",
+			Metadata:  map[string]string{"number": "50"},
+		},
+		Goal:     GoalSummarize,
+		Output:   "summary text here, long enough to be substantive" + strings.Repeat(" content", 100),
+		LLMCalls: 2,
+		Duration: 5 * time.Second,
+	}
+
+	if err := SaveLoopResult(base, result); err != nil {
+		t.Fatalf("SaveLoopResult: %v", err)
+	}
+
+	dir := filepath.Join(base, "elastic", "ensemble", "issue-50")
+	data, err := os.ReadFile(filepath.Join(dir, "run.json"))
+	if err != nil {
+		t.Fatalf("read run.json: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if raw["repo"] != "elastic/ensemble" {
+		t.Fatalf("repo: got %v", raw["repo"])
+	}
+	if raw["ref_type"] != "issue" {
+		t.Fatalf("ref_type: got %v", raw["ref_type"])
+	}
+	if raw["ref_number"] != float64(50) {
+		t.Fatalf("ref_number: got %v", raw["ref_number"])
+	}
+}
+
 func TestResultDir_IssuePrefix(t *testing.T) {
 	result := LoopResult{
 		Document: ResearchDocument{

@@ -44,6 +44,9 @@ func IsSubstantive(draft string) bool {
 // runJSON is the metadata structure written to run.json.
 type runJSON struct {
 	RunID       string  `json:"run_id"`
+	Repo        string  `json:"repo"`
+	RefType     string  `json:"ref_type"`
+	RefNumber   int     `json:"ref_number"`
 	Source      string  `json:"source"`
 	SourceURL   string  `json:"source_url"`
 	Goal        Goal    `json:"goal"`
@@ -103,8 +106,20 @@ func SaveLoopResult(baseDir string, result LoopResult) error {
 	}
 
 	// Write run.json
+	refType := "issue"
+	if result.Document.Source == "github_pr" {
+		refType = "pr"
+	}
+	refNumber := 0
+	if n := result.Document.Metadata["number"]; n != "" {
+		fmt.Sscanf(n, "%d", &refNumber)
+	}
+
 	meta := runJSON{
 		RunID:       result.RunID,
+		Repo:        result.Document.Repo,
+		RefType:     refType,
+		RefNumber:   refNumber,
 		Source:      result.Document.Source,
 		SourceURL:   result.Document.SourceURL,
 		Goal:        result.Goal,
