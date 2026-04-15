@@ -836,7 +836,26 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 
 	if step.PluginCall != nil {
 		fmt.Printf("  > %s (plugin %s %s)\n", step.ID, step.PluginCall.Plugin, step.PluginCall.Subcommand)
-		return nil, fmt.Errorf("plugin execution not yet implemented")
+		pc := step.PluginCall
+
+		// Search order: project-local, then user-global
+		searchDirs := []string{".glitch/plugins"}
+		if home, err := os.UserHomeDir(); err == nil {
+			searchDirs = append(searchDirs, filepath.Join(home, ".config", "glitch", "plugins"))
+		}
+
+		for _, dir := range searchDirs {
+			pluginDir := filepath.Join(dir, pc.Plugin)
+			if _, err := os.Stat(pluginDir); err == nil {
+				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, pc.Args)
+				if err != nil {
+					return nil, fmt.Errorf("step %s: %w", step.ID, err)
+				}
+				return &stepOutcome{output: out}, nil
+			}
+		}
+
+		return nil, fmt.Errorf("step %s: plugin %q not found, searched: %s", step.ID, pc.Plugin, strings.Join(searchDirs, ", "))
 	}
 
 	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)
