@@ -96,24 +96,24 @@ h2 {
 
 /* ── Code blocks ───────────────────────────── */
 pre.code {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  background: #1a1b2e;
+  border: 1px solid rgba(125, 207, 255, 0.1);
   border-radius: 6px;
   padding: 20px 24px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.82rem;
   line-height: 1.9;
   overflow-x: auto;
-  color: var(--fg);
+  color: #a9b1d6;
   margin-bottom: 24px;
   position: relative;
   white-space: pre;
 }
 
-pre.code .p { color: var(--teal); }
-pre.code .r { color: var(--dim); }
-pre.code .k { color: var(--teal); }
-pre.code .s { color: var(--yellow); }
+pre.code .p { color: #7dcfff; }               /* prompt $ */
+pre.code .r { color: #7a88a8; }               /* comments — brighter than dim */
+pre.code .k { color: #7dcfff; }               /* keywords: workflow, step, run */
+pre.code .s { color: #e0af68; }               /* strings */
 
 code {
   font-family: 'JetBrains Mono', monospace;
@@ -266,8 +266,9 @@ code {
   margin-bottom: 0;
   font-size: 0.78rem;
   line-height: 2;
-  border-color: var(--glow);
-  box-shadow: 0 0 60px rgba(125, 207, 255, 0.04), inset 0 0 40px rgba(125, 207, 255, 0.02);
+  background: #1a1b2e;
+  border-color: rgba(125, 207, 255, 0.15);
+  box-shadow: 0 0 60px rgba(125, 207, 255, 0.06), inset 0 0 40px rgba(125, 207, 255, 0.02);
 }
 
 /* ── Features grid ─────────────────────────── */
@@ -331,8 +332,8 @@ code {
   font-size: 0.75rem;
   line-height: 1.8;
   padding: 16px 20px;
-  background: var(--bg);
-  border-color: rgba(125, 207, 255, 0.08);
+  background: #0e0f1a;
+  border-color: rgba(125, 207, 255, 0.12);
 }
 
 /* ── How it works ──────────────────────────── */
@@ -411,8 +412,8 @@ code {
   margin-bottom: 0;
   font-size: 0.68rem;
   line-height: 1.8;
-  background: var(--bg);
-  border-color: rgba(125, 207, 255, 0.08);
+  background: #0e0f1a;
+  border-color: rgba(125, 207, 255, 0.12);
   overflow-x: auto;
   white-space: pre;
 }
@@ -609,8 +610,8 @@ footer {
 }
 
 .doc-content pre {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  background: #1a1b2e;
+  border: 1px solid rgba(125, 207, 255, 0.1);
   border-radius: 6px;
   padding: 20px 24px;
   font-family: 'JetBrains Mono', monospace;
@@ -618,6 +619,7 @@ footer {
   line-height: 1.9;
   overflow-x: auto;
   margin-bottom: 24px;
+  color: #a9b1d6;
 }
 
 .doc-content code {

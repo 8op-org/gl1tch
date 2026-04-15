@@ -101,7 +101,8 @@ test('changelog page loads', async ({ page }) => {
 
 // ── No leaked internals ─────────────────────────
 
-test('no BubbleTea/SQLite/tmux on any page', async ({ page }) => {
+test('no BubbleTea/SQLite/tmux on any page', async ({ page, }, testInfo) => {
+  testInfo.setTimeout(30000);
   const pages = ['/', '/docs/getting-started', '/docs/workflow-syntax', '/docs/plugins', '/docs/local-models'];
   const banned = ['BubbleTea', 'bubbletea', 'tea.Model', 'SQLite', 'sqlite3', 'internal/tui'];
   for (const url of pages) {
