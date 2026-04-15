@@ -787,6 +787,18 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 				out = result.Response
 				stepTokensIn = result.TokensIn
 				stepTokensOut = result.TokensOut
+			case "lm-studio":
+				lms := &provider.LMStudioProvider{
+					BaseURL:      "http://localhost:1234",
+					DefaultModel: "qwen3-8b",
+				}
+				result, llmErr := lms.Chat(model, rendered)
+				if llmErr != nil {
+					return nil, fmt.Errorf("step %s: %w", step.ID, llmErr)
+				}
+				out = result.Response
+				stepTokensIn = result.TokensIn
+				stepTokensOut = result.TokensOut
 			default:
 				var resolved bool
 
