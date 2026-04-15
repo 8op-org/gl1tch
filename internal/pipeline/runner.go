@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -13,6 +14,32 @@ import (
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/provider"
 )
+
+// stepOutcome holds the result of executing a single step.
+type stepOutcome struct {
+	output     string
+	tokensIn   int
+	tokensOut  int
+	cost       float64
+	tier       int
+	escalated  bool
+	escChain   []int
+	evalScores []int
+	isLLM      bool
+}
+
+// runCtx bundles per-run state needed by executeStep and compound forms.
+type runCtx struct {
+	input            string
+	params           map[string]string
+	defaultModel     string
+	reg              *provider.ProviderRegistry
+	providerResolver provider.ResolverFunc
+	tiers            []provider.TierConfig
+	evalThreshold    int
+	steps            map[string]string
+	prevStepID       string
+}
 
 // Result holds the output of a completed workflow run.
 type Result struct {
@@ -94,220 +121,71 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	var llmSteps int
 	var lastLLMOutput string
 
+	rctx := &runCtx{
+		input:            input,
+		params:           params,
+		defaultModel:     defaultModel,
+		reg:              reg,
+		providerResolver: providerResolver,
+		tiers:            tiers,
+		evalThreshold:    evalThreshold,
+		steps:            steps,
+	}
+
 	for i, step := range w.Steps {
-		data := map[string]any{
-			"input": input,
-			"param": params,
+		if i > 0 {
+			rctx.prevStepID = w.Steps[i-1].ID
 		}
 
-		if step.Save != "" {
-			rendered, err := render(step.Save, data, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
-			}
-			fmt.Printf("  > %s (save → %s)\n", step.ID, rendered)
-			sourceStep := step.SaveStep
-			if sourceStep == "" && i > 0 {
-				sourceStep = w.Steps[i-1].ID
-			}
-			content := steps[sourceStep]
-			if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
-				return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
-			}
-			if err := os.WriteFile(rendered, []byte(content), 0o644); err != nil {
-				return nil, fmt.Errorf("step %s: write: %w", step.ID, err)
-			}
-			steps[step.ID] = fmt.Sprintf("saved %s to %s", sourceStep, rendered)
+		outcome, err := executeStep(rctx, step)
+		if err != nil {
+			return nil, err
+		}
 
-		} else if step.Run != "" {
-			rendered, err := render(step.Run, data, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
-			}
-			fmt.Printf("  > %s\n", step.ID)
-			out, err := provider.RunShell(rendered)
-			if err != nil {
-				return nil, fmt.Errorf("step %s: %w", step.ID, err)
-			}
-			steps[step.ID] = out
-
-		} else if step.LLM != nil {
-			rendered, err := render(step.LLM.Prompt, data, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
-			}
-
-			// Prepend skill content to prompt if specified
-			if step.LLM.Skill != "" {
-				skillContent, skillErr := loadSkill(step.LLM.Skill)
-				if skillErr != nil {
-					return nil, fmt.Errorf("step %s: skill %q: %w", step.ID, step.LLM.Skill, skillErr)
-				}
-				rendered = skillContent + "\n\n---\n\n" + rendered
-			}
-
-			fmt.Printf("  > %s\n", step.ID)
-
-			prov := strings.ToLower(step.LLM.Provider)
-			model := step.LLM.Model
-			if model == "" {
-				model = defaultModel
-			}
-
-			var out string
-			var stepTier int
-			var stepEscalated bool
-			var stepEscalationChain []int
-			var stepEvalScores []int
-			var stepCost float64
-			var stepTokensIn, stepTokensOut int
-
-			// Smart routing: no provider AND no pinned tier AND tiers available
-			useSmart := prov == "" && step.LLM.Tier == nil && len(tiers) > 0
-			// Pinned tier: explicit tier set
-			usePinned := step.LLM.Tier != nil && len(tiers) > 0
-
-			if useSmart || usePinned {
-				activeTiers := tiers
-				if usePinned {
-					tierIdx := *step.LLM.Tier
-					if tierIdx >= 0 && tierIdx < len(tiers) {
-						// Single-tier slice — RunSmart treats it as final tier (no eval)
-						activeTiers = tiers[tierIdx : tierIdx+1]
-					}
-				}
-
-				runner := provider.NewTieredRunner(activeTiers, reg)
-				runner.Resolver = providerResolver
-
-				format := step.LLM.Format
-				evalFn := func(evalModel, evalPrompt string) (provider.LLMResult, error) {
-					return provider.RunOllamaWithResult(defaultModel, evalPrompt)
-				}
-
-				rr, llmErr := runner.RunSmart(context.Background(), rendered, format, evalThreshold, evalFn)
-				if llmErr != nil {
-					err = llmErr
-				} else {
-					out = rr.Response
-					stepTier = rr.Tier
-					if usePinned {
-						stepTier = *step.LLM.Tier
-					}
-					stepEscalated = rr.Escalated
-					stepEscalationChain = rr.EscalationChain
-					stepEvalScores = rr.EvalScores
-					stepCost = rr.CostUSD
-					stepTokensIn = rr.TokensIn
-					stepTokensOut = rr.TokensOut
-				}
-			} else {
-				// Original dispatch: explicit provider or no tiers configured
-				switch prov {
-				case "ollama", "":
-					if model == "" {
-						model = "qwen3:8b"
-					}
-					result, llmErr := provider.RunOllamaWithResult(model, rendered)
-					if llmErr != nil {
-						err = llmErr
-					} else {
-						out = result.Response
-						stepTokensIn = result.TokensIn
-						stepTokensOut = result.TokensOut
-					}
-				default:
-					var resolved bool
-
-					// Agent providers (claude, copilot, gemini) — full tool-using agents
-					if provider.IsAgent(prov) {
-						agent := provider.KnownAgents[prov]
-						result, llmErr := agent.Run(step.LLM.Model, rendered)
-						if llmErr != nil {
-							err = llmErr
-						} else {
-							resolved = true
-							out = result.Response
-							stepTokensIn = result.TokensIn
-							stepTokensOut = result.TokensOut
-							stepCost = result.CostUSD
-						}
-					}
-
-					// Config-defined providers (openai-compatible, etc.)
-					if !resolved && providerResolver != nil {
-						if fn, ok := providerResolver(prov); ok {
-							resolved = true
-							result, llmErr := fn(step.LLM.Model, rendered)
-							if llmErr != nil {
-								err = llmErr
-							} else {
-								out = result.Response
-								stepTokensIn = result.TokensIn
-								stepTokensOut = result.TokensOut
-								stepCost = result.CostUSD
-							}
-						}
-					}
-
-					// Shell-template providers from ~/.config/glitch/providers/
-					if !resolved {
-						result, provErr := reg.RunProviderWithResult(prov, model, rendered)
-						if provErr != nil {
-							err = provErr
-						} else {
-							out = result.Response
-							stepTokensIn = result.TokensIn
-							stepTokensOut = result.TokensOut
-							stepCost = result.CostUSD
-						}
-					}
-				}
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("step %s: %w", step.ID, err)
-			}
-
-			tokIn := int64(stepTokensIn)
-			tokOut := int64(stepTokensOut)
+		// Accumulate telemetry
+		if outcome.isLLM {
+			tokIn := int64(outcome.tokensIn)
+			tokOut := int64(outcome.tokensOut)
 			totalTokensIn += tokIn
 			totalTokensOut += tokOut
-			totalCostUSD += stepCost
+			totalCostUSD += outcome.cost
 			llmSteps++
-			lastLLMOutput = out
+			lastLLMOutput = outcome.output
 
 			if tel != nil {
+				prov := ""
+				model := defaultModel
+				if step.LLM != nil {
+					prov = strings.ToLower(step.LLM.Provider)
+					if step.LLM.Model != "" {
+						model = step.LLM.Model
+					}
+				}
 				reason := ""
-				if stepEscalated {
+				if outcome.escalated {
 					reason = "eval"
 				}
 				tel.IndexLLMCall(context.Background(), esearch.LLMCallDoc{
 					RunID:            runID,
 					Step:             fmt.Sprintf("workflow:%s/%s", w.Name, step.ID),
-					Tier:             stepTier,
+					Tier:             outcome.tier,
 					Provider:         prov,
 					Model:            model,
 					TokensIn:         tokIn,
 					TokensOut:        tokOut,
 					TokensTotal:      tokIn + tokOut,
-					CostUSD:          stepCost,
-					Escalated:        stepEscalated,
+					CostUSD:          outcome.cost,
+					Escalated:        outcome.escalated,
 					EscalationReason: reason,
-					EscalationChain:  stepEscalationChain,
-					EvalScores:       stepEvalScores,
-					FinalTier:        stepTier,
+					EscalationChain:  outcome.escChain,
+					EvalScores:       outcome.evalScores,
+					FinalTier:        outcome.tier,
 					WorkflowName:     w.Name,
 					Issue:            issue,
 					ComparisonGroup:  compGroup,
 					Timestamp:        time.Now().UTC().Format(time.RFC3339),
 				})
 			}
-
-			steps[step.ID] = out
-
-		} else {
-			return nil, fmt.Errorf("step %s: must have either 'run' or 'llm'", step.ID)
 		}
 	}
 
@@ -512,6 +390,306 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// executeStep handles control-flow forms (retry, timeout, catch, cond, map)
+// and delegates to runSingleStep for actual execution.
+func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
+	switch step.Form {
+	case "cond":
+		return executeCond(rctx, step)
+	case "map":
+		return executeMap(rctx, step)
+	}
+
+	// Determine timeout context
+	ctx := context.Background()
+	if step.Timeout != "" {
+		dur, err := time.ParseDuration(step.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: invalid timeout %q: %w", step.ID, step.Timeout, err)
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, dur)
+		defer cancel()
+	}
+
+	maxAttempts := 1 + step.Retry
+	var lastErr error
+	for attempt := range maxAttempts {
+		if attempt > 0 {
+			fmt.Printf("  > %s (retry %d/%d)\n", step.ID, attempt, step.Retry)
+		}
+
+		outcome, err := runSingleStep(ctx, rctx, step)
+		if err == nil {
+			// catch form: step succeeded, store output normally
+			rctx.steps[step.ID] = outcome.output
+			return outcome, nil
+		}
+		lastErr = err
+
+		// Check if context expired (timeout) — no point retrying
+		if ctx.Err() != nil {
+			break
+		}
+	}
+
+	// All retries exhausted — try fallback if catch form
+	if step.Form == "catch" && step.Fallback != nil {
+		fmt.Printf("  > %s (fallback → %s)\n", step.ID, step.Fallback.ID)
+		outcome, err := runSingleStep(context.Background(), rctx, *step.Fallback)
+		if err != nil {
+			return nil, fmt.Errorf("step %s fallback %s: %w", step.ID, step.Fallback.ID, err)
+		}
+		rctx.steps[step.Fallback.ID] = outcome.output
+		rctx.steps[step.ID] = outcome.output // catch step ID also gets the fallback output
+		return outcome, nil
+	}
+
+	return nil, lastErr
+}
+
+// executeCond evaluates predicate branches in order and runs the first matching step.
+func executeCond(rctx *runCtx, step Step) (*stepOutcome, error) {
+	for _, branch := range step.Branches {
+		if branch.Pred == "else" {
+			return executeStep(rctx, branch.Step)
+		}
+		// Render predicate template
+		data := map[string]any{"input": rctx.input, "param": rctx.params}
+		rendered, err := render(branch.Pred, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
+		}
+		cmd := exec.Command("sh", "-c", rendered)
+		if err := cmd.Run(); err == nil {
+			// Predicate succeeded (exit 0)
+			return executeStep(rctx, branch.Step)
+		}
+	}
+	// No branch matched — return empty outcome
+	rctx.steps[step.ID] = ""
+	return &stepOutcome{}, nil
+}
+
+// executeMap splits a prior step's output by newlines and runs the body step for each item.
+func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
+	source, ok := rctx.steps[step.MapOver]
+	if !ok {
+		return nil, fmt.Errorf("map %s: source step %q has no output", step.ID, step.MapOver)
+	}
+
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	var outputs []string
+
+	for idx, item := range lines {
+		if item == "" {
+			continue
+		}
+		// Clone the body step with a unique ID per iteration
+		body := *step.MapBody
+		body.ID = fmt.Sprintf("%s-%d", step.MapBody.ID, idx)
+
+		// Make {{.item}} available in templates by injecting into params
+		origParams := rctx.params
+		mapParams := make(map[string]string, len(origParams)+1)
+		for k, v := range origParams {
+			mapParams[k] = v
+		}
+		mapParams["item"] = item
+		mapParams["item_index"] = fmt.Sprintf("%d", idx)
+		rctx.params = mapParams
+
+		outcome, err := executeStep(rctx, body)
+		rctx.params = origParams
+		if err != nil {
+			return nil, fmt.Errorf("map %s item %d: %w", step.ID, idx, err)
+		}
+		outputs = append(outputs, outcome.output)
+	}
+
+	combined := strings.Join(outputs, "\n")
+	rctx.steps[step.ID] = combined
+	return &stepOutcome{output: combined}, nil
+}
+
+// runSingleStep executes one step (save, run, or llm) without control-flow wrappers.
+func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	data := map[string]any{
+		"input": rctx.input,
+		"param": rctx.params,
+	}
+
+	if step.Save != "" {
+		rendered, err := render(step.Save, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+		}
+		fmt.Printf("  > %s (save → %s)\n", step.ID, rendered)
+		sourceStep := step.SaveStep
+		if sourceStep == "" && rctx.prevStepID != "" {
+			sourceStep = rctx.prevStepID
+		}
+		content := rctx.steps[sourceStep]
+		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
+			return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
+		}
+		if err := os.WriteFile(rendered, []byte(content), 0o644); err != nil {
+			return nil, fmt.Errorf("step %s: write: %w", step.ID, err)
+		}
+		out := fmt.Sprintf("saved %s to %s", sourceStep, rendered)
+		return &stepOutcome{output: out}, nil
+	}
+
+	if step.Run != "" {
+		rendered, err := render(step.Run, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+		}
+		fmt.Printf("  > %s\n", step.ID)
+		out, err := provider.RunShell(rendered)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: %w", step.ID, err)
+		}
+		return &stepOutcome{output: out}, nil
+	}
+
+	if step.LLM != nil {
+		rendered, err := render(step.LLM.Prompt, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+		}
+
+		if step.LLM.Skill != "" {
+			skillContent, skillErr := loadSkill(step.LLM.Skill)
+			if skillErr != nil {
+				return nil, fmt.Errorf("step %s: skill %q: %w", step.ID, step.LLM.Skill, skillErr)
+			}
+			rendered = skillContent + "\n\n---\n\n" + rendered
+		}
+
+		fmt.Printf("  > %s\n", step.ID)
+
+		prov := strings.ToLower(step.LLM.Provider)
+		model := step.LLM.Model
+		if model == "" {
+			model = rctx.defaultModel
+		}
+
+		var out string
+		var stepTier int
+		var stepEscalated bool
+		var stepEscalationChain []int
+		var stepEvalScores []int
+		var stepCost float64
+		var stepTokensIn, stepTokensOut int
+
+		useSmart := prov == "" && step.LLM.Tier == nil && len(rctx.tiers) > 0
+		usePinned := step.LLM.Tier != nil && len(rctx.tiers) > 0
+
+		if useSmart || usePinned {
+			activeTiers := rctx.tiers
+			if usePinned {
+				tierIdx := *step.LLM.Tier
+				if tierIdx >= 0 && tierIdx < len(rctx.tiers) {
+					activeTiers = rctx.tiers[tierIdx : tierIdx+1]
+				}
+			}
+
+			runner := provider.NewTieredRunner(activeTiers, rctx.reg)
+			runner.Resolver = rctx.providerResolver
+
+			format := step.LLM.Format
+			evalFn := func(evalModel, evalPrompt string) (provider.LLMResult, error) {
+				return provider.RunOllamaWithResult(rctx.defaultModel, evalPrompt)
+			}
+
+			rr, llmErr := runner.RunSmart(ctx, rendered, format, rctx.evalThreshold, evalFn)
+			if llmErr != nil {
+				return nil, fmt.Errorf("step %s: %w", step.ID, llmErr)
+			}
+			out = rr.Response
+			stepTier = rr.Tier
+			if usePinned {
+				stepTier = *step.LLM.Tier
+			}
+			stepEscalated = rr.Escalated
+			stepEscalationChain = rr.EscalationChain
+			stepEvalScores = rr.EvalScores
+			stepCost = rr.CostUSD
+			stepTokensIn = rr.TokensIn
+			stepTokensOut = rr.TokensOut
+		} else {
+			switch prov {
+			case "ollama", "":
+				if model == "" {
+					model = "qwen3:8b"
+				}
+				result, llmErr := provider.RunOllamaWithResult(model, rendered)
+				if llmErr != nil {
+					return nil, fmt.Errorf("step %s: %w", step.ID, llmErr)
+				}
+				out = result.Response
+				stepTokensIn = result.TokensIn
+				stepTokensOut = result.TokensOut
+			default:
+				var resolved bool
+
+				if provider.IsAgent(prov) {
+					agent := provider.KnownAgents[prov]
+					result, llmErr := agent.Run(step.LLM.Model, rendered)
+					if llmErr != nil {
+						return nil, fmt.Errorf("step %s: %w", step.ID, llmErr)
+					}
+					resolved = true
+					out = result.Response
+					stepTokensIn = result.TokensIn
+					stepTokensOut = result.TokensOut
+					stepCost = result.CostUSD
+				}
+
+				if !resolved && rctx.providerResolver != nil {
+					if fn, ok := rctx.providerResolver(prov); ok {
+						resolved = true
+						result, llmErr := fn(step.LLM.Model, rendered)
+						if llmErr != nil {
+							return nil, fmt.Errorf("step %s: %w", step.ID, llmErr)
+						}
+						out = result.Response
+						stepTokensIn = result.TokensIn
+						stepTokensOut = result.TokensOut
+						stepCost = result.CostUSD
+					}
+				}
+
+				if !resolved {
+					result, provErr := rctx.reg.RunProviderWithResult(prov, model, rendered)
+					if provErr != nil {
+						return nil, fmt.Errorf("step %s: %w", step.ID, provErr)
+					}
+					out = result.Response
+					stepTokensIn = result.TokensIn
+					stepTokensOut = result.TokensOut
+					stepCost = result.CostUSD
+				}
+			}
+		}
+
+		return &stepOutcome{
+			output:     out,
+			tokensIn:   stepTokensIn,
+			tokensOut:  stepTokensOut,
+			cost:       stepCost,
+			tier:       stepTier,
+			escalated:  stepEscalated,
+			escChain:   stepEscalationChain,
+			evalScores: stepEvalScores,
+			isLLM:      true,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)
 }
 
 // loadSkill resolves a skill name or path to its content.
