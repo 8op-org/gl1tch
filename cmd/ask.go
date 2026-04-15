@@ -263,7 +263,38 @@ func resolveRepoPath(repo string) string {
 	return cwd
 }
 
+// resolveWorkflowsDir returns the workflows directory based on workspace and config.
+// Priority: config.WorkflowsDir > <workspace>/workflows/ > global (~/.config/glitch/workflows)
+func resolveWorkflowsDir(cfg *Config) string {
+	if cfg != nil && cfg.WorkflowsDir != "" {
+		return cfg.WorkflowsDir
+	}
+	if workspacePath != "" {
+		return filepath.Join(workspacePath, "workflows")
+	}
+	return ""
+}
+
 func loadWorkflows() (map[string]*pipeline.Workflow, error) {
+	cfg, _ := loadConfig()
+	wfDir := resolveWorkflowsDir(cfg)
+
+	// If workspace mode: single source only
+	if workspacePath != "" {
+		if wfDir == "" {
+			wfDir = filepath.Join(workspacePath, "workflows")
+		}
+		workflows, err := pipeline.LoadDir(wfDir)
+		if err != nil {
+			return nil, err
+		}
+		if workflows == nil {
+			workflows = make(map[string]*pipeline.Workflow)
+		}
+		return workflows, nil
+	}
+
+	// Non-workspace mode: global then local (existing behavior)
 	workflows := make(map[string]*pipeline.Workflow)
 	if home, err := os.UserHomeDir(); err == nil {
 		globalDir := home + "/.config/glitch/workflows"
