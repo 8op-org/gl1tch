@@ -20,7 +20,7 @@
   {#each entries as entry}
     {#if entry.isDir}
       <li>
-        <button class="tree-item dir" on:click={() => { toggle(entry.name); if (entry.loadChildren && !entry.children) entry.loadChildren(); }}>
+        <button class="tree-item dir" on:click={async () => { toggle(entry.name); if (entry.loadChildren && !entry.children) { await entry.loadChildren(); expanded = {...expanded}; } }}>
           <span class="tree-indent" style="width:{depth * 16}px"></span>
           <span class="tree-icon">{@html icon(expanded[entry.name] ? 'chevronDown' : 'chevronRight')}</span>
           <span class="tree-icon text-cyan">{@html icon(expanded[entry.name] ? 'folderOpen' : 'folder', 16)}</span>

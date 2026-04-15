@@ -17,7 +17,7 @@ export default defineConfig({
   webServer: {
     command: `${ROOT}/glitch --workspace ${ROOT}/test-workspace workflow gui`,
     url: 'http://127.0.0.1:8374',
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 15000,
   },
 })

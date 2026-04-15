@@ -1,0 +1,26 @@
+(workflow "analyze-issue"
+  :description "Fetch and analyze a GitHub issue"
+  :tags ("issue" "analysis")
+  :action "results:analyze"
+
+  (step "fetch"
+    (run "gh issue view {{.param.issue}} --repo {{.param.repo}} --json title,body,labels,state"))
+
+  (step "analyze"
+    (llm :provider "claude" :model "haiku"
+      :prompt ```
+      Analyze this GitHub issue and produce a short implementation plan.
+
+      ISSUE JSON:
+      {{step "fetch"}}
+
+      Respond with:
+      1. One-line summary
+      2. Type (bug/feature/docs/refactor)
+      3. Complexity (small/medium/large)
+      4. Implementation steps (2-5 bullets)
+      5. Files likely affected
+      ```))
+
+  (step "save"
+    (save "results/{{.param.repo}}/issue-{{.param.issue}}/analysis.md" :from "analyze")))

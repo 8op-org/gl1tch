@@ -46,9 +46,21 @@
       const node = { name: entry.name, path: fullPath, isDir: entry.is_dir };
       if (entry.is_dir) {
         node.children = null;
-        node.loadChildren = async () => { node.children = await loadTree(fullPath); tree = [...tree]; };
+        node.loadChildren = async () => {
+          node.children = await loadTree(fullPath);
+          // Force Svelte 5 reactivity by replacing the tree array
+          tree = replaceNode(tree, fullPath, node);
+        };
       }
       return node;
+    });
+  }
+
+  function replaceNode(nodes, path, replacement) {
+    return nodes.map(n => {
+      if (n.path === path) return { ...replacement };
+      if (n.children) return { ...n, children: replaceNode(n.children, path, replacement) };
+      return n;
     });
   }
 
