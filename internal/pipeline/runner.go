@@ -1041,6 +1041,49 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)
 }
 
+// evaluateGate determines if a gate step passed or failed.
+// Shell gates: execution error means failure, nil error means pass.
+// LLM gates: parse output for PASS/FAIL verdict.
+// Returns (passed, failureDetail).
+func evaluateGate(step Step, outcome *stepOutcome, execErr error) (bool, string) {
+	if execErr != nil {
+		return false, execErr.Error()
+	}
+
+	if step.LLM != nil {
+		upper := strings.ToUpper(strings.ReplaceAll(outcome.output, "*", ""))
+		if strings.Contains(upper, "OVERALL: PASS") || strings.Contains(upper, "OVERALL PASS") {
+			return true, ""
+		}
+		if strings.Contains(upper, "OVERALL: FAIL") || strings.Contains(upper, "OVERALL FAIL") {
+			return false, outcome.output
+		}
+		var passed, failed int
+		for _, line := range strings.Split(upper, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.Contains(line, "OVERALL") {
+				continue
+			}
+			hasPass := strings.Contains(line, "PASS")
+			hasFail := strings.Contains(line, "FAIL")
+			if hasPass && !hasFail {
+				passed++
+			} else if hasFail {
+				failed++
+			}
+		}
+		if failed > 0 {
+			return false, outcome.output
+		}
+		if passed > 0 {
+			return true, ""
+		}
+		return true, ""
+	}
+
+	return true, ""
+}
+
 // estimateCost approximates USD cost per token for known providers/models.
 // Returns 0 for local/free models.
 func estimateCost(prov, model string, tokensIn, tokensOut int) float64 {

@@ -495,6 +495,30 @@ REASON: Higher overall quality`
 	}
 }
 
+func TestEvaluateGate_ShellPass(t *testing.T) {
+	outcome := &stepOutcome{output: "all good", isLLM: false}
+	pass, detail := evaluateGate(Step{ID: "check", Run: "true", IsGate: true}, outcome, nil)
+	if !pass {
+		t.Fatalf("expected shell gate to pass, got fail: %s", detail)
+	}
+}
+
+func TestEvaluateGate_LLMPass(t *testing.T) {
+	outcome := &stepOutcome{output: "Criterion 1: PASS\nCriterion 2: PASS\nOVERALL: PASS", isLLM: true}
+	pass, _ := evaluateGate(Step{ID: "review", IsGate: true, LLM: &LLMStep{}}, outcome, nil)
+	if !pass {
+		t.Fatal("expected LLM gate with OVERALL: PASS to pass")
+	}
+}
+
+func TestEvaluateGate_LLMFail(t *testing.T) {
+	outcome := &stepOutcome{output: "Criterion 1: PASS\nCriterion 2: FAIL\nOVERALL: FAIL", isLLM: true}
+	pass, _ := evaluateGate(Step{ID: "review", IsGate: true, LLM: &LLMStep{}}, outcome, nil)
+	if pass {
+		t.Fatal("expected LLM gate with OVERALL: FAIL to fail")
+	}
+}
+
 func TestRun_PinnedTier(t *testing.T) {
 	callLog := []string{}
 	resolver := func(name string) (provider.ProviderFunc, bool) {
