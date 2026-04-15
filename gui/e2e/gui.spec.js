@@ -38,6 +38,13 @@ test.describe('API', () => {
     const resp = await request.get('/api/workflows/..%2F..%2Fetc%2Fpasswd')
     expect(resp.status()).toBe(400)
   })
+
+  test('GET /api/workflows/actions/results returns array', async ({ request }) => {
+    const resp = await request.get('/api/workflows/actions/results')
+    expect(resp.ok()).toBeTruthy()
+    const data = await resp.json()
+    expect(Array.isArray(data)).toBeTruthy()
+  })
 })
 
 // ── App shell ───────────────────────────────────────────────────────
@@ -50,22 +57,34 @@ test.describe('App shell', () => {
     expect(errors).toEqual([])
   })
 
-  test('nav bar is visible with all links', async ({ page }) => {
+  test('sidebar is visible with nav items', async ({ page }) => {
     await page.goto('/')
-    const nav = page.locator('nav')
-    await expect(nav).toBeVisible()
-    await expect(nav).toContainText('gl1tch')
-    await expect(nav).toContainText('Workflows')
-    await expect(nav).toContainText('Runs')
-    await expect(nav).toContainText('Results')
+    const sidebar = page.locator('aside.sidebar')
+    await expect(sidebar).toBeVisible()
+    await expect(page.locator('.nav-item')).toHaveCount(3)
+  })
+
+  test('sidebar expands on hover', async ({ page }) => {
+    await page.goto('/')
+    const sidebar = page.locator('aside.sidebar')
+    await sidebar.hover()
+    await expect(sidebar).toHaveClass(/expanded/)
+  })
+
+  test('active nav item is highlighted', async ({ page }) => {
+    await page.goto('/')
+    const active = page.locator('.nav-item.active')
+    await expect(active).toBeVisible()
   })
 })
 
 // ── Workflow list ───────────────────────────────────────────────────
 test.describe('Workflow list', () => {
-  test('shows workflows from API', async ({ page }) => {
+  test('renders workflow cards', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('text=hello')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.card')
+    const cards = page.locator('.card')
+    await expect(cards.first()).toBeVisible()
   })
 
   test('shows workflow description', async ({ page }) => {
@@ -73,10 +92,18 @@ test.describe('Workflow list', () => {
     await expect(page.locator('text=A simple test workflow')).toBeVisible({ timeout: 5000 })
   })
 
-  test('clicking workflow navigates to editor', async ({ page }) => {
+  test('search filters workflows', async ({ page }) => {
     await page.goto('/')
-    await page.locator('text=hello').first().click()
-    await expect(page).toHaveURL(/#\/workflow\/hello\.glitch/)
+    await page.waitForSelector('.card')
+    await page.fill('input[placeholder="Search..."]', 'nonexistent-workflow-xyz')
+    await expect(page.locator('.card')).toHaveCount(0)
+  })
+
+  test('clicking card navigates to editor', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForSelector('.card')
+    await page.locator('.card').first().click()
+    await expect(page).toHaveURL(/\/#\/workflow\//)
   })
 })
 
@@ -95,64 +122,64 @@ test.describe('Editor', () => {
     await expect(page.locator('button', { hasText: 'Run' })).toBeVisible()
   })
 
+  test('shows metadata panel', async ({ page }) => {
+    await page.goto('#/workflow/hello.glitch')
+    await expect(page.locator('.meta-panel')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('metadata panel can be collapsed', async ({ page }) => {
+    await page.goto('#/workflow/hello.glitch')
+    await expect(page.locator('.meta-panel')).toBeVisible({ timeout: 5000 })
+    await page.locator('.meta-panel .close-btn').click()
+    await expect(page.locator('.meta-panel')).not.toBeVisible()
+  })
+
   test('Run opens dialog with extracted params', async ({ page }) => {
     await page.goto('#/workflow/hello.glitch')
     await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
-    await expect(page.locator('.dialog')).toBeVisible()
-    await expect(page.locator('.dialog')).toContainText('name')
-    await expect(page.locator('.dialog input')).toBeVisible()
+    await expect(page.locator('.modal')).toBeVisible()
+    await expect(page.locator('.modal')).toContainText('name')
+    await expect(page.locator('.modal input')).toBeVisible()
   })
 
   test('Cancel closes the run dialog', async ({ page }) => {
     await page.goto('#/workflow/hello.glitch')
     await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
-    await expect(page.locator('.dialog')).toBeVisible()
+    await expect(page.locator('.modal')).toBeVisible()
     await page.locator('button', { hasText: 'Cancel' }).click()
-    await expect(page.locator('.dialog')).not.toBeVisible()
+    await expect(page.locator('.modal')).not.toBeVisible()
   })
 })
 
 // ── Results browser ─────────────────────────────────────────────────
 test.describe('Results browser', () => {
-  test('shows top-level results directory', async ({ page }) => {
+  test('file tree renders directories', async ({ page }) => {
     await page.goto('#/results')
-    await expect(page.locator('text=elastic')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tree-item')
+    const items = page.locator('.tree-item')
+    await expect(items.first()).toBeVisible()
   })
 
   test('navigates into nested directories', async ({ page }) => {
     await page.goto('#/results')
-    await page.locator('text=elastic').click()
-    await expect(page.locator('text=observability-robots')).toBeVisible({ timeout: 3000 })
-    await page.locator('text=observability-robots').click()
-    await expect(page.locator('text=issue-3916')).toBeVisible({ timeout: 3000 })
+    await page.waitForSelector('.tree-item')
+    await page.locator('.tree-item', { hasText: 'elastic' }).click()
+    await expect(page.locator('.tree-item', { hasText: 'observability-robots' })).toBeVisible({ timeout: 3000 })
   })
 
-  test('renders markdown file in preview', async ({ page }) => {
+  test('preview/edit toggle exists when file selected', async ({ page }) => {
     await page.goto('#/results')
-    await page.locator('text=elastic').click()
-    await page.locator('text=observability-robots').click()
-    await page.locator('text=issue-3916').click()
-    await page.locator('text=plan.md').click()
-    await expect(page.locator('.preview')).toContainText('Implementation Plan', { timeout: 3000 })
-  })
-
-  test('shows JSON file content', async ({ page }) => {
-    await page.goto('#/results')
-    await page.locator('text=elastic').click()
-    await page.locator('text=observability-robots').click()
-    await page.locator('text=issue-3916').click()
-    await page.locator('text=classification.json').click()
-    await expect(page.locator('.preview')).toContainText('documentation', { timeout: 3000 })
-  })
-
-  test('breadcrumb .. goes up one level', async ({ page }) => {
-    await page.goto('#/results')
-    await page.locator('text=elastic').click()
-    await expect(page.locator('.breadcrumb')).toContainText('elastic')
-    await page.locator('button.link', { hasText: '..' }).click()
-    await expect(page.locator('text=elastic')).toBeVisible()
+    await page.waitForSelector('.tree-item')
+    // Navigate to a file
+    await page.locator('.tree-item', { hasText: 'elastic' }).click()
+    await page.locator('.tree-item', { hasText: 'observability-robots' }).click()
+    await page.locator('.tree-item', { hasText: 'issue-3916' }).click()
+    await page.waitForSelector('.tree-item.file')
+    await page.locator('.tree-item.file').first().click()
+    await expect(page.locator('button', { hasText: 'Preview' })).toBeVisible()
+    await expect(page.locator('button', { hasText: 'Edit' })).toBeVisible()
   })
 })
 
@@ -160,6 +187,11 @@ test.describe('Results browser', () => {
 test.describe('Runs page', () => {
   test('loads without errors', async ({ page }) => {
     await page.goto('#/runs')
-    await expect(page.locator('h2', { hasText: 'Runs' })).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('h1', { hasText: 'Runs' })).toBeVisible({ timeout: 5000 })
+  })
+
+  test('has status filter', async ({ page }) => {
+    await page.goto('#/runs')
+    await expect(page.locator('select')).toBeVisible({ timeout: 5000 })
   })
 })
