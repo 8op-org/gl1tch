@@ -55,12 +55,16 @@ func TestWorkspaceIntegration(t *testing.T) {
 		t.Fatalf("SaveLoopResult: %v", err)
 	}
 
-	// Check result landed in workspace
-	resultDir := filepath.Join(wsDir, "results", "elastic", "ensemble", "issue-99")
-	if _, err := os.Stat(filepath.Join(resultDir, "README.md")); err != nil {
+	// Check result landed in workspace (run-scoped dir with latest symlink)
+	issueDir := filepath.Join(wsDir, "results", "elastic", "ensemble", "issue-99")
+	latestDir, err := filepath.EvalSymlinks(filepath.Join(issueDir, "latest"))
+	if err != nil {
+		t.Fatalf("latest symlink: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(latestDir, "README.md")); err != nil {
 		t.Fatal("README.md not in workspace results")
 	}
-	if _, err := os.Stat(filepath.Join(resultDir, "run.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(latestDir, "run.json")); err != nil {
 		t.Fatal("run.json not in workspace results")
 	}
 }
