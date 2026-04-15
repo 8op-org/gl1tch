@@ -63,6 +63,9 @@ type Step struct {
 	// Plugin invocation
 	PluginCall *PluginCallStep `yaml:"-"`
 
+	// Display hint — shown in CLI output next to the step name
+	Hint string `yaml:"-"`
+
 	// Phase/gate marker
 	IsGate bool `yaml:"-"`
 

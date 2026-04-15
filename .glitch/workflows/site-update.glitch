@@ -1,54 +1,129 @@
-;; site-update.glitch — regenerate 8op.org from doc stubs, examples, and git history
+;; site-update.glitch — regenerate all docs via AI, verify, build
 ;;
-;; Run with: glitch ask "update the website"
-;;        or: glitch workflow run site-update
+;; Each page gets rewritten by tiered LLM using real repo context.
+;; Triple gate catches hallucinations before anything ships.
+;; Changelog summarized by copilot.
+;;
+;; Run with: glitch workflow run site-update
 
 (workflow "site-update"
-  :description "regenerate 8op.org docs from markdown stubs, real examples, and git history"
+  :description "AI-regenerate all docs, verify, build"
 
-  ;; ── Phase 1: Gather ──────────────────────────────
+  ;; ── Gather context (shell, 0 tokens) ──────────────
+
   (step "stubs"
     (run "cat docs/site/*.md"))
 
   (step "examples"
     (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
-  (step "changelog-raw"
-    (run "git log --oneline --since='2025-01-01' -- cmd/ internal/ examples/ .glitch/"))
+  (step "workflows"
+    (run "for f in .glitch/workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
-  ;; ── Phase 2: Generate ────────────────────────────
+  (step "repo-structure"
+    (run "find internal/ cmd/ -name '*.go' -not -path '*/testdata/*' | head -50"))
+
+  (step "changelog-raw"
+    (run "git log --oneline --since='2025-01-01' -- cmd/ internal/ examples/ .glitch/ docs/site/"))
+
+  ;; ── Regenerate all pages (tiered — local first) ───
+
   (step "enrich-docs"
     (llm
-      :provider "copilot"
       :format "json"
       :prompt ```
         You are a technical writer for gl1tch (8op.org).
 
-        Rules:
+        RULES:
         - "your" framing throughout, never "the user"
         - examples before explanation
         - no internal implementation details (no BubbleTea, tmux, SQLite, Go types)
-        - every code example must come from the Real Examples section below
-        - do NOT invent commands, flags, or features that aren't shown in the examples
+        - every code example must come from the Real Examples or Workflows below
+        - do NOT invent commands, flags, or features
+        - preserve each stub's structure and headings — expand and improve, don't reorganize
+        - be thorough but concise
 
-        Your job: expand each stub into a full documentation page.
+        Your job: expand each stub into a polished documentation page.
 
-        Output as a JSON array of objects:
-        [{"slug": "getting-started", "title": "...", "order": 1, "description": "...", "content": "markdown body..."}]
+        Output as a JSON array:
+        [{"slug": "getting-started", "title": "...", "order": 1, "description": "...", "content": "markdown body"}]
 
-        Stubs:
+        STUBS (your starting point):
         {{step "stubs"}}
 
-        Real examples (use these verbatim, do not modify):
+        REAL EXAMPLES (use verbatim):
         {{step "examples"}}
+
+        REAL WORKFLOWS:
+        {{step "workflows"}}
+
+        REPO STRUCTURE:
+        {{step "repo-structure"}}
         ```))
+
+  ;; ── Save with fallback ────────────────────────────
+
+  (step "save-docs"
+    (run ```
+      python3 -c "
+import json, sys, re, glob, os
+
+raw = '''{{step \"enrich-docs\"}}'''
+
+# Try to parse JSON array from LLM output
+pages = []
+match = re.search(r'\[[\s\S]*\]', raw)
+if match:
+    try:
+        pages = json.loads(match.group())
+    except json.JSONDecodeError:
+        pass
+
+# Fallback: if LLM output didn't parse, use raw stubs
+if not pages or not all('slug' in p and 'content' in p for p in pages):
+    print('WARN: LLM output failed to parse, falling back to raw stubs', file=sys.stderr)
+    pages = []
+    order = 1
+    for path in sorted(glob.glob('docs/site/*.md')):
+        slug = os.path.splitext(os.path.basename(path))[0]
+        with open(path) as f:
+            content = f.read()
+        title = slug.replace('-', ' ').title()
+        for line in content.splitlines():
+            if line.startswith('# '):
+                title = line[2:].strip()
+                break
+        lines = content.splitlines()
+        if lines and lines[0].startswith('# '):
+            content = chr(10).join(lines[1:]).lstrip(chr(10))
+        desc = ''
+        for line in content.splitlines():
+            s = line.strip()
+            if s and not s.startswith('#') and not s.startswith(chr(96)):
+                desc = s[:120]
+                break
+        pages.append({'slug': slug, 'title': title, 'order': order, 'description': desc, 'content': content})
+        order += 1
+
+pages.sort(key=lambda p: p.get('order', 99))
+
+with open('site/generated/docs.json', 'w') as f:
+    json.dump(pages, f, indent=2)
+print(f'wrote {len(pages)} pages to site/generated/docs.json')
+"
+      ```))
+
+  (step "split-docs"
+    (run "python3 scripts/split-docs.py"))
+
+  ;; ── Changelog ─────────────────────────────────────
 
   (step "enrich-changelog"
     (llm
       :provider "copilot"
       :prompt ```
         Summarize these git commits into user-facing changelog entries.
-        Group by feature area (workflow engine, providers, CLI, docs).
+        Group by feature area (workflow engine, providers, CLI, plugins, docs).
         Skip purely internal refactors unless they change user-visible behavior.
         Output as markdown. Each entry: ### heading, then bullet points.
 
@@ -56,38 +131,26 @@
         {{step "changelog-raw"}}
         ```))
 
-  ;; ── Phase 3: Verify ──────────────────────────────
-  (step "diff-review"
-    (llm
-      :provider "copilot"
-      :prompt ```
-        You are a verification reviewer for the gl1tch project website.
-
-        Compare the generated docs against the original stubs.
-        Check:
-        1. No hallucinated features — the docs must not claim glitch can do
-           something that isn't demonstrated in the real examples
-        2. Every stub heading is covered in the generated output
-        3. Code examples use valid s-expression syntax (parentheses balanced,
-           keywords prefixed with colon, strings quoted)
-        4. Tone is user-first ("your"), no implementation internals
-
-        Original stubs:
-        {{step "stubs"}}
-
-        Generated docs:
-        {{step "enrich-docs"}}
-
-        Respond with exactly PASS or FAIL on the first line,
-        then list specific findings below.
-        ```))
-
-  ;; ── Phase 4: Output ──────────────────────────────
-  (step "save-docs"
-    (save "site/generated/docs.json" :from "enrich-docs"))
-
   (step "save-changelog"
     (save "site/generated/changelog.md" :from "enrich-changelog"))
 
-  (step "save-report"
-    (save "site/generated/build-report.md" :from "diff-review")))
+  ;; ── Triple gate (retries once on failure) ─────────
+
+  (phase "verify" :retries 1
+    (gate "no-hallucinations"
+      (run "python3 scripts/gate-hallucinations.py"))
+    (gate "stub-coverage"
+      (run "python3 scripts/gate-coverage.py"))
+    (gate "structure-and-tone"
+      (run "python3 scripts/gate-structure.py")))
+
+  ;; ── Build ─────────────────────────────────────────
+
+  (step "build-report"
+    (run "echo 'PASS' > site/generated/build-report.md && echo 'All gates passed.'"))
+
+  (step "build-site"
+    (run "cd site && npx astro build 2>&1"))
+
+  (step "done"
+    (run "echo 'Site built to site/dist/'")))

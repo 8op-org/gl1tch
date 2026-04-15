@@ -1,0 +1,87 @@
+;; site-update-page.glitch — AI rewrites an existing doc page with gated verification
+;;
+;; Run with: glitch workflow run site-update-page --set page=plugins
+;; Or:       glitch workflow run site-update-page --set page=getting-started --set instructions="add section about par form"
+
+(workflow "site-update-page"
+  :description "AI-rewrite an existing doc page with gated verification"
+
+  ;; ── Gather context ────────────────────────────────
+
+  (step "current-page"
+    (run "cat docs/site/{{.param.page}}.md"))
+
+  (step "examples"
+    (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
+
+  (step "repo-structure"
+    (run "find internal/ cmd/ -name '*.go' -not -path '*/testdata/*' | head -40"))
+
+  (step "recent-commits"
+    (run "git log --oneline -30 -- cmd/ internal/ examples/ .glitch/"))
+
+  (step "workflows"
+    (run "for f in .glitch/workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
+
+  ;; ── Rewrite (tiered) ─────────────────────────────
+
+  (step "rewrite"
+    (llm
+      :prompt ```
+        You are a technical writer for gl1tch (8op.org).
+
+        RULES:
+        - "your" framing throughout, never "the user"
+        - examples before explanation
+        - no internal implementation details (no BubbleTea, tmux, SQLite, Go types)
+        - code examples must be real — use the repo context below
+        - do NOT invent commands, flags, or features
+        - preserve the page's slug and general structure
+        - improve accuracy, add missing content, fix outdated information
+
+        INSTRUCTIONS: {{.param.instructions}}
+
+        CURRENT PAGE CONTENT:
+        {{step "current-page"}}
+
+        REAL EXAMPLES FROM REPO:
+        {{step "examples"}}
+
+        REAL WORKFLOWS:
+        {{step "workflows"}}
+
+        REPO STRUCTURE:
+        {{step "repo-structure"}}
+
+        RECENT CHANGES:
+        {{step "recent-commits"}}
+
+        OUTPUT: The complete updated markdown page. Start with the # Heading.
+        Include everything — this replaces the entire file.
+        ```))
+
+  ;; ── Save ──────────────────────────────────────────
+
+  (step "save"
+    (run ```
+      cat > "docs/site/{{.param.page}}.md" << 'STUBEOF'
+{{step "rewrite"}}
+STUBEOF
+      echo "updated docs/site/{{.param.page}}.md"
+      ```))
+
+  ;; ── Rebuild and verify ────────────────────────────
+
+  (step "rebuild"
+    (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
+
+  (phase "verify" :retries 1
+    (gate "no-hallucinations"
+      (run "python3 scripts/gate-hallucinations.py"))
+    (gate "stub-coverage"
+      (run "python3 scripts/gate-coverage.py"))
+    (gate "structure-and-tone"
+      (run "python3 scripts/gate-structure.py")))
+
+  (step "done"
+    (run "echo 'Page updated. Run: glitch workflow run site-dev to preview.'")))

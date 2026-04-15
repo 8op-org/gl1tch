@@ -18,6 +18,7 @@ import (
 
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/provider"
+	"github.com/8op-org/gl1tch/internal/ui"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -164,7 +165,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	// runBareStep executes a single step and accumulates telemetry.
 	runBareStep := func(step Step) error {
 		if _, seeded := steps[step.ID]; seeded {
-			fmt.Printf("  > %s (seeded, skipped)\n", step.ID)
+			ui.StepSDK(step.ID, "seeded, skipped")
 			return nil
 		}
 
@@ -370,7 +371,7 @@ func PreRunSharedSteps(w *Workflow, params map[string]string) (map[string]string
 		if i > 0 {
 			rctx.prevStepID = w.Steps[i-1].ID
 		}
-		fmt.Printf("  > %s (shared pre-run)\n", step.ID)
+		ui.StepShell(step.ID)
 		outcome, err := executeStep(rctx.ctx, rctx, step)
 		if err != nil {
 			return nil, fmt.Errorf("shared step %s: %w", step.ID, err)
@@ -636,7 +637,7 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	var lastErr error
 	for attempt := range maxAttempts {
 		if attempt > 0 {
-			fmt.Printf("  > %s (retry %d/%d)\n", step.ID, attempt, step.Retry)
+			ui.StepRetry(step.ID, attempt, step.Retry)
 		}
 
 		outcome, err := runSingleStep(ctx, rctx, step)
@@ -657,7 +658,7 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 
 	// All retries exhausted — try fallback if catch form
 	if step.Form == "catch" && step.Fallback != nil {
-		fmt.Printf("  > %s (fallback → %s)\n", step.ID, step.Fallback.ID)
+		ui.StepFallback(step.ID, step.Fallback.ID)
 		outcome, err := runSingleStep(ctx, rctx, *step.Fallback)
 		if err != nil {
 			return nil, fmt.Errorf("step %s fallback %s: %w", step.ID, step.Fallback.ID, err)
@@ -806,7 +807,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
-		fmt.Printf("  > %s (save → %s)\n", step.ID, rendered)
+		ui.StepSave(step.ID, rendered)
 		sourceStep := step.SaveStep
 		if sourceStep == "" && rctx.prevStepID != "" {
 			sourceStep = rctx.prevStepID
@@ -827,7 +828,13 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
-		fmt.Printf("  > %s\n", step.ID)
+		if !step.IsGate {
+			if step.Hint != "" {
+				ui.StepRunning(step.ID, step.Hint)
+			} else {
+				ui.StepShell(step.ID)
+			}
+		}
 		out, err := provider.RunShellContext(ctx, rendered)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)
@@ -849,13 +856,14 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			rendered = skillContent + "\n\n---\n\n" + rendered
 		}
 
-		fmt.Printf("  > %s\n", step.ID)
-
 		prov := strings.ToLower(step.LLM.Provider)
 		model := step.LLM.Model
+		displayModel := step.LLM.Model // only show what the user explicitly set
 		if model == "" {
 			model = rctx.defaultModel
 		}
+
+		ui.StepLLM(step.ID, prov, displayModel)
 
 		var out string
 		var stepTier int
@@ -880,6 +888,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 
 			runner := provider.NewTieredRunner(activeTiers, rctx.reg)
 			runner.Resolver = rctx.providerResolver
+			runner.Log = ui.TierLog
 
 			format := step.LLM.Format
 			evalFn := func(evalModel, evalPrompt string) (provider.LLMResult, error) {
@@ -974,6 +983,8 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			stepCost = estimateCost(prov, model, stepTokensIn, stepTokensOut)
 		}
 
+		ui.StepLLMDone(step.ID, prov, displayModel, int64(stepTokensIn), int64(stepTokensOut), time.Since(llmStart))
+
 		return &stepOutcome{
 			output:     out,
 			tokensIn:   stepTokensIn,
@@ -996,7 +1007,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
-		fmt.Printf("  > %s (json-pick)\n", step.ID)
+		ui.StepSDK(step.ID, "json-pick")
 		cmd := exec.CommandContext(ctx, "jq", rendered)
 		cmd.Stdin = strings.NewReader(from)
 		out, err := cmd.Output()
@@ -1018,7 +1029,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			parts = append(parts, string(b))
 		}
 		out := "[" + strings.Join(parts, ",") + "]"
-		fmt.Printf("  > %s (lines)\n", step.ID)
+		ui.StepSDK(step.ID, "lines")
 		return &stepOutcome{output: out}, nil
 	}
 
@@ -1037,7 +1048,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if err != nil {
 			return nil, fmt.Errorf("step %s: merge marshal: %w", step.ID, err)
 		}
-		fmt.Printf("  > %s (merge)\n", step.ID)
+		ui.StepSDK(step.ID, "merge")
 		return &stepOutcome{output: string(out)}, nil
 	}
 
@@ -1069,7 +1080,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			}
 			req.Header.Set(k, hv)
 		}
-		fmt.Printf("  > %s (http-%s)\n", step.ID, strings.ToLower(method))
+		ui.StepSDK(step.ID, "http-"+strings.ToLower(method))
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: http: %w", step.ID, err)
@@ -1090,7 +1101,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
-		fmt.Printf("  > %s (read-file)\n", step.ID)
+		ui.StepSDK(step.ID, "read-file")
 		content, err := os.ReadFile(rendered)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: read-file: %w", step.ID, err)
@@ -1110,7 +1121,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if err := os.WriteFile(rendered, []byte(content), 0o644); err != nil {
 			return nil, fmt.Errorf("step %s: write-file: %w", step.ID, err)
 		}
-		fmt.Printf("  > %s (write-file)\n", step.ID)
+		ui.StepSDK(step.ID, "write-file")
 		return &stepOutcome{output: rendered}, nil
 	}
 
@@ -1123,7 +1134,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			}
 			pattern = filepath.Join(dirRendered, pattern)
 		}
-		fmt.Printf("  > %s (glob)\n", step.ID)
+		ui.StepSDK(step.ID, "glob")
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: glob: %w", step.ID, err)
@@ -1132,7 +1143,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.PluginCall != nil {
-		fmt.Printf("  > %s (plugin %s %s)\n", step.ID, step.PluginCall.Plugin, step.PluginCall.Subcommand)
+		ui.StepPlugin(step.ID, step.PluginCall.Plugin, step.PluginCall.Subcommand)
 		pc := step.PluginCall
 
 		// Render template expressions in plugin args (e.g., {{.param.repo}})
@@ -1213,15 +1224,11 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 	var lastGateResults []GateResult
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		if attempt > 1 {
-			fmt.Printf("\n>>> Phase %q retry %d/%d\n", p.ID, attempt-1, p.Retries)
-		} else {
-			fmt.Printf("\n>>> Phase %q\n", p.ID)
-		}
+		ui.PhaseStart(p.ID, attempt-1, p.Retries)
 
 		// Run all work steps
 		for _, step := range p.Steps {
-			fmt.Printf("  > %s\n", step.ID)
+			ui.PhaseStep(step.ID)
 			outcome, err := executeStep(rctx.ctx, rctx, step)
 			if err != nil {
 				return nil, fmt.Errorf("phase %q step %q: %w", p.ID, step.ID, err)
@@ -1247,14 +1254,14 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 		for _, gate := range p.Gates {
 			if gate.Form == "par" {
 				// Run all par children concurrently
-				fmt.Printf("  > gates (parallel)")
+				ui.StepSDK("gates", "parallel")
 				for _, child := range gate.ParSteps {
-					fmt.Printf(" %s", child.ID)
+					ui.GateStart(child.ID)
 				}
-				fmt.Println()
 				_, execErr := executeStep(rctx.ctx, rctx, gate)
 				if execErr != nil {
 					for _, child := range gate.ParSteps {
+						ui.GateFail(child.ID, execErr.Error())
 						lastGateResults[flatIdx] = GateResult{ID: child.ID, Passed: false, Detail: execErr.Error()}
 						flatIdx++
 					}
@@ -1268,7 +1275,10 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 					rctx.mu.Unlock()
 					passed, detail := evaluateGate(child, &stepOutcome{output: output}, nil)
 					lastGateResults[flatIdx] = GateResult{ID: child.ID, Passed: passed, Detail: detail}
-					if !passed {
+					if passed {
+						ui.GatePass(child.ID)
+					} else {
+						ui.GateFail(child.ID, detail)
 						allPassed = false
 					}
 					flatIdx++
@@ -1277,10 +1287,11 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 					break
 				}
 			} else {
-				// Sequential gate (existing behavior)
-				fmt.Printf("  > gate %s\n", gate.ID)
+				// Sequential gate
+				ui.GateStart(gate.ID)
 				outcome, execErr := executeStep(rctx.ctx, rctx, gate)
 				if execErr != nil {
+					ui.GateFail(gate.ID, execErr.Error())
 					rctx.mu.Lock()
 					rctx.steps[gate.ID] = execErr.Error()
 					rctx.mu.Unlock()
@@ -1294,7 +1305,10 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 				rctx.mu.Unlock()
 				passed, detail := evaluateGate(gate, outcome, nil)
 				lastGateResults[flatIdx] = GateResult{ID: gate.ID, Passed: passed, Detail: detail}
-				if !passed {
+				if passed {
+					ui.GatePass(gate.ID)
+				} else {
+					ui.GateFail(gate.ID, detail)
 					allPassed = false
 					flatIdx++
 					break
@@ -1314,7 +1328,7 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 		if attempt < maxAttempts {
 			for _, gr := range lastGateResults {
 				if !gr.Passed && !gr.Skipped {
-					fmt.Printf("  > gate %s FAILED, retrying phase\n", gr.ID)
+					ui.GateRetry(gr.ID)
 					break
 				}
 			}

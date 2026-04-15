@@ -1,0 +1,61 @@
+;; site-publish.glitch — full pipeline: generate, verify, build, commit
+;;
+;; Run after editing stubs. Generates docs, runs gates, builds static
+;; site, and commits everything.
+;;
+;; Run with: glitch workflow run site-publish
+
+(workflow "site-publish"
+  :description "generate, verify, build, and commit the site"
+
+  ;; ── Generate ──────────────────────────────────────
+
+  (step "build-json"
+    (run "python3 scripts/stubs-to-json.py"))
+
+  (step "save-docs"
+    (save "site/generated/docs.json" :from "build-json"))
+
+  (step "split-docs"
+    (run "python3 scripts/split-docs.py"))
+
+  ;; ── Changelog ─────────────────────────────────────
+
+  (step "changelog-raw"
+    (run "git log --oneline --since='2025-01-01' -- cmd/ internal/ examples/ .glitch/ docs/site/"))
+
+  (step "enrich-changelog"
+    (llm
+      :provider "copilot"
+      :prompt ```
+        Summarize these git commits into user-facing changelog entries.
+        Group by feature area (workflow engine, providers, CLI, plugins, docs).
+        Skip purely internal refactors unless they change user-visible behavior.
+        Output as markdown. Each entry: ### heading, then bullet points.
+
+        Commits:
+        {{step "changelog-raw"}}
+        ```))
+
+  (step "save-changelog"
+    (save "site/generated/changelog.md" :from "enrich-changelog"))
+
+  ;; ── Verify ────────────────────────────────────────
+
+  (phase "verify" :retries 0
+    (gate "no-hallucinations"
+      (run "python3 scripts/gate-hallucinations.py"))
+    (gate "stub-coverage"
+      (run "python3 scripts/gate-coverage.py"))
+    (gate "structure-and-tone"
+      (run "python3 scripts/gate-structure.py")))
+
+  ;; ── Build ─────────────────────────────────────────
+
+  (step "build"
+    (run "cd site && npx astro build 2>&1"))
+
+  ;; ── Report ────────────────────────────────────────
+
+  (step "report"
+    (run "echo 'PASS — site built to site/dist/'")))

@@ -7,322 +7,219 @@ import Base from '../layouts/Base.astro';
 
 <!-- ── Hero ──────────────────────────────────── -->
 <section class="hero" id="hero">
-<div class="wrap">
-<div class="hero-inner">
-  <h1 class="hero-title">gl1tch</h1>
-  <p class="hero-tagline">your AI, your terminal, your rules</p>
-  <p class="hero-desc">A composable CLI that chains shell commands and LLMs into workflows you own.</p>
-
-  <div class="hero-install">
-    <pre class="code copyable" data-copy="brew install 8op-org/tap/glitch"><span class="p">$</span> brew install 8op-org/tap/glitch</pre>
-  </div>
-
-  <a href="https://github.com/8op-org/gl1tch" class="btn btn-primary">View on GitHub</a>
-  <a href="/docs/getting-started" class="btn" style="margin-left: 12px; border: 1px solid var(--border); color: var(--dim);">Read the docs</a>
-</div>
-</div>
-</section>
-
-<!-- ── Ask anything ─────────────────────────── -->
-<section id="ask">
-<div class="wrap">
-  <h2>Ask anything</h2>
-  <p class="section-copy">One command. gl1tch routes your question to the right workflow &mdash; PR URLs go to review, natural language gets matched by your local LLM.</p>
-
-  <pre class="code"><span class="p">$</span> glitch ask "review PR github.com/org/repo/pull/42"
-<span class="r">&rarr; routes to github-pr-review workflow</span>
-
-<span class="p">$</span> glitch ask "what issues are open"
-<span class="r">&rarr; routes to github-issues workflow</span>
-
-<span class="p">$</span> glitch ask "CI status"
-<span class="r">&rarr; routes to github-actions workflow</span></pre>
-
-  <div class="feature-grid">
-    <div class="feature-card">
-      <h3>Smart routing</h3>
-      <p>URL patterns detected instantly, freeform questions matched via Ollama.</p>
-    </div>
-    <div class="feature-card">
-      <h3>Local-first</h3>
-      <p>Your local LLM picks the workflow. Nothing leaves your machine unless you say so.</p>
-    </div>
-    <div class="feature-card">
-      <h3>Zero config</h3>
-      <p>Works out of the box with built-in workflows.</p>
+<div class="hero-wrap">
+  <div class="hero-left">
+    <h1 class="hero-title">gl1tch</h1>
+    <p class="hero-tagline">Shell does the work.<br>LLM does the thinking.<br>You own the workflow.</p>
+    <div class="hero-actions">
+      <pre class="code copyable hero-cmd" data-copy="brew install 8op-org/tap/glitch"><span class="p">$</span> brew install 8op-org/tap/glitch</pre>
+      <div class="hero-links">
+        <a href="https://github.com/8op-org/gl1tch" class="btn btn-primary">GitHub</a>
+        <a href="/docs/getting-started" class="btn btn-ghost">Docs</a>
+      </div>
     </div>
   </div>
-</div>
-</section>
+  <div class="hero-right">
+    <pre class="code hero-demo"><span class="r">;; this is a workflow</span>
 
-<!-- ── Compose workflows ────────────────────── -->
-<section id="workflows">
-<div class="wrap">
-  <h2>Compose workflows</h2>
-  <p class="section-copy">Shell commands fetch the data. LLMs make sense of it. Chain them together in s-expressions.</p>
+(<span class="k">workflow</span> <span class="s">"pr-review"</span>
 
-  <div class="split">
-    <pre class="code"><span class="r">;; .glitch/workflows/github-pr-review.glitch</span>
+  (<span class="k">step</span> <span class="s">"fetch"</span>
+    (<span class="k">run</span> <span class="s">"gh pr view {'{{.input}}'} --json title,body"</span>))
 
-(<span class="k">workflow</span> <span class="s">"github-pr-review"</span>
-
-  (<span class="k">step</span> <span class="s">"fetch-pr"</span>
-    (<span class="k">run</span> <span class="s">"gh pr view {'{{.input}}'} --json title,body,reviews"</span>))
-
-  (<span class="k">step</span> <span class="s">"fetch-diff"</span>
+  (<span class="k">step</span> <span class="s">"diff"</span>
     (<span class="k">run</span> <span class="s">"gh pr diff {'{{.input}}'}"</span>))
 
   (<span class="k">step</span> <span class="s">"review"</span>
     (<span class="k">llm</span>
-      <span class="r">:provider</span> <span class="s">"claude"</span>
       <span class="r">:prompt</span> <span class="s">```
-        PR: {'{{step "fetch-pr"}}'}
-        Diff: {'{{step "fetch-diff"}}'}
+        PR: {'{{step "fetch"}}'}
+        Diff: {'{{step "diff"}}'}
         Review as a senior engineer.
-        Flag bugs and security issues.
         ```</span>)))</pre>
-
-    <ul class="callout-list">
-      <li>
-        <h3>Shell steps own data</h3>
-        <p><code>gh</code>, <code>git</code>, <code>curl</code> &mdash; anything on your PATH.</p>
-      </li>
-      <li>
-        <h3>LLM steps own reasoning</h3>
-        <p>Claude, Ollama &mdash; swap providers per step.</p>
-      </li>
-      <li>
-        <h3>Go templates</h3>
-        <p>Chain outputs with <code>{'{{step "id"}}'}</code>, pass input with <code>{'{{.input}}'}</code>.</p>
-      </li>
-      <li>
-        <h3>Your workflows, your repo</h3>
-        <p>Drop .glitch files in <code>.glitch/workflows/</code> and they're live.</p>
-      </li>
-    </ul>
   </div>
 </div>
 </section>
 
-<!-- ── Extend with plugins ──────────────────── -->
-<section id="plugins">
+<!-- ── What it does ─────────────────────────── -->
+<section id="features">
+<div class="wrap-wide">
+  <div class="section-label">what you get</div>
+
+  <div class="features-grid">
+
+    <div class="feature-card feature-hero-card">
+      <div class="feature-number">01</div>
+      <h3>S-expressions, not YAML</h3>
+      <p>Workflows are parenthesized lists. Every construct composes — retry wraps timeout wraps step. No indentation wars. No anchor hacks.</p>
+      <pre class="code feature-code">(<span class="k">retry</span> <span class="s">2</span>
+  (<span class="k">timeout</span> <span class="s">"30s"</span>
+    (<span class="k">step</span> <span class="s">"fetch"</span>
+      (<span class="k">run</span> <span class="s">"curl -sf ..."</span>))))</pre>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-number">02</div>
+      <h3>Phase gates</h3>
+      <p>Verification built into the language. Gates must pass before the phase completes. If they fail, the phase retries.</p>
+      <pre class="code feature-code">(<span class="k">phase</span> <span class="s">"verify"</span> <span class="r">:retries</span> <span class="s">1</span>
+  (<span class="k">gate</span> <span class="s">"check"</span>
+    (<span class="k">run</span> <span class="s">"python3 verify.py"</span>)))</pre>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-number">03</div>
+      <h3>Tiered escalation</h3>
+      <p>Start on your local model for free. gl1tch self-evaluates the output. Escalates to cloud only when quality demands it.</p>
+      <pre class="code feature-code"><span class="r">;; tier 0: lm-studio (free)</span>
+<span class="r">;; tier 1: copilot</span>
+<span class="r">;; tier 2: claude</span>
+(<span class="k">llm</span> <span class="r">:tier</span> <span class="s">0</span> <span class="r">:format</span> <span class="s">"json"</span> <span class="r">:prompt</span> <span class="s">"..."</span>)</pre>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-number">04</div>
+      <h3>Plugins are directories</h3>
+      <p>A plugin is a folder of <code>.glitch</code> files. Each file is a subcommand. Args become flags. No compilation. No release pipeline.</p>
+      <pre class="code feature-code"><span class="p">$</span> glitch plugin github prs --since week
+<span class="r">["Fix flaky test", "Add retry logic"]</span></pre>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-number">05</div>
+      <h3>Knowledge index</h3>
+      <p><code>glitch index</code> ingests your repos into Elasticsearch. <code>glitch observe</code> queries them in natural language. Workflows use it as memory.</p>
+      <pre class="code feature-code"><span class="p">$</span> glitch observe "PRs that failed CI this week"</pre>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-number">06</div>
+      <h3>Batch comparison</h3>
+      <p>Run the same workflow across Ollama, Claude, and Copilot. A neutral local model grades the outputs. Same inputs, different brains.</p>
+      <pre class="code feature-code"><span class="p">$</span> for v in local claude copilot; do
+    glitch workflow run "issue-to-pr-$v"
+  done</pre>
+    </div>
+
+  </div>
+</div>
+</section>
+
+<!-- ── The workflow ─────────────────────────── -->
+<section id="how">
 <div class="wrap">
-  <h2>Extend with plugins</h2>
-  <p class="section-copy">Any binary on your PATH named <code>glitch-*</code> becomes a command. No registry, no config, no approval process.</p>
+  <div class="section-label">how it works</div>
+  <h2>One command. gl1tch figures out the rest.</h2>
 
-  <pre class="code"><span class="p">$</span> glitch plugin list
-  glitch-summarize
-  glitch-deploy
-
-<span class="p">$</span> glitch summarize README.md
-<span class="r"># runs glitch-summarize, passes args through</span></pre>
-
-  <div class="feature-grid">
-    <div class="feature-card">
-      <h3>Zero ceremony</h3>
-      <p>Drop a binary on PATH and it's a command.</p>
+  <div class="how-grid">
+    <div class="how-step">
+      <div class="how-num">01 ask</div>
+      <pre class="code"><span class="p">$</span> glitch ask "review PR #42"
+<span class="r">&rarr; routes to pr-review workflow</span></pre>
+      <p>Smart routing matches your question to the right workflow via local LLM. Nothing leaves your machine.</p>
     </div>
-    <div class="feature-card">
-      <h3>Any language</h3>
-      <p>Go, Python, Bash, Rust &mdash; if it runs, it's a plugin.</p>
+    <div class="how-step">
+      <div class="how-num">02 shell gathers data</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"diff"</span>
+  (<span class="k">run</span> <span class="s">"gh pr diff {'{{.input}}'}"</span>))</pre>
+      <p>Shell steps call <code>gh</code>, <code>git</code>, <code>curl</code>, <code>jq</code> — free and deterministic.</p>
     </div>
-    <div class="feature-card">
-      <h3>First-class args</h3>
-      <p>stdin / stdout / stderr pass through. Flags are yours.</p>
+    <div class="how-step">
+      <div class="how-num">03 LLM reasons about it</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"review"</span>
+  (<span class="k">llm</span> <span class="r">:prompt</span> <span class="s">```
+    Review: {'{{step "diff"}}'}
+    ```</span>))</pre>
+      <p>Swap providers per step. Ollama, Claude, Copilot, LM Studio.</p>
     </div>
   </div>
 </div>
 </section>
 
-<!-- ── Real-world examples ──────────────────── -->
-<section id="examples">
-<div class="wrap">
-  <h2>Real-world examples</h2>
-  <p class="section-copy">These workflows are in production. Shell steps fetch live data, LLM steps make sense of it.</p>
+<!-- ── This site builds itself ─────────────── -->
+<section id="meta">
+<div class="wrap-wide">
+  <div class="section-label">proof it works</div>
+  <h2>This site builds itself.</h2>
+  <p class="section-copy">The page you're reading was generated by the workflow on the left. The output on the right is from the actual run. Stubs convert to JSON via python. Copilot summarizes the changelog. Three gates verify before anything ships.</p>
 
-  <div class="examples">
+  <div class="meta-split">
+    <div class="meta-workflow">
+      <div class="meta-file-label">.glitch/workflows/site-update.glitch</div>
+      <pre class="code">(<span class="k">workflow</span> <span class="s">"site-update"</span>
 
-    <div class="example">
-      <div class="example-header">
-        <h3>Email triage</h3>
-        <span class="example-tag">shell + jq + LLM</span>
-      </div>
-      <p class="example-desc">Fetch unread emails, filter out bots with jq, then ask an LLM which ones actually need a reply.</p>
-      <pre class="code"><span class="r">;; email-triage.glitch</span>
+  (<span class="k">step</span> <span class="s">"build-json"</span>
+    (<span class="k">run</span> <span class="s">"python3 scripts/stubs-to-json.py"</span>))
 
-(<span class="k">workflow</span> <span class="s">"email-triage"</span>
-  <span class="r">:description</span> <span class="s">"surface emails that need a human reply"</span>
+  (<span class="k">step</span> <span class="s">"save-docs"</span>
+    (<span class="k">save</span> <span class="s">"site/generated/docs.json"</span>
+      <span class="r">:from</span> <span class="s">"build-json"</span>))
 
-  (<span class="k">step</span> <span class="s">"fetch-unread"</span>
-    (<span class="k">run</span> <span class="s">"gws gmail +triage --max 50 --format json | jq '.messages'"</span>))
+  (<span class="k">step</span> <span class="s">"changelog-raw"</span>
+    (<span class="k">run</span> <span class="s">"git log --oneline --since=..."</span>))
 
-  (<span class="k">step</span> <span class="s">"filter-bots"</span>
-    (<span class="k">run</span> <span class="s">```
-      cat &lt;&lt;'EOF' | jq '[.[] | select(
-        (.from | test("noreply@|notifications@github|
-          jira@|automation@|dependabot"; "i")) | not
-      )]'
-      {'{{step "fetch-unread"}}'}
-      EOF
-      ```</span>))
-
-  (<span class="k">step</span> <span class="s">"triage"</span>
+  (<span class="k">step</span> <span class="s">"enrich-changelog"</span>
     (<span class="k">llm</span>
-      <span class="r">:provider</span> <span class="s">"claude"</span>
-      <span class="r">:format</span> <span class="s">"json"</span>
-      <span class="r">:prompt</span> <span class="s">```
-        Classify which emails need attention.
-        Skip newsletters, automated reports, mass CCs.
-        Return JSON: [&#123;sender, subject, reason&#125;]
+      <span class="r">:provider</span> <span class="s">"copilot"</span>
+      <span class="r">:prompt</span> <span class="s">"Summarize commits..."</span>))
 
-        Emails: {'{{step "filter-bots"}}'}
-        ```</span>)))</pre>
+  (<span class="k">step</span> <span class="s">"save-changelog"</span>
+    (<span class="k">save</span> <span class="s">"site/generated/changelog.md"</span>
+      <span class="r">:from</span> <span class="s">"enrich-changelog"</span>))
+
+  (<span class="k">phase</span> <span class="s">"verify"</span> <span class="r">:retries</span> <span class="s">0</span>
+    (<span class="k">gate</span> <span class="s">"no-hallucinations"</span>
+      (<span class="k">run</span> <span class="s">"python3 scripts/gate-hallucinations.py"</span>))
+    (<span class="k">gate</span> <span class="s">"stub-coverage"</span>
+      (<span class="k">run</span> <span class="s">"python3 scripts/gate-coverage.py"</span>))
+    (<span class="k">gate</span> <span class="s">"structure-and-tone"</span>
+      (<span class="k">run</span> <span class="s">"python3 scripts/gate-structure.py"</span>))))</pre>
     </div>
 
-    <div class="example">
-      <div class="example-header">
-        <h3>Task prioritizer</h3>
-        <span class="example-tag">GraphQL + jq &mdash; no LLM needed</span>
-      </div>
-      <p class="example-desc">Pull review requests and your own PRs via GraphQL. Score them into HIGH / MEDIUM / LOW with pure jq — no LLM, zero cost.</p>
-      <pre class="code"><span class="r">;; task-prioritizer.glitch</span>
+    <div class="meta-output">
+      <div class="meta-file-label">terminal output</div>
+      <pre class="code meta-trace"><span class="p">$</span> glitch workflow run site-update
+<span class="term-header">&gt;&gt; site-update</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">build-json</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">save-docs</span>              <span class="term-arrow">&rarr; site/generated/docs.json</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">changelog-raw</span>
+  <span class="term-llm">&check;</span> <span class="term-llm">enrich-changelog</span>      <span class="term-anno">copilot &middot; 847 tok &middot; 3.2s</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">save-changelog</span>         <span class="term-arrow">&rarr; site/generated/changelog.md</span>
 
-(<span class="k">workflow</span> <span class="s">"task-prioritizer"</span>
-  <span class="r">:description</span> <span class="s">"prioritized task list as JSON"</span>
+<span class="term-header">&gt;&gt;&gt; Phase "verify"</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate no-hallucinations</span>  <span class="term-pass">PASS</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate stub-coverage</span>      <span class="term-pass">PASS</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate structure-and-tone</span> <span class="term-pass">PASS</span>
 
-  (<span class="k">step</span> <span class="s">"fetch-reviews"</span>
-    (<span class="k">run</span> <span class="s">```
-      gh api graphql -f query='&#123;
-        search(query: "type:pr state:open review-requested:@me"
-               type: ISSUE, first: 50) &#123;
-          nodes &#123; ... on PullRequest &#123;
-            number title url createdAt
-            repository &#123; nameWithOwner &#125;
-          &#125;&#125;
-        &#125;
-      &#125;' | jq '[.data.search.nodes[] | &#123;
-        type: "review", number, title, url,
-        repo: .repository.nameWithOwner,
-        age_days: ((now - (.createdAt|fromdateiso8601)) / 86400 | floor)
-      &#125;]'
-      ```</span>))
+  <span class="term-dim">&gt;</span> <span class="term-dim">build-report</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">save-report</span>            <span class="term-arrow">&rarr; site/generated/build-report.md</span>
 
-  (<span class="k">step</span> <span class="s">"fetch-own-prs"</span>
-    (<span class="k">run</span> <span class="s">```
-      gh api graphql -f query='&#123;
-        search(query: "type:pr state:open author:@me"
-               type: ISSUE, first: 50) &#123;
-          nodes &#123; ... on PullRequest &#123;
-            number title url createdAt
-            commits(last:1) &#123; nodes &#123; commit &#123;
-              statusCheckRollup &#123; state &#125;
-            &#125;&#125;&#125;
-          &#125;&#125;
-        &#125;
-      &#125;' | jq '[.data.search.nodes[] | &#123;
-        type: "own_pr", number, title, url,
-        ci: (.commits.nodes[0].commit
-              .statusCheckRollup.state // "UNKNOWN")
-      &#125;]'
-      ```</span>))
-
-  (<span class="k">step</span> <span class="s">"prioritize"</span>
-    (<span class="k">run</span> <span class="s">```
-      jq -n --argjson r '{'{{step "fetch-reviews"}}'}' \
-            --argjson p '{'{{step "fetch-own-prs"}}'}' '&#123;
-        high:   ([$r[] | select(.age_days > 2)]
-               + [$p[] | select(.ci == "FAILURE")]),
-        medium: [$r[] | select(.age_days &lt;= 2)],
-        low:    [$p[] | select(.ci != "FAILURE")]
-      &#125;'
-      ```</span>)))</pre>
+<span class="term-anno">&mdash;&mdash; 1.4s &middot; 847 tokens &middot; $0.00</span></pre>
     </div>
-
-    <div class="example">
-      <div class="example-header">
-        <h3>Dashboard pipeline</h3>
-        <span class="example-tag">8 workflows &rarr; static site</span>
-      </div>
-      <p class="example-desc">Run every workflow, dump JSON into an Astro data directory, build a static dashboard, open it. Whole thing takes 30 seconds.</p>
-      <pre class="code"><span class="r">#!/bin/bash</span>
-<span class="r"># One script orchestrates everything</span>
-
-for wf in email-triage task-prioritizer review-dashboard \
-          my-prs ci-status calendar falling-behind activity-log; do
-  if glitch workflow run "$wf" > "data/$wf.json"; then
-    echo "  $wf... <span class="s">ok</span>"
-  else
-    echo "[]" > "data/$wf.json"
-    echo "  $wf... <span class="k">fallback</span>"
-  fi
-done
-
-npx astro build &amp;&amp; open dist/index.html</pre>
-      <p class="example-note">Each workflow owns its own data fetching and formatting. The build script just runs them and catches failures with sensible defaults. Swap any workflow without touching the others.</p>
-    </div>
-
   </div>
-
-  <div class="example-callout">
-    <h3>You don't have to write the workflow</h3>
-    <p>With the gl1tch skill installed in your coding agent, just describe what you want. The agent writes the workflow, saves it, and runs it.</p>
-    <pre class="code"><span class="p">&gt;</span> build me a workflow that checks my open PRs across
-  these repos, flags anything with failing CI, and
-  gives me a prioritized list of what to look at first
-
-<span class="r"># Your agent writes the workflow, saves it to</span>
-<span class="r"># .glitch/workflows/pr-triage.glitch, and runs it.</span>
-<span class="r"># Next time: glitch ask "triage my PRs"</span></pre>
-  </div>
-
 </div>
 </section>
 
-<!-- ── Give your agents gl1tch ──────────────── -->
+<!-- ── Agent integration ───────────────────── -->
 <section id="agents">
 <div class="wrap">
-  <h2>Give your agents gl1tch</h2>
-  <p class="section-copy">Install a skill and your AI coding agent can run gl1tch workflows directly in your project.</p>
+  <div class="section-label">integrations</div>
+  <h2>Give your agents gl1tch.</h2>
 
   <div class="agent-cards">
-
     <div class="agent-card">
-      <div class="agent-card-top">
-        <div class="agent-card-label">Claude Code</div>
-        <div class="agent-card-cmd">
-          <pre class="code copyable" data-copy="npx @anthropic-ai/superpower install gl1tch"><span class="p">$</span> npx @anthropic-ai/superpower install gl1tch</pre>
-        </div>
-      </div>
-      <div class="agent-card-note">Your agent gets glitch ask, workflow authoring, and pipeline execution as native skills.</div>
+      <div class="agent-card-label">Claude Code</div>
+      <pre class="code copyable" data-copy="npx @anthropic-ai/superpower install gl1tch"><span class="p">$</span> npx @anthropic-ai/superpower install gl1tch</pre>
     </div>
-
     <div class="agent-card">
-      <div class="agent-card-top">
-        <div class="agent-card-label">Cursor / Copilot</div>
-        <div class="agent-card-cmd">
-          <pre class="code copyable" data-copy="curl -sLo .cursorrules https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules"><span class="r"># Add .cursorrules to your project root</span>
-<span class="p">$</span> curl -sLo .cursorrules <span class="s">https://raw.githubusercontent.com/
-  8op-org/gl1tch/main/skills/cursor/.cursorrules</span></pre>
-        </div>
-      </div>
-      <div class="agent-card-note">Drops a .cursorrules file your agent picks up automatically.</div>
+      <div class="agent-card-label">Cursor / Copilot</div>
+      <pre class="code copyable" data-copy="curl -sLo .cursorrules https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules"><span class="p">$</span> curl -sLo .cursorrules <span class="s">https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules</span></pre>
     </div>
-
     <div class="agent-card">
-      <div class="agent-card-top">
-        <div class="agent-card-label">Any agent</div>
-        <div class="agent-card-cmd">
-          <pre class="code copyable" data-copy="curl -sLo AGENTS.md https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md"><span class="r"># Add AGENTS.md to your project root</span>
-<span class="p">$</span> curl -sLo AGENTS.md <span class="s">https://raw.githubusercontent.com/
-  8op-org/gl1tch/main/skills/generic/AGENTS.md</span></pre>
-        </div>
-      </div>
-      <div class="agent-card-note">Generic instructions any LLM coding tool can follow.</div>
+      <div class="agent-card-label">Any agent</div>
+      <pre class="code copyable" data-copy="curl -sLo AGENTS.md https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md"><span class="p">$</span> curl -sLo AGENTS.md <span class="s">https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md</span></pre>
     </div>
-
   </div>
-
-  <p class="bottom-note">Skills let your agent compose and run workflows without you typing a thing. Author once, delegate forever.</p>
 </div>
 </section>
 

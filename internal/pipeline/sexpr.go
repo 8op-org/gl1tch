@@ -507,6 +507,26 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 	}
 	children = children[1:]
 
+	// Parse optional keywords before the body form (:hint "text")
+	for len(children) > 0 {
+		child := children[0]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			kw := child.KeywordVal()
+			children = children[1:]
+			if len(children) == 0 {
+				return s, fmt.Errorf("line %d: keyword :%s missing value", child.Line, kw)
+			}
+			val := resolveVal(children[0], defs)
+			children = children[1:]
+			switch kw {
+			case "hint":
+				s.Hint = val
+			}
+			continue
+		}
+		break
+	}
+
 	for _, child := range children {
 		if !child.IsList() || len(child.Children) == 0 {
 			return s, fmt.Errorf("line %d: step body must be (run ...), (llm ...), or (save ...)", child.Line)

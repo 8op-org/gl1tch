@@ -19,11 +19,23 @@ type ProviderFunc func(model, prompt string) (LLMResult, error)
 // ResolverFunc looks up a provider by name. Returns the call function and true if found.
 type ResolverFunc func(name string) (ProviderFunc, bool)
 
+// TierLogFunc is called for tier escalation events. If nil, logs to stderr.
+type TierLogFunc func(format string, args ...any)
+
 // TieredRunner tries providers in tier order, escalating on failure or validation rejection.
 type TieredRunner struct {
 	tiers    []TierConfig
 	reg      *ProviderRegistry
 	Resolver ResolverFunc
+	Log      TierLogFunc
+}
+
+func (tr *TieredRunner) log(format string, args ...any) {
+	if tr.Log != nil {
+		tr.Log(format, args...)
+	} else {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}
 }
 
 // EscalationReason describes why a tier was skipped.
@@ -71,10 +83,10 @@ func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(st
 			}
 
 			model := tier.Model
-			fmt.Fprintf(os.Stderr, ">> tier %d: trying %s\n", tierIdx, name)
+			tr.log("tier %d: trying %s", tierIdx, name)
 			result, err := tr.callProvider(name, model, prompt)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, ">> tier %d: %s error: %v\n", tierIdx, name, err)
+				tr.log("tier %d: %s error: %v", tierIdx, name, err)
 				lastReason = ReasonProviderError
 				continue // next provider in same tier
 			}
@@ -84,7 +96,7 @@ func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(st
 				if len(preview) > 500 {
 					preview = preview[:500]
 				}
-				fmt.Fprintf(os.Stderr, ">> tier %d: %s rejected (%s), escalating\n>> response preview: [%s]\n", tierIdx, name, reason, preview)
+				tr.log("tier %d: %s rejected (%s), escalating", tierIdx, name, reason)
 				lastReason = reason
 				break // escalate to next tier
 			}
@@ -166,10 +178,10 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 			}
 
 			model := tier.Model
-			fmt.Fprintf(os.Stderr, ">> smart tier %d: trying %s\n", tierIdx, name)
+			tr.log("tier %d: trying %s", tierIdx, name)
 			result, err := tr.callProvider(name, model, prompt)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s error: %v\n", tierIdx, name, err)
+				tr.log("tier %d: %s error: %v", tierIdx, name, err)
 				lastReason = ReasonProviderError
 				continue // next provider in same tier
 			}
@@ -178,7 +190,7 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 
 			// Structural check
 			if !CheckStructure(format, result.Response) {
-				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s structural fail, escalating\n", tierIdx, name)
+				tr.log("tier %d: %s structural fail, escalating", tierIdx, name)
 				scores = append(scores, 0)
 				lastReason = ReasonStructural
 				break // escalate to next tier
@@ -186,7 +198,7 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 
 			// Final tier: accept without eval
 			if tierIdx == lastTier {
-				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s accepted (final tier)\n", tierIdx, name)
+				tr.log("tier %d: %s accepted (final tier)", tierIdx, name)
 				return RunResult{
 					LLMResult:       result,
 					Tier:            tierIdx,
@@ -206,7 +218,7 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 			scores = append(scores, score)
 
 			if score >= threshold {
-				fmt.Fprintf(os.Stderr, ">> smart tier %d: %s accepted (score %d >= %d)\n", tierIdx, name, score, threshold)
+				tr.log("tier %d: %s accepted (score %d/%d)", tierIdx, name, score, threshold)
 				return RunResult{
 					LLMResult:       result,
 					Tier:            tierIdx,
@@ -216,7 +228,7 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 				}, nil
 			}
 
-			fmt.Fprintf(os.Stderr, ">> smart tier %d: %s rejected (score %d < %d), escalating\n", tierIdx, name, score, threshold)
+			tr.log("tier %d: %s rejected (score %d/%d), escalating", tierIdx, name, score, threshold)
 			lastReason = ReasonEval
 			break // escalate to next tier
 		}

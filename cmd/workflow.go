@@ -12,6 +12,7 @@ import (
 
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
+	"github.com/8op-org/gl1tch/internal/ui"
 )
 
 var workflowParams []string
@@ -101,7 +102,7 @@ var workflowRunCmd = &cobra.Command{
 			return fmt.Errorf("workflow %q not found", name)
 		}
 
-		fmt.Printf(">> %s\n", w.Name)
+		ui.WorkflowStart(w.Name)
 
 		// Wire ES telemetry for workflow LLM calls
 		var tel *esearch.Telemetry

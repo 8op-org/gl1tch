@@ -1,22 +1,22 @@
 ---
 title: "Workflow Syntax"
-order: 2
-description: "S-expression workflow reference for glitch"
+order: 5
+description: "gl1tch workflows are `.glitch` files written in s-expression syntax — parenthesized lists with keyword arguments:"
 ---
 
 ## Overview
 
-gl1tch workflows are `.glitch` files written in s-expression syntax — every construct is a parenthesized list:
+gl1tch workflows are `.glitch` files written in s-expression syntax — parenthesized lists with keyword arguments:
 
 ```
 (form arg1 arg2 :keyword value)
 ```
 
-Place your workflow files in `.glitch/workflows/` for automatic discovery.
+Drop your files in `.glitch/workflows/` for automatic discovery. This page is the complete reference for every form available.
 
 ## Workflow structure
 
-A workflow wraps one or more steps under a name and optional description:
+A workflow wraps named steps. Here is a complete real-world example:
 
 ````glitch
 ;; code-review.glitch — review staged changes before committing
@@ -55,37 +55,52 @@ A workflow wraps one or more steps under a name and optional description:
         ```)))
 ````
 
-Run it:
-
-```bash
-glitch workflow run code-review
-```
+The string passed to `(workflow ...)` is the name you use with `glitch workflow run`.
 
 ## Definitions
 
-`(def name value)` binds a constant you can reuse across steps. Define your model and provider once at the top, then reference the names wherever a value is expected:
+`(def name value)` binds a constant for the whole file. Define your model once, reference it everywhere:
 
-```glitch
+````glitch
 (def model "qwen2.5:7b")
 (def provider "ollama")
-```
 
-```glitch
-(llm :provider provider :model model ...)
-```
+(workflow "hello-sexpr"
+  :description "Demo s-expression workflow format"
+
+  (step "gather"
+    (run "echo 'hello from a .glitch workflow'"))
+
+  (step "respond"
+    (llm
+      :provider provider
+      :model model
+      :prompt ```
+        You received this message from a shell command:
+        {{step "gather"}}
+
+        Respond with a short, enthusiastic acknowledgment.
+        ```)))
+````
+
+Defs are simple text substitution — use them for anything you repeat: model names, provider strings, repo paths, usernames.
 
 ## Steps
 
-Every step has an `id` and a single action.
+Every step has an ID and a single action. The ID names the output so later steps can reference it.
 
-**Shell step** — runs a command and captures stdout:
+### Shell step
+
+Runs a command via `sh -c` and captures stdout:
 
 ```glitch
 (step "diff"
   (run "git diff --cached"))
 ```
 
-**LLM step** — sends a prompt to a language model:
+### LLM step
+
+Sends a prompt to a language model:
 
 ````glitch
 (step "changelog"
@@ -101,16 +116,38 @@ Every step has an `id` and a single action.
       ```))
 ````
 
-**Save step** — writes a step's output to a file:
+### Save step
+
+Writes a prior step's output to a file:
 
 ```glitch
 (step "save-it"
   (save "results/changelog.md" :from "changelog"))
 ```
 
-## Step references
+Paths can use template variables: `"results/{{.param.repo}}/summary.md"`.
 
-`{{step "id"}}` inserts a named step's output into any prompt or shell command. `{{.input}}` inserts the value your workflow was invoked with. `{{.param.key}}` inserts a runtime value passed with `--set`:
+## Step references and templates
+
+gl1tch uses Go `text/template` for variable substitution.
+
+| Expression | What it does |
+|-----------|-------------|
+| `{{step "id"}}` | Insert a named step's output |
+| `{{stepfile "id"}}` | Write step output to a temp file, return the path |
+| `{{.input}}` | The value passed to `glitch ask` or as trailing arg |
+| `{{.param.key}}` | A runtime parameter from `--set key=value` |
+
+**Important:** Parameters must have a dot — `{{.param.repo}}` not `{{param.repo}}`. Without the dot it silently stays literal.
+
+Use `{{stepfile "id"}}` when step output contains characters that break shell escaping:
+
+```glitch
+(step "process"
+  (run "cat '{{stepfile \"big-json\"}}' | jq '.items[]'"))
+```
+
+Full example with `--set` parameters:
 
 ````glitch
 ;; parameterized.glitch
@@ -144,23 +181,22 @@ Every step has an `id` and a single action.
     (save "results/{{.param.repo}}/summary.md" :from "summary")))
 ````
 
-```bash
-glitch workflow run parameterized --set repo=gl1tch
-```
-
 ## LLM options
 
-| Option | Values | Description |
+All keyword arguments for `(llm ...)`:
+
+| Option | Values | What it does |
 |--------|--------|-------------|
-| `:provider` | `"ollama"`, `"claude"`, `"copilot"`, `"gemini"`, custom | LLM backend |
-| `:model` | model identifier | e.g. `"qwen2.5:7b"` |
+| `:prompt` | string (required) | The prompt text |
+| `:provider` | `"ollama"`, `"claude"`, `"copilot"`, `"gemini"`, custom | Which LLM backend |
+| `:model` | model identifier | e.g. `"qwen2.5:7b"`, `"sonnet"` |
 | `:skill` | skill name | Prepends skill context to your prompt |
-| `:format` | `"json"` or `"yaml"` | Validates output as structured data |
+| `:format` | `"json"` or `"yaml"` | Validates that output parses correctly |
 | `:tier` | `0`, `1`, `2` | Pin to a specific cost tier |
 
-Here's `:skill` in action — `reviewer-verify` context is prepended to your prompt automatically:
+Using `:skill` to inject context — the skill content is prepended to your prompt automatically:
 
-```glitch
+````glitch
 (workflow "agent-with-skill"
   :description "Demonstrates the agent executor with skill injection in s-expression format."
 
@@ -175,19 +211,256 @@ Here's `:skill` in action — `reviewer-verify` context is prepended to your pro
 
   (step "save-review"
     (save "review-output.md" :from "review")))
-```
+````
 
 ## Tiered cost routing
 
-Omit `:provider` and `:tier` and gl1tch routes the step through tiers automatically:
+When you omit both `:provider` and `:tier`, gl1tch routes automatically through tiers:
 
-- **Tier 0** — local (ollama), free, runs first
-- **Tier 1** — cheap cloud provider
-- **Tier 2** — premium model
+- **Tier 0** — local (ollama), free
+- **Tier 1** — cheap cloud (openrouter free tier, copilot)
+- **Tier 2** — premium (claude)
 
-After each non-final tier, the output is self-evaluated for quality. If it passes, routing stops. If not, it escalates to the next tier.
+After each non-final tier, gl1tch self-evaluates the response quality. If it passes, routing stops. If not, it escalates. You pay for quality only when the local model can't handle it.
 
-Adding `:format "json"` or `:format "yaml"` enables structural validation — the output must parse successfully or the step escalates. Use `:tier 2` to always route a step to the premium model.
+Pin a step to a tier when you know what you need:
+
+```glitch
+;; Classification is fast and low-stakes — keep it local
+(step "classify"
+  (llm :tier 0 :format "json"
+    :prompt "Classify this issue... Respond with ONLY valid JSON."))
+
+;; PR review needs rigor — go straight to premium
+(step "review"
+  (llm :tier 2
+    :prompt "Review this PR with HIGH RIGOR..."))
+```
+
+Adding `:format "json"` enables structural validation — the output must parse as JSON or the step escalates. Use it to enforce structure without writing parsing logic.
+
+## Control flow
+
+### retry
+
+Retry a step up to N times on failure. Useful for flaky API calls:
+
+```glitch
+(retry 3
+  (step "fetch"
+    (run "curl -sf https://api.example.com/data")))
+```
+
+### timeout
+
+Kill a step if it hangs beyond a duration (Go duration strings: `"30s"`, `"2m"`, `"1h"`):
+
+```glitch
+(timeout "90s"
+  (step "grade"
+    (llm :prompt "Compare these variant outputs...")))
+```
+
+### retry + timeout compose
+
+Forms nest. Retry a slow step with a timeout on each attempt:
+
+```glitch
+(retry 2
+  (timeout "30s"
+    (step "flaky-slow"
+      (run "curl -sf https://slow-api.example.com"))))
+```
+
+### catch
+
+Run a primary step; if it fails, run a fallback instead:
+
+```glitch
+(catch
+  (step "fetch-graphql"
+    (run "gh api graphql -f query='...'"))
+  (step "fallback"
+    (run "gh issue view {{.param.issue}} --json body")))
+```
+
+This is used in production to gracefully degrade when GraphQL endpoints are unavailable:
+
+````glitch
+;; From a real plugin — fetch linked PRs via GraphQL, fall back to simple output
+(catch
+  (step "related"
+    (run ```
+      REPO="{{.param.repo}}"
+      ISSUE="{{.param.issue}}"
+      echo "=== LINKED PRS ==="
+      gh api graphql -f query="..." 2>/dev/null \
+        | jq -r '.data.repository.issue.timelineItems.nodes[]?.source
+          | select(. != null)
+          | "\(.state) #\(.number) \(.title)"' 2>/dev/null
+      echo ""
+      echo "=== RECENT REPO ACTIVITY ==="
+      gh api "repos/$REPO/commits?per_page=10" \
+        --jq '.[] | "\(.sha[0:7]) \(.commit.message | split("\n")[0])"' 2>/dev/null
+      ```))
+  (step "fallback"
+    (run "echo 'no linked PRs found'")))
+````
+
+### cond
+
+Multi-branch conditional. Predicates are shell commands — exit 0 means true:
+
+```glitch
+(cond
+  ("test -f critical.log"
+    (step "alert"
+      (run "notify-send 'Critical issue found'")))
+  ("test -f warning.log"
+    (step "warn"
+      (run "echo 'Warnings detected'")))
+  (else
+    (step "ok"
+      (run "echo 'All clear'"))))
+```
+
+### map
+
+Iterate over a prior step's output, one item per line. `{{.param.item}}` is the current item, `{{.param.item_index}}` is the zero-based index:
+
+````glitch
+(step "find-docs"
+  (run "find . -name '*.md' -maxdepth 2"))
+
+(map "find-docs"
+  (step "process-doc"
+    (run "wc -l {{.param.item}}")))
+````
+
+In production, `map` powers document ingestion — iterating over discovered files and processing each one:
+
+````glitch
+(step "find-docs"
+  (run ```
+    find "$REPO_PATH" -type f \( -name "README*" -o -name "*.md" \) \
+      -not -path '*/.git/*' -not -path '*/node_modules/*' \
+      -size -100k 2>/dev/null | sort
+    ```))
+
+(map "find-docs"
+  (step "process-doc"
+    (run ```
+      FILE="{{.param.item}}"
+      CONTENT=$(cat "$FILE" 2>/dev/null | head -500)
+      # ... hash, check for changes, index to ES
+      echo "INDEXED: $REL_PATH"
+      ```)))
+````
+
+### let
+
+Scoped bindings — like `def` but limited to the body. Shadows outer defs within scope:
+
+```glitch
+(let ((endpoint "https://api.example.com")
+      (token "abc123"))
+  (step "call"
+    (run "curl -H 'Auth: {{.param.token}}' endpoint"))
+  (step "parse"
+    (run "echo '{{step \"call\"}}' | jq '.data'")))
+```
+
+### phase and gate
+
+Group steps into a phase with optional retry semantics. Gates are verification steps that must pass before the phase is considered complete:
+
+```glitch
+(phase "gather"
+  (step "data" (run "echo 'hello world'")))
+
+(phase "process" :retries 1
+  (step "transform" (run "echo 'TRANSFORMED: hello world'"))
+  (gate "not-empty" (run "test -n \"$(echo 'TRANSFORMED: hello world')\"")))
+```
+
+If a gate fails, the whole phase retries up to `:retries` times.
+
+## SDK forms
+
+Built-in forms that reduce boilerplate. Available in workflows and plugins.
+
+### json-pick
+
+Run a jq expression against a step's output:
+
+```glitch
+(step "shape"
+  (json-pick ".[].title" :from "fetch"))
+```
+
+```glitch
+(step "extract"
+  (json-pick ".data.search.nodes" :from "graphql-result"))
+```
+
+### lines
+
+Split a step's output by newline into a JSON string array:
+
+```glitch
+(step "as-list"
+  (lines "find-files"))
+```
+
+### merge
+
+Combine JSON output from multiple steps into one object:
+
+```glitch
+(step "activity"
+  (merge "my-prs" "reviews" "mentions"))
+```
+
+### http-get / http-post
+
+HTTP requests without shelling out:
+
+```glitch
+(step "fetch-data"
+  (http-get "https://api.example.com/data"
+    :headers {"Authorization" "Bearer {{.param.token}}"}))
+
+(step "submit"
+  (http-post "https://api.example.com/submit"
+    :body "{{step \"payload\"}}"
+    :headers {"Content-Type" "application/json"}))
+```
+
+Non-2xx responses fail the step (respects `retry` and `catch` wrappers).
+
+### read-file / write-file
+
+File I/O without shell commands:
+
+```glitch
+(step "config"
+  (read-file "config/settings.json"))
+
+(step "save-output"
+  (write-file "output/report.json" :from "analysis"))
+```
+
+### glob
+
+Match files against a pattern:
+
+```glitch
+(step "find-reviews"
+  (glob "*/review.md"
+    :dir "results/{{.param.repo}}/issue-{{.param.issue}}/iteration-1"))
+```
+
+Output is newline-separated file paths — composes with `map` for batch processing.
 
 ## Comments and discard
 
@@ -230,7 +503,7 @@ Line comments start with `;`:
 
 ## Multiline strings
 
-Triple backticks delimit multiline prompts inside `.glitch` files. Content is auto-dedented, so you can indent for readability without affecting the output:
+Triple backticks delimit multiline prompts. Content is auto-dedented, so indent for readability without affecting the output:
 
 ````glitch
 (llm
@@ -241,9 +514,49 @@ Triple backticks delimit multiline prompts inside `.glitch` files. Content is au
     Files changed:
     {{step "files"}}
 
-    Diff:
-    {{step "diff"}}
-
     If everything looks good, say so. Be concise.
     ```)
 ````
+
+## Complete form reference
+
+### Top-level forms
+
+| Form | Description |
+|------|-------------|
+| `(def name "value")` | Bind a constant for the file |
+| `(workflow "name" :description "..." ...)` | Declare a workflow |
+
+### Step-level forms (inside a step)
+
+| Form | Description |
+|------|-------------|
+| `(run "command")` | Shell command (sh -c) |
+| `(llm :prompt "..." ...)` | LLM call |
+| `(save "path" :from "step-id")` | Write step output to file |
+| `(name/sub :arg "val")` | Call a plugin subcommand (namespaced shorthand) |
+| `(plugin "name" "sub" :arg "val")` | Call a plugin subcommand (verbose form) |
+| `(json-pick "expr" :from "step-id")` | Run jq expression on step output |
+| `(lines "step-id")` | Split output by newline into JSON array |
+| `(merge "a" "b" ...)` | Combine JSON from multiple steps |
+| `(http-get "url" :headers {...})` | HTTP GET request |
+| `(http-post "url" :body "..." :headers {...})` | HTTP POST request |
+| `(read-file "path")` | Read file into step output |
+| `(write-file "path" :from "step-id")` | Write step output to file |
+| `(glob "pattern" :dir "path")` | Match files, newline-separated output |
+
+### Wrapper forms (around steps)
+
+| Form | Description |
+|------|-------------|
+| `(retry N (step ...))` | Retry step up to N times on failure |
+| `(timeout "30s" (step ...))` | Kill step after duration |
+| `(catch (step ...) (step ...))` | Primary + fallback on failure |
+| `(cond (pred (step ...)) ...)` | Multi-branch conditional |
+| `(map "step-id" (step ...))` | Iterate over step output (one item per line) |
+| `(let ((name val) ...) body...)` | Scoped variable bindings |
+| `(phase "id" [:retries N] steps... [gates...])` | Grouped steps with verification gates |
+
+## Next steps
+
+- [Plugins](/docs/plugins) — package reusable subcommands and compose them into workflows

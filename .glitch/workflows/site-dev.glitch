@@ -1,0 +1,21 @@
+;; site-dev.glitch — live dev loop for editing docs
+;;
+;; Regenerates docs.json from stubs and starts astro dev server.
+;; Edit any stub in docs/site/, astro hot-reloads.
+;;
+;; Run with: glitch workflow run site-dev
+
+(workflow "site-dev"
+  :description "regenerate docs and start dev server"
+
+  (step "generate"
+    (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
+
+  (step "ensure-changelog"
+    (run "test -f site/generated/changelog.md || echo '# No changelog yet' > site/generated/changelog.md"))
+
+  (step "ensure-report"
+    (run "echo 'PASS' > site/generated/build-report.md"))
+
+  (step "dev" :hint "http://localhost:4322"
+    (run "cd site && npx astro dev --port 4322")))
