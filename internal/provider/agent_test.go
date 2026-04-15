@@ -33,7 +33,7 @@ func TestBuildArgs(t *testing.T) {
 	}{
 		{"claude", "", []string{"claude", "-p", "--output-format", "json"}},
 		{"claude", "sonnet", []string{"claude", "-p", "--output-format", "json", "--model", "sonnet"}},
-		{"copilot", "", []string{"gh", "copilot", "explain"}},
+		{"copilot", "", []string{"gh", "copilot", "-p"}},
 		{"gemini", "", []string{"gemini", "-p"}},
 	}
 	for _, tt := range tests {
