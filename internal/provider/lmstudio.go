@@ -122,3 +122,101 @@ func (p *LMStudioProvider) downloadModel(model string) error {
 		}
 	}
 }
+
+// Chat sends a prompt to LM Studio's OpenAI-compatible chat completions endpoint.
+// If the model is not found locally, it triggers an auto-download.
+func (p *LMStudioProvider) Chat(model, prompt string) (LLMResult, error) {
+	if model == "" {
+		model = p.DefaultModel
+	}
+
+	base := strings.TrimRight(p.BaseURL, "/")
+
+	// Check model availability
+	exists, loaded, err := p.checkModels(model)
+	if err != nil {
+		return LLMResult{}, err
+	}
+
+	// Auto-download if not found
+	if !exists {
+		fmt.Fprintf(os.Stderr, ">> lm-studio: model %s not found, downloading...\n", model)
+		if err := p.downloadModel(model); err != nil {
+			return LLMResult{}, err
+		}
+		// Re-check after download
+		exists, loaded, err = p.checkModels(model)
+		if err != nil {
+			return LLMResult{}, err
+		}
+		if !exists {
+			return LLMResult{}, fmt.Errorf("lm-studio: model %s not found after download", model)
+		}
+	}
+
+	if !loaded {
+		fmt.Fprintf(os.Stderr, ">> lm-studio: loading %s, expect delay\n", model)
+	}
+
+	// Send chat completion request
+	start := time.Now()
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"stream": false,
+	})
+
+	url := base + "/v1/chat/completions"
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return LLMResult{}, fmt.Errorf("lm-studio: request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return LLMResult{}, fmt.Errorf("lm-studio: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return LLMResult{}, fmt.Errorf("lm-studio: read: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return LLMResult{}, fmt.Errorf("lm-studio: %s\n%s", resp.Status, data)
+	}
+
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(data, &chatResp); err != nil {
+		return LLMResult{}, fmt.Errorf("lm-studio: parse: %w", err)
+	}
+
+	content := ""
+	if len(chatResp.Choices) > 0 {
+		content = strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	}
+
+	return LLMResult{
+		Provider:  "lm-studio",
+		Model:     model,
+		Response:  content,
+		TokensIn:  chatResp.Usage.PromptTokens,
+		TokensOut: chatResp.Usage.CompletionTokens,
+		Latency:   time.Since(start),
+		CostUSD:   0,
+	}, nil
+}
