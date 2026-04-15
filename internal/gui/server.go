@@ -30,7 +30,13 @@ type Server struct {
 
 // New creates a GUI server for the given workspace.
 func New(addr, workspace string, dev bool) (*Server, error) {
-	st, err := store.Open()
+	var st *store.Store
+	var err error
+	if workspace != "" {
+		st, err = store.OpenForWorkspace(workspace)
+	} else {
+		st, err = store.Open()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
