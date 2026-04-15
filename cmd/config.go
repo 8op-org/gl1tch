@@ -118,6 +118,9 @@ func loadConfigFrom(path string) (*Config, error) {
 }
 
 func loadConfig() (*Config, error) {
+	if mergedConfig != nil {
+		return mergedConfig, nil
+	}
 	return loadConfigFrom(configPath())
 }
 

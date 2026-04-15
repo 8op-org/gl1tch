@@ -45,19 +45,19 @@ func IsSubstantive(draft string) bool {
 
 // runJSON is the metadata structure written to run.json.
 type runJSON struct {
-	RunID       string  `json:"run_id"`
-	Repo        string  `json:"repo"`
-	RefType     string  `json:"ref_type"`
-	RefNumber   int     `json:"ref_number"`
-	Source      string  `json:"source"`
-	SourceURL   string  `json:"source_url"`
-	Goal        Goal    `json:"goal"`
-	ToolCalls   int     `json:"tool_calls"`
-	LLMCalls    int     `json:"llm_calls"`
-	TokensIn    int     `json:"tokens_in"`
-	TokensOut   int     `json:"tokens_out"`
-	CostUSD     float64 `json:"cost_usd"`
-	MaxTier     int     `json:"max_tier"`
+	RunID         string  `json:"run_id"`
+	Repo          string  `json:"repo"`
+	RefType       string  `json:"ref_type"`
+	RefNumber     int     `json:"ref_number"`
+	Source        string  `json:"source"`
+	SourceURL     string  `json:"source_url"`
+	Goal          Goal    `json:"goal"`
+	ToolCalls     int     `json:"tool_calls"`
+	LLMCalls      int     `json:"llm_calls"`
+	TokensIn      int     `json:"tokens_in"`
+	TokensOut     int     `json:"tokens_out"`
+	CostUSD       float64 `json:"cost_usd"`
+	MaxTier       int     `json:"max_tier"`
 	Escalations   int     `json:"escalations"`
 	DurationMS    int64   `json:"duration_ms"`
 	Workspace     string  `json:"workspace"`
@@ -137,19 +137,19 @@ func SaveLoopResult(baseDir string, result LoopResult) error {
 	}
 
 	meta := runJSON{
-		RunID:       result.RunID,
-		Repo:        result.Document.Repo,
-		RefType:     refType,
-		RefNumber:   refNumber,
-		Source:      result.Document.Source,
-		SourceURL:   result.Document.SourceURL,
-		Goal:        result.Goal,
-		ToolCalls:   len(result.ToolCalls),
-		LLMCalls:    result.LLMCalls,
-		TokensIn:    result.TokensIn,
-		TokensOut:   result.TokensOut,
-		CostUSD:     result.CostUSD,
-		MaxTier:     result.MaxTier,
+		RunID:         result.RunID,
+		Repo:          result.Document.Repo,
+		RefType:       refType,
+		RefNumber:     refNumber,
+		Source:        result.Document.Source,
+		SourceURL:     result.Document.SourceURL,
+		Goal:          result.Goal,
+		ToolCalls:     len(result.ToolCalls),
+		LLMCalls:      result.LLMCalls,
+		TokensIn:      result.TokensIn,
+		TokensOut:     result.TokensOut,
+		CostUSD:       result.CostUSD,
+		MaxTier:       result.MaxTier,
 		Escalations:   result.Escalations,
 		DurationMS:    result.Duration.Milliseconds(),
 		Workspace:     result.Workspace,

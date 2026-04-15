@@ -220,21 +220,23 @@ func resolveWorkflowsDir(cfg *Config) string {
 
 // ensureWorkspaceDir creates the .glitch state directory inside a workspace
 // with an inner .gitignore. Idempotent — safe to call on every run.
-func ensureWorkspaceDir(wsPath string) {
+func ensureWorkspaceDir(wsPath string) error {
 	dotGlitch := filepath.Join(wsPath, ".glitch")
-	os.MkdirAll(dotGlitch, 0o755)
+	if err := os.MkdirAll(dotGlitch, 0o755); err != nil {
+		return fmt.Errorf("create .glitch dir: %w", err)
+	}
 	giPath := filepath.Join(dotGlitch, ".gitignore")
 	if _, err := os.Stat(giPath); os.IsNotExist(err) {
-		os.WriteFile(giPath, []byte("*\n"), 0o644)
+		if err := os.WriteFile(giPath, []byte("*\n"), 0o644); err != nil {
+			return fmt.Errorf("write .glitch/.gitignore: %w", err)
+		}
 	}
+	return nil
 }
 
 // resolveResultsDir returns the results directory based on flags and workspace.
 // Priority: --results-dir flag > <workspace>/results/ > CWD/.glitch/results
 func resolveResultsDir() string {
-	if workspacePath != "" {
-		ensureWorkspaceDir(workspacePath)
-	}
 	if askResultsDir != "" {
 		return askResultsDir
 	}

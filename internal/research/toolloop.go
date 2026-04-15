@@ -38,15 +38,15 @@ func (tc ToolCall) Params() map[string]string {
 
 // LoopResult captures everything that happened during a tool-use research run.
 type LoopResult struct {
-	RunID       string           `json:"run_id"`
-	Document    ResearchDocument `json:"document"`
-	Goal        Goal             `json:"goal"`
-	Output      string           `json:"output"`
-	ToolCalls   []ToolResult     `json:"tool_calls"`
-	LLMCalls    int              `json:"llm_calls"`
-	TokensIn    int              `json:"tokens_in"`
-	TokensOut   int              `json:"tokens_out"`
-	CostUSD     float64          `json:"cost_usd"`
+	RunID         string           `json:"run_id"`
+	Document      ResearchDocument `json:"document"`
+	Goal          Goal             `json:"goal"`
+	Output        string           `json:"output"`
+	ToolCalls     []ToolResult     `json:"tool_calls"`
+	LLMCalls      int              `json:"llm_calls"`
+	TokensIn      int              `json:"tokens_in"`
+	TokensOut     int              `json:"tokens_out"`
+	CostUSD       float64          `json:"cost_usd"`
 	MaxTier       int              `json:"max_tier"`
 	Escalations   int              `json:"escalations"`
 	Duration      time.Duration    `json:"duration"`

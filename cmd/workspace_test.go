@@ -72,7 +72,9 @@ func TestWorkspaceIntegration(t *testing.T) {
 func TestEnsureWorkspaceDir(t *testing.T) {
 	wsDir := t.TempDir()
 
-	ensureWorkspaceDir(wsDir)
+	if err := ensureWorkspaceDir(wsDir); err != nil {
+		t.Fatalf("ensureWorkspaceDir: %v", err)
+	}
 
 	dotGlitch := filepath.Join(wsDir, ".glitch")
 	info, err := os.Stat(dotGlitch)
@@ -95,8 +97,12 @@ func TestEnsureWorkspaceDir(t *testing.T) {
 func TestEnsureWorkspaceDir_Idempotent(t *testing.T) {
 	wsDir := t.TempDir()
 
-	ensureWorkspaceDir(wsDir)
-	ensureWorkspaceDir(wsDir)
+	if err := ensureWorkspaceDir(wsDir); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if err := ensureWorkspaceDir(wsDir); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
 
 	gi, _ := os.ReadFile(filepath.Join(wsDir, ".glitch", ".gitignore"))
 	if string(gi) != "*\n" {

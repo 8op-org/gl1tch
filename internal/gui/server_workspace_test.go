@@ -14,11 +14,10 @@ func TestNew_WorkspaceStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	defer s.store.Close()
 
 	dbPath := filepath.Join(wsDir, ".glitch", "glitch.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatalf("expected workspace DB at %s: %v", dbPath, err)
 	}
-
-	_ = s
 }
