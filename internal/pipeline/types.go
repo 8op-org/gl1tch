@@ -77,6 +77,14 @@ type Step struct {
 	ReadFile  string         `yaml:"-"` // file path to read
 	WriteFile *WriteFileStep `yaml:"-"`
 	GlobPat   *GlobStep      `yaml:"-"`
+
+	// ES forms
+	Search *SearchStep `yaml:"-"`
+	Index  *IndexStep  `yaml:"-"`
+	Delete *DeleteStep `yaml:"-"`
+
+	// Embedding
+	Embed *EmbedStep `yaml:"-"`
 }
 
 // CondBranch is one arm of a (cond ...) form.
@@ -126,6 +134,40 @@ type WriteFileStep struct {
 type GlobStep struct {
 	Pattern string // glob pattern
 	Dir     string // optional base directory
+}
+
+// SearchStep queries Elasticsearch and returns hits as JSON.
+type SearchStep struct {
+	IndexName string
+	Query     string   // raw JSON query body
+	Size      int      // max hits (default 10)
+	Fields    []string // _source field filter
+	ESURL     string   // override ES URL (empty = workspace default)
+}
+
+// IndexStep indexes a single document into Elasticsearch.
+type IndexStep struct {
+	IndexName     string
+	Doc           string // template-rendered JSON document
+	DocID         string // optional explicit _id
+	ESURL         string
+	EmbedField    string // field in doc to embed (empty = no embedding)
+	EmbedProvider string
+	EmbedModel    string
+}
+
+// DeleteStep deletes documents matching a query from Elasticsearch.
+type DeleteStep struct {
+	IndexName string
+	Query     string // raw JSON query body
+	ESURL     string
+}
+
+// EmbedStep generates an embedding vector from text.
+type EmbedStep struct {
+	Input    string // template-rendered text to embed
+	Provider string
+	Model    string
 }
 
 // LoadFile reads a single workflow file (YAML or sexpr).
