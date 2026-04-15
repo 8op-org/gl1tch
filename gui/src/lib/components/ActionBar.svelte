@@ -10,7 +10,7 @@
   }
 
   $effect(() => {
-    context; resultPath;
+    context;
     fetchActions();
   });
 </script>

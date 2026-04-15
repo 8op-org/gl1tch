@@ -1,4 +1,5 @@
 <script>
+  import { untrack } from 'svelte';
   import { push } from 'svelte-spa-router';
   import { runWorkflow } from '../lib/api.js';
   import { icon } from '../lib/icons.js';
@@ -9,11 +10,14 @@
   let running = $state(false);
   let error = $state(null);
 
-  // Pre-fill values from autoParams
+  // Pre-fill values from autoParams (one-time on mount)
   $effect(() => {
-    for (const [k, v] of Object.entries(autoParams)) {
-      if (v && !values[k]) values[k] = v;
-    }
+    const ap = autoParams;
+    untrack(() => {
+      for (const [k, v] of Object.entries(ap)) {
+        if (v && !values[k]) values[k] = v;
+      }
+    });
   });
 
   async function handleSubmit() {
