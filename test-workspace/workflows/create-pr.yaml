@@ -1,0 +1,52 @@
+name: create-pr
+description: Create a draft GitHub PR from a results folder
+actions:
+  - results:pr
+  - results
+steps:
+  - id: detect-repo
+    run: |
+      DIR="{{.param.path}}"
+      ORG=$(echo "$DIR" | awk -F/ '{for(i=1;i<=NF;i++) if($(i+1) != "") {print $i; exit}}')
+      REPO=$(echo "$DIR" | awk -F/ '{for(i=1;i<=NF;i++) if($(i+1) != "") {print $(i+1); exit}}')
+      echo "${ORG}/${REPO}"
+
+  - id: read-review
+    run: |
+      DIR="{{.param.path}}"
+      if [ -f "$DIR/review.md" ]; then
+        cat "$DIR/review.md"
+      else
+        echo "No review found. Run review-results first."
+      fi
+
+  - id: build-pr-body
+    llm:
+      prompt: |
+        Create a pull request description from this review:
+
+        {{step "read-review"}}
+
+        Format as:
+        ## Summary
+        <2-3 bullet points>
+
+        ## Review Notes
+        <key findings from the review>
+
+        ## Test Plan
+        <checklist of testing steps>
+
+  - id: create-draft
+    run: |
+      REPO="{{step "detect-repo"}}"
+      TITLE="{{.param.title}}"
+      BRANCH="{{.param.branch}}"
+      if [ -z "$TITLE" ]; then TITLE="Draft PR from gl1tch results"; fi
+      if [ -z "$BRANCH" ]; then echo "ERROR: branch param required" >&2; exit 1; fi
+      BODY='{{step "build-pr-body"}}'
+      gh pr create --repo "$REPO" --head "$BRANCH" --draft --title "$TITLE" --body "$BODY"
+
+  - id: save-url
+    save: "{{.param.path}}/pr-url.txt"
+    save_step: create-draft
