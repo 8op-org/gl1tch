@@ -12,7 +12,7 @@
   let searchQuery = $state('');
   let activeTags = $state([]);
   let sortBy = $state('name');
-  let viewMode = $state('grouped'); // 'grouped' | 'grid' | 'list'
+  let viewMode = $state('grid'); // 'grouped' | 'grid' | 'list'
   let collapsedGroups = $state({});
 
   const allTags = $derived([...new Set(workflows.flatMap(w => w.tags || []))].sort());
@@ -61,11 +61,11 @@
 </script>
 
 <div class="page-header">
-  <h1>Workflows</h1>
+  <h1>{@html icon('workflow', 20)} Workflows</h1>
   <div class="flex items-center gap-sm">
-    <button class="view-btn" class:active={viewMode === 'grouped'} on:click={() => viewMode = 'grouped'} title="Grouped">{@html icon('folder', 16)}</button>
-    <button class="view-btn" class:active={viewMode === 'grid'} on:click={() => viewMode = 'grid'} title="Grid">{@html icon('workflow', 16)}</button>
-    <button class="view-btn" class:active={viewMode === 'list'} on:click={() => viewMode = 'list'} title="List">{@html icon('file', 16)}</button>
+    <button class="view-btn" class:active={viewMode === 'grid'} onclick={() => viewMode = 'grid'} title="Cards">{@html icon('workflow', 16)}</button>
+    <button class="view-btn" class:active={viewMode === 'grouped'} onclick={() => viewMode = 'grouped'} title="Grouped">{@html icon('folder', 16)}</button>
+    <button class="view-btn" class:active={viewMode === 'list'} onclick={() => viewMode = 'list'} title="List">{@html icon('file', 16)}</button>
   </div>
 </div>
 <div class="page-content">
@@ -80,19 +80,22 @@
       <div class="groups">
         {#each grouped as [groupName, groupWorkflows]}
           <div class="group">
-            <button class="group-header" on:click={() => toggleGroup(groupName)}>
+            <button class="group-header" onclick={() => toggleGroup(groupName)}>
               <span class="group-chevron">{@html icon(collapsedGroups[groupName] ? 'chevronRight' : 'chevronDown')}</span>
               <span class="group-name">{groupName}</span>
               <span class="group-count">{groupWorkflows.length}</span>
             </button>
             {#if !collapsedGroups[groupName]}
-              <div class="group-grid">
+              <div class="group-items">
                 {#each groupWorkflows as wf}
-                  <button class="card surface" on:click={() => push(`/workflow/${wf.file}`)}>
-                    <div class="card-name mono">{@html icon('zap', 14)} {wf.name}</div>
-                    {#if wf.description}<p class="card-desc text-muted">{wf.description}</p>{/if}
-                    <div class="card-footer text-muted">
-                      {#if wf.last_run_status}<StatusBadge status={wf.last_run_status} />{:else}<span>Never run</span>{/if}
+                  <button class="group-item" onclick={() => push(`/workflow/${wf.file}`)}>
+                    <span class="group-item-icon">{@html icon('zap', 14)}</span>
+                    <div class="group-item-info">
+                      <span class="group-item-name">{wf.name}</span>
+                      {#if wf.description}<span class="group-item-desc">{wf.description}</span>{/if}
+                    </div>
+                    <div class="group-item-status">
+                      {#if wf.last_run_status}<StatusBadge status={wf.last_run_status} />{/if}
                     </div>
                   </button>
                 {/each}
@@ -107,7 +110,7 @@
         <thead><tr><th>Name</th><th>Description</th><th>Group</th><th>Status</th></tr></thead>
         <tbody>
           {#each filtered as wf}
-            <tr class="clickable" on:click={() => push(`/workflow/${wf.file}`)}>
+            <tr class="clickable" onclick={() => push(`/workflow/${wf.file}`)}>
               <td class="mono text-cyan">{wf.name}</td>
               <td class="text-muted">{wf.description || ''}</td>
               <td><span class="pill">{getGroup(wf)}</span></td>
@@ -120,7 +123,7 @@
     {:else}
       <div class="card-grid">
         {#each filtered as wf}
-          <button class="card surface" on:click={() => push(`/workflow/${wf.file}`)}>
+          <button class="card surface" onclick={() => push(`/workflow/${wf.file}`)}>
             <div class="card-name mono">{@html icon('zap', 14)} {wf.name}</div>
             {#if wf.description}<p class="card-desc text-muted">{wf.description}</p>{/if}
             {#if wf.tags?.length}
@@ -142,6 +145,8 @@
 </div>
 
 <style>
+  h1 { display: flex; align-items: center; gap: 8px; }
+
   /* View toggle */
   .view-btn {
     background: none;
@@ -158,46 +163,64 @@
     background: rgba(0, 229, 255, 0.08);
   }
 
-  /* Grouped view */
-  .groups { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
-  .group { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  /* Grouped view — modern list style */
+  .groups { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .group { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-surface); }
   .group-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
     text-align: left;
-    padding: 10px 16px;
-    background: var(--bg-surface);
+    padding: 12px 20px;
+    background: transparent;
     border: none;
     color: var(--text-primary);
     cursor: pointer;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: background 0.15s;
   }
   .group-header:hover { background: var(--bg-elevated); }
-  .group-chevron { display: flex; align-items: center; color: var(--text-muted); }
+  .group-chevron { display: flex; align-items: center; color: var(--neon-cyan); }
   .group-name { text-transform: capitalize; }
   .group-count {
     margin-left: auto;
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--text-muted);
-    background: var(--bg-elevated);
-    padding: 1px 8px;
-    border-radius: 10px;
+    color: var(--neon-cyan);
+    background: rgba(0, 229, 255, 0.08);
+    padding: 2px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 229, 255, 0.15);
   }
-  .group-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  .group-items { display: flex; flex-direction: column; }
+  .group-item {
+    display: flex;
+    align-items: center;
     gap: 12px;
-    padding: 12px 16px;
+    padding: 10px 20px 10px 44px;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+    width: 100%;
   }
+  .group-item:hover { background: var(--bg-elevated); }
+  .group-item-icon { color: var(--neon-cyan); display: flex; flex-shrink: 0; }
+  .group-item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .group-item-name { font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); }
+  .group-item-desc { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-item-status { flex-shrink: 0; }
 
   /* Card grid */
   .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
-  .card { text-align: left; padding: 16px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.15s; }
-  .card:hover { border-color: rgba(0, 229, 255, 0.3); }
+  .card { text-align: left; padding: 16px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
+  .card:hover { border-color: rgba(0, 229, 255, 0.3); box-shadow: 0 0 12px rgba(0, 229, 255, 0.06); }
   .card-name { font-family: var(--font-mono); font-size: 14px; color: var(--neon-cyan); display: flex; align-items: center; gap: 6px; }
   .card-desc { font-size: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card-tags { display: flex; gap: 6px; flex-wrap: wrap; }

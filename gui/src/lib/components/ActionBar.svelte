@@ -1,13 +1,17 @@
 <script>
-  import { onMount } from 'svelte';
   import { getWorkflowActions } from '../api.js';
   import { icon } from '../icons.js';
 
   let { context = '', resultPath = '', onrun } = $props();
   let actions = $state([]);
 
-  onMount(async () => {
+  async function fetchActions() {
     try { actions = await getWorkflowActions(context) || []; } catch (_) { actions = []; }
+  }
+
+  $effect(() => {
+    context; resultPath;
+    fetchActions();
   });
 </script>
 
@@ -15,7 +19,7 @@
   <div class="action-bar">
     <span class="action-label text-muted">Actions:</span>
     {#each actions as wf}
-      <button class="primary" on:click={() => onrun?.(wf)}>
+      <button class="primary" onclick={() => onrun?.({ ...wf, autoParams: { path: resultPath } })}>
         {@html icon('zap', 14)} {wf.name}
       </button>
     {/each}

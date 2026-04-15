@@ -20,7 +20,7 @@
   {#if tags.length > 0}
     <div class="tags">
       {#each tags as tag}
-        <button class="pill" class:active={activeTags.includes(tag)} on:click={() => toggleTag(tag)}>{tag}</button>
+        <button class="pill" class:active={activeTags.includes(tag)} onclick={() => toggleTag(tag)}>{tag}</button>
       {/each}
     </div>
   {/if}

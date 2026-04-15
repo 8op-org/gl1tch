@@ -20,6 +20,7 @@
   let dirty = $state(false);
   let loading = $state(true);
   let error = $state(null);
+  let selectedFolder = $state('');
   let editorEl = $state(null);
   let editorView = $state(null);
 
@@ -93,8 +94,12 @@
 
   async function handleSelect(path) {
     const entry = findEntry(tree, path);
-    if (entry?.isDir && entry.loadChildren && !entry.children) { await entry.loadChildren(); }
-    else if (entry && !entry.isDir) { await selectFile(path); }
+    if (entry?.isDir) {
+      selectedFolder = path;
+      if (entry.loadChildren && !entry.children) { await entry.loadChildren(); }
+    } else if (entry && !entry.isDir) {
+      await selectFile(path);
+    }
   }
 
   function findEntry(entries, path) {
@@ -112,9 +117,9 @@
   <Breadcrumb segments={breadcrumbSegments()} />
   {#if selectedPath}
     <div class="flex items-center gap-sm">
-      <button class:primary={mode === 'preview'} on:click={() => { mode = 'preview'; if (editorView) { editorView.destroy(); editorView = null; } }}>{@html icon('eye', 14)} Preview</button>
-      <button class:primary={mode === 'edit'} on:click={switchToEdit}>{@html icon('edit', 14)} Edit</button>
-      {#if mode === 'edit' && dirty}<button class="primary" on:click={handleSave}>{@html icon('save', 14)} Save</button>{/if}
+      <button class:primary={mode === 'preview'} onclick={() => { mode = 'preview'; if (editorView) { editorView.destroy(); editorView = null; } }}>{@html icon('eye', 14)} Preview</button>
+      <button class:primary={mode === 'edit'} onclick={switchToEdit}>{@html icon('edit', 14)} Edit</button>
+      {#if mode === 'edit' && dirty}<button class="primary" onclick={handleSave}>{@html icon('save', 14)} Save</button>{/if}
     </div>
   {/if}
 </div>
@@ -122,7 +127,7 @@
 {#if loading}<div class="page-content"><p class="text-muted">Loading...</p></div>
 {:else if error}<div class="page-content"><p class="status-fail">{error}</p></div>
 {:else}
-  <ActionBar context="results" resultPath={selectedPath} onrun={(wf) => { actionWorkflow = wf; }} />
+  <ActionBar context="results" resultPath={selectedFolder} onrun={(wf) => { actionWorkflow = wf; }} />
   <SplitPane leftWidth={250}>
     <div slot="left" class="tree-pane"><FileTree entries={tree} {selectedPath} onselect={handleSelect} /></div>
     <div slot="right" class="preview-pane">
@@ -133,11 +138,11 @@
       {:else if isMarkdown}
         <div class="rendered-content">{@html renderMarkdown(fileContent)}</div>
       {:else if isJson}
-        <pre><code>{(() => { try { return JSON.stringify(JSON.parse(fileContent), null, 2); } catch { return fileContent; } })()}</code></pre>
+        <pre class="json-content">{(() => { try { return JSON.stringify(JSON.parse(fileContent), null, 2); } catch { return fileContent; } })()}</pre>
       {:else if isDiff}
         <pre class="diff-content">{fileContent}</pre>
       {:else}
-        <pre><code>{fileContent}</code></pre>
+        <pre class="file-content">{fileContent}</pre>
       {/if}
     </div>
   </SplitPane>
@@ -147,6 +152,7 @@
   <RunDialog
     name={actionWorkflow.name}
     params={actionWorkflow.params || []}
+    autoParams={actionWorkflow.autoParams || {}}
     onclose={() => { actionWorkflow = null; }}
   />
 {/if}
@@ -155,9 +161,8 @@
   .tree-pane { padding: 8px 0; height: 100%; }
   .preview-pane { flex: 1; display: flex; flex-direction: column; }
   .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; opacity: 0.5; }
-  .rendered-content { padding: 24px; line-height: 1.6; }
-  .rendered-content :global(pre) { margin: 12px 0; }
+  .rendered-content { padding: 24px; }
   .editor-wrap { flex: 1; }
   .editor-wrap :global(.cm-editor) { height: 100%; }
-  pre { padding: 24px; margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; }
+  pre { margin: 0; }
 </style>

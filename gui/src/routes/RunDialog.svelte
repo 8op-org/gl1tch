@@ -4,10 +4,17 @@
   import { icon } from '../lib/icons.js';
   import Modal from '../lib/components/Modal.svelte';
 
-  let { name, params = [], onclose } = $props();
+  let { name, params = [], autoParams = {}, onclose } = $props();
   let values = $state({});
   let running = $state(false);
   let error = $state(null);
+
+  // Pre-fill values from autoParams
+  $effect(() => {
+    for (const [k, v] of Object.entries(autoParams)) {
+      if (v && !values[k]) values[k] = v;
+    }
+  });
 
   async function handleSubmit() {
     running = true; error = null;
@@ -17,11 +24,11 @@
 
 <Modal title="Run {name}" {onclose}>
   {#if params.length > 0}
-    <form on:submit|preventDefault={handleSubmit} class="flex flex-col gap-md">
+    <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex flex-col gap-md">
       {#each params as param}<label class="field"><span class="field-label">{param}</span><input type="text" bind:value={values[param]} placeholder={param} /></label>{/each}
       {#if error}<p class="status-fail" style="font-size:12px">{error}</p>{/if}
       <div class="flex justify-between" style="margin-top:8px">
-        <button type="button" on:click={onclose}>Cancel</button>
+        <button type="button" onclick={onclose}>Cancel</button>
         <button type="submit" class="primary" disabled={running}>{#if running}Running...{:else}{@html icon('play', 14)} Start Run{/if}</button>
       </div>
     </form>
@@ -30,8 +37,8 @@
       <p class="text-muted">No parameters required.</p>
       {#if error}<p class="status-fail" style="font-size:12px">{error}</p>{/if}
       <div class="flex justify-between">
-        <button on:click={onclose}>Cancel</button>
-        <button class="primary" disabled={running} on:click={handleSubmit}>{#if running}Running...{:else}{@html icon('play', 14)} Start Run{/if}</button>
+        <button onclick={onclose}>Cancel</button>
+        <button class="primary" disabled={running} onclick={handleSubmit}>{#if running}Running...{:else}{@html icon('play', 14)} Start Run{/if}</button>
       </div>
     </div>
   {/if}

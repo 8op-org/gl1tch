@@ -62,14 +62,14 @@
   onMount(() => { load(); });
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="page-header">
   <Breadcrumb segments={breadcrumbs} onnavigate={(href) => push(href.replace('#', ''))} />
   <div class="flex items-center gap-sm">
     {#if saveStatus === 'saved'}<span class="status-pass" style="font-size:12px">Saved</span>{:else if saveStatus === 'saving'}<span class="text-muted" style="font-size:12px">Saving...</span>{/if}
-    <button class:primary={dirty} disabled={!dirty} on:click={handleSave}>{@html icon('save', 14)} Save</button>
-    <button class="primary" on:click={() => showRunDialog = true}>{@html icon('play', 14)} Run</button>
+    <button class:primary={dirty} disabled={!dirty} onclick={handleSave}>{@html icon('save', 14)} Save</button>
+    <button class="primary" onclick={() => showRunDialog = true}>{@html icon('play', 14)} Run</button>
   </div>
 </div>
 
@@ -80,7 +80,7 @@
     <div class="editor-pane" bind:this={editorEl}></div>
     {#if showMeta}
       <aside class="meta-panel">
-        <div class="meta-header"><h3>Metadata</h3><button class="close-btn" on:click={() => showMeta = false}>&times;</button></div>
+        <div class="meta-header"><h3>Metadata</h3><button class="close-btn" onclick={() => showMeta = false}>&times;</button></div>
         <div class="meta-body">
           {#if metadata.tags?.length}<div class="meta-section"><span class="meta-label">Tags</span><div class="flex gap-sm" style="flex-wrap:wrap">{#each metadata.tags as tag}<span class="pill">{tag}</span>{/each}</div></div>{/if}
           {#if metadata.author}<div class="meta-section"><span class="meta-label">Author</span><span class="mono">@{metadata.author}</span></div>{/if}
@@ -93,12 +93,12 @@
         </div>
       </aside>
     {:else}
-      <button class="meta-toggle" on:click={() => showMeta = true} title="Show metadata">{@html icon('chevronRight')}</button>
+      <button class="meta-toggle" onclick={() => showMeta = true} title="Show metadata">{@html icon('chevronRight')}</button>
     {/if}
   </div>
 {/if}
 
-{#if showRunDialog}<RunDialog {name} params={workflowParams} onclose={() => showRunDialog = false} />{/if}
+{#if showRunDialog}<RunDialog {name} params={workflowParams} autoParams={{}} onclose={() => showRunDialog = false} />{/if}
 
 <style>
   .editor-layout { display: flex; flex: 1; overflow: hidden; }

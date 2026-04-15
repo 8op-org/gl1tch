@@ -10,15 +10,15 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="overlay" on:click={handleBackdrop}>
+<div class="overlay" onclick={handleBackdrop}>
   <div class="modal surface">
     <div class="modal-header">
       <h2>{title}</h2>
       {#if onclose}
-        <button class="close-btn" on:click={onclose}>&times;</button>
+        <button class="close-btn" onclick={onclose}>&times;</button>
       {/if}
     </div>
     <div class="modal-body">
