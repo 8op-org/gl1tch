@@ -74,6 +74,38 @@ func TestParseWorkspace_Minimal(t *testing.T) {
 	}
 }
 
+func TestParseWorkspace_Elasticsearch(t *testing.T) {
+	src := []byte(`
+(workspace "test"
+  :description "test workspace"
+  (defaults
+    :model "qwen2.5:7b"
+    :provider "ollama"
+    :elasticsearch "http://es.internal:9200"))
+`)
+	w, err := ParseFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Defaults.Elasticsearch != "http://es.internal:9200" {
+		t.Fatalf("elasticsearch = %q, want http://es.internal:9200", w.Defaults.Elasticsearch)
+	}
+}
+
+func TestParseWorkspace_ElasticsearchDefault(t *testing.T) {
+	src := []byte(`
+(workspace "test"
+  (defaults :model "qwen2.5:7b"))
+`)
+	w, err := ParseFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Defaults.Elasticsearch != "" {
+		t.Fatalf("elasticsearch should be empty by default, got %q", w.Defaults.Elasticsearch)
+	}
+}
+
 func TestParseWorkspace_NoWorkspaceForm(t *testing.T) {
 	src := `(workflow "not-a-workspace")`
 	_, err := ParseFile([]byte(src))

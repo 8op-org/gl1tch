@@ -17,8 +17,9 @@ type Workspace struct {
 
 // Defaults holds default model/provider settings for a workspace.
 type Defaults struct {
-	Model    string
-	Provider string
+	Model         string
+	Provider      string
+	Elasticsearch string
 }
 
 // ParseFile parses workspace.glitch source bytes into a Workspace.
@@ -130,6 +131,8 @@ func convertDefaults(n *sexpr.Node) (Defaults, error) {
 				d.Model = val.StringVal()
 			case "provider":
 				d.Provider = val.StringVal()
+			case "elasticsearch":
+				d.Elasticsearch = val.StringVal()
 			default:
 				return Defaults{}, fmt.Errorf("line %d: unknown defaults keyword :%s", child.Line, key)
 			}
