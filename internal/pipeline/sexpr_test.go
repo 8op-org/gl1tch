@@ -934,6 +934,78 @@ func TestSexprWorkflow_NoMetadata(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_Par(t *testing.T) {
+	src := []byte(`
+(workflow "test-par"
+  (step "setup" (run "echo setup"))
+  (par
+    (step "a" (run "echo alpha"))
+    (step "b" (run "echo bravo")))
+  (step "final" (run "echo done")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(w.Items))
+	}
+	parItem := w.Items[1]
+	if parItem.Step == nil {
+		t.Fatal("expected par item to be a step")
+	}
+	if parItem.Step.Form != "par" {
+		t.Fatalf("expected form %q, got %q", "par", parItem.Step.Form)
+	}
+	if len(parItem.Step.ParSteps) != 2 {
+		t.Fatalf("expected 2 par steps, got %d", len(parItem.Step.ParSteps))
+	}
+	if parItem.Step.ParSteps[0].ID != "a" {
+		t.Fatalf("expected par step 0 ID %q, got %q", "a", parItem.Step.ParSteps[0].ID)
+	}
+	if parItem.Step.ParSteps[1].ID != "b" {
+		t.Fatalf("expected par step 1 ID %q, got %q", "b", parItem.Step.ParSteps[1].ID)
+	}
+}
+
+func TestSexprWorkflow_ParSingleChild(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (par
+    (step "a" (run "echo one"))))
+`)
+	_, err := parseSexprWorkflow(src)
+	if err == nil {
+		t.Fatal("expected error for par with single child")
+	}
+	if !strings.Contains(err.Error(), "at least 2") {
+		t.Fatalf("expected 'at least 2' error, got: %v", err)
+	}
+}
+
+func TestSexprWorkflow_ParWithRetry(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (par
+    (retry 2 (step "a" (run "echo alpha")))
+    (step "b" (run "echo bravo"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parItem := w.Items[0]
+	if parItem.Step.Form != "par" {
+		t.Fatalf("expected par form, got %q", parItem.Step.Form)
+	}
+	if len(parItem.Step.ParSteps) != 2 {
+		t.Fatalf("expected 2 par steps, got %d", len(parItem.Step.ParSteps))
+	}
+	if parItem.Step.ParSteps[0].Retry != 2 {
+		t.Fatalf("expected retry 2, got %d", parItem.Step.ParSteps[0].Retry)
+	}
+}
+
 func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 	src := []byte(`
 (workflow "old-style"
