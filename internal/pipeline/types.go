@@ -11,9 +11,25 @@ import (
 
 // Workflow is a named sequence of steps loaded from YAML.
 type Workflow struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Steps       []Step `yaml:"steps"`
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description"`
+	Steps       []Step         `yaml:"steps"`
+	Items       []WorkflowItem `yaml:"-"`
+}
+
+// WorkflowItem is a union type for the ordered sequence of workflow elements.
+// Exactly one of Step or Phase is non-nil.
+type WorkflowItem struct {
+	Step  *Step
+	Phase *Phase
+}
+
+// Phase groups steps and gates into a retriable unit of work.
+type Phase struct {
+	ID      string
+	Retries int
+	Steps   []Step // work steps
+	Gates   []Step // verification steps (IsGate = true)
 }
 
 // Step is a single unit of work — either a shell command, an LLM call, or a save-to-file.
@@ -38,6 +54,9 @@ type Step struct {
 
 	// Plugin invocation
 	PluginCall *PluginCallStep `yaml:"-"`
+
+	// Phase/gate marker
+	IsGate bool `yaml:"-"`
 
 	// SDK forms
 	JsonPick  *JsonPickStep  `yaml:"-"`

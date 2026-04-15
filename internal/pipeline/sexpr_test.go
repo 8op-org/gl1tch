@@ -709,3 +709,65 @@ func TestSexprWorkflow_PluginCall(t *testing.T) {
 		t.Fatalf("expected authored=%q, got %q", "true", s.PluginCall.Args["authored"])
 	}
 }
+
+func TestSexprWorkflow_Phase(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (phase "gather"
+    (step "fetch" (run "echo data")))
+
+  (phase "verify" :retries 2
+    (step "process" (run "echo processed"))
+    (gate "check" (run "test -f output.txt"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(w.Items))
+	}
+
+	p0 := w.Items[0].Phase
+	if p0 == nil {
+		t.Fatal("expected item 0 to be a phase")
+	}
+	if p0.ID != "gather" {
+		t.Fatalf("expected phase id %q, got %q", "gather", p0.ID)
+	}
+	if p0.Retries != 0 {
+		t.Fatalf("expected retries 0, got %d", p0.Retries)
+	}
+	if len(p0.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(p0.Steps))
+	}
+	if p0.Steps[0].ID != "fetch" {
+		t.Fatalf("expected step id %q, got %q", "fetch", p0.Steps[0].ID)
+	}
+	if len(p0.Gates) != 0 {
+		t.Fatalf("expected 0 gates, got %d", len(p0.Gates))
+	}
+
+	p1 := w.Items[1].Phase
+	if p1 == nil {
+		t.Fatal("expected item 1 to be a phase")
+	}
+	if p1.ID != "verify" {
+		t.Fatalf("expected phase id %q, got %q", "verify", p1.ID)
+	}
+	if p1.Retries != 2 {
+		t.Fatalf("expected retries 2, got %d", p1.Retries)
+	}
+	if len(p1.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(p1.Steps))
+	}
+	if len(p1.Gates) != 1 {
+		t.Fatalf("expected 1 gate, got %d", len(p1.Gates))
+	}
+	if p1.Gates[0].ID != "check" {
+		t.Fatalf("expected gate id %q, got %q", "check", p1.Gates[0].ID)
+	}
+	if !p1.Gates[0].IsGate {
+		t.Fatal("expected gate to have IsGate=true")
+	}
+}
