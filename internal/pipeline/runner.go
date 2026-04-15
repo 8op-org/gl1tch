@@ -50,6 +50,17 @@ type runCtx struct {
 	mu               sync.Mutex
 }
 
+// stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
+func (r *runCtx) stepsSnapshot() map[string]string {
+	r.mu.Lock()
+	snap := make(map[string]string, len(r.steps))
+	for k, v := range r.steps {
+		snap[k] = v
+	}
+	r.mu.Unlock()
+	return snap
+}
+
 // Result holds the output of a completed workflow run.
 type Result struct {
 	Workflow string
@@ -669,7 +680,7 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		}
 		// Render predicate template
 		data := map[string]any{"input": rctx.input, "param": rctx.params}
-		rendered, err := render(branch.Pred, data, rctx.steps)
+		rendered, err := render(branch.Pred, data, rctx.stepsSnapshot())
 		if err != nil {
 			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
 		}
@@ -688,7 +699,8 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 
 // executeMap splits a prior step's output by newlines and runs the body step for each item.
 func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
-	source, ok := rctx.steps[step.MapOver]
+	snap := rctx.stepsSnapshot()
+	source, ok := snap[step.MapOver]
 	if !ok {
 		return nil, fmt.Errorf("map %s: source step %q has no output", step.ID, step.MapOver)
 	}
@@ -740,7 +752,6 @@ func executePar(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 	results := make([]parResult, len(step.ParSteps))
 
 	for i, child := range step.ParSteps {
-		i, child := i, child
 		g.Go(func() error {
 			outcome, err := executeStep(gctx, rctx, child)
 			if err != nil {
@@ -782,13 +793,16 @@ func executePar(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 
 // runSingleStep executes one step (save, run, or llm) without control-flow wrappers.
 func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	// Snapshot steps map for safe concurrent reads during par execution.
+	stepsSnap := rctx.stepsSnapshot()
+
 	data := map[string]any{
 		"input": rctx.input,
 		"param": rctx.params,
 	}
 
 	if step.Save != "" {
-		rendered, err := render(step.Save, data, rctx.steps)
+		rendered, err := render(step.Save, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -797,7 +811,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if sourceStep == "" && rctx.prevStepID != "" {
 			sourceStep = rctx.prevStepID
 		}
-		content := rctx.steps[sourceStep]
+		content := stepsSnap[sourceStep]
 		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
 			return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
 		}
@@ -809,7 +823,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Run != "" {
-		rendered, err := render(step.Run, data, rctx.steps)
+		rendered, err := render(step.Run, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -822,7 +836,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.LLM != nil {
-		rendered, err := render(step.LLM.Prompt, data, rctx.steps)
+		rendered, err := render(step.LLM.Prompt, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -977,8 +991,8 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	// --- SDK forms ---
 
 	if step.JsonPick != nil {
-		from := rctx.steps[step.JsonPick.From]
-		rendered, err := render(step.JsonPick.Expr, data, rctx.steps)
+		from := stepsSnap[step.JsonPick.From]
+		rendered, err := render(step.JsonPick.Expr, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -993,7 +1007,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Lines != "" {
-		from := rctx.steps[step.Lines]
+		from := stepsSnap[step.Lines]
 		lines := strings.Split(strings.TrimSpace(from), "\n")
 		var parts []string
 		for _, l := range lines {
@@ -1012,7 +1026,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		merged := make(map[string]any)
 		for _, id := range step.Merge {
 			var obj map[string]any
-			if err := json.Unmarshal([]byte(rctx.steps[id]), &obj); err != nil {
+			if err := json.Unmarshal([]byte(stepsSnap[id]), &obj); err != nil {
 				return nil, fmt.Errorf("step %s: merge %q: %w", step.ID, id, err)
 			}
 			for k, v := range obj {
@@ -1028,13 +1042,13 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.HttpCall != nil {
-		urlRendered, err := render(step.HttpCall.URL, data, rctx.steps)
+		urlRendered, err := render(step.HttpCall.URL, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: url template: %w", step.ID, err)
 		}
 		var bodyReader io.Reader
 		if step.HttpCall.Body != "" {
-			bodyRendered, err := render(step.HttpCall.Body, data, rctx.steps)
+			bodyRendered, err := render(step.HttpCall.Body, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: body template: %w", step.ID, err)
 			}
@@ -1049,7 +1063,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: http request: %w", step.ID, err)
 		}
 		for k, v := range step.HttpCall.Headers {
-			hv, err := render(v, data, rctx.steps)
+			hv, err := render(v, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: header %q template: %w", step.ID, k, err)
 			}
@@ -1072,7 +1086,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.ReadFile != "" {
-		rendered, err := render(step.ReadFile, data, rctx.steps)
+		rendered, err := render(step.ReadFile, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -1085,11 +1099,11 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.WriteFile != nil {
-		rendered, err := render(step.WriteFile.Path, data, rctx.steps)
+		rendered, err := render(step.WriteFile.Path, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
-		content := rctx.steps[step.WriteFile.From]
+		content := stepsSnap[step.WriteFile.From]
 		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
 			return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
 		}
@@ -1103,7 +1117,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	if step.GlobPat != nil {
 		pattern := step.GlobPat.Pattern
 		if step.GlobPat.Dir != "" {
-			dirRendered, err := render(step.GlobPat.Dir, data, rctx.steps)
+			dirRendered, err := render(step.GlobPat.Dir, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: dir template: %w", step.ID, err)
 			}
@@ -1124,7 +1138,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		// Render template expressions in plugin args (e.g., {{.param.repo}})
 		renderedArgs := make(map[string]string, len(pc.Args))
 		for k, v := range pc.Args {
-			rendered, err := render(v, data, rctx.steps)
+			rendered, err := render(v, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: plugin arg %q: %w", step.ID, k, err)
 			}
