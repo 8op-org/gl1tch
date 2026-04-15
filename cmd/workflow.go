@@ -15,10 +15,12 @@ import (
 )
 
 var workflowParams []string
+var workflowTagFilter string
 
 func init() {
 	workflowRunCmd.Flags().StringVarP(&targetPath, "path", "C", "", "run against this directory instead of cwd")
 	workflowRunCmd.Flags().StringArrayVar(&workflowParams, "set", nil, "set workflow param (key=value), repeatable")
+	workflowListCmd.Flags().StringVar(&workflowTagFilter, "tag", "", "filter workflows by tag")
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
@@ -44,6 +46,20 @@ var workflowListCmd = &cobra.Command{
 			names = append(names, name)
 		}
 		sort.Strings(names)
+
+		if workflowTagFilter != "" {
+			var filtered []string
+			for _, name := range names {
+				w := workflows[name]
+				for _, tag := range w.Tags {
+					if tag == workflowTagFilter {
+						filtered = append(filtered, name)
+						break
+					}
+				}
+			}
+			names = filtered
+		}
 
 		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 		for _, name := range names {
