@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -769,5 +770,111 @@ func TestSexprWorkflow_Phase(t *testing.T) {
 	}
 	if !p1.Gates[0].IsGate {
 		t.Fatal("expected gate to have IsGate=true")
+	}
+}
+
+func TestSexprWorkflow_MixedStepsAndPhases(t *testing.T) {
+	src := []byte(`
+(workflow "mixed"
+  (step "setup" (run "echo start"))
+  (phase "core" :retries 1
+    (step "work" (run "echo working"))
+    (gate "check" (run "test -f done.txt")))
+  (step "cleanup" (run "echo done")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(w.Items))
+	}
+	if w.Items[0].Step == nil || w.Items[0].Step.ID != "setup" {
+		t.Fatal("expected item 0 to be bare step 'setup'")
+	}
+	if w.Items[1].Phase == nil || w.Items[1].Phase.ID != "core" {
+		t.Fatal("expected item 1 to be phase 'core'")
+	}
+	if w.Items[2].Step == nil || w.Items[2].Step.ID != "cleanup" {
+		t.Fatal("expected item 2 to be bare step 'cleanup'")
+	}
+}
+
+func TestSexprWorkflow_GateOutsidePhase(t *testing.T) {
+	src := []byte(`
+(workflow "bad"
+  (gate "orphan" (run "echo fail")))
+`)
+	_, err := parseSexprWorkflow(src)
+	if err == nil {
+		t.Fatal("expected error for gate outside phase")
+	}
+	if !strings.Contains(err.Error(), "must be inside") {
+		t.Fatalf("expected 'must be inside' error, got: %v", err)
+	}
+}
+
+func TestSexprWorkflow_PhaseWithLLMGate(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (phase "analyze" :retries 1
+    (step "gen"
+      (llm :prompt "generate something"))
+    (gate "review"
+      (llm :tier 2 :prompt "review: {{step \"gen\"}}"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := w.Items[0].Phase
+	if p == nil {
+		t.Fatal("expected phase")
+	}
+	if len(p.Gates) != 1 {
+		t.Fatalf("expected 1 gate, got %d", len(p.Gates))
+	}
+	g := p.Gates[0]
+	if g.LLM == nil {
+		t.Fatal("expected LLM gate")
+	}
+	if g.LLM.Tier == nil || *g.LLM.Tier != 2 {
+		t.Fatalf("expected tier 2, got %v", g.LLM.Tier)
+	}
+	if !g.IsGate {
+		t.Fatal("expected IsGate=true")
+	}
+}
+
+func TestSexprWorkflow_PhaseNoName(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (phase
+    (step "s" (run "echo"))))
+`)
+	_, err := parseSexprWorkflow(src)
+	if err == nil {
+		t.Fatal("expected error for phase without name")
+	}
+}
+
+func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
+	src := []byte(`
+(workflow "old-style"
+  (step "a" (run "echo a"))
+  (step "b" (run "echo b")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Items) != 2 {
+		t.Fatalf("expected 2 items for bare-step workflow, got %d", len(w.Items))
+	}
+	if w.Items[0].Step == nil || w.Items[0].Step.ID != "a" {
+		t.Fatal("expected item 0 to be step 'a'")
+	}
+	if w.Items[1].Step == nil || w.Items[1].Step.ID != "b" {
+		t.Fatal("expected item 1 to be step 'b'")
 	}
 }
