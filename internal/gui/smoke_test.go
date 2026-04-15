@@ -32,11 +32,11 @@ func TestSmokeEndToEnd(t *testing.T) {
 	}
 	defer st.Close()
 
-	runID, err := st.RecordRun("workflow", "smoke", "test input")
+	runID, err := st.RecordRun(store.RunRecord{Kind: "workflow", Name: "smoke", Input: "test input"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	st.RecordStep(runID, "hello", "prompt", "output", "qwen3-8b", 2500)
+	st.RecordStep(store.StepRecord{RunID: runID, StepID: "hello", Prompt: "prompt", Output: "output", Model: "qwen3-8b", DurationMs: 2500})
 	st.FinishRun(runID, "echo hi", 0)
 
 	srv := &Server{workspace: dir, store: st, mux: http.NewServeMux(), dev: true}

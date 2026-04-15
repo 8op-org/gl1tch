@@ -28,7 +28,7 @@ func testServerWithStore(t *testing.T) *Server {
 
 func TestListRuns(t *testing.T) {
 	srv := testServerWithStore(t)
-	id, _ := srv.store.RecordRun("workflow", "hello", "")
+	id, _ := srv.store.RecordRun(store.RunRecord{Kind: "workflow", Name: "hello", Input: ""})
 	srv.store.FinishRun(id, "done", 0)
 
 	w := httptest.NewRecorder()
@@ -48,8 +48,8 @@ func TestListRuns(t *testing.T) {
 
 func TestGetRun(t *testing.T) {
 	srv := testServerWithStore(t)
-	id, _ := srv.store.RecordRun("workflow", "hello", "test input")
-	srv.store.RecordStep(id, "step1", "prompt", "output", "gpt-4", 1500)
+	id, _ := srv.store.RecordRun(store.RunRecord{Kind: "workflow", Name: "hello", Input: "test input"})
+	srv.store.RecordStep(store.StepRecord{RunID: id, StepID: "step1", Prompt: "prompt", Output: "output", Model: "gpt-4", DurationMs: 1500})
 	srv.store.FinishRun(id, "done", 0)
 
 	w := httptest.NewRecorder()
