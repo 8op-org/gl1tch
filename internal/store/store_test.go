@@ -24,7 +24,7 @@ func TestRecordRun(t *testing.T) {
 	}
 	defer s.Close()
 
-	id, err := s.RecordRun("pipeline", "test-run", "some input")
+	id, err := s.RecordRun(RunRecord{Kind: "pipeline", Name: "test-run", Input: "some input"})
 	if err != nil {
 		t.Fatalf("RecordRun: %v", err)
 	}
@@ -45,17 +45,23 @@ func TestRecordStep(t *testing.T) {
 	}
 	defer s.Close()
 
-	runID, err := s.RecordRun("pipeline", "step-test", "")
+	runID, err := s.RecordRun(RunRecord{Kind: "pipeline", Name: "step-test", Input: ""})
 	if err != nil {
 		t.Fatalf("RecordRun: %v", err)
 	}
 
-	if err := s.RecordStep(runID, "step-1", "my prompt", "model output", "qwen2.5:7b", 123); err != nil {
+	if err := s.RecordStep(StepRecord{
+		RunID: runID, StepID: "step-1", Prompt: "my prompt",
+		Output: "model output", Model: "qwen2.5:7b", DurationMs: 123,
+	}); err != nil {
 		t.Fatalf("RecordStep: %v", err)
 	}
 
 	// Insert OR REPLACE — should not error on duplicate step_id
-	if err := s.RecordStep(runID, "step-1", "updated prompt", "new output", "qwen2.5:7b", 456); err != nil {
+	if err := s.RecordStep(StepRecord{
+		RunID: runID, StepID: "step-1", Prompt: "updated prompt",
+		Output: "new output", Model: "qwen2.5:7b", DurationMs: 456,
+	}); err != nil {
 		t.Fatalf("RecordStep (replace): %v", err)
 	}
 }
@@ -79,6 +85,81 @@ func TestRecordResearchEvent(t *testing.T) {
 		t.Fatalf("RecordResearchEvent: %v", err)
 	}
 }
+
+func TestRecordRunEnriched(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenAt(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	id, err := s.RecordRun(RunRecord{
+		Kind:         "workflow",
+		Name:         "pr-review",
+		Input:        "review this",
+		WorkflowFile: "pr-review.glitch",
+		Repo:         "elastic/ensemble",
+		Model:        "qwen2.5:7b",
+	})
+	if err != nil {
+		t.Fatalf("RecordRun: %v", err)
+	}
+	if id <= 0 {
+		t.Fatalf("expected positive ID, got %d", id)
+	}
+
+	if err := s.FinishRun(id, "done", 0, RunTotals{
+		TokensIn:  1500,
+		TokensOut: 300,
+		CostUSD:   0.005,
+	}); err != nil {
+		t.Fatalf("FinishRun: %v", err)
+	}
+}
+
+func TestRecordStepEnriched(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenAt(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	runID, _ := s.RecordRun(RunRecord{Kind: "workflow", Name: "test", Input: ""})
+
+	err = s.RecordStep(StepRecord{
+		RunID:      runID,
+		StepID:     "fetch",
+		Prompt:     "echo hello",
+		Output:     "hello",
+		Model:      "qwen2.5:7b",
+		DurationMs: 150,
+		Kind:       "run",
+		ExitStatus: intPtr(0),
+	})
+	if err != nil {
+		t.Fatalf("RecordStep: %v", err)
+	}
+
+	err = s.RecordStep(StepRecord{
+		RunID:      runID,
+		StepID:     "gate-check",
+		Prompt:     "verify",
+		Output:     "PASS",
+		Model:      "",
+		DurationMs: 50,
+		Kind:       "gate",
+		ExitStatus: intPtr(0),
+		GatePassed: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("RecordStep gate: %v", err)
+	}
+}
+
+func intPtr(n int) *int    { return &n }
+func boolPtr(b bool) *bool { return &b }
 
 func TestSimilarResearchEvents(t *testing.T) {
 	dir := t.TempDir()

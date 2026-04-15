@@ -2,15 +2,22 @@ package store
 
 const createSchema = `
 CREATE TABLE IF NOT EXISTS runs (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind        TEXT NOT NULL,
-  name        TEXT NOT NULL,
-  input       TEXT,
-  output      TEXT,
-  exit_status INTEGER,
-  started_at  INTEGER NOT NULL,
-  finished_at INTEGER,
-  metadata    TEXT
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind          TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  input         TEXT,
+  output        TEXT,
+  exit_status   INTEGER,
+  started_at    INTEGER NOT NULL,
+  finished_at   INTEGER,
+  metadata      TEXT,
+  workflow_file TEXT,
+  repo          TEXT,
+  model         TEXT,
+  tokens_in     INTEGER,
+  tokens_out    INTEGER,
+  cost_usd      REAL,
+  variant       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS steps (
@@ -21,6 +28,11 @@ CREATE TABLE IF NOT EXISTS steps (
   output      TEXT,
   model       TEXT,
   duration_ms INTEGER,
+  kind        TEXT,
+  exit_status INTEGER,
+  tokens_in   INTEGER,
+  tokens_out  INTEGER,
+  gate_passed INTEGER,
   UNIQUE(run_id, step_id)
 );
 

@@ -61,11 +61,46 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
+// RunRecord holds the fields for inserting a new run.
+type RunRecord struct {
+	Kind         string
+	Name         string
+	Input        string
+	WorkflowFile string
+	Repo         string
+	Model        string
+	Variant      string
+}
+
+// RunTotals holds accumulated totals for finishing a run.
+type RunTotals struct {
+	TokensIn  int64
+	TokensOut int64
+	CostUSD   float64
+}
+
+// StepRecord holds the fields for inserting a step.
+type StepRecord struct {
+	RunID      int64
+	StepID     string
+	Prompt     string
+	Output     string
+	Model      string
+	DurationMs int64
+	Kind       string
+	ExitStatus *int
+	TokensIn   int64
+	TokensOut  int64
+	GatePassed *bool
+}
+
 // RecordRun inserts a new run record and returns the new row ID.
-func (s *Store) RecordRun(kind, name, input string) (int64, error) {
+func (s *Store) RecordRun(rec RunRecord) (int64, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO runs (kind, name, input, started_at) VALUES (?, ?, ?, ?)`,
-		kind, name, input, time.Now().UnixMilli(),
+		`INSERT INTO runs (kind, name, input, started_at, workflow_file, repo, model, variant)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.Kind, rec.Name, rec.Input, time.Now().UnixMilli(),
+		rec.WorkflowFile, rec.Repo, rec.Model, rec.Variant,
 	)
 	if err != nil {
 		return 0, err
@@ -73,8 +108,18 @@ func (s *Store) RecordRun(kind, name, input string) (int64, error) {
 	return res.LastInsertId()
 }
 
-// FinishRun updates an existing run with its output and exit status.
-func (s *Store) FinishRun(id int64, output string, exitStatus int) error {
+// FinishRun updates an existing run with its output, exit status, and totals.
+func (s *Store) FinishRun(id int64, output string, exitStatus int, totals ...RunTotals) error {
+	if len(totals) > 0 {
+		t := totals[0]
+		_, err := s.db.Exec(
+			`UPDATE runs SET output = ?, exit_status = ?, finished_at = ?,
+             tokens_in = ?, tokens_out = ?, cost_usd = ? WHERE id = ?`,
+			output, exitStatus, time.Now().UnixMilli(),
+			t.TokensIn, t.TokensOut, t.CostUSD, id,
+		)
+		return err
+	}
 	_, err := s.db.Exec(
 		`UPDATE runs SET output = ?, exit_status = ?, finished_at = ? WHERE id = ?`,
 		output, exitStatus, time.Now().UnixMilli(), id,
@@ -83,11 +128,21 @@ func (s *Store) FinishRun(id int64, output string, exitStatus int) error {
 }
 
 // RecordStep inserts or replaces a step record for a given run.
-func (s *Store) RecordStep(runID int64, stepID, prompt, output, model string, durationMs int64) error {
+func (s *Store) RecordStep(rec StepRecord) error {
+	var gatePassed *int
+	if rec.GatePassed != nil {
+		v := 0
+		if *rec.GatePassed {
+			v = 1
+		}
+		gatePassed = &v
+	}
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO steps (run_id, step_id, prompt, output, model, duration_ms)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		runID, stepID, prompt, output, model, durationMs,
+		`INSERT OR REPLACE INTO steps (run_id, step_id, prompt, output, model, duration_ms,
+         kind, exit_status, tokens_in, tokens_out, gate_passed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.RunID, rec.StepID, rec.Prompt, rec.Output, rec.Model, rec.DurationMs,
+		rec.Kind, rec.ExitStatus, rec.TokensIn, rec.TokensOut, gatePassed,
 	)
 	return err
 }
