@@ -110,6 +110,17 @@ func (tr *TieredRunner) callProvider(name, model, prompt string) (LLMResult, err
 		return RunOllamaWithResult(model, prompt)
 	}
 
+	if name == "lm-studio" {
+		p := &LMStudioProvider{
+			BaseURL:      "http://localhost:1234",
+			DefaultModel: "qwen3-8b",
+		}
+		if model == "" {
+			model = p.DefaultModel
+		}
+		return p.Chat(model, prompt)
+	}
+
 	// Check resolver (openai-compatible providers from config)
 	if tr.Resolver != nil {
 		if fn, ok := tr.Resolver(name); ok {

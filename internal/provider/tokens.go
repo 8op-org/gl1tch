@@ -24,7 +24,8 @@ var pricing = map[string][2]float64{
 	"copilot": {0.00, 0.00},
 	"codex":   {0.00, 0.00},
 	"gemini":  {0.00, 0.00},
-	"ollama":  {0.00, 0.00},
+	"ollama":    {0.00, 0.00},
+	"lm-studio": {0.00, 0.00},
 }
 
 // EstimateCost returns the estimated USD cost for the given provider and token counts.
