@@ -169,7 +169,7 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
-	case "map":
+	case "map", "each":
 		s, err := convertMap(n, defs)
 		if err != nil {
 			return nil, err
@@ -559,7 +559,7 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 					}
 				}
 			}
-		case "json-pick":
+		case "json-pick", "pick":
 			jp, err := convertJsonPick(child, defs)
 			if err != nil {
 				return s, err
@@ -577,25 +577,25 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.Merge = ids
-		case "http-get":
+		case "http-get", "fetch":
 			hc, err := convertHttpCall(child, "GET", defs)
 			if err != nil {
 				return s, err
 			}
 			s.HttpCall = hc
-		case "http-post":
+		case "http-post", "send":
 			hc, err := convertHttpCall(child, "POST", defs)
 			if err != nil {
 				return s, err
 			}
 			s.HttpCall = hc
-		case "read-file":
+		case "read-file", "read":
 			path, err := convertReadFile(child, defs)
 			if err != nil {
 				return s, err
 			}
 			s.ReadFile = path
-		case "write-file":
+		case "write-file", "write":
 			wf, err := convertWriteFile(child, defs)
 			if err != nil {
 				return s, err

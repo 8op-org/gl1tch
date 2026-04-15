@@ -1047,6 +1047,142 @@ func TestSexprWorkflow_ParInPhase(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_AliasEach(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "list"
+    (run "echo -e 'a\nb\nc'"))
+  (each "list"
+    (step "process"
+      (run "echo handling item"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "map" {
+		t.Fatalf("expected form %q, got %q", "map", s.Form)
+	}
+	if s.MapOver != "list" {
+		t.Fatalf("expected map-over %q, got %q", "list", s.MapOver)
+	}
+	if s.MapBody == nil {
+		t.Fatal("expected map body step")
+	}
+}
+
+func TestSexprWorkflow_AliasPick(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (run "curl http://example.com/api"))
+  (step "s2"
+    (pick ".a" :from "s1")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.JsonPick == nil {
+		t.Fatal("expected JsonPick step")
+	}
+	if s.JsonPick.Expr != ".a" {
+		t.Fatalf("expected expr %q, got %q", ".a", s.JsonPick.Expr)
+	}
+	if s.JsonPick.From != "s1" {
+		t.Fatalf("expected from %q, got %q", "s1", s.JsonPick.From)
+	}
+}
+
+func TestSexprWorkflow_AliasFetch(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (fetch "http://example.com")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.HttpCall == nil {
+		t.Fatal("expected HttpCall step")
+	}
+	if s.HttpCall.Method != "GET" {
+		t.Fatalf("expected method %q, got %q", "GET", s.HttpCall.Method)
+	}
+	if s.HttpCall.URL != "http://example.com" {
+		t.Fatalf("expected URL %q, got %q", "http://example.com", s.HttpCall.URL)
+	}
+}
+
+func TestSexprWorkflow_AliasSend(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (send "http://example.com" :body "{\"key\":\"val\"}")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.HttpCall == nil {
+		t.Fatal("expected HttpCall step")
+	}
+	if s.HttpCall.Method != "POST" {
+		t.Fatalf("expected method %q, got %q", "POST", s.HttpCall.Method)
+	}
+	if s.HttpCall.URL != "http://example.com" {
+		t.Fatalf("expected URL %q, got %q", "http://example.com", s.HttpCall.URL)
+	}
+}
+
+func TestSexprWorkflow_AliasRead(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (read "path/to/file.txt")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.ReadFile != "path/to/file.txt" {
+		t.Fatalf("expected read-file %q, got %q", "path/to/file.txt", s.ReadFile)
+	}
+}
+
+func TestSexprWorkflow_AliasWrite(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "gen"
+    (llm :prompt "generate"))
+  (step "s1"
+    (write "out.txt" :from "gen")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.WriteFile == nil {
+		t.Fatal("expected WriteFile step")
+	}
+	if s.WriteFile.Path != "out.txt" {
+		t.Fatalf("expected path %q, got %q", "out.txt", s.WriteFile.Path)
+	}
+	if s.WriteFile.From != "gen" {
+		t.Fatalf("expected from %q, got %q", "gen", s.WriteFile.From)
+	}
+}
+
 func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 	src := []byte(`
 (workflow "old-style"
