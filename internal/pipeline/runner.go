@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/provider"
+	"golang.org/x/sync/errgroup"
 )
 
 // stepOutcome holds the result of executing a single step.
@@ -35,6 +37,7 @@ type stepOutcome struct {
 
 // runCtx bundles per-run state needed by executeStep and compound forms.
 type runCtx struct {
+	ctx              context.Context
 	input            string
 	params           map[string]string
 	defaultModel     string
@@ -44,6 +47,18 @@ type runCtx struct {
 	evalThreshold    int
 	steps            map[string]string
 	prevStepID       string
+	mu               sync.Mutex
+}
+
+// stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
+func (r *runCtx) stepsSnapshot() map[string]string {
+	r.mu.Lock()
+	snap := make(map[string]string, len(r.steps))
+	for k, v := range r.steps {
+		snap[k] = v
+	}
+	r.mu.Unlock()
+	return snap
 }
 
 // Result holds the output of a completed workflow run.
@@ -135,6 +150,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	}
 
 	rctx := &runCtx{
+		ctx:              context.Background(),
 		input:            input,
 		params:           params,
 		defaultModel:     defaultModel,
@@ -152,7 +168,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			return nil
 		}
 
-		outcome, err := executeStep(rctx, step)
+		outcome, err := executeStep(rctx.ctx, rctx, step)
 		if err != nil {
 			return err
 		}
@@ -217,7 +233,9 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 				report, err := executePhase(rctx, *item.Phase)
 				if err != nil {
 					if report != nil {
+						rctx.mu.Lock()
 						rctx.steps["_verification_report"] = report.FormatReport()
+						rctx.mu.Unlock()
 					}
 					return nil, err
 				}
@@ -341,6 +359,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 func PreRunSharedSteps(w *Workflow, params map[string]string) (map[string]string, error) {
 	steps := make(map[string]string)
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		params: params,
 		steps:  steps,
 	}
@@ -352,7 +371,7 @@ func PreRunSharedSteps(w *Workflow, params map[string]string) (map[string]string
 			rctx.prevStepID = w.Steps[i-1].ID
 		}
 		fmt.Printf("  > %s (shared pre-run)\n", step.ID)
-		outcome, err := executeStep(rctx, step)
+		outcome, err := executeStep(rctx.ctx, rctx, step)
 		if err != nil {
 			return nil, fmt.Errorf("shared step %s: %w", step.ID, err)
 		}
@@ -592,16 +611,8 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 
 // executeStep handles control-flow forms (retry, timeout, catch, cond, map)
 // and delegates to runSingleStep for actual execution.
-func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
-	switch step.Form {
-	case "cond":
-		return executeCond(rctx, step)
-	case "map":
-		return executeMap(rctx, step)
-	}
-
-	// Determine timeout context
-	ctx := context.Background()
+func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	// Apply timeout before dispatching compound forms so (timeout "1s" (par ...)) works.
 	if step.Timeout != "" {
 		dur, err := time.ParseDuration(step.Timeout)
 		if err != nil {
@@ -610,6 +621,15 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, dur)
 		defer cancel()
+	}
+
+	switch step.Form {
+	case "cond":
+		return executeCond(ctx, rctx, step)
+	case "map":
+		return executeMap(ctx, rctx, step)
+	case "par":
+		return executePar(ctx, rctx, step)
 	}
 
 	maxAttempts := 1 + step.Retry
@@ -622,7 +642,9 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 		outcome, err := runSingleStep(ctx, rctx, step)
 		if err == nil {
 			// catch form: step succeeded, store output normally
+			rctx.mu.Lock()
 			rctx.steps[step.ID] = outcome.output
+			rctx.mu.Unlock()
 			return outcome, nil
 		}
 		lastErr = err
@@ -636,12 +658,14 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 	// All retries exhausted — try fallback if catch form
 	if step.Form == "catch" && step.Fallback != nil {
 		fmt.Printf("  > %s (fallback → %s)\n", step.ID, step.Fallback.ID)
-		outcome, err := runSingleStep(context.Background(), rctx, *step.Fallback)
+		outcome, err := runSingleStep(ctx, rctx, *step.Fallback)
 		if err != nil {
 			return nil, fmt.Errorf("step %s fallback %s: %w", step.ID, step.Fallback.ID, err)
 		}
+		rctx.mu.Lock()
 		rctx.steps[step.Fallback.ID] = outcome.output
 		rctx.steps[step.ID] = outcome.output // catch step ID also gets the fallback output
+		rctx.mu.Unlock()
 		return outcome, nil
 	}
 
@@ -649,31 +673,34 @@ func executeStep(rctx *runCtx, step Step) (*stepOutcome, error) {
 }
 
 // executeCond evaluates predicate branches in order and runs the first matching step.
-func executeCond(rctx *runCtx, step Step) (*stepOutcome, error) {
+func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	for _, branch := range step.Branches {
 		if branch.Pred == "else" {
-			return executeStep(rctx, branch.Step)
+			return executeStep(ctx, rctx, branch.Step)
 		}
 		// Render predicate template
 		data := map[string]any{"input": rctx.input, "param": rctx.params}
-		rendered, err := render(branch.Pred, data, rctx.steps)
+		rendered, err := render(branch.Pred, data, rctx.stepsSnapshot())
 		if err != nil {
 			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
 		}
-		cmd := exec.Command("sh", "-c", rendered)
+		cmd := exec.CommandContext(ctx, "sh", "-c", rendered)
 		if err := cmd.Run(); err == nil {
 			// Predicate succeeded (exit 0)
-			return executeStep(rctx, branch.Step)
+			return executeStep(ctx, rctx, branch.Step)
 		}
 	}
 	// No branch matched — return empty outcome
+	rctx.mu.Lock()
 	rctx.steps[step.ID] = ""
+	rctx.mu.Unlock()
 	return &stepOutcome{}, nil
 }
 
 // executeMap splits a prior step's output by newlines and runs the body step for each item.
-func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
-	source, ok := rctx.steps[step.MapOver]
+func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	source, ok := snap[step.MapOver]
 	if !ok {
 		return nil, fmt.Errorf("map %s: source step %q has no output", step.ID, step.MapOver)
 	}
@@ -699,7 +726,7 @@ func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
 		mapParams["item_index"] = fmt.Sprintf("%d", idx)
 		rctx.params = mapParams
 
-		outcome, err := executeStep(rctx, body)
+		outcome, err := executeStep(ctx, rctx, body)
 		rctx.params = origParams
 		if err != nil {
 			return nil, fmt.Errorf("map %s item %d: %w", step.ID, idx, err)
@@ -708,19 +735,74 @@ func executeMap(rctx *runCtx, step Step) (*stepOutcome, error) {
 	}
 
 	combined := strings.Join(outputs, "\n")
+	rctx.mu.Lock()
 	rctx.steps[step.ID] = combined
+	rctx.mu.Unlock()
 	return &stepOutcome{output: combined}, nil
+}
+
+// executePar runs all child steps concurrently and waits for completion.
+// Fail-fast: first error cancels all siblings via context.
+func executePar(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	g, gctx := errgroup.WithContext(ctx)
+
+	type parResult struct {
+		outcome *stepOutcome
+	}
+	results := make([]parResult, len(step.ParSteps))
+
+	for i, child := range step.ParSteps {
+		g.Go(func() error {
+			outcome, err := executeStep(gctx, rctx, child)
+			if err != nil {
+				return fmt.Errorf("par step %q: %w", child.ID, err)
+			}
+			results[i] = parResult{outcome: outcome}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	var combined []string
+	composite := &stepOutcome{}
+	for _, r := range results {
+		if r.outcome != nil {
+			combined = append(combined, r.outcome.output)
+			if r.outcome.isLLM {
+				composite.isLLM = true
+				composite.tokensIn += r.outcome.tokensIn
+				composite.tokensOut += r.outcome.tokensOut
+				composite.cost += r.outcome.cost
+				if r.outcome.latencyMs > composite.latencyMs {
+					composite.latencyMs = r.outcome.latencyMs
+				}
+			}
+		}
+	}
+
+	composite.output = strings.Join(combined, "\n")
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = composite.output
+	rctx.mu.Unlock()
+
+	return composite, nil
 }
 
 // runSingleStep executes one step (save, run, or llm) without control-flow wrappers.
 func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	// Snapshot steps map for safe concurrent reads during par execution.
+	stepsSnap := rctx.stepsSnapshot()
+
 	data := map[string]any{
 		"input": rctx.input,
 		"param": rctx.params,
 	}
 
 	if step.Save != "" {
-		rendered, err := render(step.Save, data, rctx.steps)
+		rendered, err := render(step.Save, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -729,7 +811,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if sourceStep == "" && rctx.prevStepID != "" {
 			sourceStep = rctx.prevStepID
 		}
-		content := rctx.steps[sourceStep]
+		content := stepsSnap[sourceStep]
 		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
 			return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
 		}
@@ -741,12 +823,12 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Run != "" {
-		rendered, err := render(step.Run, data, rctx.steps)
+		rendered, err := render(step.Run, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
 		fmt.Printf("  > %s\n", step.ID)
-		out, err := provider.RunShell(rendered)
+		out, err := provider.RunShellContext(ctx, rendered)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)
 		}
@@ -754,7 +836,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.LLM != nil {
-		rendered, err := render(step.LLM.Prompt, data, rctx.steps)
+		rendered, err := render(step.LLM.Prompt, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -909,8 +991,8 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	// --- SDK forms ---
 
 	if step.JsonPick != nil {
-		from := rctx.steps[step.JsonPick.From]
-		rendered, err := render(step.JsonPick.Expr, data, rctx.steps)
+		from := stepsSnap[step.JsonPick.From]
+		rendered, err := render(step.JsonPick.Expr, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -925,7 +1007,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Lines != "" {
-		from := rctx.steps[step.Lines]
+		from := stepsSnap[step.Lines]
 		lines := strings.Split(strings.TrimSpace(from), "\n")
 		var parts []string
 		for _, l := range lines {
@@ -944,7 +1026,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		merged := make(map[string]any)
 		for _, id := range step.Merge {
 			var obj map[string]any
-			if err := json.Unmarshal([]byte(rctx.steps[id]), &obj); err != nil {
+			if err := json.Unmarshal([]byte(stepsSnap[id]), &obj); err != nil {
 				return nil, fmt.Errorf("step %s: merge %q: %w", step.ID, id, err)
 			}
 			for k, v := range obj {
@@ -960,13 +1042,13 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.HttpCall != nil {
-		urlRendered, err := render(step.HttpCall.URL, data, rctx.steps)
+		urlRendered, err := render(step.HttpCall.URL, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: url template: %w", step.ID, err)
 		}
 		var bodyReader io.Reader
 		if step.HttpCall.Body != "" {
-			bodyRendered, err := render(step.HttpCall.Body, data, rctx.steps)
+			bodyRendered, err := render(step.HttpCall.Body, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: body template: %w", step.ID, err)
 			}
@@ -981,7 +1063,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: http request: %w", step.ID, err)
 		}
 		for k, v := range step.HttpCall.Headers {
-			hv, err := render(v, data, rctx.steps)
+			hv, err := render(v, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: header %q template: %w", step.ID, k, err)
 			}
@@ -1004,7 +1086,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.ReadFile != "" {
-		rendered, err := render(step.ReadFile, data, rctx.steps)
+		rendered, err := render(step.ReadFile, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
@@ -1017,11 +1099,11 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.WriteFile != nil {
-		rendered, err := render(step.WriteFile.Path, data, rctx.steps)
+		rendered, err := render(step.WriteFile.Path, data, stepsSnap)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
 		}
-		content := rctx.steps[step.WriteFile.From]
+		content := stepsSnap[step.WriteFile.From]
 		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
 			return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
 		}
@@ -1035,7 +1117,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	if step.GlobPat != nil {
 		pattern := step.GlobPat.Pattern
 		if step.GlobPat.Dir != "" {
-			dirRendered, err := render(step.GlobPat.Dir, data, rctx.steps)
+			dirRendered, err := render(step.GlobPat.Dir, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: dir template: %w", step.ID, err)
 			}
@@ -1056,7 +1138,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		// Render template expressions in plugin args (e.g., {{.param.repo}})
 		renderedArgs := make(map[string]string, len(pc.Args))
 		for k, v := range pc.Args {
-			rendered, err := render(v, data, rctx.steps)
+			rendered, err := render(v, data, stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: plugin arg %q: %w", step.ID, k, err)
 			}
@@ -1140,43 +1222,89 @@ func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
 		// Run all work steps
 		for _, step := range p.Steps {
 			fmt.Printf("  > %s\n", step.ID)
-			outcome, err := executeStep(rctx, step)
+			outcome, err := executeStep(rctx.ctx, rctx, step)
 			if err != nil {
 				return nil, fmt.Errorf("phase %q step %q: %w", p.ID, step.ID, err)
 			}
+			rctx.mu.Lock()
 			rctx.steps[step.ID] = outcome.output
+			rctx.mu.Unlock()
 		}
 
-		// Run gates in order, stop on first failure
-		lastGateResults = make([]GateResult, len(p.Gates))
+		// Flatten gates for result tracking (par blocks expand to children)
+		var flatGates []Step
+		for _, gate := range p.Gates {
+			if gate.Form == "par" {
+				flatGates = append(flatGates, gate.ParSteps...)
+			} else {
+				flatGates = append(flatGates, gate)
+			}
+		}
+		lastGateResults = make([]GateResult, len(flatGates))
 		allPassed := true
+		flatIdx := 0
 
-		for gi, gate := range p.Gates {
-			fmt.Printf("  > gate %s\n", gate.ID)
-			outcome, execErr := executeStep(rctx, gate)
-
-			if execErr != nil {
-				// Shell gate execution failure
-				rctx.steps[gate.ID] = execErr.Error()
-				lastGateResults[gi] = GateResult{ID: gate.ID, Passed: false, Detail: execErr.Error()}
-				allPassed = false
-				for ski := gi + 1; ski < len(p.Gates); ski++ {
-					lastGateResults[ski] = GateResult{ID: p.Gates[ski].ID, Skipped: true}
+		for _, gate := range p.Gates {
+			if gate.Form == "par" {
+				// Run all par children concurrently
+				fmt.Printf("  > gates (parallel)")
+				for _, child := range gate.ParSteps {
+					fmt.Printf(" %s", child.ID)
 				}
-				break
-			}
-
-			rctx.steps[gate.ID] = outcome.output
-			passed, detail := evaluateGate(gate, outcome, nil)
-			lastGateResults[gi] = GateResult{ID: gate.ID, Passed: passed, Detail: detail}
-
-			if !passed {
-				allPassed = false
-				for ski := gi + 1; ski < len(p.Gates); ski++ {
-					lastGateResults[ski] = GateResult{ID: p.Gates[ski].ID, Skipped: true}
+				fmt.Println()
+				_, execErr := executeStep(rctx.ctx, rctx, gate)
+				if execErr != nil {
+					for _, child := range gate.ParSteps {
+						lastGateResults[flatIdx] = GateResult{ID: child.ID, Passed: false, Detail: execErr.Error()}
+						flatIdx++
+					}
+					allPassed = false
+					break
 				}
-				break
+				// Evaluate each par child gate
+				for _, child := range gate.ParSteps {
+					rctx.mu.Lock()
+					output := rctx.steps[child.ID]
+					rctx.mu.Unlock()
+					passed, detail := evaluateGate(child, &stepOutcome{output: output}, nil)
+					lastGateResults[flatIdx] = GateResult{ID: child.ID, Passed: passed, Detail: detail}
+					if !passed {
+						allPassed = false
+					}
+					flatIdx++
+				}
+				if !allPassed {
+					break
+				}
+			} else {
+				// Sequential gate (existing behavior)
+				fmt.Printf("  > gate %s\n", gate.ID)
+				outcome, execErr := executeStep(rctx.ctx, rctx, gate)
+				if execErr != nil {
+					rctx.mu.Lock()
+					rctx.steps[gate.ID] = execErr.Error()
+					rctx.mu.Unlock()
+					lastGateResults[flatIdx] = GateResult{ID: gate.ID, Passed: false, Detail: execErr.Error()}
+					allPassed = false
+					flatIdx++
+					break
+				}
+				rctx.mu.Lock()
+				rctx.steps[gate.ID] = outcome.output
+				rctx.mu.Unlock()
+				passed, detail := evaluateGate(gate, outcome, nil)
+				lastGateResults[flatIdx] = GateResult{ID: gate.ID, Passed: passed, Detail: detail}
+				if !passed {
+					allPassed = false
+					flatIdx++
+					break
+				}
+				flatIdx++
 			}
+		}
+		// Mark remaining gates as skipped
+		for ; flatIdx < len(flatGates); flatIdx++ {
+			lastGateResults[flatIdx] = GateResult{ID: flatGates[flatIdx].ID, Skipped: true}
 		}
 
 		if allPassed {

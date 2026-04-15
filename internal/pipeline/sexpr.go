@@ -173,6 +173,12 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "par":
+		s, err := convertPar(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	default:
 		return nil, fmt.Errorf("line %d: unknown form %q", n.Line, head)
 	}
@@ -346,6 +352,45 @@ func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 	}, nil
 }
 
+// convertPar: (par (step ...) (step ...) ...)
+// All children run concurrently. Minimum 2 children.
+func convertPar(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:] // skip "par"
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (par) needs at least 2 children", n.Line)
+	}
+
+	var parSteps []Step
+	for _, child := range children {
+		if !child.IsList() || len(child.Children) == 0 {
+			return Step{}, fmt.Errorf("line %d: (par) children must be forms", child.Line)
+		}
+		head := child.Children[0].SymbolVal()
+		if head == "" {
+			head = child.Children[0].StringVal()
+		}
+		if head == "gate" {
+			g, err := convertGate(child, defs)
+			if err != nil {
+				return Step{}, fmt.Errorf("line %d: par child: %w", child.Line, err)
+			}
+			parSteps = append(parSteps, g)
+		} else {
+			steps, err := convertForm(child, head, defs)
+			if err != nil {
+				return Step{}, fmt.Errorf("line %d: par child: %w", child.Line, err)
+			}
+			parSteps = append(parSteps, steps...)
+		}
+	}
+
+	return Step{
+		ID:       fmt.Sprintf("par-%d", n.Line),
+		Form:     "par",
+		ParSteps: parSteps,
+	}, nil
+}
+
 // convertPhase: (phase "name" [:retries N] (step ...) ... (gate ...) ...)
 func convertPhase(n *sexpr.Node, defs map[string]string) (Phase, error) {
 	children := n.Children[1:] // skip "phase"
@@ -401,8 +446,32 @@ func convertPhase(n *sexpr.Node, defs map[string]string) (Phase, error) {
 					return Phase{}, err
 				}
 				p.Steps = append(p.Steps, s)
+			case "par":
+				parStep, err := convertPar(child, defs)
+				if err != nil {
+					return Phase{}, err
+				}
+				// All children must be the same kind (all gates or all steps).
+				allGates := true
+				allSteps := true
+				for i := range parStep.ParSteps {
+					if parStep.ParSteps[i].IsGate {
+						allSteps = false
+					} else {
+						allGates = false
+					}
+				}
+				if !allGates && !allSteps {
+					return Phase{}, fmt.Errorf("line %d: (par) inside phase must contain all gates or all steps, not a mix", child.Line)
+				}
+				parStep.IsGate = allGates
+				if allGates {
+					p.Gates = append(p.Gates, parStep)
+				} else {
+					p.Steps = append(p.Steps, parStep)
+				}
 			default:
-				return Phase{}, fmt.Errorf("line %d: unexpected form %q inside phase (expected step or gate)", child.Line, head)
+				return Phase{}, fmt.Errorf("line %d: unexpected form %q inside phase (expected step, gate, or par)", child.Line, head)
 			}
 			i++
 			continue

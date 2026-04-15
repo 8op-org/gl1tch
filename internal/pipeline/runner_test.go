@@ -276,6 +276,7 @@ OVERALL: PASS`
 
 func TestRunSingleStep_Lines(t *testing.T) {
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{"list": "alpha\nbeta\ngamma"},
 		params: map[string]string{},
 	}
@@ -292,6 +293,7 @@ func TestRunSingleStep_Lines(t *testing.T) {
 
 func TestRunSingleStep_Merge(t *testing.T) {
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps: map[string]string{
 			"a": `{"x":1}`,
 			"b": `{"y":2}`,
@@ -314,6 +316,7 @@ func TestRunSingleStep_ReadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{},
 		params: map[string]string{},
 	}
@@ -330,6 +333,7 @@ func TestRunSingleStep_ReadFile(t *testing.T) {
 func TestRunSingleStep_WriteFile(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "sub", "out.txt")
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{"gen": "hello world"},
 		params: map[string]string{},
 	}
@@ -361,6 +365,7 @@ func TestRunSingleStep_Glob(t *testing.T) {
 		}
 	}
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{},
 		params: map[string]string{},
 	}
@@ -383,6 +388,7 @@ func TestRunSingleStep_JsonPick(t *testing.T) {
 		t.Skip("jq not on PATH")
 	}
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  map[string]string{"data": `{"name":"alice","age":30}`},
 		params: map[string]string{},
 	}
@@ -536,6 +542,7 @@ func TestExecutePhase_AllGatesPass(t *testing.T) {
 	}
 
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  make(map[string]string),
 		params: map[string]string{},
 	}
@@ -562,6 +569,7 @@ func TestExecutePhase_GateFailsNoRetry(t *testing.T) {
 	}
 
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  make(map[string]string),
 		params: map[string]string{},
 	}
@@ -602,6 +610,7 @@ func TestExecutePhase_GateFailsThenPassesOnRetry(t *testing.T) {
 	}
 
 	rctx := &runCtx{
+		ctx:    context.Background(),
 		steps:  make(map[string]string),
 		params: map[string]string{},
 	}
@@ -771,5 +780,121 @@ func TestRun_PinnedTier(t *testing.T) {
 	}
 	if len(callLog) != 1 || callLog[0] != "fake-premium" {
 		t.Errorf("callLog = %v, want [fake-premium]", callLog)
+	}
+}
+
+func TestRun_Par_Basic(t *testing.T) {
+	src := []byte(`
+(workflow "test-par"
+  (step "setup" (run "echo setup-value"))
+  (par
+    (step "a" (run "echo alpha"))
+    (step "b" (run "echo bravo")))
+  (step "final" (run "echo a={{step \"a\"}} b={{step \"b\"}}")))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := provider.LoadProviders(t.TempDir())
+	result, err := Run(w, "", "", nil, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Steps["a"], "alpha") {
+		t.Fatalf("expected step a to contain 'alpha', got %q", result.Steps["a"])
+	}
+	if !strings.Contains(result.Steps["b"], "bravo") {
+		t.Fatalf("expected step b to contain 'bravo', got %q", result.Steps["b"])
+	}
+	if !strings.Contains(result.Output, "a=alpha") {
+		t.Fatalf("expected final output to contain 'a=alpha', got %q", result.Output)
+	}
+	if !strings.Contains(result.Output, "b=bravo") {
+		t.Fatalf("expected final output to contain 'b=bravo', got %q", result.Output)
+	}
+}
+
+func TestRun_Par_FailFast(t *testing.T) {
+	src := []byte(`
+(workflow "test-par-fail"
+  (par
+    (step "ok" (run "echo fine"))
+    (step "bad" (run "exit 1"))))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := provider.LoadProviders(t.TempDir())
+	_, err = Run(w, "", "", nil, reg)
+	if err == nil {
+		t.Fatal("expected error from failing par step")
+	}
+	if !strings.Contains(err.Error(), "bad") {
+		t.Fatalf("expected error to mention step 'bad', got: %v", err)
+	}
+}
+
+func TestRun_Par_WithTimeout(t *testing.T) {
+	src := []byte(`
+(workflow "test-par-timeout"
+  (timeout "1s"
+    (par
+      (step "fast" (run "echo quick"))
+      (step "slow" (run "sleep 10")))))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := provider.LoadProviders(t.TempDir())
+	_, err = Run(w, "", "", nil, reg)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+}
+
+func TestRun_Par_InPhase(t *testing.T) {
+	src := []byte(`
+(workflow "test-par-phase"
+  (phase "check" :retries 0
+    (step "work" (run "echo done"))
+    (par
+      (gate "g1" (run "echo PASS"))
+      (gate "g2" (run "echo PASS")))))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := provider.LoadProviders(t.TempDir())
+	result, err := Run(w, "", "", nil, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Steps["g1"] == "" {
+		t.Fatal("expected gate g1 to have output")
+	}
+	if result.Steps["g2"] == "" {
+		t.Fatal("expected gate g2 to have output")
+	}
+}
+
+func TestRun_Par_FromFile(t *testing.T) {
+	w, err := LoadFile("testdata/par-demo.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := provider.LoadProviders(t.TempDir())
+	result, err := Run(w, "", "", nil, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Output, "left=left-branch") {
+		t.Fatalf("expected merged output, got %q", result.Output)
+	}
+	if !strings.Contains(result.Output, "right=right-branch") {
+		t.Fatalf("expected merged output, got %q", result.Output)
 	}
 }
