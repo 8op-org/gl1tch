@@ -890,9 +890,6 @@ func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
 	if sr.IndexName == "" {
 		return nil, fmt.Errorf("line %d: search missing :index", n.Line)
 	}
-	if sr.Query == "" {
-		return nil, fmt.Errorf("line %d: search missing :query", n.Line)
-	}
 	return sr, nil
 }
 

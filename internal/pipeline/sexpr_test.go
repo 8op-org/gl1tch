@@ -1333,3 +1333,31 @@ func TestSexprWorkflow_Embed(t *testing.T) {
 		t.Fatalf("model = %q", s.Embed.Model)
 	}
 }
+
+func TestSexprWorkflow_SearchQueryOptional(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (search :index "my-index" :size 5)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if s.Search.IndexName != "my-index" {
+		t.Fatalf("expected index %q, got %q", "my-index", s.Search.IndexName)
+	}
+	if s.Search.Size != 5 {
+		t.Fatalf("expected size 5, got %d", s.Search.Size)
+	}
+	if s.Search.Query != "" {
+		t.Fatalf("expected empty query, got %q", s.Search.Query)
+	}
+}
