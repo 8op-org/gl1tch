@@ -274,6 +274,96 @@ func TestParseCrossReview_Empty(t *testing.T) {
 	}
 }
 
+func TestParseCrossReview_NumericFormat(t *testing.T) {
+	output := `VARIANT: local
+plan_completeness: 9/10
+plan_specificity: 9/10
+pr_quality: 9/10
+review_accuracy: 9/10
+total: 36/40
+notes: Structured plan with clear implementation steps
+
+VARIANT: copilot
+plan_completeness: 8/10
+plan_specificity: 9/10
+pr_quality: 9/10
+review_accuracy: 9/10
+total: 35/40
+notes: Detailed self-review
+
+WINNER: local
+REASON: The local variant provides a more structured plan`
+
+	scores := ParseCrossReview(output)
+	if len(scores) != 2 {
+		t.Fatalf("expected 2 variants, got %d", len(scores))
+	}
+
+	// Check local: all scores >= 7, so passed=4, total=4
+	if scores[0].Variant != "local" {
+		t.Fatalf("expected variant 'local', got %q", scores[0].Variant)
+	}
+	if scores[0].Passed != 4 || scores[0].Total != 4 {
+		t.Fatalf("local: expected 4/4, got %d/%d", scores[0].Passed, scores[0].Total)
+	}
+	if !scores[0].Winner {
+		t.Fatal("local should be winner")
+	}
+
+	// Check copilot
+	if scores[1].Variant != "copilot" {
+		t.Fatalf("expected variant 'copilot', got %q", scores[1].Variant)
+	}
+	if scores[1].Passed != 4 || scores[1].Total != 4 {
+		t.Fatalf("copilot: expected 4/4, got %d/%d", scores[1].Passed, scores[1].Total)
+	}
+	if scores[1].Winner {
+		t.Fatal("copilot should not be winner")
+	}
+}
+
+func TestParseCrossReview_NumericWithLowScores(t *testing.T) {
+	output := `VARIANT: local
+plan_completeness: 9/10
+plan_specificity: 6/10
+pr_quality: 5/10
+review_accuracy: 8/10
+total: 28/40
+notes: Mixed results
+
+VARIANT: claude
+plan_completeness: 10/10
+plan_specificity: 9/10
+pr_quality: 9/10
+review_accuracy: 9/10
+total: 37/40
+notes: Strong across the board
+
+WINNER: claude
+REASON: Higher overall quality`
+
+	scores := ParseCrossReview(output)
+	if len(scores) != 2 {
+		t.Fatalf("expected 2 variants, got %d", len(scores))
+	}
+
+	// local: 9 >= 7 (pass), 6 < 7 (fail), 5 < 7 (fail), 8 >= 7 (pass) = 2/4
+	if scores[0].Variant != "local" || scores[0].Passed != 2 || scores[0].Total != 4 {
+		t.Fatalf("local: expected 2/4, got %d/%d", scores[0].Passed, scores[0].Total)
+	}
+	if scores[0].Winner {
+		t.Fatal("local should not be winner")
+	}
+
+	// claude: all >= 7 = 4/4
+	if scores[1].Variant != "claude" || scores[1].Passed != 4 || scores[1].Total != 4 {
+		t.Fatalf("claude: expected 4/4, got %d/%d", scores[1].Passed, scores[1].Total)
+	}
+	if !scores[1].Winner {
+		t.Fatal("claude should be winner")
+	}
+}
+
 func TestRun_PinnedTier(t *testing.T) {
 	callLog := []string{}
 	resolver := func(name string) (provider.ProviderFunc, bool) {

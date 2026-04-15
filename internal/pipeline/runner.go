@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -279,7 +280,114 @@ type CrossReviewScore struct {
 }
 
 // ParseCrossReview extracts per-variant scores from cross-review LLM output.
+// Supports two formats:
+//
+// Old format (PASS/FAIL):
+//
+//	--- LOCAL ---
+//	1. Specificity — PASS — good
+//	SCORE: 4/5
+//	WINNER: LOCAL
+//
+// New format (numeric scores):
+//
+//	VARIANT: local
+//	plan_completeness: 9/10
+//	total: 36/40
+//	WINNER: local
 func ParseCrossReview(output string) []CrossReviewScore {
+	upper := strings.ToUpper(strings.ReplaceAll(output, "*", ""))
+
+	// Detect which format: new format uses "VARIANT:" headers
+	if strings.Contains(upper, "\nVARIANT:") || strings.HasPrefix(upper, "VARIANT:") {
+		return parseCrossReviewNumeric(output)
+	}
+	return parseCrossReviewPassFail(output)
+}
+
+// parseCrossReviewNumeric handles the new format with VARIANT: headers and N/M scores.
+// A score >= 7 out of 10 counts as "passed". The total is the count of score lines.
+func parseCrossReviewNumeric(output string) []CrossReviewScore {
+	var scores []CrossReviewScore
+	lines := strings.Split(output, "\n")
+
+	// Find WINNER line (case-insensitive)
+	winner := ""
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		upper := strings.ToUpper(trimmed)
+		if strings.HasPrefix(upper, "WINNER:") {
+			winner = strings.TrimSpace(trimmed[len("WINNER:"):])
+			break
+		}
+	}
+
+	currentVariant := ""
+	passed, total := 0, 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		upper := strings.ToUpper(trimmed)
+
+		// Detect VARIANT: header
+		if strings.HasPrefix(upper, "VARIANT:") {
+			// Save previous variant
+			if currentVariant != "" && total > 0 {
+				isWinner := strings.EqualFold(winner, currentVariant)
+				scores = append(scores, CrossReviewScore{
+					Variant: strings.ToLower(currentVariant),
+					Passed:  passed,
+					Total:   total,
+					Winner:  isWinner,
+				})
+			}
+			currentVariant = strings.TrimSpace(trimmed[len("VARIANT:"):])
+			passed = 0
+			total = 0
+			continue
+		}
+
+		// Skip non-score lines
+		if strings.HasPrefix(upper, "WINNER:") || strings.HasPrefix(upper, "REASON:") ||
+			strings.HasPrefix(upper, "NOTES:") || strings.HasPrefix(upper, "TOTAL:") {
+			continue
+		}
+
+		// Parse score lines like "plan_completeness: 9/10"
+		if currentVariant != "" && strings.Contains(trimmed, "/") && strings.Contains(trimmed, ":") {
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
+				scorePart := strings.TrimSpace(parts[1])
+				numDenom := strings.SplitN(scorePart, "/", 2)
+				if len(numDenom) == 2 {
+					num, errN := strconv.Atoi(strings.TrimSpace(numDenom[0]))
+					_, errD := strconv.Atoi(strings.TrimSpace(numDenom[1]))
+					if errN == nil && errD == nil {
+						total++
+						if num >= 7 {
+							passed++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Save last variant
+	if currentVariant != "" && total > 0 {
+		isWinner := strings.EqualFold(winner, currentVariant)
+		scores = append(scores, CrossReviewScore{
+			Variant: strings.ToLower(currentVariant),
+			Passed:  passed,
+			Total:   total,
+			Winner:  isWinner,
+		})
+	}
+
+	return scores
+}
+
+// parseCrossReviewPassFail handles the old format with --- VARIANT --- headers and PASS/FAIL lines.
+func parseCrossReviewPassFail(output string) []CrossReviewScore {
 	var scores []CrossReviewScore
 	upper := strings.ToUpper(strings.ReplaceAll(output, "*", ""))
 	lines := strings.Split(upper, "\n")
