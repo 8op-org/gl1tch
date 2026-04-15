@@ -47,9 +47,11 @@ type LoopResult struct {
 	TokensIn    int              `json:"tokens_in"`
 	TokensOut   int              `json:"tokens_out"`
 	CostUSD     float64          `json:"cost_usd"`
-	MaxTier     int              `json:"max_tier"`
-	Escalations int              `json:"escalations"`
-	Duration    time.Duration    `json:"duration"`
+	MaxTier       int              `json:"max_tier"`
+	Escalations   int              `json:"escalations"`
+	Duration      time.Duration    `json:"duration"`
+	Workspace     string           `json:"workspace"`
+	WorkspacePath string           `json:"workspace_path"`
 }
 
 // ToolLoop is the v2 research engine: LLM calls tools iteratively with tiered escalation.
