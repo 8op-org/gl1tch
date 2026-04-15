@@ -58,23 +58,6 @@ func (s *Server) routes() {
 	}
 }
 
-// Stub handlers — will be implemented in Tasks 4-5
-func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handleGetResult(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handleKibanaWorkflow(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-func (s *Server) handleKibanaRun(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", 501)
-}
-
 // ListenAndServe starts the HTTP server.
 func (s *Server) ListenAndServe() error {
 	srv := &http.Server{
