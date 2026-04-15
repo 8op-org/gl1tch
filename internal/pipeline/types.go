@@ -35,6 +35,18 @@ type Step struct {
 	Branches []CondBranch `yaml:"-"` // cond: ordered predicate→step pairs
 	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
 	MapBody  *Step        `yaml:"-"` // map: template step executed per item
+
+	// Plugin invocation
+	PluginCall *PluginCallStep `yaml:"-"`
+
+	// SDK forms
+	JsonPick  *JsonPickStep  `yaml:"-"`
+	Lines     string         `yaml:"-"` // step ID to split by newlines
+	Merge     []string       `yaml:"-"` // step IDs to merge
+	HttpCall  *HttpCallStep  `yaml:"-"`
+	ReadFile  string         `yaml:"-"` // file path to read
+	WriteFile *WriteFileStep `yaml:"-"`
+	GlobPat   *GlobStep      `yaml:"-"`
 }
 
 // CondBranch is one arm of a (cond ...) form.
@@ -51,6 +63,39 @@ type LLMStep struct {
 	Skill    string `yaml:"skill,omitempty"` // skill name or path — prepended to prompt as system context
 	Tier     *int   `yaml:"tier,omitempty"`
 	Format   string `yaml:"format,omitempty"`
+}
+
+// PluginCallStep invokes a plugin subcommand as a sub-workflow.
+type PluginCallStep struct {
+	Plugin     string            // plugin name
+	Subcommand string            // subcommand name
+	Args       map[string]string // keyword args
+}
+
+// JsonPickStep runs a jq expression against a step's output.
+type JsonPickStep struct {
+	Expr string // jq expression
+	From string // step ID
+}
+
+// HttpCallStep performs an HTTP request.
+type HttpCallStep struct {
+	Method  string            // "GET" or "POST"
+	URL     string            // template-rendered
+	Body    string            // template-rendered (POST only)
+	Headers map[string]string // template-rendered
+}
+
+// WriteFileStep writes a step's output to a file.
+type WriteFileStep struct {
+	Path string // template-rendered file path
+	From string // step ID whose output to write
+}
+
+// GlobStep matches files against a pattern.
+type GlobStep struct {
+	Pattern string // glob pattern
+	Dir     string // optional base directory
 }
 
 // LoadFile reads a single workflow file (YAML or sexpr).

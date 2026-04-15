@@ -68,7 +68,7 @@ subcommands have no shared state.
 ;; shared defs available to all subcommands
 (def username "adam-stokes")
 (def timezone "US/Eastern")
-(def repos ["elastic/ensemble" "elastic/oblt-cli" "elastic/observability-robots"])
+(def repos "elastic/ensemble elastic/oblt-cli elastic/observability-robots")
 ```
 
 ### Rules
