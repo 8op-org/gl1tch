@@ -64,3 +64,38 @@ func TestWorkspaceIntegration(t *testing.T) {
 		t.Fatal("run.json not in workspace results")
 	}
 }
+
+func TestEnsureWorkspaceDir(t *testing.T) {
+	wsDir := t.TempDir()
+
+	ensureWorkspaceDir(wsDir)
+
+	dotGlitch := filepath.Join(wsDir, ".glitch")
+	info, err := os.Stat(dotGlitch)
+	if err != nil {
+		t.Fatalf(".glitch dir not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatal(".glitch is not a directory")
+	}
+
+	gi, err := os.ReadFile(filepath.Join(dotGlitch, ".gitignore"))
+	if err != nil {
+		t.Fatalf(".gitignore not created: %v", err)
+	}
+	if string(gi) != "*\n" {
+		t.Fatalf(".gitignore: got %q, want %q", string(gi), "*\n")
+	}
+}
+
+func TestEnsureWorkspaceDir_Idempotent(t *testing.T) {
+	wsDir := t.TempDir()
+
+	ensureWorkspaceDir(wsDir)
+	ensureWorkspaceDir(wsDir)
+
+	gi, _ := os.ReadFile(filepath.Join(wsDir, ".glitch", ".gitignore"))
+	if string(gi) != "*\n" {
+		t.Fatalf(".gitignore content wrong after second call: %q", string(gi))
+	}
+}
