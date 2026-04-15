@@ -25,7 +25,7 @@
 >
   <div class="logo">
     <a href="#/">
-      <span class="logo-text">gl</span><span class="logo-accent">1</span><span class="logo-text">tch</span>
+      <span class="logo-short">1</span><span class="logo-full"><span class="logo-text">gl</span><span class="logo-accent">1</span><span class="logo-text">tch</span></span>
     </a>
   </div>
 
@@ -62,11 +62,13 @@
   .sidebar.expanded { width: var(--sidebar-width-expanded); }
 
   .logo {
-    padding: 16px;
+    padding: 0 16px;
     height: 52px;
     display: flex;
     align-items: center;
+    justify-content: center;
     border-bottom: 1px solid var(--border);
+    overflow: hidden;
   }
   .logo a {
     font-family: var(--font-mono);
@@ -74,7 +76,17 @@
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
   }
+  .logo-short {
+    color: var(--neon-cyan);
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .logo-full { display: none; }
+  .sidebar.expanded .logo-short { display: none; }
+  .sidebar.expanded .logo-full { display: inline; }
   .logo-text { color: var(--text-primary); }
   .logo-accent { color: var(--neon-cyan); }
   .logo a:hover .logo-text { color: var(--neon-cyan); }
