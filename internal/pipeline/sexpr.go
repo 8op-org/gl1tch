@@ -446,8 +446,32 @@ func convertPhase(n *sexpr.Node, defs map[string]string) (Phase, error) {
 					return Phase{}, err
 				}
 				p.Steps = append(p.Steps, s)
+			case "par":
+				parStep, err := convertPar(child, defs)
+				if err != nil {
+					return Phase{}, err
+				}
+				// All children must be the same kind (all gates or all steps).
+				allGates := true
+				allSteps := true
+				for i := range parStep.ParSteps {
+					if parStep.ParSteps[i].IsGate {
+						allSteps = false
+					} else {
+						allGates = false
+					}
+				}
+				if !allGates && !allSteps {
+					return Phase{}, fmt.Errorf("line %d: (par) inside phase must contain all gates or all steps, not a mix", child.Line)
+				}
+				parStep.IsGate = allGates
+				if allGates {
+					p.Gates = append(p.Gates, parStep)
+				} else {
+					p.Steps = append(p.Steps, parStep)
+				}
 			default:
-				return Phase{}, fmt.Errorf("line %d: unexpected form %q inside phase (expected step or gate)", child.Line, head)
+				return Phase{}, fmt.Errorf("line %d: unexpected form %q inside phase (expected step, gate, or par)", child.Line, head)
 			}
 			i++
 			continue

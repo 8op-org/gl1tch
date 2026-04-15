@@ -1006,6 +1006,47 @@ func TestSexprWorkflow_ParWithRetry(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_ParInPhase(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (phase "verify" :retries 0
+    (step "work" (run "echo work"))
+    (par
+      (gate "g1" (run "echo pass1"))
+      (gate "g2" (run "echo pass2")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Items) != 1 {
+		t.Fatalf("expected 1 item (phase), got %d", len(w.Items))
+	}
+	p := w.Items[0].Phase
+	if p == nil {
+		t.Fatal("expected phase item")
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("expected 1 work step, got %d", len(p.Steps))
+	}
+	if len(p.Gates) != 1 {
+		t.Fatalf("expected 1 gate (par wrapper), got %d", len(p.Gates))
+	}
+	parGate := p.Gates[0]
+	if parGate.Form != "par" {
+		t.Fatalf("expected gate form %q, got %q", "par", parGate.Form)
+	}
+	if len(parGate.ParSteps) != 2 {
+		t.Fatalf("expected 2 par gates, got %d", len(parGate.ParSteps))
+	}
+	if !parGate.ParSteps[0].IsGate {
+		t.Fatal("expected par child 0 to be a gate")
+	}
+	if !parGate.ParSteps[1].IsGate {
+		t.Fatal("expected par child 1 to be a gate")
+	}
+}
+
 func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 	src := []byte(`
 (workflow "old-style"
