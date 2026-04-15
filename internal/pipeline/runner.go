@@ -3,7 +3,10 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -687,6 +690,153 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			evalScores: stepEvalScores,
 			isLLM:      true,
 		}, nil
+	}
+
+	// --- SDK forms ---
+
+	if step.JsonPick != nil {
+		from := rctx.steps[step.JsonPick.From]
+		rendered, err := render(step.JsonPick.Expr, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+		}
+		fmt.Printf("  > %s (json-pick)\n", step.ID)
+		cmd := exec.CommandContext(ctx, "jq", rendered)
+		cmd.Stdin = strings.NewReader(from)
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("step %s: jq: %w", step.ID, err)
+		}
+		return &stepOutcome{output: strings.TrimSpace(string(out))}, nil
+	}
+
+	if step.Lines != "" {
+		from := rctx.steps[step.Lines]
+		lines := strings.Split(strings.TrimSpace(from), "\n")
+		var parts []string
+		for _, l := range lines {
+			if l == "" {
+				continue
+			}
+			parts = append(parts, fmt.Sprintf("%q", l))
+		}
+		out := "[" + strings.Join(parts, ",") + "]"
+		fmt.Printf("  > %s (lines)\n", step.ID)
+		return &stepOutcome{output: out}, nil
+	}
+
+	if len(step.Merge) > 0 {
+		merged := make(map[string]any)
+		for _, id := range step.Merge {
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(rctx.steps[id]), &obj); err != nil {
+				return nil, fmt.Errorf("step %s: merge %q: %w", step.ID, id, err)
+			}
+			for k, v := range obj {
+				merged[k] = v
+			}
+		}
+		out, err := json.Marshal(merged)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: merge marshal: %w", step.ID, err)
+		}
+		fmt.Printf("  > %s (merge)\n", step.ID)
+		return &stepOutcome{output: string(out)}, nil
+	}
+
+	if step.HttpCall != nil {
+		urlRendered, err := render(step.HttpCall.URL, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: url template: %w", step.ID, err)
+		}
+		var bodyReader io.Reader
+		if step.HttpCall.Body != "" {
+			bodyRendered, err := render(step.HttpCall.Body, data, rctx.steps)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: body template: %w", step.ID, err)
+			}
+			bodyReader = strings.NewReader(bodyRendered)
+		}
+		method := step.HttpCall.Method
+		if method == "" {
+			method = "GET"
+		}
+		req, err := http.NewRequestWithContext(ctx, method, urlRendered, bodyReader)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: http request: %w", step.ID, err)
+		}
+		for k, v := range step.HttpCall.Headers {
+			hv, err := render(v, data, rctx.steps)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: header %q template: %w", step.ID, k, err)
+			}
+			req.Header.Set(k, hv)
+		}
+		fmt.Printf("  > %s (http-%s)\n", step.ID, strings.ToLower(method))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: http: %w", step.ID, err)
+		}
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: http read body: %w", step.ID, err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("step %s: http %d: %s", step.ID, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		}
+		return &stepOutcome{output: string(respBody)}, nil
+	}
+
+	if step.ReadFile != "" {
+		rendered, err := render(step.ReadFile, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+		}
+		fmt.Printf("  > %s (read-file)\n", step.ID)
+		content, err := os.ReadFile(rendered)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: read-file: %w", step.ID, err)
+		}
+		return &stepOutcome{output: string(content)}, nil
+	}
+
+	if step.WriteFile != nil {
+		rendered, err := render(step.WriteFile.Path, data, rctx.steps)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+		}
+		content := rctx.steps[step.WriteFile.From]
+		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
+			return nil, fmt.Errorf("step %s: mkdir: %w", step.ID, err)
+		}
+		if err := os.WriteFile(rendered, []byte(content), 0o644); err != nil {
+			return nil, fmt.Errorf("step %s: write-file: %w", step.ID, err)
+		}
+		fmt.Printf("  > %s (write-file)\n", step.ID)
+		return &stepOutcome{output: rendered}, nil
+	}
+
+	if step.GlobPat != nil {
+		pattern := step.GlobPat.Pattern
+		if step.GlobPat.Dir != "" {
+			dirRendered, err := render(step.GlobPat.Dir, data, rctx.steps)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: dir template: %w", step.ID, err)
+			}
+			pattern = filepath.Join(dirRendered, pattern)
+		}
+		fmt.Printf("  > %s (glob)\n", step.ID)
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: glob: %w", step.ID, err)
+		}
+		return &stepOutcome{output: strings.Join(matches, "\n")}, nil
+	}
+
+	if step.PluginCall != nil {
+		fmt.Printf("  > %s (plugin %s %s)\n", step.ID, step.PluginCall.Plugin, step.PluginCall.Subcommand)
+		return nil, fmt.Errorf("plugin execution not yet implemented")
 	}
 
 	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)

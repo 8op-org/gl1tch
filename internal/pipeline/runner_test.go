@@ -1,6 +1,10 @@
 package pipeline
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -264,6 +268,133 @@ OVERALL: PASS`
 	}
 	if scores[1].Winner {
 		t.Fatal("claude should not be winner")
+	}
+}
+
+// --- SDK form unit tests ---
+
+func TestRunSingleStep_Lines(t *testing.T) {
+	rctx := &runCtx{
+		steps:  map[string]string{"list": "alpha\nbeta\ngamma"},
+		params: map[string]string{},
+	}
+	step := Step{ID: "split", Lines: "list"}
+	out, err := runSingleStep(context.Background(), rctx, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := `["alpha","beta","gamma"]`
+	if out.output != expected {
+		t.Fatalf("expected %q, got %q", expected, out.output)
+	}
+}
+
+func TestRunSingleStep_Merge(t *testing.T) {
+	rctx := &runCtx{
+		steps: map[string]string{
+			"a": `{"x":1}`,
+			"b": `{"y":2}`,
+		},
+		params: map[string]string{},
+	}
+	step := Step{ID: "combined", Merge: []string{"a", "b"}}
+	out, err := runSingleStep(context.Background(), rctx, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.output, `"x"`) || !strings.Contains(out.output, `"y"`) {
+		t.Fatalf("expected merged JSON with x and y, got %q", out.output)
+	}
+}
+
+func TestRunSingleStep_ReadFile(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "hello.txt")
+	if err := os.WriteFile(tmp, []byte("file contents here"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rctx := &runCtx{
+		steps:  map[string]string{},
+		params: map[string]string{},
+	}
+	step := Step{ID: "read", ReadFile: tmp}
+	out, err := runSingleStep(context.Background(), rctx, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.output != "file contents here" {
+		t.Fatalf("expected %q, got %q", "file contents here", out.output)
+	}
+}
+
+func TestRunSingleStep_WriteFile(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "sub", "out.txt")
+	rctx := &runCtx{
+		steps:  map[string]string{"gen": "hello world"},
+		params: map[string]string{},
+	}
+	step := Step{
+		ID:        "write",
+		WriteFile: &WriteFileStep{Path: tmp, From: "gen"},
+	}
+	out, err := runSingleStep(context.Background(), rctx, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.output != tmp {
+		t.Fatalf("expected path %q, got %q", tmp, out.output)
+	}
+	data, err := os.ReadFile(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "hello world" {
+		t.Fatalf("file contents = %q, want %q", string(data), "hello world")
+	}
+}
+
+func TestRunSingleStep_Glob(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.yaml", "b.yaml", "c.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rctx := &runCtx{
+		steps:  map[string]string{},
+		params: map[string]string{},
+	}
+	step := Step{
+		ID:      "find",
+		GlobPat: &GlobStep{Pattern: "*.yaml", Dir: dir},
+	}
+	out, err := runSingleStep(context.Background(), rctx, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := strings.Split(strings.TrimSpace(out.output), "\n")
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 matches, got %d: %v", len(matches), matches)
+	}
+}
+
+func TestRunSingleStep_JsonPick(t *testing.T) {
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("jq not on PATH")
+	}
+	rctx := &runCtx{
+		steps:  map[string]string{"data": `{"name":"alice","age":30}`},
+		params: map[string]string{},
+	}
+	step := Step{
+		ID:       "pick",
+		JsonPick: &JsonPickStep{Expr: ".name", From: "data"},
+	}
+	out, err := runSingleStep(context.Background(), rctx, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.output != `"alice"` {
+		t.Fatalf("expected %q, got %q", `"alice"`, out.output)
 	}
 }
 
