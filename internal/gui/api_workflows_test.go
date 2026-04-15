@@ -105,3 +105,31 @@ func TestListWorkflowsEmpty(t *testing.T) {
 		t.Errorf("expected empty list, got %d", len(wfs))
 	}
 }
+
+func TestListWorkflows_WithMetadata(t *testing.T) {
+	srv := testServer(t)
+	wfDir := filepath.Join(srv.workspace, "workflows")
+	src := `(workflow "pr-review" :description "Review PRs" :tags ("review" "ci") :author "adam" :version "1.0" :created "2026-04-01" (step "s1" (run "echo hi")))`
+	os.WriteFile(filepath.Join(wfDir, "pr-review.glitch"), []byte(src), 0o644)
+
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/workflows", nil))
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var wfs []workflowEntry
+	json.Unmarshal(w.Body.Bytes(), &wfs)
+	if len(wfs) != 1 {
+		t.Fatalf("expected 1 workflow, got %d", len(wfs))
+	}
+	if len(wfs[0].Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(wfs[0].Tags))
+	}
+	if wfs[0].Author != "adam" {
+		t.Errorf("expected author adam, got %q", wfs[0].Author)
+	}
+	if wfs[0].Version != "1.0" {
+		t.Errorf("expected version 1.0, got %q", wfs[0].Version)
+	}
+}

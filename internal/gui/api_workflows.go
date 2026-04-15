@@ -12,6 +12,7 @@ import (
 
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/provider"
+	"github.com/8op-org/gl1tch/internal/store"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,6 +53,10 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 			Name:        wf.Name,
 			File:        e.Name(),
 			Description: wf.Description,
+			Tags:        wf.Tags,
+			Author:      wf.Author,
+			Version:     wf.Version,
+			Created:     wf.Created,
 		})
 	}
 	if workflows == nil {
@@ -140,7 +145,11 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Record the run in the store so the GUI can track it
 	var runID int64
 	if s.store != nil {
-		runID, _ = s.store.RecordRun("workflow", wf.Name, "")
+		runID, _ = s.store.RecordRun(store.RunRecord{
+			Kind:         "workflow",
+			Name:         wf.Name,
+			WorkflowFile: name,
+		})
 	}
 
 	// Load config for model/provider/tiers

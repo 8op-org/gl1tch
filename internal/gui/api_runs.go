@@ -1,20 +1,27 @@
 package gui
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
 )
 
 type runEntry struct {
-	ID         int64  `json:"id"`
-	Kind       string `json:"kind"`
-	Name       string `json:"name"`
-	Input      string `json:"input"`
-	Output     string `json:"output,omitempty"`
-	ExitStatus int    `json:"exit_status"`
-	StartedAt  int64  `json:"started_at"`
-	FinishedAt int64  `json:"finished_at,omitempty"`
+	ID           int64   `json:"id"`
+	Kind         string  `json:"kind"`
+	Name         string  `json:"name"`
+	Input        string  `json:"input"`
+	Output       string  `json:"output,omitempty"`
+	ExitStatus   int     `json:"exit_status"`
+	StartedAt    int64   `json:"started_at"`
+	FinishedAt   int64   `json:"finished_at,omitempty"`
+	WorkflowFile string  `json:"workflow_file,omitempty"`
+	Repo         string  `json:"repo,omitempty"`
+	Model        string  `json:"model,omitempty"`
+	TokensIn     int64   `json:"tokens_in"`
+	TokensOut    int64   `json:"tokens_out"`
+	CostUSD      float64 `json:"cost_usd"`
 }
 
 func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +32,9 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.store.DB().Query(
 		`SELECT id, kind, name, COALESCE(input,''), COALESCE(output,''),
-		        COALESCE(exit_status,0), started_at, COALESCE(finished_at,0)
+		        COALESCE(exit_status,0), started_at, COALESCE(finished_at,0),
+		        COALESCE(workflow_file,''), COALESCE(repo,''), COALESCE(model,''),
+		        COALESCE(tokens_in,0), COALESCE(tokens_out,0), COALESCE(cost_usd,0)
 		 FROM runs ORDER BY id DESC LIMIT 100`,
 	)
 	if err != nil {
@@ -38,7 +47,9 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var re runEntry
 		if err := rows.Scan(&re.ID, &re.Kind, &re.Name, &re.Input, &re.Output,
-			&re.ExitStatus, &re.StartedAt, &re.FinishedAt); err != nil {
+			&re.ExitStatus, &re.StartedAt, &re.FinishedAt,
+			&re.WorkflowFile, &re.Repo, &re.Model,
+			&re.TokensIn, &re.TokensOut, &re.CostUSD); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
@@ -71,10 +82,14 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	var run runEntry
 	err = s.store.DB().QueryRow(
 		`SELECT id, kind, name, COALESCE(input,''), COALESCE(output,''),
-		        COALESCE(exit_status,0), started_at, COALESCE(finished_at,0)
+		        COALESCE(exit_status,0), started_at, COALESCE(finished_at,0),
+		        COALESCE(workflow_file,''), COALESCE(repo,''), COALESCE(model,''),
+		        COALESCE(tokens_in,0), COALESCE(tokens_out,0), COALESCE(cost_usd,0)
 		 FROM runs WHERE id = ?`, id,
 	).Scan(&run.ID, &run.Kind, &run.Name, &run.Input, &run.Output,
-		&run.ExitStatus, &run.StartedAt, &run.FinishedAt)
+		&run.ExitStatus, &run.StartedAt, &run.FinishedAt,
+		&run.WorkflowFile, &run.Repo, &run.Model,
+		&run.TokensIn, &run.TokensOut, &run.CostUSD)
 	if err != nil {
 		http.Error(w, "not found", 404)
 		return
@@ -84,18 +99,33 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		StepID     string `json:"step_id"`
 		Model      string `json:"model"`
 		DurationMs int64  `json:"duration_ms"`
+		Kind       string `json:"kind,omitempty"`
+		ExitStatus *int   `json:"exit_status,omitempty"`
+		TokensIn   int64  `json:"tokens_in"`
+		TokensOut  int64  `json:"tokens_out"`
+		GatePassed *bool  `json:"gate_passed,omitempty"`
 	}
 
 	stepRows, _ := s.store.DB().Query(
-		`SELECT step_id, COALESCE(model,''), COALESCE(duration_ms,0)
+		`SELECT step_id, COALESCE(model,''), COALESCE(duration_ms,0),
+		        COALESCE(kind,''), exit_status, COALESCE(tokens_in,0),
+		        COALESCE(tokens_out,0), gate_passed
 		 FROM steps WHERE run_id = ?`, id)
 	var steps []stepEntry
 	if stepRows != nil {
 		defer stepRows.Close()
 		for stepRows.Next() {
 			var se stepEntry
-			if err := stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs); err != nil {
-				continue
+			var exitStatus, gatePassed sql.NullInt64
+			stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs,
+				&se.Kind, &exitStatus, &se.TokensIn, &se.TokensOut, &gatePassed)
+			if exitStatus.Valid {
+				v := int(exitStatus.Int64)
+				se.ExitStatus = &v
+			}
+			if gatePassed.Valid {
+				v := gatePassed.Int64 == 1
+				se.GatePassed = &v
 			}
 			steps = append(steps, se)
 		}
