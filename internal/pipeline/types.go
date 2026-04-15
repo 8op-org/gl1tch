@@ -56,6 +56,9 @@ type Step struct {
 	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
 	MapBody  *Step        `yaml:"-"` // map: template step executed per item
 
+	// Parallel execution
+	ParSteps []Step `yaml:"-"` // par: concurrent child steps
+
 	// Plugin invocation
 	PluginCall *PluginCallStep `yaml:"-"`
 
