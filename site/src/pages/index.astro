@@ -109,28 +109,31 @@ import Base from '../layouts/Base.astro';
 <section id="how">
 <div class="wrap">
   <div class="section-label">how it works</div>
-  <h2>One command. gl1tch figures out the rest.</h2>
+  <h2>Write a workflow. Or let AI write it for you.</h2>
 
   <div class="how-grid">
     <div class="how-step">
-      <div class="how-num">01 ask</div>
-      <pre class="code"><span class="p">$</span> glitch ask "review PR #42"
-<span class="r">&rarr; routes to pr-review workflow</span></pre>
-      <p>Smart routing matches your question to the right workflow via local LLM. Nothing leaves your machine.</p>
+      <div class="how-num">01 shell gathers context</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"examples"</span>
+  (<span class="k">run</span> <span class="s">"cat examples/*.glitch"</span>))
+(<span class="k">step</span> <span class="s">"structure"</span>
+  (<span class="k">run</span> <span class="s">"find internal/ cmd/ -name '*.go'"</span>))</pre>
+      <p>Shell steps gather your repo context — code, docs, git history. Free and deterministic.</p>
     </div>
     <div class="how-step">
-      <div class="how-num">02 shell gathers data</div>
-      <pre class="code">(<span class="k">step</span> <span class="s">"diff"</span>
-  (<span class="k">run</span> <span class="s">"gh pr diff {'{{.input}}'}"</span>))</pre>
-      <p>Shell steps call <code>gh</code>, <code>git</code>, <code>curl</code>, <code>jq</code> — free and deterministic.</p>
+      <div class="how-num">02 LLM generates or reasons</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"generate"</span>
+  (<span class="k">llm</span> <span class="r">:tier</span> <span class="s">0</span>
+    <span class="r">:prompt</span> <span class="s">"Write docs using:
+    {'{{step \"examples\"}}'}..."</span>))</pre>
+      <p>Tiered routing tries local LLM first. Escalates to cloud only if quality demands it.</p>
     </div>
     <div class="how-step">
-      <div class="how-num">03 LLM reasons about it</div>
-      <pre class="code">(<span class="k">step</span> <span class="s">"review"</span>
-  (<span class="k">llm</span> <span class="r">:prompt</span> <span class="s">```
-    Review: {'{{step "diff"}}'}
-    ```</span>))</pre>
-      <p>Swap providers per step. Ollama, Claude, Copilot, LM Studio.</p>
+      <div class="how-num">03 gates verify before shipping</div>
+      <pre class="code">(<span class="k">phase</span> <span class="s">"verify"</span> <span class="r">:retries</span> <span class="s">1</span>
+  (<span class="k">gate</span> <span class="s">"no-hallucinations"</span>
+    (<span class="k">run</span> <span class="s">"python3 scripts/gate.py"</span>)))</pre>
+      <p>Shell-based gates catch hallucinated features, leaked internals, and missing coverage. Retries on failure.</p>
     </div>
   </div>
 </div>

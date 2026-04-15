@@ -84,7 +84,11 @@
     (gate "structure-and-tone"
       (run "python3 scripts/gate-structure.py")))
 
-  ;; ── Done ──────────────────────────────────────────
+  ;; ── Page tests ────────────────────────────────────
+
+  (phase "page-tests" :retries 0
+    (gate "playwright"
+      (run "bash scripts/gate-playwright.sh")))
 
   (step "done"
-    (run "echo 'Page created. Run: glitch workflow run site-dev to preview.'")))
+    (run "echo 'Page created and tested. Run: glitch workflow run site-dev to preview.'")))

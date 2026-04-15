@@ -1,12 +1,9 @@
-;; site-publish.glitch — full pipeline: generate, verify, build, commit
-;;
-;; Run after editing stubs. Generates docs, runs gates, builds static
-;; site, and commits everything.
+;; site-publish.glitch — full pipeline: generate, verify, build, test
 ;;
 ;; Run with: glitch workflow run site-publish
 
 (workflow "site-publish"
-  :description "generate, verify, build, and commit the site"
+  :description "generate, verify, build, and test the site"
 
   ;; ── Generate ──────────────────────────────────────
 
@@ -40,9 +37,9 @@
   (step "save-changelog"
     (save "site/generated/changelog.md" :from "enrich-changelog"))
 
-  ;; ── Verify ────────────────────────────────────────
+  ;; ── Content gates ─────────────────────────────────
 
-  (phase "verify" :retries 0
+  (phase "content-verify" :retries 0
     (gate "no-hallucinations"
       (run "python3 scripts/gate-hallucinations.py"))
     (gate "stub-coverage"
@@ -55,7 +52,11 @@
   (step "build"
     (run "cd site && npx astro build 2>&1"))
 
-  ;; ── Report ────────────────────────────────────────
+  ;; ── Page tests ────────────────────────────────────
 
-  (step "report"
-    (run "echo 'PASS — site built to site/dist/'")))
+  (phase "page-tests" :retries 0
+    (gate "playwright"
+      (run "bash scripts/gate-playwright.sh")))
+
+  (step "done"
+    (run "echo 'All gates passed. Site built to site/dist/'")))
