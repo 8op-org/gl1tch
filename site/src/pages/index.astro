@@ -148,55 +148,56 @@ import Base from '../layouts/Base.astro';
         <span class="example-tag">shell + jq + LLM</span>
       </div>
       <p class="example-desc">Fetch unread emails, filter out bots with jq, then ask an LLM which ones actually need a reply.</p>
-      <pre class="code"><span class="k">name:</span> <span class="s">email-triage</span>
-<span class="k">description:</span> <span class="s">surface emails that need a human reply</span>
+      <pre class="code"><span class="r">;; email-triage.glitch</span>
 
-<span class="k">steps:</span>
-  - <span class="k">id:</span> <span class="s">fetch-unread</span>
-    <span class="k">run:</span> <span class="s">|</span>
-      gws gmail +triage --max 50 --format json \
-        | jq '.messages'
+(<span class="k">workflow</span> <span class="s">"email-triage"</span>
+  <span class="r">:description</span> <span class="s">"surface emails that need a human reply"</span>
 
-  - <span class="k">id:</span> <span class="s">filter-bots</span>
-    <span class="k">run:</span> <span class="s">|</span>
+  (<span class="k">step</span> <span class="s">"fetch-unread"</span>
+    (<span class="k">run</span> <span class="s">"gws gmail +triage --max 50 --format json | jq '.messages'"</span>))
+
+  (<span class="k">step</span> <span class="s">"filter-bots"</span>
+    (<span class="k">run</span> <span class="s">```
       cat &lt;&lt;'EOF' | jq '[.[] | select(
         (.from | test("noreply@|notifications@github|
           jira@|automation@|dependabot"; "i")) | not
       )]'
       {'{{step "fetch-unread"}}'}
       EOF
+      ```</span>))
 
-  - <span class="k">id:</span> <span class="s">triage</span>
-    <span class="k">llm:</span>
-      <span class="k">provider:</span> <span class="s">claude</span>
-      <span class="k">model:</span> <span class="s">claude-haiku-4-5-20251001</span>
-      <span class="k">prompt:</span> <span class="s">|</span>
+  (<span class="k">step</span> <span class="s">"triage"</span>
+    (<span class="k">llm</span>
+      <span class="r">:provider</span> <span class="s">"claude"</span>
+      <span class="r">:format</span> <span class="s">"json"</span>
+      <span class="r">:prompt</span> <span class="s">```
         Classify which emails need attention.
         Skip newsletters, automated reports, mass CCs.
         Return JSON: [&#123;sender, subject, reason&#125;]
 
-        Emails: {'{{step "filter-bots"}}'}</pre>
+        Emails: {'{{step "filter-bots"}}'}
+        ```</span>)))</pre>
     </div>
 
     <div class="example">
       <div class="example-header">
         <h3>Task prioritizer</h3>
-        <span class="example-tag">3 GraphQL fetches + jq scoring</span>
+        <span class="example-tag">GraphQL + jq &mdash; no LLM needed</span>
       </div>
-      <p class="example-desc">Pull review requests, assigned issues, and your own PRs via GraphQL. Score them into HIGH / MEDIUM / LOW with pure jq — no LLM needed.</p>
-      <pre class="code"><span class="k">name:</span> <span class="s">task-prioritizer</span>
-<span class="k">description:</span> <span class="s">prioritized task list as JSON</span>
+      <p class="example-desc">Pull review requests and your own PRs via GraphQL. Score them into HIGH / MEDIUM / LOW with pure jq — no LLM, zero cost.</p>
+      <pre class="code"><span class="r">;; task-prioritizer.glitch</span>
 
-<span class="k">steps:</span>
-  - <span class="k">id:</span> <span class="s">fetch-reviews</span>
-    <span class="k">run:</span> <span class="s">|</span>
+(<span class="k">workflow</span> <span class="s">"task-prioritizer"</span>
+  <span class="r">:description</span> <span class="s">"prioritized task list as JSON"</span>
+
+  (<span class="k">step</span> <span class="s">"fetch-reviews"</span>
+    (<span class="k">run</span> <span class="s">```
       gh api graphql -f query='&#123;
         search(query: "type:pr state:open review-requested:@me"
                type: ISSUE, first: 50) &#123;
           nodes &#123; ... on PullRequest &#123;
             number title url createdAt
             repository &#123; nameWithOwner &#125;
-            author &#123; login &#125;
           &#125;&#125;
         &#125;
       &#125;' | jq '[.data.search.nodes[] | &#123;
@@ -204,9 +205,10 @@ import Base from '../layouts/Base.astro';
         repo: .repository.nameWithOwner,
         age_days: ((now - (.createdAt|fromdateiso8601)) / 86400 | floor)
       &#125;]'
+      ```</span>))
 
-  - <span class="k">id:</span> <span class="s">fetch-own-prs</span>
-    <span class="k">run:</span> <span class="s">|</span>
+  (<span class="k">step</span> <span class="s">"fetch-own-prs"</span>
+    (<span class="k">run</span> <span class="s">```
       gh api graphql -f query='&#123;
         search(query: "type:pr state:open author:@me"
                type: ISSUE, first: 50) &#123;
@@ -222,18 +224,18 @@ import Base from '../layouts/Base.astro';
         ci: (.commits.nodes[0].commit
               .statusCheckRollup.state // "UNKNOWN")
       &#125;]'
+      ```</span>))
 
-  - <span class="k">id:</span> <span class="s">prioritize</span>
-    <span class="k">run:</span> <span class="s">|</span>
+  (<span class="k">step</span> <span class="s">"prioritize"</span>
+    (<span class="k">run</span> <span class="s">```
       jq -n --argjson r '{'{{step "fetch-reviews"}}'}' \
             --argjson p '{'{{step "fetch-own-prs"}}'}' '&#123;
-        high: (
-          [$r[] | select(.age_days > 2)] +
-          [$p[] | select(.ci == "FAILURE")]
-        ),
-        medium: [$r[] | select(.age_days <= 2)],
+        high:   ([$r[] | select(.age_days > 2)]
+               + [$p[] | select(.ci == "FAILURE")]),
+        medium: [$r[] | select(.age_days &lt;= 2)],
         low:    [$p[] | select(.ci != "FAILURE")]
-      &#125;'</pre>
+      &#125;'
+      ```</span>)))</pre>
     </div>
 
     <div class="example">
@@ -245,24 +247,15 @@ import Base from '../layouts/Base.astro';
       <pre class="code"><span class="r">#!/bin/bash</span>
 <span class="r"># One script orchestrates everything</span>
 
-run_workflow() &#123;
-  local name="$1" out="$2" fallback="$3"
-  if glitch workflow run "$name" > "data/$out"; then
-    echo "  $name... <span class="s">ok</span>"
+for wf in email-triage task-prioritizer review-dashboard \
+          my-prs ci-status calendar falling-behind activity-log; do
+  if glitch workflow run "$wf" > "data/$wf.json"; then
+    echo "  $wf... <span class="s">ok</span>"
   else
-    echo "$fallback" > "data/$out"
-    echo "  $name... <span class="k">fallback</span>"
+    echo "[]" > "data/$wf.json"
+    echo "  $wf... <span class="k">fallback</span>"
   fi
-&#125;
-
-run_workflow email-triage     email.json    "[]"
-run_workflow task-prioritizer tasks.json    '&#123;&#125;'
-run_workflow review-dashboard reviews.json  "[]"
-run_workflow my-prs           my-prs.json   "[]"
-run_workflow ci-status        ci.json       "[]"
-run_workflow calendar         calendar.json '&#123;&#125;'
-run_workflow falling-behind   gaps.json     '&#123;&#125;'
-run_workflow activity-log     activity.json '&#123;&#125;'
+done
 
 npx astro build &amp;&amp; open dist/index.html</pre>
       <p class="example-note">Each workflow owns its own data fetching and formatting. The build script just runs them and catches failures with sensible defaults. Swap any workflow without touching the others.</p>

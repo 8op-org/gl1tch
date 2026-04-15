@@ -1,21 +1,25 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import Doc from '../layouts/Doc.astro';
 
 const entries = (await getCollection('changelog')).sort(
   (a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
 );
+
+const rendered = await Promise.all(
+  entries.map(async (entry) => {
+    const { Content } = await render(entry);
+    return { entry, Content };
+  })
+);
 ---
 
 <Doc title="Changelog">
-  {entries.map(async (entry) => {
-    const { Content } = await entry.render();
-    return (
-      <article>
-        <h3>{entry.data.title}</h3>
-        <time>{entry.data.date}</time>
-        <Content />
-      </article>
-    );
-  })}
+  {rendered.map(({ entry, Content }) => (
+    <article>
+      <h3>{entry.data.title}</h3>
+      <time>{entry.data.date}</time>
+      <Content />
+    </article>
+  ))}
 </Doc>
