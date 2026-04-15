@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -13,6 +14,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/ui"
+	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
 var workflowParams []string
@@ -123,11 +125,27 @@ var workflowRunCmd = &cobra.Command{
 		}
 
 		cfg, _ := loadConfig()
+
+		// Try to load workspace config for ES URL
+		var wsESURL string
+		wsFile := ".glitch/workspace.glitch"
+		if workspacePath != "" {
+			wsFile = filepath.Join(workspacePath, "workspace.glitch")
+		}
+		if wsData, err := os.ReadFile(wsFile); err == nil {
+			if ws, err := workspace.ParseFile(wsData); err == nil {
+				if ws.Defaults.Elasticsearch != "" {
+					wsESURL = ws.Defaults.Elasticsearch
+				}
+			}
+		}
+
 		result, err := pipeline.Run(w, input, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 			Telemetry:        tel,
 			ProviderResolver: cfg.BuildProviderResolver(),
 			Tiers:            cfg.Tiers,
 			EvalThreshold:    cfg.EvalThreshold,
+			ESURL:            wsESURL,
 		})
 		if err != nil {
 			return err

@@ -22,6 +22,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const defaultOllamaURL = "http://localhost:11434"
+
 // stepOutcome holds the result of executing a single step.
 type stepOutcome struct {
 	output     string
@@ -49,6 +51,7 @@ type runCtx struct {
 	steps            map[string]string
 	prevStepID       string
 	mu               sync.Mutex
+	esURL            string
 }
 
 // stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
@@ -60,6 +63,17 @@ func (r *runCtx) stepsSnapshot() map[string]string {
 	}
 	r.mu.Unlock()
 	return snap
+}
+
+// resolveESURL returns the ES URL to use, checking step override, then runCtx default, then fallback.
+func resolveESURL(stepURL string, rctx *runCtx) string {
+	if stepURL != "" {
+		return stepURL
+	}
+	if rctx.esURL != "" {
+		return rctx.esURL
+	}
+	return "http://localhost:9200"
 }
 
 // Result holds the output of a completed workflow run.
@@ -78,6 +92,7 @@ type RunOpts struct {
 	Tiers            []provider.TierConfig
 	EvalThreshold    int
 	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
+	ESURL            string            // default ES URL from workspace config
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -150,6 +165,11 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		}
 	}
 
+	var esURL string
+	if len(opts) > 0 && opts[0].ESURL != "" {
+		esURL = opts[0].ESURL
+	}
+
 	rctx := &runCtx{
 		ctx:              context.Background(),
 		input:            input,
@@ -160,6 +180,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		tiers:            tiers,
 		evalThreshold:    evalThreshold,
 		steps:            steps,
+		esURL:            esURL,
 	}
 
 	// runBareStep executes a single step and accumulates telemetry.
@@ -598,6 +619,28 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 			f.Close()
 			return f.Name()
 		},
+
+		// String functions
+		"split":      func(sep, s string) []string { return strings.Split(s, sep) },
+		"join":       func(sep string, parts []string) string { return strings.Join(parts, sep) },
+		"last":       func(s []string) string { if len(s) == 0 { return "" }; return s[len(s)-1] },
+		"first":      func(s []string) string { if len(s) == 0 { return "" }; return s[0] },
+		"upper":      strings.ToUpper,
+		"lower":      strings.ToLower,
+		"trim":       strings.TrimSpace,
+		"trimPrefix": func(prefix, s string) string { return strings.TrimPrefix(s, prefix) },
+		"trimSuffix": func(suffix, s string) string { return strings.TrimSuffix(s, suffix) },
+		"replace":    func(old, new, s string) string { return strings.ReplaceAll(s, old, new) },
+		"truncate": func(n int, s string) string {
+			runes := []rune(s)
+			if len(runes) <= n {
+				return s
+			}
+			return string(runes[:n])
+		},
+		"contains":  strings.Contains,
+		"hasPrefix": strings.HasPrefix,
+		"hasSuffix": strings.HasSuffix,
 	}
 	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
 	if err != nil {
@@ -1140,6 +1183,136 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: glob: %w", step.ID, err)
 		}
 		return &stepOutcome{output: strings.Join(matches, "\n")}, nil
+	}
+
+	if step.Search != nil {
+		indexRendered, err := render(step.Search.IndexName, data, stepsSnap)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: index template: %w", step.ID, err)
+		}
+		esURL := resolveESURL(step.Search.ESURL, rctx)
+		es := esearch.NewClient(esURL)
+
+		queryBody := map[string]any{}
+		if step.Search.Query != "" {
+			var q any
+			if err := json.Unmarshal([]byte(step.Search.Query), &q); err != nil {
+				return nil, fmt.Errorf("step %s: query parse: %w", step.ID, err)
+			}
+			queryBody["query"] = q
+		}
+		queryBody["size"] = step.Search.Size
+		if len(step.Search.Fields) > 0 {
+			queryBody["_source"] = step.Search.Fields
+		}
+
+		queryJSON, err := json.Marshal(queryBody)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: query marshal: %w", step.ID, err)
+		}
+
+		ui.StepSDK(step.ID, "search")
+		resp, err := es.Search(ctx, []string{indexRendered}, queryJSON)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: %w", step.ID, err)
+		}
+
+		sources := make([]json.RawMessage, 0)
+		for _, hit := range resp.Results {
+			sources = append(sources, hit.Source)
+		}
+		out, err := json.Marshal(sources)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: marshal results: %w", step.ID, err)
+		}
+		return &stepOutcome{output: string(out)}, nil
+	}
+
+	if step.Index != nil {
+		indexRendered, err := render(step.Index.IndexName, data, stepsSnap)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: index template: %w", step.ID, err)
+		}
+		docRendered, err := render(step.Index.Doc, data, stepsSnap)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: doc template: %w", step.ID, err)
+		}
+		idRendered := step.Index.DocID
+		if idRendered != "" {
+			idRendered, err = render(idRendered, data, stepsSnap)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: id template: %w", step.ID, err)
+			}
+		}
+
+		docBytes := []byte(docRendered)
+
+		if step.Index.EmbedField != "" {
+			var docMap map[string]any
+			if err := json.Unmarshal(docBytes, &docMap); err != nil {
+				return nil, fmt.Errorf("step %s: parse doc for embedding: %w", step.ID, err)
+			}
+			fieldVal, ok := docMap[step.Index.EmbedField]
+			if ok {
+				text := fmt.Sprintf("%v", fieldVal)
+				vec, err := provider.EmbedOllama(ctx, defaultOllamaURL, step.Index.EmbedModel, text)
+				if err != nil {
+					return nil, fmt.Errorf("step %s: embed: %w", step.ID, err)
+				}
+				docMap["embedding"] = vec
+				docBytes, err = json.Marshal(docMap)
+				if err != nil {
+					return nil, fmt.Errorf("step %s: marshal embedded doc: %w", step.ID, err)
+				}
+			}
+		}
+
+		esURL := resolveESURL(step.Index.ESURL, rctx)
+		es := esearch.NewClient(esURL)
+		ui.StepSDK(step.ID, "index")
+		resp, err := es.IndexDoc(ctx, indexRendered, idRendered, docBytes)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: %w", step.ID, err)
+		}
+		out, _ := json.Marshal(resp)
+		return &stepOutcome{output: string(out)}, nil
+	}
+
+	if step.Delete != nil {
+		indexRendered, err := render(step.Delete.IndexName, data, stepsSnap)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: index template: %w", step.ID, err)
+		}
+		esURL := resolveESURL(step.Delete.ESURL, rctx)
+		es := esearch.NewClient(esURL)
+
+		var q any
+		if err := json.Unmarshal([]byte(step.Delete.Query), &q); err != nil {
+			return nil, fmt.Errorf("step %s: query parse: %w", step.ID, err)
+		}
+		wrapped, _ := json.Marshal(map[string]any{"query": q})
+
+		ui.StepSDK(step.ID, "delete")
+		resp, err := es.DeleteByQuery(ctx, indexRendered, wrapped)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: %w", step.ID, err)
+		}
+		out, _ := json.Marshal(resp)
+		return &stepOutcome{output: string(out)}, nil
+	}
+
+	if step.Embed != nil {
+		rendered, err := render(step.Embed.Input, data, stepsSnap)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: input template: %w", step.ID, err)
+		}
+		ui.StepSDK(step.ID, "embed")
+		vec, err := provider.EmbedOllama(ctx, defaultOllamaURL, step.Embed.Model, rendered)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: %w", step.ID, err)
+		}
+		out, _ := json.Marshal(vec)
+		return &stepOutcome{output: string(out)}, nil
 	}
 
 	if step.PluginCall != nil {

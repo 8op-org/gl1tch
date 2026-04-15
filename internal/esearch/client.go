@@ -209,6 +209,79 @@ func parseIndexStats(data []byte) []IndexStat {
 	return filtered
 }
 
+// IndexDocResponse holds the parsed result of indexing a single document.
+type IndexDocResponse struct {
+	ID      string `json:"_id"`
+	Version int    `json:"_version"`
+	Result  string `json:"result"`
+}
+
+// IndexDoc indexes a single document. If docID is empty, ES auto-generates an ID (POST);
+// otherwise it upserts the document at the given ID (PUT).
+func (c *Client) IndexDoc(ctx context.Context, index, docID string, doc json.RawMessage) (*IndexDocResponse, error) {
+	method := http.MethodPut
+	path := "/" + index + "/_doc/" + docID
+	if docID == "" {
+		method = http.MethodPost
+		path = "/" + index + "/_doc"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(doc))
+	if err != nil {
+		return nil, fmt.Errorf("index doc: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("index doc: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("index doc: status %s — %s", resp.Status, truncate(string(body), 256))
+	}
+
+	var result IndexDocResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("index doc: decode response: %w", err)
+	}
+	return &result, nil
+}
+
+// DeleteByQueryResponse holds the parsed result of a delete-by-query operation.
+type DeleteByQueryResponse struct {
+	Deleted int `json:"deleted"`
+}
+
+// DeleteByQuery deletes documents matching query from the given index.
+func (c *Client) DeleteByQuery(ctx context.Context, index string, query json.RawMessage) (*DeleteByQueryResponse, error) {
+	path := "/" + index + "/_delete_by_query"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(query))
+	if err != nil {
+		return nil, fmt.Errorf("delete by query: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("delete by query: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("delete by query: status %s — %s", resp.Status, truncate(string(body), 256))
+	}
+
+	var result DeleteByQueryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("delete by query: decode response: %w", err)
+	}
+	return &result, nil
+}
+
 // truncate returns at most n bytes of s, appending "…" if truncated.
 func truncate(s string, n int) string {
 	if len(s) <= n {

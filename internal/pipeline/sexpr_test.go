@@ -1047,6 +1047,142 @@ func TestSexprWorkflow_ParInPhase(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_AliasEach(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "list"
+    (run "echo -e 'a\nb\nc'"))
+  (each "list"
+    (step "process"
+      (run "echo handling item"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "map" {
+		t.Fatalf("expected form %q, got %q", "map", s.Form)
+	}
+	if s.MapOver != "list" {
+		t.Fatalf("expected map-over %q, got %q", "list", s.MapOver)
+	}
+	if s.MapBody == nil {
+		t.Fatal("expected map body step")
+	}
+}
+
+func TestSexprWorkflow_AliasPick(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (run "curl http://example.com/api"))
+  (step "s2"
+    (pick ".a" :from "s1")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.JsonPick == nil {
+		t.Fatal("expected JsonPick step")
+	}
+	if s.JsonPick.Expr != ".a" {
+		t.Fatalf("expected expr %q, got %q", ".a", s.JsonPick.Expr)
+	}
+	if s.JsonPick.From != "s1" {
+		t.Fatalf("expected from %q, got %q", "s1", s.JsonPick.From)
+	}
+}
+
+func TestSexprWorkflow_AliasFetch(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (fetch "http://example.com")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.HttpCall == nil {
+		t.Fatal("expected HttpCall step")
+	}
+	if s.HttpCall.Method != "GET" {
+		t.Fatalf("expected method %q, got %q", "GET", s.HttpCall.Method)
+	}
+	if s.HttpCall.URL != "http://example.com" {
+		t.Fatalf("expected URL %q, got %q", "http://example.com", s.HttpCall.URL)
+	}
+}
+
+func TestSexprWorkflow_AliasSend(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (send "http://example.com" :body "{\"key\":\"val\"}")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.HttpCall == nil {
+		t.Fatal("expected HttpCall step")
+	}
+	if s.HttpCall.Method != "POST" {
+		t.Fatalf("expected method %q, got %q", "POST", s.HttpCall.Method)
+	}
+	if s.HttpCall.URL != "http://example.com" {
+		t.Fatalf("expected URL %q, got %q", "http://example.com", s.HttpCall.URL)
+	}
+}
+
+func TestSexprWorkflow_AliasRead(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (read "path/to/file.txt")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.ReadFile != "path/to/file.txt" {
+		t.Fatalf("expected read-file %q, got %q", "path/to/file.txt", s.ReadFile)
+	}
+}
+
+func TestSexprWorkflow_AliasWrite(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "gen"
+    (llm :prompt "generate"))
+  (step "s1"
+    (write "out.txt" :from "gen")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.WriteFile == nil {
+		t.Fatal("expected WriteFile step")
+	}
+	if s.WriteFile.Path != "out.txt" {
+		t.Fatalf("expected path %q, got %q", "out.txt", s.WriteFile.Path)
+	}
+	if s.WriteFile.From != "gen" {
+		t.Fatalf("expected from %q, got %q", "gen", s.WriteFile.From)
+	}
+}
+
 func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 	src := []byte(`
 (workflow "old-style"
@@ -1065,5 +1201,135 @@ func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 	}
 	if w.Items[1].Step == nil || w.Items[1].Step.ID != "b" {
 		t.Fatal("expected item 1 to be step 'b'")
+	}
+}
+
+func TestSexprWorkflow_Search(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "q" (search :index "my-index" :query {"term" {"type" "doc"}} :size 50 :fields ("title" "content"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if s.Search.IndexName != "my-index" {
+		t.Fatalf("index = %q, want my-index", s.Search.IndexName)
+	}
+	if s.Search.Size != 50 {
+		t.Fatalf("size = %d, want 50", s.Search.Size)
+	}
+	if len(s.Search.Fields) != 2 || s.Search.Fields[0] != "title" || s.Search.Fields[1] != "content" {
+		t.Fatalf("fields = %v, want [title content]", s.Search.Fields)
+	}
+}
+
+func TestSexprWorkflow_SearchDefaultSize(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "q" (search :index "my-index" :query {"term" {"type" "doc"}})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].Search.Size != 10 {
+		t.Fatalf("default size = %d, want 10", w.Steps[0].Search.Size)
+	}
+}
+
+func TestSexprWorkflow_SearchWithES(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "q" (search :index "my-index" :query {"match_all" {}} :es "http://remote:9200")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].Search.ESURL != "http://remote:9200" {
+		t.Fatalf("es url = %q, want http://remote:9200", w.Steps[0].Search.ESURL)
+	}
+}
+
+func TestSexprWorkflow_Index(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "idx" (index :index "my-index" :doc "{\"title\":\"hello\"}" :id "doc-1")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Index == nil {
+		t.Fatal("expected index step")
+	}
+	if s.Index.IndexName != "my-index" {
+		t.Fatalf("index = %q", s.Index.IndexName)
+	}
+	if s.Index.DocID != "doc-1" {
+		t.Fatalf("doc id = %q", s.Index.DocID)
+	}
+}
+
+func TestSexprWorkflow_IndexWithEmbed(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "idx" (index :index "my-index" :doc "{}" :embed :field "content" :model "nomic-embed-text")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Index.EmbedField != "content" {
+		t.Fatalf("embed field = %q, want content", s.Index.EmbedField)
+	}
+	if s.Index.EmbedModel != "nomic-embed-text" {
+		t.Fatalf("embed model = %q, want nomic-embed-text", s.Index.EmbedModel)
+	}
+}
+
+func TestSexprWorkflow_Delete(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "del" (delete :index "my-index" :query {"term" {"type" "old"}})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Delete == nil {
+		t.Fatal("expected delete step")
+	}
+	if s.Delete.IndexName != "my-index" {
+		t.Fatalf("index = %q", s.Delete.IndexName)
+	}
+}
+
+func TestSexprWorkflow_Embed(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "vec" (embed :input "hello world" :model "nomic-embed-text")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Embed == nil {
+		t.Fatal("expected embed step")
+	}
+	if s.Embed.Input != "hello world" {
+		t.Fatalf("input = %q", s.Embed.Input)
+	}
+	if s.Embed.Model != "nomic-embed-text" {
+		t.Fatalf("model = %q", s.Embed.Model)
 	}
 }
