@@ -18,13 +18,13 @@ Add `glitch workflow gui` as a built-in command that starts a local web server f
 3. Run a workflow (set params, kick it off)
 4. View results with markdown rendering and syntax highlighting
 5. Re-run a workflow (same or modified params)
+6. Embedded Kibana telemetry — per-run and per-workflow aggregate views
 
 ### Explicitly deferred
 
 - Live tail of running workflows (WebSocket streaming)
 - Batch management UI
 - Plugin browser
-- Telemetry/ES integration (link to Kibana instead)
 - Run diffing
 - Config editor
 
@@ -57,6 +57,8 @@ The GUI command imports gl1tch packages directly (no subprocess shelling):
 
 - `internal/pipeline` — run workflows, read step definitions
 - `internal/store` — query past runs and results from SQLite
+- `internal/dashboard` — extend existing Kibana seeding with per-workflow saved searches
+- `internal/esearch` — query ES for telemetry data
 - Filesystem — read/write `.glitch` files, read result artifacts
 
 ## REST API
@@ -69,6 +71,8 @@ POST /api/workflows/:name/run    Start a run (params in JSON body)
 GET  /api/runs                   List past runs from SQLite store
 GET  /api/runs/:id               Run detail + result file listing
 GET  /api/results/*path          Read a result file (md, json, txt)
+GET  /api/kibana/workflow/:name  Kibana iframe URL for workflow aggregate view
+GET  /api/kibana/run/:id         Kibana iframe URL for specific run
 WS   /api/runs/:id/stream        Live step output (stub in v1)
 ```
 
@@ -90,7 +94,11 @@ Modal form. Extracts `{{.param.*}}` references from the workflow source to auto-
 
 ### Run view
 
-Shows run metadata (workflow, params, start time, status). v1: polls `GET /api/runs/:id` for status updates. Displays step list with pass/fail indicators. Links to result files when complete.
+Shows run metadata (workflow, params, start time, status). v1: polls `GET /api/runs/:id` for status updates. Displays step list with pass/fail indicators. Links to result files when complete. Embedded Kibana panel showing LLM calls, latency, and cost for this specific run (filtered by run_id).
+
+### Workflow overview (telemetry)
+
+Each workflow page includes an embedded Kibana panel showing aggregate telemetry across all runs: average latency per step, total cost over time, success/failure rate. Useful for spotting trends across batch runs.
 
 ### Results browser
 
@@ -118,6 +126,7 @@ Tree view of `results/` directory. Click a file to view:
 | go:embed for prod | Single binary distribution, no runtime deps |
 | Custom Lezer grammar | Sexpr is simple (~50 lines); no existing grammar fits the gl1tch dialect |
 | Deferred: live streaming | WebSocket plumbing exists but v1 uses polling for simplicity |
+| Kibana embed, not custom charts | Kibana already renders telemetry well; embedding avoids rebuilding charting |
 
 ## File changes
 
@@ -127,6 +136,7 @@ Tree view of `results/` directory. Click a file to view:
 - `internal/gui/server.go` — HTTP server, router, static file serving
 - `internal/gui/api.go` — REST handlers
 - `internal/gui/ws.go` — WebSocket stub
+- `internal/gui/kibana.go` — Kibana saved search creation + iframe URL generation
 - `gui/` — Entire Svelte frontend directory
 - `gui/src/lib/sexpr.grammar` — Lezer grammar for sexpr highlighting
 
