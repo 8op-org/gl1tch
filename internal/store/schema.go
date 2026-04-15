@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS runs (
   tokens_in     INTEGER,
   tokens_out    INTEGER,
   cost_usd      REAL,
-  variant       TEXT
+  variant       TEXT,
+  workspace     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS steps (

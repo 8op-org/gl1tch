@@ -199,6 +199,34 @@ func TestRecordStepEnriched(t *testing.T) {
 	}
 }
 
+func TestRecordRun_Workspace(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenAt(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	id, err := s.RecordRun(RunRecord{
+		Kind:      "pipeline",
+		Name:      "test-run",
+		Input:     "some input",
+		Workspace: "stokagent",
+	})
+	if err != nil {
+		t.Fatalf("RecordRun: %v", err)
+	}
+
+	var ws string
+	err = s.db.QueryRow("SELECT workspace FROM runs WHERE id = ?", id).Scan(&ws)
+	if err != nil {
+		t.Fatalf("query workspace: %v", err)
+	}
+	if ws != "stokagent" {
+		t.Fatalf("workspace: got %q, want stokagent", ws)
+	}
+}
+
 func intPtr(n int) *int    { return &n }
 func boolPtr(b bool) *bool { return &b }
 
