@@ -1,6 +1,7 @@
 package store
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -13,6 +14,46 @@ func TestOpenAndClose(t *testing.T) {
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestOpenForWorkspace(t *testing.T) {
+	wsDir := t.TempDir()
+	s, err := OpenForWorkspace(wsDir)
+	if err != nil {
+		t.Fatalf("OpenForWorkspace: %v", err)
+	}
+	defer s.Close()
+
+	dbPath := filepath.Join(wsDir, ".glitch", "glitch.db")
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Fatalf("expected DB at %s: %v", dbPath, err)
+	}
+
+	id, err := s.RecordRun(RunRecord{Kind: "test", Name: "ws-test", Input: ""})
+	if err != nil {
+		t.Fatalf("RecordRun: %v", err)
+	}
+	if id <= 0 {
+		t.Fatalf("expected positive ID, got %d", id)
+	}
+}
+
+func TestOpenAt_BusyTimeout(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenAt(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	var timeout int
+	err = s.db.QueryRow("PRAGMA busy_timeout").Scan(&timeout)
+	if err != nil {
+		t.Fatalf("PRAGMA busy_timeout: %v", err)
+	}
+	if timeout != 5000 {
+		t.Fatalf("busy_timeout: got %d, want 5000", timeout)
 	}
 }
 

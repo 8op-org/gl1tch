@@ -35,12 +35,17 @@ func Open() (*Store, error) {
 	return OpenAt(filepath.Join(home, ".local", "share", "glitch", "glitch.db"))
 }
 
+// OpenForWorkspace opens a workspace-scoped store at <workspace>/.glitch/glitch.db.
+func OpenForWorkspace(workspacePath string) (*Store, error) {
+	return OpenAt(filepath.Join(workspacePath, ".glitch", "glitch.db"))
+}
+
 // OpenAt opens the store at the given path, creating parent directories as needed.
 func OpenAt(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)")
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
