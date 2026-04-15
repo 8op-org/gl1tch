@@ -1,0 +1,52 @@
+<script>
+/* ── Hex-rain canvas ────────────────────────── */
+(function() {
+  var canvas = document.getElementById('hexbg');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var COL_W = 28, ROW_H = 18;
+  var COLS, ROWS, offsets, speeds, grid;
+
+  function hexByte() {
+    return Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+  }
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function setup() {
+    COLS = Math.ceil(canvas.width / COL_W) + 2;
+    ROWS = Math.ceil(canvas.height / ROW_H) + 3;
+    offsets = Array.from({ length: COLS }, function() { return Math.random() * ROWS * ROW_H; });
+    speeds  = Array.from({ length: COLS }, function() { return 0.25 + Math.random() * 0.45; });
+    var GRID_H = ROWS * 4;
+    grid = Array.from({ length: GRID_H }, function() {
+      return Array.from({ length: COLS }, hexByte);
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '12px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(135, 135, 175, 0.07)';
+    for (var col = 0; col < COLS; col++) {
+      offsets[col] = (offsets[col] + speeds[col]) % (grid.length * ROW_H);
+      var startRow = Math.floor(offsets[col] / ROW_H);
+      var subPx = offsets[col] % ROW_H;
+      for (var row = 0; row <= ROWS + 1; row++) {
+        var y = row * ROW_H - subPx;
+        var gridRow = (startRow + row) % grid.length;
+        ctx.fillText(grid[gridRow][col], col * COL_W, y);
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  setup();
+  window.addEventListener('resize', function() { resize(); setup(); });
+  draw();
+})();
+</script>

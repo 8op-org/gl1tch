@@ -1,0 +1,28 @@
+---
+import Base from './Base.astro';
+import '../styles/global.css';
+import HexRain from '../components/HexRain.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<Base title={`${title} — gl1tch`} description={description}>
+  <main>
+    <section>
+      <div class="wrap">
+        <h2>{title}</h2>
+        <div class="doc-content">
+          <slot />
+        </div>
+      </div>
+    </section>
+  </main>
+  <HexRain />
+  <CodeBlock />
+</Base>

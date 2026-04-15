@@ -2,3 +2,4 @@ glitch
 dist/
 .env
 .worktrees/
+site/generated/

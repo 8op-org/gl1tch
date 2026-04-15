@@ -1,0 +1,22 @@
+<script>
+/* ── Click-to-copy ──────────────────────────── */
+(function() {
+  document.querySelectorAll('.copyable').forEach(function(block) {
+    var btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    btn.addEventListener('click', function() {
+      var text = block.getAttribute('data-copy') || block.textContent.trim();
+      navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
+      }).catch(function() {
+        btn.textContent = 'failed';
+        setTimeout(function() { btn.textContent = 'copy'; }, 2000);
+      });
+    });
+    block.appendChild(btn);
+  });
+})();
+</script>

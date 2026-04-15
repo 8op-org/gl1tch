@@ -1,0 +1,55 @@
+---
+import '../styles/global.css';
+import HexRain from '../components/HexRain.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'A composable CLI that chains shell commands and LLMs into workflows you own.',
+} = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<meta name="description" content={description}>
+<meta name="theme-color" content="#1a1b26">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<canvas id="hexbg"></canvas>
+
+<slot />
+
+<!-- ── Footer ───────────────────────────────── -->
+<footer>
+<div class="wrap">
+  <div class="footer-install">
+    <pre class="code copyable" data-copy="brew install 8op-org/tap/glitch"><span class="p">$</span> brew install 8op-org/tap/glitch</pre>
+  </div>
+
+  <div class="footer-links">
+    <a href="https://github.com/8op-org/gl1tch">GitHub</a>
+    <a href="/docs/getting-started">Docs</a>
+    <a href="/changelog">Changelog</a>
+    <a href="https://github.com/8op-org/gl1tch/blob/main/LICENSE">MIT License</a>
+  </div>
+
+  <p class="footer-attr">made with AI &mdash; guided by adam s&#x2020;okes</p>
+</div>
+</footer>
+
+<HexRain />
+<CodeBlock />
+</body>
+</html>

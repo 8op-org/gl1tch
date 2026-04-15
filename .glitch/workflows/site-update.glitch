@@ -1,0 +1,91 @@
+;; site-update.glitch — regenerate 8op.org from doc stubs, examples, and git history
+;;
+;; Run with: glitch ask "update the website"
+;;        or: glitch workflow run site-update
+
+(workflow "site-update"
+  :description "regenerate 8op.org docs from markdown stubs, real examples, and git history"
+
+  ;; ── Phase 1: Gather ──────────────────────────────
+  (step "stubs"
+    (run "cat docs/site/*.md"))
+
+  (step "examples"
+    (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
+
+  (step "changelog-raw"
+    (run "git log --oneline --since='2025-01-01' -- cmd/ internal/ examples/ .glitch/"))
+
+  ;; ── Phase 2: Generate ────────────────────────────
+  (step "enrich-docs"
+    (llm
+      :format "json"
+      :prompt ```
+        You are a technical writer for gl1tch (8op.org).
+
+        Rules:
+        - "your" framing throughout, never "the user"
+        - examples before explanation
+        - no internal implementation details (no BubbleTea, tmux, SQLite, Go types)
+        - every code example must come from the Real Examples section below
+        - do NOT invent commands, flags, or features that aren't shown in the examples
+
+        Your job: expand each stub into a full documentation page.
+
+        Output as a JSON array of objects:
+        [{"slug": "getting-started", "title": "...", "order": 1, "description": "...", "content": "markdown body..."}]
+
+        Stubs:
+        {{step "stubs"}}
+
+        Real examples (use these verbatim, do not modify):
+        {{step "examples"}}
+        ```))
+
+  (step "enrich-changelog"
+    (llm
+      :prompt ```
+        Summarize these git commits into user-facing changelog entries.
+        Group by feature area (workflow engine, providers, CLI, docs).
+        Skip purely internal refactors unless they change user-visible behavior.
+        Output as markdown. Each entry: ### heading, then bullet points.
+
+        Commits:
+        {{step "changelog-raw"}}
+        ```))
+
+  ;; ── Phase 3: Verify ──────────────────────────────
+  (step "diff-review"
+    (llm
+      :tier 2
+      :prompt ```
+        You are a verification reviewer for the gl1tch project website.
+
+        Compare the generated docs against the original stubs.
+        Check:
+        1. No hallucinated features — the docs must not claim glitch can do
+           something that isn't demonstrated in the real examples
+        2. Every stub heading is covered in the generated output
+        3. Code examples use valid s-expression syntax (parentheses balanced,
+           keywords prefixed with colon, strings quoted)
+        4. Tone is user-first ("your"), no implementation internals
+
+        Original stubs:
+        {{step "stubs"}}
+
+        Generated docs:
+        {{step "enrich-docs"}}
+
+        Respond with exactly PASS or FAIL on the first line,
+        then list specific findings below.
+        ```))
+
+  ;; ── Phase 4: Output ──────────────────────────────
+  (step "save-docs"
+    (save "site/generated/docs.json" :from "enrich-docs"))
+
+  (step "save-changelog"
+    (save "site/generated/changelog.md" :from "enrich-changelog"))
+
+  (step "save-report"
+    (save "site/generated/build-report.md" :from "diff-review")))
