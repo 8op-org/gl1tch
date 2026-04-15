@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -26,7 +27,7 @@ func TestEmbedOllama_ParsesResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	vec, err := EmbedOllama(srv.URL, "nomic-embed-text", "hello world")
+	vec, err := EmbedOllama(context.Background(), srv.URL, "nomic-embed-text", "hello world")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestEmbedOllama_ErrorStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := EmbedOllama(srv.URL, "bad-model", "test")
+	_, err := EmbedOllama(context.Background(), srv.URL, "bad-model", "test")
 	if err == nil {
 		t.Fatal("expected error for 500 status, got nil")
 	}

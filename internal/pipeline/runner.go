@@ -22,6 +22,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const defaultOllamaURL = "http://localhost:11434"
+
 // stepOutcome holds the result of executing a single step.
 type stepOutcome struct {
 	output     string
@@ -1215,7 +1217,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)
 		}
 
-		var sources []json.RawMessage
+		sources := make([]json.RawMessage, 0)
 		for _, hit := range resp.Results {
 			sources = append(sources, hit.Source)
 		}
@@ -1253,7 +1255,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			fieldVal, ok := docMap[step.Index.EmbedField]
 			if ok {
 				text := fmt.Sprintf("%v", fieldVal)
-				vec, err := provider.EmbedOllama("http://localhost:11434", step.Index.EmbedModel, text)
+				vec, err := provider.EmbedOllama(ctx, defaultOllamaURL, step.Index.EmbedModel, text)
 				if err != nil {
 					return nil, fmt.Errorf("step %s: embed: %w", step.ID, err)
 				}
@@ -1284,8 +1286,14 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		esURL := resolveESURL(step.Delete.ESURL, rctx)
 		es := esearch.NewClient(esURL)
 
+		var q any
+		if err := json.Unmarshal([]byte(step.Delete.Query), &q); err != nil {
+			return nil, fmt.Errorf("step %s: query parse: %w", step.ID, err)
+		}
+		wrapped, _ := json.Marshal(map[string]any{"query": q})
+
 		ui.StepSDK(step.ID, "delete")
-		resp, err := es.DeleteByQuery(ctx, indexRendered, json.RawMessage(step.Delete.Query))
+		resp, err := es.DeleteByQuery(ctx, indexRendered, wrapped)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)
 		}
@@ -1299,7 +1307,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: input template: %w", step.ID, err)
 		}
 		ui.StepSDK(step.ID, "embed")
-		vec, err := provider.EmbedOllama("http://localhost:11434", step.Embed.Model, rendered)
+		vec, err := provider.EmbedOllama(ctx, defaultOllamaURL, step.Embed.Model, rendered)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)
 		}

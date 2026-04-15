@@ -1280,7 +1280,7 @@ func TestSexprWorkflow_Index(t *testing.T) {
 func TestSexprWorkflow_IndexWithEmbed(t *testing.T) {
 	src := []byte(`
 (workflow "test"
-  (step "idx" (index :index "my-index" :doc "{}" :embed :field "content" :provider "ollama" :model "nomic-embed-text")))
+  (step "idx" (index :index "my-index" :doc "{}" :embed :field "content" :model "nomic-embed-text")))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -1289,9 +1289,6 @@ func TestSexprWorkflow_IndexWithEmbed(t *testing.T) {
 	s := w.Steps[0]
 	if s.Index.EmbedField != "content" {
 		t.Fatalf("embed field = %q, want content", s.Index.EmbedField)
-	}
-	if s.Index.EmbedProvider != "ollama" {
-		t.Fatalf("embed provider = %q, want ollama", s.Index.EmbedProvider)
 	}
 	if s.Index.EmbedModel != "nomic-embed-text" {
 		t.Fatalf("embed model = %q, want nomic-embed-text", s.Index.EmbedModel)
@@ -1319,7 +1316,7 @@ func TestSexprWorkflow_Delete(t *testing.T) {
 func TestSexprWorkflow_Embed(t *testing.T) {
 	src := []byte(`
 (workflow "test"
-  (step "vec" (embed :input "hello world" :provider "ollama" :model "nomic-embed-text")))
+  (step "vec" (embed :input "hello world" :model "nomic-embed-text")))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -1331,9 +1328,6 @@ func TestSexprWorkflow_Embed(t *testing.T) {
 	}
 	if s.Embed.Input != "hello world" {
 		t.Fatalf("input = %q", s.Embed.Input)
-	}
-	if s.Embed.Provider != "ollama" {
-		t.Fatalf("provider = %q", s.Embed.Provider)
 	}
 	if s.Embed.Model != "nomic-embed-text" {
 		t.Fatalf("model = %q", s.Embed.Model)

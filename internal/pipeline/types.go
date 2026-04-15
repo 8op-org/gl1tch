@@ -151,9 +151,8 @@ type IndexStep struct {
 	Doc           string // template-rendered JSON document
 	DocID         string // optional explicit _id
 	ESURL         string
-	EmbedField    string // field in doc to embed (empty = no embedding)
-	EmbedProvider string
-	EmbedModel    string
+	EmbedField string // field in doc to embed (empty = no embedding)
+	EmbedModel string
 }
 
 // DeleteStep deletes documents matching a query from Elasticsearch.
@@ -165,9 +164,8 @@ type DeleteStep struct {
 
 // EmbedStep generates an embedding vector from text.
 type EmbedStep struct {
-	Input    string // template-rendered text to embed
-	Provider string
-	Model    string
+	Input string // template-rendered text to embed
+	Model string
 }
 
 // LoadFile reads a single workflow file (YAML or sexpr).

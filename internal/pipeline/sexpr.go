@@ -906,7 +906,7 @@ func convertIndex(n *sexpr.Node, defs map[string]string) (*IndexStep, error) {
 			key := child.KeywordVal()
 			switch key {
 			case "embed":
-				// :embed is followed by sub-keywords :field, :provider, :model
+				// :embed is followed by sub-keywords :field, :model
 				i++
 				for i < len(children) {
 					sub := children[i]
@@ -914,7 +914,7 @@ func convertIndex(n *sexpr.Node, defs map[string]string) (*IndexStep, error) {
 						break
 					}
 					subKey := sub.KeywordVal()
-					if subKey != "field" && subKey != "provider" && subKey != "model" {
+					if subKey != "field" && subKey != "model" {
 						break
 					}
 					i++
@@ -925,8 +925,6 @@ func convertIndex(n *sexpr.Node, defs map[string]string) (*IndexStep, error) {
 					switch subKey {
 					case "field":
 						idx.EmbedField = resolveVal(val, defs)
-					case "provider":
-						idx.EmbedProvider = resolveVal(val, defs)
 					case "model":
 						idx.EmbedModel = resolveVal(val, defs)
 					}
@@ -1023,8 +1021,6 @@ func convertEmbed(n *sexpr.Node, defs map[string]string) (*EmbedStep, error) {
 			switch key {
 			case "input":
 				emb.Input = resolveVal(val, defs)
-			case "provider":
-				emb.Provider = resolveVal(val, defs)
 			case "model":
 				emb.Model = resolveVal(val, defs)
 			default:
@@ -1037,9 +1033,6 @@ func convertEmbed(n *sexpr.Node, defs map[string]string) (*EmbedStep, error) {
 	}
 	if emb.Input == "" {
 		return nil, fmt.Errorf("line %d: embed missing :input", n.Line)
-	}
-	if emb.Provider == "" {
-		return nil, fmt.Errorf("line %d: embed missing :provider", n.Line)
 	}
 	if emb.Model == "" {
 		return nil, fmt.Errorf("line %d: embed missing :model", n.Line)
