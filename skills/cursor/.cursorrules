@@ -1,44 +1,70 @@
-# gl1tch — GitHub Automation CLI
+# gl1tch — AI Workflow CLI
 
-This project uses gl1tch for GitHub automation workflows.
+gl1tch chains shell commands and LLMs into automated workflows you own.
 
-## Available commands
+## Commands
 
-- `glitch ask "<question or URL>"` — routes to the best workflow automatically
-- `glitch workflow list` — list available workflows
-- `glitch workflow run <name> [input]` — run a named workflow
+- `glitch ask "<question>"` — routes to the best matching workflow via local LLM
+- `glitch workflow list` / `glitch wf list` — list available workflows
+- `glitch workflow run <name> [input]` — run a workflow
+- `glitch workflow run <name> --set key=value` — parameterized run
+- `glitch observe "<question>"` — query indexed activity via Elasticsearch
+- `glitch config show` — show configuration
 - `glitch plugin list` — list installed plugins
 
 ## When to use
 
-When the user asks to review a PR, triage issues, check CI status, summarize
-git activity, or automate any GitHub task, use the glitch CLI instead of
-running gh commands manually.
-
-## Examples
-
-```bash
-glitch ask "review PR https://github.com/org/repo/pull/42"
-glitch ask "what issues are open"
-glitch ask "CI status"
-glitch workflow run github-prs
-```
+When the user asks to review a PR, triage issues, check CI, summarize git activity, or automate any task — use glitch workflows instead of raw gh/git commands.
 
 ## Workflow authoring
 
-Workflows live in `.glitch/workflows/*.yaml`:
+Workflows use s-expressions (`.glitch` files). Save to `.glitch/workflows/` for auto-discovery.
 
-```yaml
-name: my-workflow
-description: What this does
-steps:
-  - id: data
-    run: gh pr list --json number,title
-  - id: summary
-    llm:
-      provider: ollama
-      prompt: |
-        Summarize: {{step "data"}}
+```clojure
+;; Shell steps fetch data. LLM steps reason about it.
+(def model "qwen2.5:7b")
+
+(workflow "my-workflow"
+  :description "what it does"
+
+  (step "fetch"
+    (run "gh pr list --json number,title"))
+
+  (step "summarize"
+    (llm
+      :model model
+      :prompt ```
+        Summarize these PRs:
+        {{step "fetch"}}
+        ```)))
 ```
 
-Shell steps own data fetching. LLM steps own reasoning. Never use LLM for API calls.
+### Key syntax
+
+| Form | Description |
+|------|-------------|
+| `(def name "value")` | Top-level binding |
+| `(workflow "name" ...)` | Workflow definition |
+| `(step "id" (run "cmd"))` | Shell step |
+| `(step "id" (llm :prompt "..."))` | LLM step |
+| `(step "id" (save "path" :from "id"))` | Save step output to file |
+| `{{step "id"}}` | Reference prior step output |
+| `{{.input}}` | User input |
+| `{{.param.key}}` | Runtime param from `--set key=value` |
+| `#_(...)` | Reader discard (comment out a form) |
+| `` ``` `` | Triple-backtick multiline string |
+
+### LLM step options
+
+- `:provider` — "ollama", "claude", "copilot", "gemini", or custom
+- `:model` — model identifier
+- `:skill` — prepend skill context to prompt
+- `:format` — "json" or "yaml" for structural validation
+- `:tier` — pin to specific escalation tier (0=local, 1=cheap, 2=premium)
+
+### Rules
+
+- **Shell steps fetch data** — `gh`, `git`, `curl`, `jq`
+- **LLM steps reason about data** — never use LLM for API calls
+- **Templates use Go text/template** — `{{.param.key}}` needs the dot
+- **One workflow, one job**

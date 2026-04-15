@@ -1,201 +1,667 @@
 ---
-name: gl1tch
-description: Use the gl1tch CLI to automate GitHub tasks, run workflows, and compose shell+LLM pipelines. Invoke when the user asks to review PRs, triage issues, check CI, run any glitch workflow, or set up glitch in their project.
+name: glitch
+description: Complete reference for the gl1tch CLI (8op-org/gl1tch) — workflow authoring, CLI commands, providers, batch runs, workspace model, observer, research loop, and installation. Use when the user mentions glitch, wants to create/edit/run workflows, automate tasks with glitch, review PRs via glitch, run batch comparisons, query indexed data, install/update glitch, or describes a task that could be a glitch workflow.
 ---
 
-# gl1tch — GitHub Automation CLI
+# glitch
 
-## When to use
+gl1tch is a GitHub co-pilot CLI that orchestrates shell commands and LLM calls into automated workflows. Core design principle: **shell does the grunt work, LLM does the thinking.** Shell steps fetch and shape data (free, deterministic). LLM steps reason about it (expensive, so feed pre-processed data).
 
-- User asks to review a PR, check issues, or see CI status
-- User asks to run a glitch workflow
-- User asks to create or edit a workflow YAML
-- User mentions glitch, gl1tch, or references .glitch/workflows/
-- User asks to set up or install glitch
-- User asks about Ollama models or local LLM setup for glitch
+## Installation
 
-## Setup
-
-Before using glitch, verify the full stack is ready. Run these checks and fix anything missing:
-
-### 1. Install glitch
+Install from the Homebrew tap. Remove any locally built shadows first:
 
 ```bash
+# 1. Remove locally built shadows
+rm -f ~/.local/bin/glitch
+rm -f "$(go env GOPATH)/bin/glitch"
+
+# 2. Tap
+brew tap 8op-org/tap 2>/dev/null || true
+
+# 3. Reinstall
+brew reinstall glitch
+
+# 4. Verify
+brew list --versions glitch
 glitch --version
 ```
 
-If missing: `brew install 8op-org/tap/glitch`
+**Prerequisites:** Ollama must be running locally (`ollama serve`) with `qwen2.5:7b` pulled (`ollama pull qwen2.5:7b`). GitHub CLI (`gh`) must be authenticated.
 
-### 2. Install and start Ollama
+| Formula | Source repo |
+|---------|------------|
+| `glitch` | `8op-org/gl1tch` |
 
-glitch uses Ollama for local LLM routing (`glitch ask`) and for any workflow step with `provider: ollama`. It must be running on localhost:11434.
+The tap auto-updates via goreleaser's `brews:` section. `HOMEBREW_TAP_GITHUB_TOKEN` must be set as a repo secret.
 
-```bash
-# Check if Ollama is installed
-ollama --version
-
-# If missing — install it
-brew install ollama
-
-# Check if Ollama is running
-curl -s http://localhost:11434/api/tags > /dev/null && echo "running" || echo "not running"
-
-# If not running — start the service
-brew services start ollama
-```
-
-### 3. Pull the required model
-
-glitch defaults to `qwen2.5:7b` for routing and local LLM steps. This model must be pulled before `glitch ask` will work.
+## CLI Command Reference
 
 ```bash
-# Check if the model exists
-ollama list | grep qwen2.5:7b
+# Smart routing — matches input to best workflow, falls back to research loop
+glitch ask "work on issue 3442"
+glitch ask "https://github.com/elastic/ensemble/issues/1281"
+glitch ask "3442"                              # bare issue number
 
-# If missing — pull it (~4.7GB)
-ollama pull qwen2.5:7b
+# Workflow management
+glitch workflow list                           # list available workflows
+glitch wf list                                 # alias
+glitch workflow run <name> [input]             # run a named workflow
+glitch workflow run <name> --set key=value     # parameterized run
+glitch workflow run <name> --path /some/repo   # run against different directory
+
+# Workspace mode (cross-repo work)
+glitch --workspace ~/Projects/stokagent ask elastic/observability-robots#3920
+
+# Observer — query indexed activity via Elasticsearch
+glitch observe "How many issues were resolved this week?"
+glitch observe "Show all PRs that failed CI" --repo elastic/kibana
+
+# Infrastructure
+glitch up                                      # start ES + Kibana via docker-compose
+glitch down                                    # stop ES + Kibana
+glitch index [path]                            # index repo into ES for code search
+
+# Configuration
+glitch config show
+glitch config set default_model qwen3:8b
 ```
 
-### 4. Install the GitHub CLI
+## Ask Routing
 
-Most workflows use `gh` for GitHub API calls. It must be authenticated.
+`glitch ask` auto-routes input through a fallback chain:
+
+1. **Fast-path regex** — pattern-matched before any LLM call:
+   - `"work on issue NNN"` → `work-on-issue` workflow
+   - GitHub PR URL → `github-pr-review` workflow
+   - `"review NNN"` or `"review <url>"` → `pr-review` workflow
+   - GitHub issue URL → `issue-to-pr` workflow
+   - Bare issue ref (`3339`, `org/repo#3339`) → `issue-to-pr` workflow
+2. **LLM workflow selection** — builds numbered menu of workflows, asks local LLM to pick best match
+3. **Research loop** — evidence-gathering tool-use loop (see Research Loop section)
+4. **One-shot LLM** — direct Ollama fallback
+
+## Workspace Model
+
+The `--workspace` flag scopes workflows and results to a directory. Designed for cross-repo work where one command center (e.g., stokagent) manages workflows and results for multiple target repos.
 
 ```bash
-# Check if gh is installed and authenticated
-gh auth status
-
-# If missing
-brew install gh
-gh auth login
+glitch --workspace ~/Projects/stokagent ask elastic/observability-robots#3920
 ```
 
-### 5. Verify the full stack
+Typical usage with a shell alias:
 
 ```bash
-glitch --version          # should print version
-glitch config show        # should show default_model: qwen2.5:7b
-glitch workflow list      # should list available workflows
-glitch ask "help"         # should route to help workflow via Ollama
+alias gl='glitch --workspace ~/Projects/stokagent'
 ```
 
-If `glitch ask` hangs or errors, Ollama is likely not running or the model isn't pulled.
+When `--workspace` is set:
 
-## Commands
+- **Workflows:** resolved from `<workspace>/workflows/` only. Global `~/.config/glitch/workflows/` is skipped.
+- **Results:** written to `<workspace>/results/<org>/<repo>/<issue|pr>-<number>/`.
+- **Without `--workspace`:** current behavior — global workflows, CWD-relative results.
 
-| Command | What it does |
-|---------|-------------|
-| `glitch ask "<question or URL>"` | Routes to the best matching workflow |
-| `glitch workflow list` | List available workflows |
-| `glitch workflow run <name> [input]` | Run a specific workflow by name |
-| `glitch config show` | Show current configuration |
-| `glitch config set default_model <model>` | Change the default Ollama model |
-| `glitch plugin list` | List installed plugins |
+### Result directory structure
 
-## Examples
-
-```bash
-# Review a PR
-glitch ask "review PR https://github.com/org/repo/pull/42"
-
-# List open issues
-glitch ask "what issues are open"
-
-# Check CI status
-glitch ask "CI status"
-
-# Run a specific workflow
-glitch workflow run github-prs
-
-# Run against a different repo
-glitch ask -C ~/Projects/other-repo "show me open PRs"
+```
+<workspace>/results/<org>/<repo>/
+  issue-3920/
+    README.md          # rollup — frontmatter metadata + action-ready content
+    evidence/          # raw tool call outputs, numbered
+      001-github-issue.md
+      002-grep-results.md
+      003-file-read.md
+    plan.md            # implementation plan (if goal=implement)
+    review.md          # post-impl review (if applicable)
+    run.json           # machine-readable run metadata
 ```
 
-## Workflow authoring
+#### README.md rollup format
 
-When the user describes an automation they want, create a workflow YAML file for them. Save it to `.glitch/workflows/<name>.yaml` so glitch discovers it automatically.
+```markdown
+---
+repo: elastic/observability-robots
+ref: issue-3920
+title: "Fix flaky CI in integration tests"
+status: researched | planned | implemented
+created: 2026-04-14T10:30:00Z
+model: qwen2.5:7b
+---
 
-### Structure
+## Summary
+<2-3 sentence findings>
+
+## Recommendation
+<what to do, concrete>
+
+## Response Draft
+<copy-paste ready PR comment, issue reply, or PR body>
+
+## Evidence Index
+- [001-github-issue.md](evidence/001-github-issue.md) — original issue body and comments
+- [002-grep-results.md](evidence/002-grep-results.md) — relevant code matches
+```
+
+#### Variant runs
+
+For comparing outputs across models/tools:
+
+```
+results/elastic/observability-robots/
+  issue-3920/           # default run
+  issue-3920--claude/   # variant
+  issue-3920--copilot/  # variant
+```
+
+#### run.json schema
+
+```json
+{
+  "repo": "elastic/observability-robots",
+  "ref_type": "issue",
+  "ref_number": 3920,
+  "workflow": "pr-review",
+  "status": "researched",
+  "created": "2026-04-14T10:30:00Z",
+  "duration_seconds": 45,
+  "model": "qwen2.5:7b",
+  "variant": null
+}
+```
+
+## Workflow Authoring
+
+gl1tch supports two workflow formats:
+
+- **`.glitch` (s-expression)** — preferred format, Lisp-like syntax
+- **`.yaml`** — legacy YAML format, still supported
+
+### File Locations
+
+- **Global workflows**: `~/.config/glitch/workflows/` — loaded by all `glitch` runs
+- **Project-local workflows**: `.glitch/workflows/` — override globals for the project
+- **Workspace workflows**: `<workspace>/workflows/` — when `--workspace` is set (replaces global)
+- **Config**: `~/.config/glitch/config.yaml`
+
+Loading order: global dir first, then `.glitch/workflows/` (local overrides global). With `--workspace`, only `<workspace>/workflows/` is loaded.
+
+### S-Expression Format (.glitch) — Preferred
+
+```clojure
+;; comments start with ;;
+
+;; Top-level bindings
+(def model "qwen2.5:7b")
+(def provider "ollama")
+
+(workflow "workflow-name"
+  :description "what it does"
+
+  (step "step-id"
+    (run "shell command here"))
+
+  (step "another-step"
+    (llm
+      :provider provider        ;; resolves def binding
+      :model model
+      :prompt ```
+        Multiline prompt with triple-backtick delimiters.
+        Use {{step "step-id"}} for prior step output.
+        Use {{.input}} for user input.
+        Use {{.param.key}} for --set key=value params.
+        ```))
+
+  (step "write-file"
+    (save "results/{{.param.repo}}/output.md" :from "another-step"))
+
+  ;; Disable a step without deleting it:
+  #_(step "skipped"
+    (run "echo this is disabled")))
+```
+
+### S-Expression Syntax Reference
+
+| Form | Description |
+|------|-------------|
+| `(def name "value")` | Top-level binding, substituted in keyword values and run commands |
+| `(workflow "name" ...)` | Workflow definition, one per file |
+| `:description "text"` | Workflow metadata keyword |
+| `(step "id" ...)` | Step definition, id must be unique |
+| `(run "command")` | Shell step (sh -c) |
+| `(run varname)` | Shell step using a def binding |
+| `(llm :prompt "..." [:provider "x"] [:model "y"])` | LLM call |
+| `(llm ... :skill "name")` | LLM call with skill content prepended to prompt |
+| `(llm ... :tier 1)` | LLM call pinned to a specific escalation tier |
+| `(llm ... :format "json")` | LLM call with output format hint |
+| `(save "path" :from "step-id")` | Write step output to file |
+| `(retry N (step ...))` | Retry step up to N times on failure |
+| `(timeout "30s" (step ...))` | Kill step after duration (Go duration string) |
+| `(let ((name val) ...) body...)` | Scoped bindings — like def but lexically scoped |
+| `(catch (step ...) (step ...))` | Run primary step; on failure, run fallback instead |
+| `(cond (pred (step ...)) ...)` | Multi-branch conditional — predicates are shell commands (exit 0 = true) |
+| `(map "step-id" (step ...))` | Iterate over prior step output (newline-split), run body per item |
+| `` ``` `` | Triple-backtick multiline string (auto-dedented) |
+| `#_(...)` | Reader discard — comments out entire s-expression |
+| `;; text` | Line comment |
+
+### Control Flow Forms
+
+Forms compose — `retry` can wrap `timeout`, `let` can contain `retry`, etc.
+
+```clojure
+;; Retry a flaky API call up to 3 times
+(retry 3
+  (step "fetch"
+    (run "curl -sf https://api.example.com/data")))
+
+;; Kill an LLM step if it hangs beyond 2 minutes
+(timeout "2m"
+  (step "analyze"
+    (llm :prompt "Analyze: {{step \"fetch\"}}")))
+
+;; Compose: retry + timeout
+(retry 2
+  (timeout "30s"
+    (step "flaky-slow"
+      (run "curl -sf https://slow-api.example.com"))))
+
+;; Scoped bindings (shadows outer defs within body)
+(let ((endpoint "https://api.example.com")
+      (token "abc123"))
+  (step "call"
+    (run "curl -H 'Auth: {{.param.token}}' endpoint"))
+  (step "parse"
+    (run "echo '{{step \"call\"}}' | jq '.data'")))
+
+;; Error recovery — if primary fails, run fallback
+(catch
+  (step "try"
+    (run "gh api graphql -f query='...'"))
+  (step "fallback"
+    (run "gh issue view {{.param.issue}} --json body")))
+
+;; Multi-branch conditional — predicates are shell commands
+(cond
+  ("test -f critical.log"
+    (step "alert"
+      (run "notify-send 'Critical issue found'")))
+  ("test -f warning.log"
+    (step "warn"
+      (run "echo 'Warnings detected'")))
+  (else
+    (step "ok"
+      (run "echo 'All clear'"))))
+
+;; Iterate over prior step output (one item per line)
+;; {{.param.item}} and {{.param.item_index}} available in body
+(step "list-files"
+  (run "find . -name '*.go' -maxdepth 2"))
+
+(map "list-files"
+  (step "check"
+    (run "wc -l {{.param.item}}")))
+```
+
+### Template Expressions (Go text/template)
+
+| Expression | Description |
+|-----------|-------------|
+| `{{.input}}` | User input passed to the workflow |
+| `{{.param.key}}` | Runtime parameter from `--set key=value` |
+| `{{.param.item}}` | Current item in a `(map ...)` iteration |
+| `{{.param.item_index}}` | Current index (0-based) in a `(map ...)` iteration |
+| `{{step "id"}}` | Output of a previous step |
+| `{{stepfile "id"}}` | Write step output to temp file, return path |
+
+**Important:** Templates use Go `text/template`. Parameters must have a dot: `{{.param.input}}` not `{{param.input}}` — without the dot it silently stays literal.
+
+### YAML Format (Legacy)
 
 ```yaml
-name: my-workflow
-description: What this workflow does
+name: workflow-name
+description: what it does
+
 steps:
-  - id: step-name
-    run: shell command here    # shell step — fetches data
-  - id: llm-step
-    llm:                       # LLM step — reasons about data
-      provider: ollama         # or "claude"
-      model: qwen2.5:7b
-      prompt: |
-        Use {{step "step-name"}} to reference prior step output.
-        Use {{.input}} for the user's input.
-```
-
-### Rules
-
-- **Shell steps fetch data** — `gh`, `git`, `curl`, `jq`, anything on PATH
-- **LLM steps reason about data** — never use LLM for API calls or data fetching
-- **Templates use Go text/template syntax** — `{{.input}}` for user input, `{{step "id"}}` for prior step output
-- **Provider options:** `ollama` (local, default) or `claude` (Anthropic API via CLI)
-- **Default model:** `qwen2.5:7b` for ollama, `claude-haiku-4-5-20251001` for claude
-- **Keep shell steps simple** — pipe to `jq` for JSON transformation, don't write complex bash
-- **One workflow, one job** — don't combine unrelated tasks into a single workflow
-
-### Workflow design pattern
-
-Follow this pattern when creating workflows:
-
-1. **Shell steps first** — fetch all the raw data you need
-2. **jq for shaping** — transform/filter data with jq in the shell step
-3. **LLM step last** — only if you need analysis, summarization, or classification
-4. **Not everything needs AI** — pure shell+jq workflows are valid and often better
-
-### Example: PR review workflow
-
-```yaml
-name: pr-review
-description: Review a GitHub pull request
-steps:
-  - id: fetch-pr
+  - id: step-id
     run: |
-      gh pr view "{{.input}}" --json title,body,reviews
+      shell command here
 
-  - id: fetch-diff
-    run: |
-      gh pr diff "{{.input}}"
-
-  - id: review
+  - id: another-step
     llm:
       provider: claude
       model: claude-haiku-4-5-20251001
       prompt: |
-        PR metadata: {{step "fetch-pr"}}
-        Diff: {{step "fetch-diff"}}
+        Prompt with {{step "step-id"}} and {{.input}}
 
-        Review as a senior engineer.
-        Flag bugs, security issues, and anything that looks wrong.
+  - id: write-file
+    save: "results/output.md"
+    save_step: another-step
 ```
 
-### Example: pure shell workflow (no LLM)
+### The Cardinal Rule: Shell First, LLM Last
+
+**Shell steps collect and prepare data** — `gh`, `git`, `curl`, `jq`, date math, text processing. Fast, deterministic, free.
+
+**LLM steps synthesize the result** — summarizing, prioritizing, formatting, judgment calls. Expensive, so feed pre-processed data.
+
+#### What belongs in shell steps
+
+- API calls: `gh api graphql`, `gh pr view`, `curl`
+- Data filtering: `jq` selectors, `grep`, `awk`
+- Date computation: `date -v`, arithmetic
+- Git operations: `git log`, `git diff`, `git status`
+- Text extraction: `sed`, `cut`, field selection
+
+#### What belongs in LLM steps
+
+- Summarizing or explaining data for a human reader
+- Prioritizing items based on fuzzy criteria
+- Writing natural language reports from structured data
+- Making judgment calls (e.g., "is this PR risky?")
+
+#### Anti-patterns
+
+- Asking the LLM to parse JSON (use `jq`)
+- Asking the LLM to calculate dates (use `date`)
+- Putting all logic in one massive LLM step
+- Using multiple LLM steps when one suffices
+- Relying on LLM/MCP for live API calls (shell steps own data fetching)
+
+## Workflow Patterns
+
+### Pattern 1: Simple fetch + format
+
+```clojure
+(def model "qwen3:8b")
+
+(workflow "git-status"
+  :description "Summarize current git state"
+
+  (step "status"
+    (run "git status --short"))
+
+  (step "summary"
+    (llm :model model
+      :prompt ```
+        Summarize this git status for a developer:
+        {{step "status"}}
+        ```)))
+```
+
+### Pattern 2: Multi-source aggregation
+
+```clojure
+(def model "qwen3:8b")
+
+(workflow "morning-briefing"
+  :description "Aggregate multiple sources into daily briefing"
+
+  (step "prs"
+    (run "gh pr list --author @me --json number,title,state | jq '.'"))
+
+  (step "reviews"
+    (run "gh pr list --search 'review-requested:@me' --json number,title,url | jq '.'"))
+
+  (step "issues"
+    (run "gh issue list --assignee @me --json number,title,labels | jq '.'"))
+
+  (step "briefing"
+    (llm :model model
+      :prompt ```
+        Create a morning briefing from these sources:
+
+        My PRs:
+        {{step "prs"}}
+
+        Pending reviews:
+        {{step "reviews"}}
+
+        My issues:
+        {{step "issues"}}
+
+        Format: bullet list, no emoji, terse.
+        ```)))
+```
+
+### Pattern 3: Parameterized with --set
+
+```clojure
+(workflow "parameterized"
+  :description "Pass runtime params with --set"
+
+  (step "fetch"
+    (run "gh issue view {{.param.issue}} --repo {{.param.repo}} --json number,title,body"))
+
+  (step "analyze"
+    (llm :prompt ```
+      Analyze this issue:
+      {{step "fetch"}}
+      ```))
+
+  (step "save-it"
+    (save "results/{{.param.repo}}/{{.param.issue}}.md" :from "analyze")))
+```
+
+Run with: `glitch workflow run parameterized --set issue=3442 --set repo=elastic/ensemble`
+
+### Pattern 4: Issue-to-PR pipeline (full)
+
+The most complex pattern. Structure:
+
+1. `fetch-issue` — `gh issue view` with full JSON
+2. `fetch-related` — linked PRs via GraphQL timeline
+3. `repo-context` — local repo structure, recent commits, config files
+4. `prior-results` — previous iteration feedback (for iterative improvement)
+5. `classify` — LLM extracts type, complexity, requirements, acceptance criteria
+6. `research` — LLM produces detailed implementation plan
+7. `build-pr` — LLM generates PR title, body, and next steps
+8. `review` — LLM grades against acceptance criteria (PASS/FAIL per criterion)
+9. `save-results` — shell step writes all artifacts to results dir
+
+### Pattern 5: Using stepfile for complex shell escaping
+
+When step output contains characters that break shell escaping:
+
+```clojure
+(step "use-prior-output"
+  (run "cat '{{stepfile \"big-json-step\"}}' | jq '.items[]'"))
+```
+
+`{{stepfile "id"}}` writes the step output to a temp file and returns the path.
+
+## Provider & Model Configuration
+
+Config at `~/.config/glitch/config.yaml`:
 
 ```yaml
-name: ci-status
-description: Show recent CI failures
-steps:
-  - id: fetch
-    run: |
-      gh run list --status failure --limit 10 \
-        --json name,conclusion,startedAt,url \
-        --jq '.[] | "\(.name) — \(.conclusion) \(.startedAt) \(.url)"'
+default_model: qwen3:8b
+default_provider: ollama
+
+providers:
+  openrouter:
+    type: openai-compatible
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    default_model: google/gemma-3-12b-it:free
+
+tiers:
+  - providers: [ollama]
+    model: qwen3:8b
+  - providers: [openrouter]
+    model: google/gemma-3-12b-it:free
+  - providers: [copilot, claude]
 ```
 
-## Troubleshooting
+### Provider Reference
 
-| Problem | Fix |
-|---------|-----|
-| `glitch ask` hangs | Ollama not running: `brew services start ollama` |
-| `glitch ask` returns wrong workflow | Model not pulled: `ollama pull qwen2.5:7b` |
-| `ollama: connection refused` | Start Ollama: `brew services start ollama` |
-| Workflow fails on `gh` step | Not authenticated: `gh auth login` |
-| `claude: command not found` | Install Claude CLI or use `provider: ollama` instead |
-| Template `{{.input}}` stays literal | Must include the dot: `{{.input}}` not `{{input}}` |
+| Provider | How it runs | Notes |
+|----------|------------|-------|
+| `ollama` | Local Ollama server at `localhost:11434` | Free, default. Requires `ollama serve` |
+| `claude` | `claude -p --output-format text` | Strong reasoning, tool-use agent |
+| `copilot` | `gh copilot explain` / Copilot CLI | Premium requests |
+| `gemini` | `gemini -p` | Google agent |
+| `openrouter` | OpenAI-compatible API | Free tiers available |
+| (omitted) | Uses `default_provider` from config | |
+
+### Available Models (Current)
+
+| Tier | Models |
+|------|--------|
+| **Local (Ollama)** | qwen3:8b (default), qwen2.5:7b, qwen3-coder:30b, qwen3.5:35b-a3b |
+| **OpenRouter free** | google/gemma-3-12b-it:free, meta-llama/llama-4-scout:free |
+| **Claude** | claude-haiku-4-5-20251001, claude-sonnet-4-6-20250514 |
+| **Copilot** | uses default model |
+
+### Tiered Escalation
+
+When no provider is pinned in a workflow step and tiers are configured, glitch uses smart routing:
+
+1. Try tier 1 (e.g., local Ollama)
+2. Self-eval the response with local LLM (score 1-5)
+3. If score < threshold (default: 4), escalate to next tier
+4. Escalation reasons: malformed output, empty response, hallucination, provider error, structural failure, low eval score
+
+## Batch Comparison Runs
+
+Batch runs execute the same workflow across multiple LLM variants to compare output quality.
+
+**Concept:** batch = issues x variants x iterations + cross-review + manifest.
+
+### Naming Convention
+
+```
+issue-to-pr-local.glitch      # ollama/qwen2.5:7b
+issue-to-pr-claude.glitch     # claude CLI
+issue-to-pr-copilot.glitch    # copilot CLI
+issue-to-pr-gemma.glitch      # openrouter/gemma
+cross-review.glitch            # neutral grader
+```
+
+Keep pipeline structure identical across variants — only change `(def provider ...)` and `(def model ...)`.
+
+### Batch Script Pattern
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+cd ~/Projects/gl1tch
+go build -o /tmp/glitch-batch .
+GLITCH="/tmp/glitch-batch"
+
+VARIANTS="local claude copilot"
+
+for variant in $VARIANTS; do
+  echo ">>> ($variant) — $(date)"
+  $GLITCH workflow run "task-name-$variant" 2>&1 || echo "WARN: $variant failed"
+done
+```
+
+### Results Structure
+
+```
+results/<issue>/
+  iteration-1/
+    local/
+      classification.json
+      plan.md
+      review.md
+      pr-title.txt
+      pr-body.md
+    claude/
+      ...
+    cross-review.md
+  manifest.md
+```
+
+## Observer & Elasticsearch
+
+glitch indexes workflow events to Elasticsearch for observation and telemetry.
+
+```bash
+# Start infrastructure
+glitch up          # docker-compose: ES + Kibana
+
+# Index a repo for code search
+glitch index ~/Projects/ensemble
+
+# Query indexed data
+glitch observe "How many issues were resolved this week?"
+glitch observe "Show all PRs that failed CI" --repo elastic/kibana
+
+# Stop
+glitch down
+```
+
+### ES Indices
+
+| Index | Contents |
+|-------|----------|
+| `glitch-events` | Raw workflow events |
+| `glitch-research-runs` | Research loop executions |
+| `glitch-tool-calls` | Tool invocations |
+| `glitch-llm-calls` | LLM call telemetry (tokens, cost, latency) |
+| `glitch-code-<repo>` | Chunked source + symbols (from `glitch index`) |
+
+Kibana dashboard at `http://localhost:5601/app/dashboards#/view/glitch-llm-dashboard`.
+
+## Research Loop
+
+When `glitch ask` can't match a workflow, it falls into the research loop — an iterative tool-use engine.
+
+**How it works:**
+1. LLM emits JSON tool calls: `{"tool": "name", "params": {...}}`
+2. Available tools: `git`, `grep`, `ls`, `cat`, `curl`, `jq`, etc.
+3. Max 15 tool calls per loop iteration
+4. Escalates through tiered providers on failure
+
+**Goals:**
+- `GoalSummarize` — gather and summarize information
+- `GoalImplement` — gather info and generate implementation plan
+
+**Adapters:** Bridges to agent providers (Claude, Copilot, Gemini) for headless execution via stdin/stdout.
+
+## Plugin System
+
+### Naming Convention
+
+- **Repos:** `gl1tch-<plugin>` (e.g., `gl1tch-github`)
+- **Binaries:** `glitch-<plugin>` (e.g., `glitch-github`)
+
+### Custom Providers
+
+YAML-defined in `~/.config/glitch/providers/`:
+
+```yaml
+name: "my-provider"
+command: "command template with {{.prompt}} and {{.model}}"
+```
+
+### Release Pipeline
+
+Plugins use GoReleaser + GitHub Actions. Tag a release → GoReleaser builds binaries → auto-updates the Homebrew tap formula at `8op-org/homebrew-tap`.
+
+## Project Reference
+
+- **Repo**: `8op-org/gl1tch` at `~/Projects/gl1tch`
+- **Language**: Go (Cobra CLI)
+- **Module**: `github.com/8op-org/gl1tch`
+- **Config**: `~/.config/glitch/config.yaml`
+- **Environment**: `~/.config/glitch/.env` and `./.env`
+- **Global workflows**: `~/.config/glitch/workflows/`
+- **Custom providers**: `~/.config/glitch/providers/`
+
+### Key Packages
+
+| Package | Path | Purpose |
+|---------|------|---------|
+| `cmd` | `cmd/` | CLI commands (Cobra) |
+| `pipeline` | `internal/pipeline/` | Workflow execution engine |
+| `sexpr` | `internal/sexpr/` | S-expression lexer/parser |
+| `provider` | `internal/provider/` | Multi-LLM routing and execution |
+| `research` | `internal/research/` | Evidence gathering tool-use loop |
+| `router` | `internal/router/` | Input → workflow matching |
+| `batch` | `internal/batch/` | Multi-issue batch orchestration |
+| `observer` | `internal/observer/` | Natural language ES query engine |
+| `esearch` | `internal/esearch/` | Elasticsearch HTTP client |
+| `store` | `internal/store/` | SQLite persistence |
