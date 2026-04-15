@@ -550,19 +550,21 @@ test.describe('Results browser', () => {
     expect(count).toBeGreaterThan(0)
   })
 
-  test('clicking action button opens RunDialog with path pre-filled', async ({ page }) => {
+  test('clicking action button opens RunDialog with path param pre-filled', async ({ page }) => {
     await page.goto('#/results')
     await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item.dir').first().click()
+    // Get the folder name before clicking
+    const dirItem = page.locator('.tree-item.dir').first()
+    const folderName = await dirItem.locator('.tree-name').textContent()
+    await dirItem.click()
     await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
     await page.locator('.action-bar .action-btn').first().click()
     await expect(page.locator('.modal')).toBeVisible({ timeout: 3000 })
-    // path param should be pre-filled
+    // path param field must exist and be pre-filled with the folder path
     const pathInput = page.locator('.modal input[placeholder="path"]')
-    if (await pathInput.isVisible()) {
-      const val = await pathInput.inputValue()
-      expect(val.length).toBeGreaterThan(0)
-    }
+    await expect(pathInput).toBeVisible()
+    const val = await pathInput.inputValue()
+    expect(val).toContain(folderName.trim())
   })
 
   test('action bar updates when different folder clicked', async ({ page }) => {

@@ -10,7 +10,13 @@
   let running = $state(false);
   let error = $state(null);
 
-  // Pre-fill values from autoParams (one-time on mount)
+  // Merge autoParams keys into params so fields appear, and pre-fill values
+  const allParams = $derived(() => {
+    const set = new Set(params);
+    for (const k of Object.keys(autoParams)) set.add(k);
+    return [...set];
+  });
+
   $effect(() => {
     const ap = autoParams;
     untrack(() => {
@@ -27,9 +33,9 @@
 </script>
 
 <Modal title="Run {name}" {onclose}>
-  {#if params.length > 0}
+  {#if allParams().length > 0}
     <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex flex-col gap-md">
-      {#each params as param}<label class="field"><span class="field-label">{param}</span><input type="text" bind:value={values[param]} placeholder={param} /></label>{/each}
+      {#each allParams() as param}<label class="field"><span class="field-label">{param}</span><input type="text" bind:value={values[param]} placeholder={param} /></label>{/each}
       {#if error}<p class="status-fail" style="font-size:12px">{error}</p>{/if}
       <div class="flex justify-between" style="margin-top:8px">
         <button type="button" onclick={onclose}>Cancel</button>

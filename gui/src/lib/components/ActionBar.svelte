@@ -22,7 +22,7 @@
   <div class="action-bar">
     <span class="action-context">{@html icon('folder', 14)} {folderLabel}</span>
     {#each actions as wf}
-      <button class="action-btn" onclick={() => onrun?.({ ...wf, autoParams: { path: resultPath } })}>
+      <button class="action-btn" onclick={() => onrun?.({ ...wf, name: wf.file, autoParams: { path: resultPath } })}>
         {@html icon('zap', 12)} {wf.description || wf.name}
       </button>
     {/each}
