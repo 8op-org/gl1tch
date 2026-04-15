@@ -18,9 +18,10 @@ description: Install glitch and run your first workflow
 
 ## Your first ask
 
-- glitch ask "what time is it" routes your question to the best matching workflow
+- glitch ask routes your question to the best matching workflow
 - routing works via local LLM — nothing leaves your machine
-- show 2-3 examples of ask routing to different workflows
+- only mention workflows that exist in examples/ — do NOT invent routing examples
+- show: glitch ask "review this code" → routes to code-review workflow
 
 ## Writing your own workflow
 

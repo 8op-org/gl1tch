@@ -1,6 +1,6 @@
 ;; git-changelog.glitch — generate a changelog from recent commits
 ;;
-;; Run with: glitch pipeline run examples/git-changelog.glitch
+;; Run with: glitch workflow run git-changelog
 
 (def model "qwen2.5:7b")
 

@@ -19,6 +19,7 @@
   ;; ── Phase 2: Generate ────────────────────────────
   (step "enrich-docs"
     (llm
+      :provider "copilot"
       :format "json"
       :prompt ```
         You are a technical writer for gl1tch (8op.org).
@@ -44,6 +45,7 @@
 
   (step "enrich-changelog"
     (llm
+      :provider "copilot"
       :prompt ```
         Summarize these git commits into user-facing changelog entries.
         Group by feature area (workflow engine, providers, CLI, docs).
@@ -57,7 +59,7 @@
   ;; ── Phase 3: Verify ──────────────────────────────
   (step "diff-review"
     (llm
-      :tier 2
+      :provider "copilot"
       :prompt ```
         You are a verification reviewer for the gl1tch project website.
 

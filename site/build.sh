@@ -18,7 +18,11 @@ if [[ ! -f "$GENERATED/build-report.md" ]]; then
 fi
 
 # ── Gate: check diff-review passed ───────────────
-VERDICT=$(head -1 "$GENERATED/build-report.md")
+if grep -q "^PASS" "$GENERATED/build-report.md"; then
+  VERDICT="PASS"
+else
+  VERDICT="FAIL"
+fi
 if [[ "$VERDICT" != "PASS" ]]; then
   echo "ERROR: Diff-review did not pass."
   echo "Verdict: $VERDICT"
@@ -30,7 +34,12 @@ echo "diff-review: PASS"
 # ── Split docs JSON into individual markdown files ──
 rm -rf "$CONTENT_DOCS"/*.md
 node -e "
-const docs = JSON.parse(require('fs').readFileSync('$GENERATED/docs.json', 'utf8'));
+// Extract JSON array from potentially noisy provider output
+const raw = require('fs').readFileSync('$GENERATED/docs.json', 'utf8');
+const start = raw.indexOf('[');
+const end = raw.lastIndexOf(']');
+if (start === -1 || end === -1) { console.error('ERROR: no JSON array found in docs.json'); process.exit(1); }
+const docs = JSON.parse(raw.slice(start, end + 1));
 for (const doc of docs) {
   const fm = [
     '---',

@@ -1,6 +1,6 @@
 ;; multi-step-chain.glitch — chain shell + LLM steps with step references
 ;;
-;; Run with: glitch pipeline run examples/multi-step-chain.glitch
+;; Run with: glitch workflow run multi-step-chain
 
 (def model "qwen2.5:7b")
 

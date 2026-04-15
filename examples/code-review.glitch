@@ -1,6 +1,6 @@
 ;; code-review.glitch — review staged changes before committing
 ;;
-;; Run with: glitch pipeline run examples/code-review.glitch
+;; Run with: glitch workflow run code-review
 
 (def model "qwen2.5:7b")
 

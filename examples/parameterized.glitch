@@ -1,6 +1,6 @@
 ;; parameterized.glitch — use {{.param.*}} for runtime inputs
 ;;
-;; Run with: glitch pipeline run examples/parameterized.glitch --param repo=gl1tch
+;; Run with: glitch workflow run parameterized --set repo=gl1tch
 
 (def model "qwen2.5:7b")
 

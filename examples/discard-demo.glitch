@@ -1,6 +1,6 @@
 ;; discard-demo.glitch — demonstrate #_ reader discard for toggling steps
 ;;
-;; Run with: glitch pipeline run examples/discard-demo.glitch
+;; Run with: glitch workflow run discard-demo
 ;;
 ;; The #_ prefix comments out an entire s-expression at read time.
 ;; Use it to disable steps without deleting them.

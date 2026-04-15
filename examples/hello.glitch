@@ -1,6 +1,6 @@
 ;; hello.glitch — example gl1tch s-expression workflows
 ;;
-;; Run with: glitch pipeline run examples/hello.glitch
+;; Run with: glitch workflow run hello-sexpr
 
 ;; ─────────────────────────────────────────────────
 ;; 1. Minimal — one shell step, one LLM step

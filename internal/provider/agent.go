@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -36,19 +37,61 @@ var KnownAgents = map[string]AgentProvider{
 // Run executes the agent in headless mode with the given prompt and returns
 // a structured LLMResult. The prompt (including any prepended skill context)
 // is piped via stdin to avoid shell escaping issues with large prompts.
+// Copilot is special: gh copilot -p requires the prompt as an argument (no
+// stdin support), so we write to a temp file and use $(cat tmpfile).
 func (a *AgentProvider) Run(model, prompt string) (LLMResult, error) {
 	start := time.Now()
 
-	args := a.buildArgs(model)
-	cmd := exec.Command("sh", "-c", strings.Join(args, " "))
-	cmd.Stdin = strings.NewReader(prompt)
+	var cmd *exec.Cmd
+	var cleanupFn func()
+
+	if a.Name == "copilot" {
+		// gh copilot -p <text> doesn't read stdin.
+		// Write prompt to temp file, pass via command substitution.
+		tmpFile, err := os.CreateTemp("", "glitch-copilot-*.txt")
+		if err != nil {
+			return LLMResult{}, fmt.Errorf("agent copilot: create temp file: %w", err)
+		}
+		cleanupFn = func() { os.Remove(tmpFile.Name()) }
+		if _, err := tmpFile.WriteString(prompt); err != nil {
+			cleanupFn()
+			return LLMResult{}, fmt.Errorf("agent copilot: write temp file: %w", err)
+		}
+		tmpFile.Close()
+
+		shellCmd := fmt.Sprintf("gh copilot -p \"$(cat %s)\" -s", tmpFile.Name())
+		cmd = exec.Command("sh", "-c", shellCmd)
+	} else {
+		args := a.buildArgs(model)
+		cmd = exec.Command("sh", "-c", strings.Join(args, " "))
+		cmd.Stdin = strings.NewReader(prompt)
+	}
 
 	out, err := cmd.CombinedOutput()
+	if cleanupFn != nil {
+		cleanupFn()
+	}
 	if err != nil {
 		return LLMResult{}, fmt.Errorf("agent %s: %w\n%s", a.Name, err, out)
 	}
 
 	response := strings.TrimSpace(string(out))
+
+	// Strip Copilot trailing stats lines (Changes, Requests, Tokens)
+	if a.Name == "copilot" {
+		lines := strings.Split(response, "\n")
+		var cleaned []string
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "Changes ") ||
+				strings.HasPrefix(trimmed, "Requests ") ||
+				strings.HasPrefix(trimmed, "Tokens ") {
+				continue
+			}
+			cleaned = append(cleaned, line)
+		}
+		response = strings.TrimSpace(strings.Join(cleaned, "\n"))
+	}
 
 	// Try to parse JSON output (claude --output-format json)
 	result := LLMResult{
@@ -86,8 +129,9 @@ func (a *AgentProvider) buildArgs(model string) []string {
 		}
 		return args
 	case "copilot":
-		// gh copilot explain reads from stdin
-		return []string{"gh", "copilot", "explain"}
+		// Copilot is handled directly in Run() via temp file + command substitution.
+		// This path shouldn't be reached, but return a sensible default.
+		return []string{"gh", "copilot", "-p"}
 	case "gemini":
 		return []string{a.Command, "-p"}
 	default:
