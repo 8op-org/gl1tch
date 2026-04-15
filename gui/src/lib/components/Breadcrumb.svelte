@@ -6,7 +6,7 @@
   {#each segments as seg, i}
     {#if i > 0}<span class="sep">/</span>{/if}
     {#if seg.href && i < segments.length - 1}
-      <a href={seg.href} on:click|preventDefault={() => onnavigate?.(seg.href)}>{seg.label}</a>
+      <a href={seg.href} onclick={(e) => { e.preventDefault(); onnavigate?.(seg.href); }}>{seg.label}</a>
     {:else}
       <span class="current">{seg.label}</span>
     {/if}

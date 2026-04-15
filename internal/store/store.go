@@ -49,6 +49,21 @@ func OpenAt(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Detect schema drift: if runs table exists but is missing expected columns, drop all and recreate.
+	var count int
+	err = db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name = 'input'`).Scan(&count)
+	if err == nil && count == 0 {
+		// Check if the table actually exists (count == 0 also when table doesn't exist)
+		var tableCount int
+		db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='runs'`).Scan(&tableCount)
+		if tableCount > 0 {
+			db.Exec("DROP TABLE IF EXISTS steps")
+			db.Exec("DROP TABLE IF EXISTS runs")
+			db.Exec("DROP TABLE IF EXISTS research_events")
+		}
+	}
+
 	if _, err := db.Exec(createSchema); err != nil {
 		db.Close()
 		return nil, err

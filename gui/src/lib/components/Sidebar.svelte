@@ -20,8 +20,8 @@
 <aside
   class="sidebar"
   class:expanded
-  on:mouseenter={() => expanded = true}
-  on:mouseleave={() => expanded = false}
+  onmouseenter={() => expanded = true}
+  onmouseleave={() => expanded = false}
 >
   <div class="logo">
     <a href="#/">

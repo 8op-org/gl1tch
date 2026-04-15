@@ -26,7 +26,7 @@
 <div class="split-pane" bind:this={containerEl} class:dragging>
   <div class="split-left" style="width:{width}px"><slot name="left" /></div>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="split-handle" on:mousedown={onMouseDown}></div>
+  <div class="split-handle" onmousedown={onMouseDown}></div>
   <div class="split-right"><slot name="right" /></div>
 </div>
 
