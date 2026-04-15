@@ -1674,3 +1674,115 @@ func TestSexprWorkflow_ThreadWithReduce(t *testing.T) {
 		t.Fatalf("expected reduce over %q, got %q", w.Steps[0].ID, w.Steps[1].ReduceOver)
 	}
 }
+
+func TestSexprWorkflow_CompareBasic(t *testing.T) {
+	src := `(workflow "cmp-test"
+	  :description "compare smoke"
+	  (step "pick"
+	    (compare
+	      (branch "fast" (llm :prompt "fast answer"))
+	      (branch "slow" (llm :prompt "slow answer")))))
+	`
+	w, err := parseSexprWorkflow([]byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.Form != "compare" {
+		t.Fatalf("expected form=compare, got %q", s.Form)
+	}
+	if len(s.CompareBranches) != 2 {
+		t.Fatalf("expected 2 branches, got %d", len(s.CompareBranches))
+	}
+	if s.CompareBranches[0].Name != "fast" {
+		t.Errorf("branch 0 name = %q, want fast", s.CompareBranches[0].Name)
+	}
+	if s.CompareReview != nil {
+		t.Error("expected nil review (default), got non-nil")
+	}
+}
+
+func TestSexprWorkflow_CompareMultiStep(t *testing.T) {
+	src := `(workflow "cmp-multi"
+	  :description "multi-step branches"
+	  (compare
+	    :id "impl"
+	    (branch "local"
+	      (step "plan" (llm :prompt "plan locally"))
+	      (step "code" (run "echo done")))
+	    (branch "cloud"
+	      (step "plan" (llm :prompt "plan in cloud"))
+	      (step "code" (run "echo done")))
+	    (review :criteria ("accuracy" "completeness") :model "qwen2.5:7b")))
+	`
+	w, err := parseSexprWorkflow([]byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(w.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(w.Items))
+	}
+	s := w.Items[0].Step
+	if s == nil {
+		t.Fatal("expected Step item, got Phase")
+	}
+	if s.Form != "compare" {
+		t.Fatalf("form = %q, want compare", s.Form)
+	}
+	if s.CompareID != "impl" {
+		t.Errorf("CompareID = %q, want impl", s.CompareID)
+	}
+	if len(s.CompareBranches) != 2 {
+		t.Fatalf("branches = %d, want 2", len(s.CompareBranches))
+	}
+	if len(s.CompareBranches[0].Steps) != 2 {
+		t.Errorf("local branch steps = %d, want 2", len(s.CompareBranches[0].Steps))
+	}
+	if s.CompareReview == nil {
+		t.Fatal("expected review config")
+	}
+	if len(s.CompareReview.Criteria) != 2 {
+		t.Errorf("criteria = %d, want 2", len(s.CompareReview.Criteria))
+	}
+	if s.CompareReview.Model != "qwen2.5:7b" {
+		t.Errorf("review model = %q, want qwen2.5:7b", s.CompareReview.Model)
+	}
+}
+
+func TestSexprWorkflow_CompareCustomPrompt(t *testing.T) {
+	src := `(workflow "cmp-custom"
+	  :description "custom review"
+	  (step "tone"
+	    (compare
+	      (branch "formal" (llm :prompt "Write formally"))
+	      (branch "casual" (llm :prompt "Write casually"))
+	      (review :prompt "Which is better?" :model "qwen2.5:7b"))))
+	`
+	w, err := parseSexprWorkflow([]byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	s := w.Steps[0]
+	if s.CompareReview == nil {
+		t.Fatal("expected review")
+	}
+	if s.CompareReview.Prompt != "Which is better?" {
+		t.Errorf("prompt = %q", s.CompareReview.Prompt)
+	}
+}
+
+func TestSexprWorkflow_CompareTooFewBranches(t *testing.T) {
+	src := `(workflow "bad"
+	  :description "needs 2"
+	  (step "x"
+	    (compare
+	      (branch "only-one" (llm :prompt "solo")))))
+	`
+	_, err := parseSexprWorkflow([]byte(src))
+	if err == nil {
+		t.Fatal("expected error for <2 branches")
+	}
+}

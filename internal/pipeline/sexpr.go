@@ -208,6 +208,12 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 		return []Step{s}, nil
 	case "->":
 		return convertThread(n, defs)
+	case "compare":
+		s, err := convertCompare(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	default:
 		return nil, fmt.Errorf("line %d: unknown form %q", n.Line, head)
 	}
@@ -608,6 +614,151 @@ func convertThread(n *sexpr.Node, defs map[string]string) ([]Step, error) {
 	return steps, nil
 }
 
+// convertCompare: (compare [:id "name"] (branch "name" ...) ... [(review ...)])
+func convertCompare(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	s := Step{
+		ID:   fmt.Sprintf("compare-%d", n.Line),
+		Form: "compare",
+	}
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			kw := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return s, fmt.Errorf("line %d: keyword :%s missing value", child.Line, kw)
+			}
+			val := resolveVal(children[i], defs)
+			i++
+			switch kw {
+			case "id":
+				s.CompareID = val
+				s.ID = val
+			}
+			continue
+		}
+		break
+	}
+	for _, child := range children[i:] {
+		if !child.IsList() || len(child.Children) == 0 {
+			return s, fmt.Errorf("line %d: compare body must be (branch ...) or (review ...)", child.Line)
+		}
+		head := child.Children[0].SymbolVal()
+		if head == "" {
+			head = child.Children[0].StringVal()
+		}
+		switch head {
+		case "branch":
+			b, err := convertBranch(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.CompareBranches = append(s.CompareBranches, b)
+		case "review":
+			r, err := convertReview(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.CompareReview = r
+		default:
+			return s, fmt.Errorf("line %d: unexpected form %q in compare (expected branch or review)", child.Line, head)
+		}
+	}
+	if len(s.CompareBranches) < 2 {
+		return s, fmt.Errorf("line %d: (compare) needs at least 2 branches, got %d", n.Line, len(s.CompareBranches))
+	}
+	return s, nil
+}
+
+// convertBranch: (branch "name" (step ...) ...) or (branch "name" (llm ...))
+func convertBranch(n *sexpr.Node, defs map[string]string) (CompareBranch, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return CompareBranch{}, fmt.Errorf("line %d: (branch) needs name and at least one body", n.Line)
+	}
+	name := resolveVal(children[0], defs)
+	if name == "" {
+		return CompareBranch{}, fmt.Errorf("line %d: branch name must be a non-empty string", children[0].Line)
+	}
+	var steps []Step
+	for _, child := range children[1:] {
+		if !child.IsList() || len(child.Children) == 0 {
+			return CompareBranch{}, fmt.Errorf("line %d: branch body must be forms", child.Line)
+		}
+		head := child.Children[0].SymbolVal()
+		if head == "" {
+			head = child.Children[0].StringVal()
+		}
+		switch head {
+		case "llm", "run", "save":
+			implicitStep := &sexpr.Node{
+				Line: child.Line,
+				Children: []*sexpr.Node{
+					{Atom: &sexpr.Token{Type: sexpr.TokenSymbol, Val: "step"}, Line: child.Line},
+					{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: name}, Line: child.Line},
+					child,
+				},
+			}
+			s, err := convertStep(implicitStep, defs)
+			if err != nil {
+				return CompareBranch{}, fmt.Errorf("line %d: branch %q body: %w", child.Line, name, err)
+			}
+			steps = append(steps, s)
+		case "step":
+			s, err := convertStep(child, defs)
+			if err != nil {
+				return CompareBranch{}, fmt.Errorf("line %d: branch %q: %w", child.Line, name, err)
+			}
+			steps = append(steps, s)
+		default:
+			formSteps, err := convertForm(child, head, defs)
+			if err != nil {
+				return CompareBranch{}, fmt.Errorf("line %d: branch %q: %w", child.Line, name, err)
+			}
+			steps = append(steps, formSteps...)
+		}
+	}
+	return CompareBranch{Name: name, Steps: steps}, nil
+}
+
+// convertReview: (review [:criteria (...)] [:prompt "..."] [:model "..."])
+func convertReview(n *sexpr.Node, defs map[string]string) (*ReviewConfig, error) {
+	children := n.Children[1:]
+	r := &ReviewConfig{}
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if !child.IsAtom() || child.Atom.Type != sexpr.TokenKeyword {
+			return nil, fmt.Errorf("line %d: review expects keyword arguments", child.Line)
+		}
+		kw := child.KeywordVal()
+		i++
+		if i >= len(children) {
+			return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, kw)
+		}
+		valNode := children[i]
+		i++
+		switch kw {
+		case "criteria":
+			if !valNode.IsList() {
+				return nil, fmt.Errorf("line %d: :criteria must be a list", valNode.Line)
+			}
+			for _, c := range valNode.Children {
+				r.Criteria = append(r.Criteria, resolveVal(c, defs))
+			}
+		case "prompt":
+			r.Prompt = resolveVal(valNode, defs)
+		case "model":
+			r.Model = resolveVal(valNode, defs)
+		default:
+			return nil, fmt.Errorf("line %d: unknown review keyword :%s", child.Line, kw)
+		}
+	}
+	return r, nil
+}
+
 // convertPhase: (phase "name" [:retries N] (step ...) ... (gate ...) ...)
 func convertPhase(n *sexpr.Node, defs map[string]string) (Phase, error) {
 	children := n.Children[1:] // skip "phase"
@@ -851,6 +1002,14 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.Embed = emb
+		case "compare":
+			cmp, err := convertCompare(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Form = "compare"
+			s.CompareBranches = cmp.CompareBranches
+			s.CompareReview = cmp.CompareReview
 		case "plugin":
 			pc, err := convertPluginCall(child, defs)
 			if err != nil {
