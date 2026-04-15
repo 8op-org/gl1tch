@@ -1,0 +1,41 @@
+;; review-results — structured code review on a results folder
+
+(workflow "review-results"
+  :description "Run a structured code review on a results folder"
+  :action "results:review"
+  :action "results"
+
+  (step "gather"
+    (run ```
+DIR="{{.param.path}}"
+if [ -z "$DIR" ]; then echo "ERROR: no path provided" >&2; exit 1; fi
+echo "## Files in $DIR"
+find "$DIR" -type f | head -50
+echo "---"
+for f in $(find "$DIR" -type f \( -name '*.diff' -o -name '*.patch' -o -name '*.md' \) | head -20); do
+  echo "### $f"
+  head -200 "$f"
+  echo "---"
+done
+```))
+
+  (step "review"
+    (llm
+      :prompt ```
+Review the following results folder contents against this checklist:
+
+{{step "gather"}}
+
+Checklist — mark each PASS, FAIL, or N/A:
+- Functionality: do changes accomplish their stated goal?
+- Tests: adequate coverage?
+- Security: no secrets, no injection vectors?
+- Performance: no obvious bottlenecks?
+- Standards: follows repo conventions?
+- Breaking changes: documented?
+
+End with a summary and suggested actions.
+```))
+
+  (step "save-review"
+    (save "{{.param.path}}/review.md" :from "review")))
