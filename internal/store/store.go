@@ -56,6 +56,11 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// DB returns the underlying *sql.DB for direct queries.
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
 // RecordRun inserts a new run record and returns the new row ID.
 func (s *Store) RecordRun(kind, name, input string) (int64, error) {
 	res, err := s.db.Exec(
