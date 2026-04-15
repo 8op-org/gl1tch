@@ -21,6 +21,26 @@ test('feature grid has 6 cards', async ({ page }) => {
   await expect(cards).toHaveCount(6);
 });
 
+test('how-it-works has 3 steps', async ({ page }) => {
+  await page.goto('/');
+  const steps = page.locator('.how-step');
+  await expect(steps).toHaveCount(3);
+});
+
+test('meta section shows both gate phases', async ({ page }) => {
+  await page.goto('/');
+  const trace = page.locator('.meta-trace');
+  await expect(trace).toContainText('content-verify');
+  await expect(trace).toContainText('page-tests');
+  await expect(trace).toContainText('playwright');
+});
+
+test('workflow suite has 4 commands', async ({ page }) => {
+  await page.goto('/');
+  const cmds = page.locator('.meta-cmd');
+  await expect(cmds).toHaveCount(4);
+});
+
 test('install command is copyable', async ({ page }) => {
   await page.goto('/');
   const install = page.locator('.hero-cmd');

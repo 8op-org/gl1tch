@@ -107,7 +107,7 @@ import Base from '../layouts/Base.astro';
 
 <!-- ── The workflow ─────────────────────────── -->
 <section id="how">
-<div class="wrap">
+<div class="wrap-wide">
   <div class="section-label">how it works</div>
   <h2>Write a workflow. Or let AI write it for you.</h2>
 
@@ -159,10 +159,13 @@ import Base from '../layouts/Base.astro';
   <span class="term-dim">&gt;</span> <span class="term-dim">save-stub</span>
   <span class="term-dim">&gt;</span> <span class="term-dim">rebuild-json</span>
 
-<span class="term-header">&gt;&gt;&gt; Phase "verify"</span>
+<span class="term-header">&gt;&gt;&gt; Phase "content-verify"</span>
   <span class="term-pass">&check;</span> <span class="term-gate">gate no-hallucinations</span>  <span class="term-pass">PASS</span>
   <span class="term-pass">&check;</span> <span class="term-gate">gate stub-coverage</span>      <span class="term-pass">PASS</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate structure-and-tone</span> <span class="term-pass">PASS</span></pre>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate structure-and-tone</span> <span class="term-pass">PASS</span>
+
+<span class="term-header">&gt;&gt;&gt; Phase "page-tests"</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate playwright</span>         <span class="term-pass">PASS</span> <span class="term-anno">14 tests &middot; 8.7s</span></pre>
 
   <div class="meta-suite">
     <div class="meta-cmd">
