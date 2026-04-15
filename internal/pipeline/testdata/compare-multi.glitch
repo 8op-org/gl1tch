@@ -1,0 +1,11 @@
+(workflow "compare-multi"
+  :description "multi-step branch compare"
+
+  (compare
+    :id "impl"
+    (branch "fast"
+      (step "plan" (run "echo fast-plan"))
+      (step "build" (run "echo fast-build")))
+    (branch "slow"
+      (step "plan" (run "echo slow-plan"))
+      (step "build" (run "echo slow-build")))))

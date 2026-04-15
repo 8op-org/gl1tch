@@ -1,0 +1,9 @@
+(workflow "compare-basic"
+  :description "basic compare smoke test"
+
+  (step "setup" (run "echo shared-data"))
+
+  (step "pick"
+    (compare
+      (branch "alpha" (run "echo alpha-result"))
+      (branch "beta" (run "echo beta-result")))))

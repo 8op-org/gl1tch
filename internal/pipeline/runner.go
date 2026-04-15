@@ -654,8 +654,43 @@ func extractJSON(s string) (string, error) {
 
 func render(tmpl string, data map[string]any, steps map[string]string) (string, error) {
 	funcMap := template.FuncMap{
-		"step": func(id string) string {
+		"step": func(args ...string) string {
+			if len(args) == 0 {
+				return ""
+			}
+			id := args[0]
+			for i := 1; i < len(args); i++ {
+				switch args[i] {
+				case ":variant":
+					if i+1 < len(args) {
+						i++
+						// Try namespaced lookup: id/variant/id
+						if v, ok := steps[id+"/"+args[i]+"/"+id]; ok {
+							return v
+						}
+						// Try any step in that branch
+						prefix := id + "/" + args[i] + "/"
+						for k, v := range steps {
+							if strings.HasPrefix(k, prefix) {
+								return v
+							}
+						}
+					}
+				case ":winner":
+					return steps[id+"/__winner"]
+				case ":scores":
+					return steps[id+"/__scores"]
+				}
+			}
 			return steps[id]
+		},
+		"branch": func(name string) string {
+			for k, v := range steps {
+				if strings.HasSuffix(k, "/"+name) || k == name {
+					return v
+				}
+			}
+			return ""
 		},
 		// stepfile writes step output to a temp file and returns the path.
 		// Use in shell steps where inline content would break escaping:
@@ -774,6 +809,8 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executeReduce(ctx, rctx, step)
 	case "par":
 		return executePar(ctx, rctx, step)
+	case "compare":
+		return executeCompare(ctx, rctx, step)
 	}
 
 	maxAttempts := 1 + step.Retry
@@ -1069,6 +1106,172 @@ func executePar(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 }
 
 // runSingleStep executes one step (save, run, or llm) without control-flow wrappers.
+// executeCompare runs all branches in parallel, then judges results to pick a winner.
+func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	if len(step.CompareBranches) < 2 {
+		return nil, fmt.Errorf("compare %s: need at least 2 branches", step.ID)
+	}
+
+	type branchResult struct {
+		name    string
+		output  string
+		outcome *stepOutcome
+		err     error
+	}
+
+	results := make([]branchResult, len(step.CompareBranches))
+	g, gctx := errgroup.WithContext(ctx)
+
+	for i, branch := range step.CompareBranches {
+		br := branch
+		g.Go(func() error {
+			// Create an isolated runCtx for this branch
+			branchRctx := &runCtx{
+				ctx:              gctx,
+				input:            rctx.input,
+				params:           rctx.params,
+				workspace:        rctx.workspace,
+				defaultModel:     rctx.defaultModel,
+				reg:              rctx.reg,
+				providerResolver: rctx.providerResolver,
+				tiers:            rctx.tiers,
+				evalThreshold:    rctx.evalThreshold,
+				steps:            rctx.stepsSnapshot(), // copy outer steps
+				esURL:            rctx.esURL,
+			}
+
+			var lastOutput string
+			composite := &stepOutcome{}
+			for _, s := range br.Steps {
+				outcome, err := executeStep(gctx, branchRctx, s)
+				if err != nil {
+					results[i] = branchResult{name: br.Name, err: err}
+					return nil // don't fail other branches
+				}
+				lastOutput = outcome.output
+				if outcome.isLLM {
+					composite.isLLM = true
+					composite.tokensIn += outcome.tokensIn
+					composite.tokensOut += outcome.tokensOut
+					composite.cost += outcome.cost
+					if outcome.latencyMs > composite.latencyMs {
+						composite.latencyMs = outcome.latencyMs
+					}
+				}
+			}
+
+			composite.output = lastOutput
+
+			// Store namespaced steps in parent context
+			// Take snapshot before locking to avoid deadlock (stepsSnapshot also locks)
+			outerSnap := rctx.stepsSnapshot()
+			rctx.mu.Lock()
+			for id, val := range branchRctx.steps {
+				if _, inherited := outerSnap[id]; !inherited {
+					nsID := fmt.Sprintf("%s/%s/%s", step.ID, br.Name, id)
+					rctx.steps[nsID] = val
+				}
+			}
+			rctx.mu.Unlock()
+
+			results[i] = branchResult{name: br.Name, output: lastOutput, outcome: composite}
+			return nil
+		})
+	}
+
+	g.Wait()
+
+	// Collect successful branches
+	branchOutputs := make(map[string]string)
+	var successResults []branchResult
+	for _, r := range results {
+		if r.err == nil && r.output != "" {
+			branchOutputs[r.name] = r.output
+			successResults = append(successResults, r)
+		}
+	}
+
+	if len(successResults) == 0 {
+		return nil, fmt.Errorf("compare %s: all branches failed", step.ID)
+	}
+
+	// Pick winner
+	var winnerName, winnerOutput string
+	if len(successResults) == 1 {
+		winnerName = successResults[0].name
+		winnerOutput = successResults[0].output
+	} else {
+		winnerName, winnerOutput = runCompareReview(ctx, rctx, step, branchOutputs)
+	}
+
+	// Store results accessible via template
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = winnerOutput
+	rctx.steps[step.ID+"/__winner"] = winnerName
+	rctx.mu.Unlock()
+
+	composite := &stepOutcome{output: winnerOutput}
+	for _, r := range results {
+		if r.outcome != nil && r.outcome.isLLM {
+			composite.isLLM = true
+			composite.tokensIn += r.outcome.tokensIn
+			composite.tokensOut += r.outcome.tokensOut
+			composite.cost += r.outcome.cost
+		}
+	}
+
+	return composite, nil
+}
+
+// runCompareReview executes the judge and returns the winner name and output.
+// For shell-only branches (no LLM available), picks the first branch as default.
+func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutputs map[string]string) (string, string) {
+	if rctx.reg == nil {
+		// No provider registry — can't run LLM judge, pick first branch
+		for name, output := range branchOutputs {
+			return name, output
+		}
+	}
+
+	reviewModel := rctx.defaultModel
+	if step.CompareReview != nil && step.CompareReview.Model != "" {
+		reviewModel = step.CompareReview.Model
+	}
+
+	prompt := buildReviewPrompt(step.CompareReview, branchOutputs)
+
+	reviewStep := Step{
+		ID: step.ID + "-review",
+		LLM: &LLMStep{
+			Prompt: prompt,
+			Model:  reviewModel,
+		},
+	}
+
+	outcome, err := runSingleStep(ctx, rctx, reviewStep)
+	if err != nil {
+		// Review failed — pick first branch as fallback
+		for name, output := range branchOutputs {
+			return name, output
+		}
+	}
+
+	scores := ParseCrossReview(outcome.output)
+	for _, s := range scores {
+		if s.Winner {
+			if output, ok := branchOutputs[s.Variant]; ok {
+				return s.Variant, output
+			}
+		}
+	}
+
+	// No winner parsed — pick first
+	for name, output := range branchOutputs {
+		return name, output
+	}
+	return "", ""
+}
+
 func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	// Snapshot steps map for safe concurrent reads during par execution.
 	stepsSnap := rctx.stepsSnapshot()

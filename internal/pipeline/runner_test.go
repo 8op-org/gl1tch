@@ -1035,3 +1035,104 @@ func TestRun_Par_FromFile(t *testing.T) {
 		t.Fatalf("expected merged output, got %q", result.Output)
 	}
 }
+
+func TestRun_Compare_Basic(t *testing.T) {
+	w, err := LoadFile("testdata/compare-basic.glitch")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if result.Output == "" {
+		t.Error("expected non-empty output")
+	}
+	if result.Steps["setup"] != "shared-data" {
+		t.Errorf("setup = %q, want shared-data", result.Steps["setup"])
+	}
+	if result.Steps["pick"] == "" {
+		t.Error("pick step should have winner output")
+	}
+}
+
+func TestRun_Compare_MultiStep(t *testing.T) {
+	w, err := LoadFile("testdata/compare-multi.glitch")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if result.Steps["impl"] == "" {
+		t.Error("impl step should have winner output")
+	}
+}
+
+func TestRun_Compare_BranchFailure(t *testing.T) {
+	src := `(workflow "fail-test"
+	  :description "one branch fails"
+	  (step "pick"
+	    (compare
+	      (branch "good" (run "echo works"))
+	      (branch "bad" (run "exit 1")))))
+	`
+	w, err := parseSexprWorkflow([]byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("run: %v (should succeed with one good branch)", err)
+	}
+	if result.Steps["pick"] != "works" {
+		t.Errorf("pick = %q, want 'works'", result.Steps["pick"])
+	}
+}
+
+func TestRun_Compare_AllBranchesFail(t *testing.T) {
+	src := `(workflow "all-fail"
+	  :description "both fail"
+	  (step "pick"
+	    (compare
+	      (branch "a" (run "exit 1"))
+	      (branch "b" (run "exit 2")))))
+	`
+	w, err := parseSexprWorkflow([]byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	_, err = Run(w, "", "", nil, nil)
+	if err == nil {
+		t.Fatal("expected error when all branches fail")
+	}
+}
+
+func TestRun_Compare_StepAccessVariant(t *testing.T) {
+	src := `(workflow "variant-access"
+	  :description "access specific variant output"
+	  (compare
+	    :id "impl"
+	    (branch "fast"
+	      (step "out" (run "echo fast-output")))
+	    (branch "slow"
+	      (step "out" (run "echo slow-output"))))
+	  (step "check" (run "echo winner={{step \"impl\"}}")))
+	`
+	w, err := parseSexprWorkflow([]byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	check := result.Steps["check"]
+	if !strings.Contains(check, "winner=") {
+		t.Errorf("check = %q, expected winner= prefix", check)
+	}
+	if check != "winner=fast-output" && check != "winner=slow-output" {
+		t.Errorf("check = %q, expected one of the branch outputs", check)
+	}
+}
