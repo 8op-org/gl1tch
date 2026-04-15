@@ -1,0 +1,37 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build the full binary (GUI + Go)
+    deps: [gui:build]
+    cmds:
+      - go build -o glitch .
+
+  gui:build:
+    desc: Build GUI frontend and copy dist for embedding
+    dir: gui
+    cmds:
+      - npm run build
+      - rm -rf ../internal/gui/dist
+      - cp -r dist ../internal/gui/dist
+
+  gui:test:
+    desc: Run GUI Playwright tests
+    deps: [build]
+    dir: gui
+    cmds:
+      - npx playwright test
+
+  gui:dev:
+    desc: Run GUI dev server (proxies API to Go backend)
+    dir: gui
+    cmds:
+      - npm run dev
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f glitch
+      - rm -rf internal/gui/dist
+      - rm -rf gui/dist
+      - rm -rf gui/test-results
