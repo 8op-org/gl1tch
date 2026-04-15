@@ -98,7 +98,7 @@ Call an LLM provider. Output is the response text (trimmed).
 
 ### `(save "path" [:from "step-id"])`
 
-Write content to a file at `path` (template-rendered). If `:from` is specified, saves that step's output. Otherwise saves the previous step's output. Output is the written content.
+Write content to a file at `path` (template-rendered). If `:from` is specified, saves that step's output. Otherwise saves the previous step's output. Output is a confirmation string: `"saved {sourceStep} to {path}"`.
 
 ### `(json-pick "expr" [:from "step-id"])`
 
