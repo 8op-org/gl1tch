@@ -711,6 +711,34 @@ func TestSexprWorkflow_PluginCall(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_PluginCallNamespaced(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "prs"
+    (github/prs :since "yesterday" :authored)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.PluginCall == nil {
+		t.Fatal("expected PluginCall step")
+	}
+	if s.PluginCall.Plugin != "github" {
+		t.Fatalf("expected plugin %q, got %q", "github", s.PluginCall.Plugin)
+	}
+	if s.PluginCall.Subcommand != "prs" {
+		t.Fatalf("expected subcommand %q, got %q", "prs", s.PluginCall.Subcommand)
+	}
+	if s.PluginCall.Args["since"] != "yesterday" {
+		t.Fatalf("expected since=%q, got %q", "yesterday", s.PluginCall.Args["since"])
+	}
+	if s.PluginCall.Args["authored"] != "true" {
+		t.Fatalf("expected authored=%q, got %q", "true", s.PluginCall.Args["authored"])
+	}
+}
+
 func TestSexprWorkflow_Phase(t *testing.T) {
 	src := []byte(`
 (workflow "test"

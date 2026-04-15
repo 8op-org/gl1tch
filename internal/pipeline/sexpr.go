@@ -508,7 +508,29 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 			}
 			s.PluginCall = pc
 		default:
-			return s, fmt.Errorf("line %d: unknown step type %q", child.Line, head)
+			// github/prs → plugin "github", subcommand "prs"
+			if parts := strings.SplitN(head, "/", 2); len(parts) == 2 {
+				pc := &PluginCallStep{
+					Plugin:     parts[0],
+					Subcommand: parts[1],
+					Args:       make(map[string]string),
+				}
+				for i := 1; i < len(child.Children); i++ {
+					c := child.Children[i]
+					if c.IsAtom() && c.Atom.Type == sexpr.TokenKeyword {
+						key := c.KeywordVal()
+						if i+1 >= len(child.Children) || (child.Children[i+1].IsAtom() && child.Children[i+1].Atom.Type == sexpr.TokenKeyword) {
+							pc.Args[key] = "true"
+						} else {
+							i++
+							pc.Args[key] = resolveVal(child.Children[i], defs)
+						}
+					}
+				}
+				s.PluginCall = pc
+			} else {
+				return s, fmt.Errorf("line %d: unknown step type %q", child.Line, head)
+			}
 		}
 	}
 	return s, nil
