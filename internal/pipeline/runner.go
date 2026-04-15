@@ -145,23 +145,18 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		steps:            steps,
 	}
 
-	for i, step := range w.Steps {
-		if i > 0 {
-			rctx.prevStepID = w.Steps[i-1].ID
-		}
-
-		// Skip steps already provided by seed (shared data-gathering results)
+	// runBareStep executes a single step and accumulates telemetry.
+	runBareStep := func(step Step) error {
 		if _, seeded := steps[step.ID]; seeded {
 			fmt.Printf("  > %s (seeded, skipped)\n", step.ID)
-			continue
+			return nil
 		}
 
 		outcome, err := executeStep(rctx, step)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		// Accumulate telemetry
 		if outcome.isLLM {
 			tokIn := int64(outcome.tokensIn)
 			tokOut := int64(outcome.tokensOut)
@@ -205,6 +200,36 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 					ComparisonGroup:  compGroup,
 					Timestamp:        time.Now().UTC().Format(time.RFC3339),
 				})
+			}
+		}
+		return nil
+	}
+
+	// If Items is populated (sexpr with phases), walk the ordered item list.
+	// Otherwise fall back to flat Steps for backward compat.
+	if len(w.Items) > 0 {
+		for _, item := range w.Items {
+			if item.Step != nil {
+				if err := runBareStep(*item.Step); err != nil {
+					return nil, err
+				}
+			} else if item.Phase != nil {
+				report, err := executePhase(rctx, *item.Phase)
+				if err != nil {
+					if report != nil {
+						rctx.steps["_verification_report"] = report.FormatReport()
+					}
+					return nil, err
+				}
+			}
+		}
+	} else {
+		for i, step := range w.Steps {
+			if i > 0 {
+				rctx.prevStepID = w.Steps[i-1].ID
+			}
+			if err := runBareStep(step); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -282,10 +307,30 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		}
 	}
 
-	last := w.Steps[len(w.Steps)-1]
+	// Determine last step output for Result.Output
+	var lastOutput string
+	if len(w.Items) > 0 {
+		// Walk items in reverse to find the last step/phase output
+		for i := len(w.Items) - 1; i >= 0; i-- {
+			item := w.Items[i]
+			if item.Step != nil {
+				lastOutput = steps[item.Step.ID]
+				break
+			} else if item.Phase != nil {
+				// Last step in the phase
+				p := item.Phase
+				if len(p.Steps) > 0 {
+					lastOutput = steps[p.Steps[len(p.Steps)-1].ID]
+					break
+				}
+			}
+		}
+	} else if len(w.Steps) > 0 {
+		lastOutput = steps[w.Steps[len(w.Steps)-1].ID]
+	}
 	return &Result{
 		Workflow: w.Name,
-		Output:   steps[last.ID],
+		Output:   lastOutput,
 		Steps:    steps,
 	}, nil
 }
@@ -1039,6 +1084,122 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)
+}
+
+// GateResult holds the outcome of a single gate evaluation.
+type GateResult struct {
+	ID      string
+	Passed  bool
+	Detail  string
+	Skipped bool
+}
+
+// VerificationReport is emitted when a phase exhausts its retry budget.
+type VerificationReport struct {
+	Phase    string
+	Attempts int
+	MaxRetry int
+	Gates    []GateResult
+}
+
+// FormatReport returns a human-readable verification report.
+func (vr *VerificationReport) FormatReport() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Phase %q FAILED (%d/%d attempts exhausted)\n\n", vr.Phase, vr.Attempts, vr.Attempts)
+	b.WriteString("Gate results (final attempt):\n")
+	for _, g := range vr.Gates {
+		if g.Skipped {
+			fmt.Fprintf(&b, "  %s: (skipped - prior gate failed)\n", g.ID)
+		} else if g.Passed {
+			fmt.Fprintf(&b, "  %s: PASS\n", g.ID)
+		} else {
+			detail := g.Detail
+			if len(detail) > 200 {
+				detail = detail[:200] + "..."
+			}
+			fmt.Fprintf(&b, "  %s: FAIL - %s\n", g.ID, detail)
+		}
+	}
+	return b.String()
+}
+
+// executePhase runs all steps, then all gates. On gate failure, retries the
+// phase up to p.Retries times. Returns nil report on success, non-nil on failure.
+func executePhase(rctx *runCtx, p Phase) (*VerificationReport, error) {
+	maxAttempts := 1 + p.Retries
+
+	var lastGateResults []GateResult
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			fmt.Printf("\n>>> Phase %q retry %d/%d\n", p.ID, attempt-1, p.Retries)
+		} else {
+			fmt.Printf("\n>>> Phase %q\n", p.ID)
+		}
+
+		// Run all work steps
+		for _, step := range p.Steps {
+			fmt.Printf("  > %s\n", step.ID)
+			outcome, err := executeStep(rctx, step)
+			if err != nil {
+				return nil, fmt.Errorf("phase %q step %q: %w", p.ID, step.ID, err)
+			}
+			rctx.steps[step.ID] = outcome.output
+		}
+
+		// Run gates in order, stop on first failure
+		lastGateResults = make([]GateResult, len(p.Gates))
+		allPassed := true
+
+		for gi, gate := range p.Gates {
+			fmt.Printf("  > gate %s\n", gate.ID)
+			outcome, execErr := executeStep(rctx, gate)
+
+			if execErr != nil {
+				// Shell gate execution failure
+				rctx.steps[gate.ID] = execErr.Error()
+				lastGateResults[gi] = GateResult{ID: gate.ID, Passed: false, Detail: execErr.Error()}
+				allPassed = false
+				for ski := gi + 1; ski < len(p.Gates); ski++ {
+					lastGateResults[ski] = GateResult{ID: p.Gates[ski].ID, Skipped: true}
+				}
+				break
+			}
+
+			rctx.steps[gate.ID] = outcome.output
+			passed, detail := evaluateGate(gate, outcome, nil)
+			lastGateResults[gi] = GateResult{ID: gate.ID, Passed: passed, Detail: detail}
+
+			if !passed {
+				allPassed = false
+				for ski := gi + 1; ski < len(p.Gates); ski++ {
+					lastGateResults[ski] = GateResult{ID: p.Gates[ski].ID, Skipped: true}
+				}
+				break
+			}
+		}
+
+		if allPassed {
+			return nil, nil
+		}
+
+		if attempt < maxAttempts {
+			for _, gr := range lastGateResults {
+				if !gr.Passed && !gr.Skipped {
+					fmt.Printf("  > gate %s FAILED, retrying phase\n", gr.ID)
+					break
+				}
+			}
+		}
+	}
+
+	report := &VerificationReport{
+		Phase:    p.ID,
+		Attempts: maxAttempts,
+		MaxRetry: p.Retries,
+		Gates:    lastGateResults,
+	}
+	return report, fmt.Errorf("phase %q: all %d attempts exhausted\n%s", p.ID, maxAttempts, report.FormatReport())
 }
 
 // evaluateGate determines if a gate step passed or failed.

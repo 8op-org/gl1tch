@@ -1,0 +1,11 @@
+(workflow "phase-gate-test"
+  :description "end-to-end phase and gate test"
+
+  (phase "gather"
+    (step "data" (run "echo 'hello world'")))
+
+  (phase "process" :retries 1
+    (step "transform" (run "echo 'TRANSFORMED: hello world'"))
+    (gate "not-empty" (run "test -n \"$(echo 'TRANSFORMED: hello world')\"")))
+
+  (step "done" (run "echo finished")))

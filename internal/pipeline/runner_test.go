@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -516,6 +517,209 @@ func TestEvaluateGate_LLMFail(t *testing.T) {
 	pass, _ := evaluateGate(Step{ID: "review", IsGate: true, LLM: &LLMStep{}}, outcome, nil)
 	if pass {
 		t.Fatal("expected LLM gate with OVERALL: FAIL to fail")
+	}
+}
+
+func TestExecutePhase_AllGatesPass(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker.txt")
+
+	p := Phase{
+		ID:      "test-phase",
+		Retries: 0,
+		Steps: []Step{
+			{ID: "create", Run: fmt.Sprintf("touch %s", marker)},
+		},
+		Gates: []Step{
+			{ID: "verify", Run: fmt.Sprintf("test -f %s", marker), IsGate: true},
+		},
+	}
+
+	rctx := &runCtx{
+		steps:  make(map[string]string),
+		params: map[string]string{},
+	}
+
+	report, err := executePhase(rctx, p)
+	if err != nil {
+		t.Fatalf("expected phase to pass, got error: %v", err)
+	}
+	if report != nil {
+		t.Fatalf("expected nil report on success, got: %v", report)
+	}
+}
+
+func TestExecutePhase_GateFailsNoRetry(t *testing.T) {
+	p := Phase{
+		ID:      "test-phase",
+		Retries: 0,
+		Steps: []Step{
+			{ID: "work", Run: "echo done"},
+		},
+		Gates: []Step{
+			{ID: "check", Run: "false", IsGate: true},
+		},
+	}
+
+	rctx := &runCtx{
+		steps:  make(map[string]string),
+		params: map[string]string{},
+	}
+
+	report, err := executePhase(rctx, p)
+	if err == nil {
+		t.Fatal("expected error when gate fails with no retries")
+	}
+	if report == nil {
+		t.Fatal("expected verification report")
+	}
+	if report.Phase != "test-phase" {
+		t.Fatalf("expected phase %q, got %q", "test-phase", report.Phase)
+	}
+	if report.Gates[0].Passed {
+		t.Fatal("expected gate 'check' to fail")
+	}
+}
+
+func TestExecutePhase_GateFailsThenPassesOnRetry(t *testing.T) {
+	dir := t.TempDir()
+	file1 := filepath.Join(dir, "file1.txt")
+	file2 := filepath.Join(dir, "file2.txt")
+	counter := filepath.Join(dir, "counter.txt")
+
+	stepCmd := fmt.Sprintf("if [ ! -f %s ]; then touch %s && touch %s; else touch %s; fi", counter, counter, file1, file2)
+	gateCmd := fmt.Sprintf("test -f %s && test -f %s", file1, file2)
+
+	p := Phase{
+		ID:      "retry-phase",
+		Retries: 1,
+		Steps: []Step{
+			{ID: "create", Run: stepCmd},
+		},
+		Gates: []Step{
+			{ID: "verify", Run: gateCmd, IsGate: true},
+		},
+	}
+
+	rctx := &runCtx{
+		steps:  make(map[string]string),
+		params: map[string]string{},
+	}
+
+	report, err := executePhase(rctx, p)
+	if err != nil {
+		t.Fatalf("expected phase to pass on retry, got error: %v", err)
+	}
+	if report != nil {
+		t.Fatalf("expected nil report on success, got: %v", report)
+	}
+}
+
+func TestRun_WithPhases(t *testing.T) {
+	dir := t.TempDir()
+	outFile := filepath.Join(dir, "output.txt")
+
+	w := &Workflow{
+		Name: "phase-test",
+		Items: []WorkflowItem{
+			{Phase: &Phase{
+				ID: "gather",
+				Steps: []Step{
+					{ID: "fetch", Run: fmt.Sprintf("echo hello > %s && echo hello", outFile)},
+				},
+			}},
+			{Phase: &Phase{
+				ID: "verify",
+				Steps: []Step{
+					{ID: "process", Run: "echo processed"},
+				},
+				Gates: []Step{
+					{ID: "check", Run: fmt.Sprintf("test -f %s", outFile), IsGate: true},
+				},
+			}},
+		},
+	}
+
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Steps["fetch"] == "" {
+		t.Fatal("expected fetch step output")
+	}
+	if result.Steps["process"] == "" {
+		t.Fatal("expected process step output")
+	}
+}
+
+func TestRun_WithPhases_GateFails(t *testing.T) {
+	w := &Workflow{
+		Name: "fail-test",
+		Items: []WorkflowItem{
+			{Phase: &Phase{
+				ID: "work",
+				Steps: []Step{
+					{ID: "do-thing", Run: "echo working"},
+				},
+				Gates: []Step{
+					{ID: "check", Run: "false", IsGate: true},
+				},
+			}},
+		},
+	}
+
+	_, err := Run(w, "", "", nil, nil)
+	if err == nil {
+		t.Fatal("expected error when gate fails")
+	}
+	if !strings.Contains(err.Error(), "exhausted") {
+		t.Fatalf("expected exhaustion error, got: %v", err)
+	}
+}
+
+func TestRun_EndToEnd_PhaseGateWorkflow(t *testing.T) {
+	w, err := LoadFile("testdata/phase-gate.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Name != "phase-gate-test" {
+		t.Fatalf("expected name %q, got %q", "phase-gate-test", w.Name)
+	}
+
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result.Steps["data"], "hello world") {
+		t.Fatalf("expected data to contain 'hello world', got %q", result.Steps["data"])
+	}
+	if !strings.Contains(result.Steps["transform"], "TRANSFORMED") {
+		t.Fatalf("expected transform output, got %q", result.Steps["transform"])
+	}
+	if strings.TrimSpace(result.Steps["done"]) != "finished" {
+		t.Fatalf("expected done='finished', got %q", result.Steps["done"])
+	}
+}
+
+func TestRun_BareStepsStillWork(t *testing.T) {
+	w := &Workflow{
+		Name: "bare-test",
+		Steps: []Step{
+			{ID: "a", Run: "echo alpha"},
+			{ID: "b", Run: "echo beta"},
+		},
+	}
+
+	result, err := Run(w, "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.TrimSpace(result.Steps["a"]) != "alpha" {
+		t.Fatalf("expected 'alpha', got %q", result.Steps["a"])
+	}
+	if strings.TrimSpace(result.Steps["b"]) != "beta" {
+		t.Fatalf("expected 'beta', got %q", result.Steps["b"])
 	}
 }
 
