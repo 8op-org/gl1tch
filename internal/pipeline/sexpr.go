@@ -87,11 +87,28 @@ func convertWorkflow(n *sexpr.Node, defs map[string]string) (*Workflow, error) {
 			if head == "" {
 				head = child.Children[0].StringVal()
 			}
+			if head == "phase" {
+				p, err := convertPhase(child, defs)
+				if err != nil {
+					return nil, err
+				}
+				w.Items = append(w.Items, WorkflowItem{Phase: &p})
+				w.Steps = append(w.Steps, p.Steps...)
+				w.Steps = append(w.Steps, p.Gates...)
+				i++
+				continue
+			}
+			if head == "gate" {
+				return nil, fmt.Errorf("line %d: (gate) must be inside a (phase)", child.Line)
+			}
 			steps, err := convertForm(child, head, defs)
 			if err != nil {
 				return nil, err
 			}
 			w.Steps = append(w.Steps, steps...)
+			for idx := range steps {
+				w.Items = append(w.Items, WorkflowItem{Step: &w.Steps[len(w.Steps)-len(steps)+idx]})
+			}
 			i++
 			continue
 		}
@@ -312,6 +329,83 @@ func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 		MapOver: source,
 		MapBody: &body,
 	}, nil
+}
+
+// convertPhase: (phase "name" [:retries N] (step ...) ... (gate ...) ...)
+func convertPhase(n *sexpr.Node, defs map[string]string) (Phase, error) {
+	children := n.Children[1:] // skip "phase"
+	if len(children) == 0 {
+		return Phase{}, fmt.Errorf("line %d: (phase) missing name", n.Line)
+	}
+
+	p := Phase{}
+	p.ID = children[0].StringVal()
+	if p.ID == "" {
+		return Phase{}, fmt.Errorf("line %d: phase name must be a string", children[0].Line)
+	}
+	children = children[1:]
+
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return Phase{}, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+			}
+			val := children[i]
+			switch key {
+			case "retries":
+				n, err := strconv.Atoi(resolveVal(val, defs))
+				if err != nil {
+					return Phase{}, fmt.Errorf("line %d: :retries must be an integer", val.Line)
+				}
+				p.Retries = n
+			default:
+				return Phase{}, fmt.Errorf("line %d: unknown phase keyword :%s", child.Line, key)
+			}
+			i++
+			continue
+		}
+		if child.IsList() && len(child.Children) > 0 {
+			head := child.Children[0].SymbolVal()
+			if head == "" {
+				head = child.Children[0].StringVal()
+			}
+			switch head {
+			case "gate":
+				g, err := convertGate(child, defs)
+				if err != nil {
+					return Phase{}, err
+				}
+				p.Gates = append(p.Gates, g)
+			case "step":
+				s, err := convertStep(child, defs)
+				if err != nil {
+					return Phase{}, err
+				}
+				p.Steps = append(p.Steps, s)
+			default:
+				return Phase{}, fmt.Errorf("line %d: unexpected form %q inside phase (expected step or gate)", child.Line, head)
+			}
+			i++
+			continue
+		}
+		return Phase{}, fmt.Errorf("line %d: unexpected form in phase", child.Line)
+	}
+	return p, nil
+}
+
+// convertGate: (gate "name" (run ...) | (llm ...))
+// Structurally identical to convertStep but sets IsGate = true.
+func convertGate(n *sexpr.Node, defs map[string]string) (Step, error) {
+	s, err := convertStep(n, defs)
+	if err != nil {
+		return Step{}, err
+	}
+	s.IsGate = true
+	return s, nil
 }
 
 func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
