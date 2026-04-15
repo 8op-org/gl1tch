@@ -1,0 +1,114 @@
+package gui
+
+import (
+	"embed"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"time"
+
+	"github.com/8op-org/gl1tch/internal/store"
+)
+
+//go:embed all:dist
+var distFS embed.FS
+
+// Server is the workflow GUI HTTP server.
+type Server struct {
+	addr      string
+	workspace string
+	dev       bool
+	store     *store.Store
+	mux       *http.ServeMux
+}
+
+// New creates a GUI server for the given workspace.
+func New(addr, workspace string, dev bool) (*Server, error) {
+	st, err := store.Open()
+	if err != nil {
+		return nil, fmt.Errorf("open store: %w", err)
+	}
+	s := &Server{
+		addr:      addr,
+		workspace: workspace,
+		dev:       dev,
+		store:     st,
+		mux:       http.NewServeMux(),
+	}
+	s.routes()
+	return s, nil
+}
+
+func (s *Server) routes() {
+	// API routes — handlers will be added in subsequent tasks
+	s.mux.HandleFunc("GET /api/workflows", s.handleListWorkflows)
+	s.mux.HandleFunc("GET /api/workflows/{name}", s.handleGetWorkflow)
+	s.mux.HandleFunc("PUT /api/workflows/{name}", s.handlePutWorkflow)
+	s.mux.HandleFunc("POST /api/workflows/{name}/run", s.handleRunWorkflow)
+	s.mux.HandleFunc("GET /api/runs", s.handleListRuns)
+	s.mux.HandleFunc("GET /api/runs/{id}", s.handleGetRun)
+	s.mux.HandleFunc("GET /api/results/{path...}", s.handleGetResult)
+	s.mux.HandleFunc("GET /api/kibana/workflow/{name}", s.handleKibanaWorkflow)
+	s.mux.HandleFunc("GET /api/kibana/run/{id}", s.handleKibanaRun)
+
+	if !s.dev {
+		dist, _ := fs.Sub(distFS, "dist")
+		fileServer := http.FileServer(http.FS(dist))
+		s.mux.Handle("GET /", fileServer)
+	}
+}
+
+// Stub handlers — will be implemented in Tasks 3-5
+func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handlePutWorkflow(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleGetResult(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleKibanaWorkflow(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+func (s *Server) handleKibanaRun(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", 501)
+}
+
+// ListenAndServe starts the HTTP server.
+func (s *Server) ListenAndServe() error {
+	srv := &http.Server{
+		Addr:         s.addr,
+		Handler:      s.mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 60 * time.Second,
+	}
+	return srv.ListenAndServe()
+}
+
+// Close releases server resources.
+func (s *Server) Close() error {
+	return s.store.Close()
+}
+
+// workflowsDir returns the path to the workspace workflows directory.
+func (s *Server) workflowsDir() string {
+	return s.workspace + "/workflows"
+}
+
+// resultsDir returns the path to the workspace results directory.
+func (s *Server) resultsDir() string {
+	return s.workspace + "/results"
+}

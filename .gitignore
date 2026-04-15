@@ -6,3 +6,5 @@ dist/
 site/generated/
 site/.vscode/
 results/
+gui/node_modules/
+gui/dist/
