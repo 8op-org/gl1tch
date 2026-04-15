@@ -1,8 +1,11 @@
 package store
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestOpenAndClose(t *testing.T) {
@@ -160,6 +163,49 @@ func TestRecordStepEnriched(t *testing.T) {
 
 func intPtr(n int) *int    { return &n }
 func boolPtr(b bool) *bool { return &b }
+
+func TestOpenAt_RecreatesStaleSchema(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	// Create a DB with a runs table missing the "input" column
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)")
+	if err != nil {
+		t.Fatalf("open raw db: %v", err)
+	}
+	_, err = db.Exec(`CREATE TABLE runs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		kind TEXT NOT NULL,
+		name TEXT NOT NULL,
+		exit_status INTEGER,
+		started_at INTEGER NOT NULL
+	)`)
+	if err != nil {
+		t.Fatalf("create stale table: %v", err)
+	}
+	_, err = db.Exec(`CREATE TABLE steps (id INTEGER PRIMARY KEY)`)
+	if err != nil {
+		t.Fatalf("create stale steps: %v", err)
+	}
+	_, err = db.Exec(`CREATE TABLE research_events (id INTEGER PRIMARY KEY)`)
+	if err != nil {
+		t.Fatalf("create stale research_events: %v", err)
+	}
+	db.Close()
+
+	// OpenAt should detect the missing "input" column, drop, and recreate
+	s, err := OpenAt(dbPath)
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	// Verify the input column exists by inserting a run with input
+	_, err = s.RecordRun(RunRecord{Kind: "test", Name: "drift-test", Input: "hello"})
+	if err != nil {
+		t.Fatalf("RecordRun after drift fix should succeed: %v", err)
+	}
+}
 
 func TestSimilarResearchEvents(t *testing.T) {
 	dir := t.TempDir()
