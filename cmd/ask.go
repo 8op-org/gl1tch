@@ -90,9 +90,8 @@ var askCmd = &cobra.Command{
 				fmt.Printf("Repo: %s (%s)\n\n", resolved, repoPath)
 
 				err := batch.Run(context.Background(), batch.RunOpts{
-					Issues:     issues,
-					Repo:       resolved,
-					RepoPath:   repoPath,
+					Items:      issues,
+					Params:     map[string]string{"repo": resolved},
 					ResultsDir: resolveResultsDir(),
 					Variants:   variants,
 					Iterations: iterations,

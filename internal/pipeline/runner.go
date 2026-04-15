@@ -61,6 +61,7 @@ type RunOpts struct {
 	ProviderResolver provider.ResolverFunc
 	Tiers            []provider.TierConfig
 	EvalThreshold    int
+	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -126,6 +127,13 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	var llmSteps int
 	var lastLLMOutput string
 
+	// Pre-populate steps from seed (data-gathering results shared across variants)
+	if len(opts) > 0 && opts[0].SeedSteps != nil {
+		for k, v := range opts[0].SeedSteps {
+			steps[k] = v
+		}
+	}
+
 	rctx := &runCtx{
 		input:            input,
 		params:           params,
@@ -140,6 +148,12 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	for i, step := range w.Steps {
 		if i > 0 {
 			rctx.prevStepID = w.Steps[i-1].ID
+		}
+
+		// Skip steps already provided by seed (shared data-gathering results)
+		if _, seeded := steps[step.ID]; seeded {
+			fmt.Printf("  > %s (seeded, skipped)\n", step.ID)
+			continue
 		}
 
 		outcome, err := executeStep(rctx, step)
@@ -274,6 +288,32 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		Output:   steps[last.ID],
 		Steps:    steps,
 	}, nil
+}
+
+// PreRunSharedSteps executes only the (run ...) shell steps from a workflow and
+// returns their outputs keyed by step ID. Used by batch to run data-gathering
+// steps once and seed all variant runs with the results.
+func PreRunSharedSteps(w *Workflow, params map[string]string) (map[string]string, error) {
+	steps := make(map[string]string)
+	rctx := &runCtx{
+		params: params,
+		steps:  steps,
+	}
+	for i, step := range w.Steps {
+		if step.Run == "" {
+			continue
+		}
+		if i > 0 {
+			rctx.prevStepID = w.Steps[i-1].ID
+		}
+		fmt.Printf("  > %s (shared pre-run)\n", step.ID)
+		outcome, err := executeStep(rctx, step)
+		if err != nil {
+			return nil, fmt.Errorf("shared step %s: %w", step.ID, err)
+		}
+		steps[step.ID] = outcome.output
+	}
+	return steps, nil
 }
 
 // CrossReviewScore holds a parsed per-variant score from a cross-review.

@@ -2,6 +2,7 @@ package batch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,10 +20,9 @@ var DefaultVariants = []string{"local", "claude", "copilot", "gemma", "grok"}
 
 // RunOpts configures a batch run.
 type RunOpts struct {
-	Issues     []string
-	Repo       string
-	RepoPath   string
-	ResultsDir string // explicit results dir; empty = CWD/.glitch/results
+	Items      []string          // items to iterate (issues, prompts, test IDs, etc.)
+	Params     map[string]string // base params passed to every workflow run
+	ResultsDir string            // explicit results dir; empty = CWD/.glitch/results
 	Variants   []string
 	Iterations int
 	Workflows  map[string]*pipeline.Workflow
@@ -39,7 +39,34 @@ type BatchConfig struct {
 	EvalThreshold    int
 }
 
-// Run executes the full batch: issues x variants x iterations + cross-reviews + manifests.
+// variantWorkflows groups loaded workflows into variant sets for a given item.
+// Matches workflows where the last hyphen-separated segment is a known variant
+// and the prefix contains the item identifier (or is a generic name like "issue-to-pr").
+func variantWorkflows(workflows map[string]*pipeline.Workflow, item string, variants []string) map[string]*pipeline.Workflow {
+	variantSet := make(map[string]bool, len(variants))
+	for _, v := range variants {
+		variantSet[v] = true
+	}
+
+	result := make(map[string]*pipeline.Workflow)
+	for name, wf := range workflows {
+		idx := strings.LastIndex(name, "-")
+		if idx < 0 {
+			continue
+		}
+		suffix := name[idx+1:]
+		if !variantSet[suffix] {
+			continue
+		}
+		prefix := name[:idx]
+		if strings.Contains(prefix, item) || prefix == "issue-to-pr" {
+			result[suffix] = wf
+		}
+	}
+	return result
+}
+
+// Run executes the full batch: items × variants × iterations + cross-reviews + manifests.
 func Run(ctx context.Context, opts RunOpts) error {
 	resultsBase := opts.ResultsDir
 	if resultsBase == "" {
@@ -52,52 +79,68 @@ func Run(ctx context.Context, opts RunOpts) error {
 		fmt.Printf("ITERATION %d of %d\n", iter, opts.Iterations)
 		fmt.Printf("=========================================\n")
 
-		for _, issue := range opts.Issues {
-			// Run all variants in parallel
-			var wg sync.WaitGroup
-			for _, variant := range opts.Variants {
-				wfName := fmt.Sprintf("issue-to-pr-%s", variant)
-				w, ok := opts.Workflows[wfName]
-				if !ok {
-					fmt.Fprintf(os.Stderr, "WARN: workflow %q not found, skipping\n", wfName)
-					continue
-				}
+		for _, item := range opts.Items {
+			// Build per-run params: base params + item + iteration
+			params := make(map[string]string, len(opts.Params)+2)
+			for k, v := range opts.Params {
+				params[k] = v
+			}
+			params["item"] = item
+			params["iteration"] = fmt.Sprintf("%d", iter)
+			// Backwards compat: also set "issue" so existing workflows work
+			if _, hasIssue := params["issue"]; !hasIssue {
+				params["issue"] = item
+			}
 
+			// Discover variant workflows for this item
+			vws := variantWorkflows(opts.Workflows, item, opts.Variants)
+			if len(vws) == 0 {
+				fmt.Fprintf(os.Stderr, "WARN: no variant workflows found for %q, skipping\n", item)
+				continue
+			}
+
+			// Pre-run shared (run ...) steps once using the first available variant.
+			// These are data-gathering shell steps identical across all variants.
+			var seedSteps map[string]string
+			for _, wf := range vws {
+				fmt.Printf("\n>>> %s (pre-run shared steps, iter %d)\n", item, iter)
+				var err error
+				seedSteps, err = pipeline.PreRunSharedSteps(wf, params)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "WARN: %s shared steps failed: %v\n", item, err)
+				}
+				break
+			}
+
+			// Run all variants in parallel, seeded with shared step results
+			var wg sync.WaitGroup
+			for variant, wf := range vws {
 				wg.Add(1)
 				go func(v string, wf *pipeline.Workflow) {
 					defer wg.Done()
-					fmt.Printf("\n>>> #%s (%s, iter %d)\n", issue, v, iter)
-					params := map[string]string{
-						"issue":     issue,
-						"repo":      opts.Repo,
-						"iteration": fmt.Sprintf("%d", iter),
-					}
+					fmt.Printf("\n>>> %s (%s, iter %d)\n", item, v, iter)
 					result, err := pipeline.Run(wf, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 						Telemetry:        opts.Config.Telemetry,
 						ProviderResolver: opts.Config.ProviderResolver,
 						Tiers:            opts.Config.Tiers,
 						EvalThreshold:    opts.Config.EvalThreshold,
-						Issue:            issue,
+						Issue:            item,
 						ComparisonGroup:  v,
+						SeedSteps:        seedSteps,
 					})
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "WARN: #%s (%s, iter %d) failed: %v\n", issue, v, iter, err)
+						fmt.Fprintf(os.Stderr, "WARN: %s (%s, iter %d) failed: %v\n", item, v, iter, err)
 					} else {
-						saveResults(resultsBase, issue, v, iter, opts.Repo, result)
+						saveResults(resultsBase, item, v, iter, result)
 					}
-					fmt.Printf(">>> #%s (%s, iter %d) complete\n", issue, v, iter)
-				}(variant, w)
+					fmt.Printf(">>> %s (%s, iter %d) complete\n", item, v, iter)
+				}(variant, wf)
 			}
 			wg.Wait()
 
 			// Cross-review
 			if crW, ok := opts.Workflows["cross-review"]; ok {
-				fmt.Printf("\n>>> #%s (cross-review, iter %d)\n", issue, iter)
-				params := map[string]string{
-					"issue":     issue,
-					"repo":      opts.Repo,
-					"iteration": fmt.Sprintf("%d", iter),
-				}
+				fmt.Printf("\n>>> %s (cross-review, iter %d)\n", item, iter)
 				result, err := pipeline.Run(crW, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 					Telemetry:        opts.Config.Telemetry,
 					ProviderResolver: opts.Config.ProviderResolver,
@@ -105,9 +148,9 @@ func Run(ctx context.Context, opts RunOpts) error {
 					EvalThreshold:    opts.Config.EvalThreshold,
 				})
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARN: #%s cross-review iter %d failed: %v\n", issue, iter, err)
+					fmt.Fprintf(os.Stderr, "WARN: %s cross-review iter %d failed: %v\n", item, iter, err)
 				} else if cr, ok := result.Steps["cross-review"]; ok {
-					crDir := resultPath(resultsBase, opts.Repo, issue, "", iter)
+					crDir := resultPath(resultsBase, item, "", iter)
 					os.MkdirAll(crDir, 0o755)
 					os.WriteFile(filepath.Join(crDir, "cross-review.md"), []byte(cr), 0o644)
 				}
@@ -120,40 +163,27 @@ func Run(ctx context.Context, opts RunOpts) error {
 	fmt.Printf("GENERATING MANIFESTS\n")
 	fmt.Printf("=========================================\n")
 
-	for _, issue := range opts.Issues {
-		parts := strings.SplitN(opts.Repo, "/", 2)
-		org := parts[0]
-		repoName := "general"
-		if len(parts) > 1 {
-			repoName = parts[1]
-		}
-		issueDir := filepath.Join(resultsBase, org, repoName, "issue-"+issue)
-		m, err := GenerateManifest(issueDir, issue, opts.Variants, opts.Iterations)
+	for _, item := range opts.Items {
+		itemDir := filepath.Join(resultsBase, item)
+		m, err := GenerateManifest(itemDir, item, opts.Variants, opts.Iterations)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: manifest for #%s: %v\n", issue, err)
+			fmt.Fprintf(os.Stderr, "WARN: manifest for %s: %v\n", item, err)
 			continue
 		}
-		if err := WriteManifest(issueDir, m, opts.Variants, opts.Iterations); err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: write manifest #%s: %v\n", issue, err)
+		if err := WriteManifest(itemDir, m, opts.Variants, opts.Iterations); err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: write manifest %s: %v\n", item, err)
 			continue
 		}
-		fmt.Printf("  #%s: %s/manifest.md (winner: %s iter %d)\n", issue, issueDir, m.BestVariant, m.BestIteration)
+		fmt.Printf("  %s: %s/manifest.md (winner: %s iter %d)\n", item, itemDir, m.BestVariant, m.BestIteration)
 	}
 
 	return nil
 }
 
-// resultPath computes the result directory for a batch issue run.
-// Pattern: baseDir/<org>/<repo>/issue-<number>/iteration-<n>[/<variant>]
-func resultPath(baseDir, repo, issue, variant string, iter int) string {
-	parts := strings.SplitN(repo, "/", 2)
-	org := parts[0]
-	repoName := "general"
-	if len(parts) > 1 {
-		repoName = parts[1]
-	}
-
-	dir := filepath.Join(baseDir, org, repoName, "issue-"+issue, fmt.Sprintf("iteration-%d", iter))
+// resultPath computes the result directory for a batch run.
+// Pattern: baseDir/<item>/iteration-<n>[/<variant>]
+func resultPath(baseDir, item, variant string, iter int) string {
+	dir := filepath.Join(baseDir, item, fmt.Sprintf("iteration-%d", iter))
 	if variant != "" {
 		dir = filepath.Join(dir, variant)
 	}
@@ -161,50 +191,30 @@ func resultPath(baseDir, repo, issue, variant string, iter int) string {
 }
 
 // saveResults writes workflow step outputs to the results directory.
-func saveResults(resultsBase, issue, variant string, iter int, repo string, result *pipeline.Result) {
-	dir := resultPath(resultsBase, repo, issue, variant, iter)
+func saveResults(resultsBase, item, variant string, iter int, result *pipeline.Result) {
+	dir := resultPath(resultsBase, item, variant, iter)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: mkdir %s: %v\n", dir, err)
 		return
 	}
 
-	// Save known step outputs
-	stepFiles := map[string]string{
-		"classify": "classification.json",
-		"research": "plan.md",
-		"review":   "review.md",
-	}
-	for stepID, filename := range stepFiles {
-		if content, ok := result.Steps[stepID]; ok {
-			os.WriteFile(filepath.Join(dir, filename), []byte(content), 0o644)
+	// Save all step outputs by step ID
+	for stepID, content := range result.Steps {
+		if strings.TrimSpace(content) == "" {
+			continue
 		}
-	}
-
-	// Extract PR sections from build-pr step
-	if prContent, ok := result.Steps["build-pr"]; ok {
-		extractSection(prContent, "---PR_TITLE---", "---END_PR_TITLE---", filepath.Join(dir, "pr-title.txt"))
-		extractSection(prContent, "---PR_BODY---", "---END_PR_BODY---", filepath.Join(dir, "pr-body.md"))
-		extractSection(prContent, "---NEXT_STEPS---", "---END_NEXT_STEPS---", filepath.Join(dir, "next-steps.md"))
-		// Fallback: save full PR output if title extraction got nothing
-		if data, err := os.ReadFile(filepath.Join(dir, "pr-title.txt")); err != nil || len(strings.TrimSpace(string(data))) == 0 {
-			os.WriteFile(filepath.Join(dir, "pr-artifacts.md"), []byte(prContent), 0o644)
-		}
+		os.WriteFile(filepath.Join(dir, stepID+".md"), []byte(content), 0o644)
 	}
 
 	// Write run metadata
-	runJSON := fmt.Sprintf(`{"repo":"%s","issue":"%s","iteration":%d,"variant":"%s","timestamp":"%s"}`,
-		repo, issue, iter, variant, time.Now().UTC().Format(time.RFC3339))
-	os.WriteFile(filepath.Join(dir, "run.json"), []byte(runJSON), 0o644)
+	meta := map[string]interface{}{
+		"item":      item,
+		"variant":   variant,
+		"iteration": iter,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+	metaJSON, _ := json.Marshal(meta)
+	os.WriteFile(filepath.Join(dir, "run.json"), metaJSON, 0o644)
 
 	fmt.Printf("  Results saved: %s/\n", dir)
-}
-
-// extractSection pulls text between start/end delimiters and writes to path.
-func extractSection(content, startDelim, endDelim, path string) {
-	start := strings.Index(content, startDelim)
-	end := strings.Index(content, endDelim)
-	if start >= 0 && end > start {
-		section := strings.TrimSpace(content[start+len(startDelim) : end])
-		os.WriteFile(path, []byte(section), 0o644)
-	}
 }

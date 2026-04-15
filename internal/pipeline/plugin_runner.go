@@ -6,10 +6,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/8op-org/gl1tch/internal/plugin"
 	"github.com/8op-org/gl1tch/internal/provider"
 )
+
+// pluginCache holds parsed plugin artifacts so repeated calls skip file I/O and parsing.
+var pluginCache struct {
+	manifests sync.Map // pluginDir → *plugin.Manifest
+	subs      sync.Map // subcommandPath → *cachedSubcommand
+}
+
+type cachedSubcommand struct {
+	argDefs []plugin.ArgDef
+	wf      *Workflow
+}
 
 // RunPluginSubcommand loads and executes a plugin subcommand from a plugin directory root.
 // pluginRoot is the parent directory containing plugin directories (e.g., ~/.config/glitch/plugins).
@@ -19,33 +31,24 @@ func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[str
 		return "", fmt.Errorf("plugin %q not found in %s", pluginName, pluginRoot)
 	}
 
-	// Load manifest for shared defs and metadata
-	manifest, err := plugin.LoadManifest(pluginDir)
+	// Load manifest (cached)
+	manifest, err := loadManifestCached(pluginDir, pluginName)
 	if err != nil {
-		return "", fmt.Errorf("plugin %q manifest: %w", pluginName, err)
-	}
-
-	// Load subcommand file
-	subPath := filepath.Join(pluginDir, subcommand+".glitch")
-	data, err := os.ReadFile(subPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("plugin %q has no subcommand %q", pluginName, subcommand)
-		}
 		return "", err
 	}
 
-	// Parse args from subcommand
-	argDefs, err := plugin.ParseArgs(data)
+	// Load and parse subcommand (cached)
+	subPath := filepath.Join(pluginDir, subcommand+".glitch")
+	cached, err := loadSubcommandCached(subPath, pluginName, subcommand)
 	if err != nil {
-		return "", fmt.Errorf("plugin %q %q args: %w", pluginName, subcommand, err)
+		return "", err
 	}
 
 	// Build params: manifest defs + resolved args
 	if args == nil {
 		args = make(map[string]string)
 	}
-	params, err := plugin.BuildParams(argDefs, args)
+	params, err := plugin.BuildParams(cached.argDefs, args)
 	if err != nil {
 		return "", fmt.Errorf("plugin %q %q: %w", pluginName, subcommand, err)
 	}
@@ -57,12 +60,6 @@ func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[str
 		}
 	}
 
-	// Parse and run the workflow
-	w, err := parseSexprWorkflow(data)
-	if err != nil {
-		return "", fmt.Errorf("plugin %q %q parse: %w", pluginName, subcommand, err)
-	}
-
 	var provReg *provider.ProviderRegistry
 	if len(reg) > 0 && reg[0] != nil {
 		provReg = reg[0]
@@ -70,9 +67,49 @@ func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[str
 		provReg, _ = provider.LoadProviders("")
 	}
 
-	result, err := Run(w, "", "", params, provReg)
+	result, err := Run(cached.wf, "", "", params, provReg)
 	if err != nil {
 		return "", fmt.Errorf("plugin %q %q run: %w", pluginName, subcommand, err)
 	}
 	return strings.TrimSpace(result.Output), nil
+}
+
+func loadManifestCached(pluginDir, pluginName string) (*plugin.Manifest, error) {
+	if v, ok := pluginCache.manifests.Load(pluginDir); ok {
+		return v.(*plugin.Manifest), nil
+	}
+	m, err := plugin.LoadManifest(pluginDir)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %q manifest: %w", pluginName, err)
+	}
+	pluginCache.manifests.Store(pluginDir, m)
+	return m, nil
+}
+
+func loadSubcommandCached(subPath, pluginName, subcommand string) (*cachedSubcommand, error) {
+	if v, ok := pluginCache.subs.Load(subPath); ok {
+		return v.(*cachedSubcommand), nil
+	}
+
+	data, err := os.ReadFile(subPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("plugin %q has no subcommand %q", pluginName, subcommand)
+		}
+		return nil, err
+	}
+
+	argDefs, err := plugin.ParseArgs(data)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %q %q args: %w", pluginName, subcommand, err)
+	}
+
+	wf, err := parseSexprWorkflow(data)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %q %q parse: %w", pluginName, subcommand, err)
+	}
+
+	c := &cachedSubcommand{argDefs: argDefs, wf: wf}
+	pluginCache.subs.Store(subPath, c)
+	return c, nil
 }
