@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
 func TestLoadConfig_WithProviders(t *testing.T) {
@@ -83,6 +85,64 @@ func TestProviderConfig_ResolveAPIKey_NeitherSet(t *testing.T) {
 	_, err := pc.ResolveAPIKey()
 	if err == nil {
 		t.Fatal("expected error when no API key configured")
+	}
+}
+
+func TestApplyWorkspace(t *testing.T) {
+	cfg := &Config{
+		DefaultModel:    "qwen3:8b",
+		DefaultProvider: "ollama",
+	}
+
+	ws := &workspace.Workspace{
+		Defaults: workspace.Defaults{
+			Model:    "llama3.2:3b",
+			Provider: "lm-studio",
+		},
+	}
+
+	ApplyWorkspace(ws, cfg)
+
+	if cfg.DefaultModel != "llama3.2:3b" {
+		t.Fatalf("DefaultModel: got %q, want llama3.2:3b", cfg.DefaultModel)
+	}
+	if cfg.DefaultProvider != "lm-studio" {
+		t.Fatalf("DefaultProvider: got %q, want lm-studio", cfg.DefaultProvider)
+	}
+}
+
+func TestApplyWorkspace_NilWorkspace(t *testing.T) {
+	cfg := &Config{
+		DefaultModel:    "qwen3:8b",
+		DefaultProvider: "ollama",
+	}
+
+	ApplyWorkspace(nil, cfg)
+
+	if cfg.DefaultModel != "qwen3:8b" {
+		t.Fatalf("DefaultModel changed to %q", cfg.DefaultModel)
+	}
+}
+
+func TestApplyWorkspace_PartialDefaults(t *testing.T) {
+	cfg := &Config{
+		DefaultModel:    "qwen3:8b",
+		DefaultProvider: "ollama",
+	}
+
+	ws := &workspace.Workspace{
+		Defaults: workspace.Defaults{
+			Model: "llama3.2:3b",
+		},
+	}
+
+	ApplyWorkspace(ws, cfg)
+
+	if cfg.DefaultModel != "llama3.2:3b" {
+		t.Fatalf("DefaultModel: got %q", cfg.DefaultModel)
+	}
+	if cfg.DefaultProvider != "ollama" {
+		t.Fatalf("DefaultProvider should stay ollama, got %q", cfg.DefaultProvider)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/8op-org/gl1tch/internal/provider"
+	"github.com/8op-org/gl1tch/internal/workspace"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -138,6 +139,20 @@ func (cfg *Config) BuildProviderResolver() provider.ResolverFunc {
 			DefaultModel: pc.DefaultModel,
 		}
 		return p.Chat, true
+	}
+}
+
+// ApplyWorkspace overlays workspace defaults onto the config.
+// Call after loadConfig, before CLI flag overrides.
+func ApplyWorkspace(ws *workspace.Workspace, cfg *Config) {
+	if ws == nil {
+		return
+	}
+	if ws.Defaults.Model != "" {
+		cfg.DefaultModel = ws.Defaults.Model
+	}
+	if ws.Defaults.Provider != "" {
+		cfg.DefaultProvider = ws.Defaults.Provider
 	}
 }
 
