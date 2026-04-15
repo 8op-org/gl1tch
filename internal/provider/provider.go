@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -237,7 +238,12 @@ func RunShellWithStdin(command, stdin string) (string, error) {
 
 // RunShell executes a shell command and returns its stdout.
 func RunShell(command string) (string, error) {
-	cmd := exec.Command("sh", "-c", command)
+	return RunShellContext(context.Background(), command)
+}
+
+// RunShellContext executes a shell command with context support for cancellation.
+func RunShellContext(ctx context.Context, command string) (string, error) {
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("shell: %w\n%s", err, out)
