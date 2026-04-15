@@ -1203,3 +1203,139 @@ func TestSexprWorkflow_NoPhases_ItemsPopulated(t *testing.T) {
 		t.Fatal("expected item 1 to be step 'b'")
 	}
 }
+
+func TestSexprWorkflow_Search(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "q" (search :index "my-index" :query {"term" {"type" "doc"}} :size 50 :fields ("title" "content"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if s.Search.IndexName != "my-index" {
+		t.Fatalf("index = %q, want my-index", s.Search.IndexName)
+	}
+	if s.Search.Size != 50 {
+		t.Fatalf("size = %d, want 50", s.Search.Size)
+	}
+	if len(s.Search.Fields) != 2 || s.Search.Fields[0] != "title" || s.Search.Fields[1] != "content" {
+		t.Fatalf("fields = %v, want [title content]", s.Search.Fields)
+	}
+}
+
+func TestSexprWorkflow_SearchDefaultSize(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "q" (search :index "my-index" :query {"term" {"type" "doc"}})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].Search.Size != 10 {
+		t.Fatalf("default size = %d, want 10", w.Steps[0].Search.Size)
+	}
+}
+
+func TestSexprWorkflow_SearchWithES(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "q" (search :index "my-index" :query {"match_all" {}} :es "http://remote:9200")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].Search.ESURL != "http://remote:9200" {
+		t.Fatalf("es url = %q, want http://remote:9200", w.Steps[0].Search.ESURL)
+	}
+}
+
+func TestSexprWorkflow_Index(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "idx" (index :index "my-index" :doc "{\"title\":\"hello\"}" :id "doc-1")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Index == nil {
+		t.Fatal("expected index step")
+	}
+	if s.Index.IndexName != "my-index" {
+		t.Fatalf("index = %q", s.Index.IndexName)
+	}
+	if s.Index.DocID != "doc-1" {
+		t.Fatalf("doc id = %q", s.Index.DocID)
+	}
+}
+
+func TestSexprWorkflow_IndexWithEmbed(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "idx" (index :index "my-index" :doc "{}" :embed :field "content" :provider "ollama" :model "nomic-embed-text")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Index.EmbedField != "content" {
+		t.Fatalf("embed field = %q, want content", s.Index.EmbedField)
+	}
+	if s.Index.EmbedProvider != "ollama" {
+		t.Fatalf("embed provider = %q, want ollama", s.Index.EmbedProvider)
+	}
+	if s.Index.EmbedModel != "nomic-embed-text" {
+		t.Fatalf("embed model = %q, want nomic-embed-text", s.Index.EmbedModel)
+	}
+}
+
+func TestSexprWorkflow_Delete(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "del" (delete :index "my-index" :query {"term" {"type" "old"}})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Delete == nil {
+		t.Fatal("expected delete step")
+	}
+	if s.Delete.IndexName != "my-index" {
+		t.Fatalf("index = %q", s.Delete.IndexName)
+	}
+}
+
+func TestSexprWorkflow_Embed(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "vec" (embed :input "hello world" :provider "ollama" :model "nomic-embed-text")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Embed == nil {
+		t.Fatal("expected embed step")
+	}
+	if s.Embed.Input != "hello world" {
+		t.Fatalf("input = %q", s.Embed.Input)
+	}
+	if s.Embed.Provider != "ollama" {
+		t.Fatalf("provider = %q", s.Embed.Provider)
+	}
+	if s.Embed.Model != "nomic-embed-text" {
+		t.Fatalf("model = %q", s.Embed.Model)
+	}
+}

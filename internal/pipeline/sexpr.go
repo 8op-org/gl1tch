@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -607,6 +608,30 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.GlobPat = g
+		case "search":
+			sr, err := convertSearch(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Search = sr
+		case "index":
+			idx, err := convertIndex(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Index = idx
+		case "delete":
+			del, err := convertDelete(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Delete = del
+		case "embed":
+			emb, err := convertEmbed(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Embed = emb
 		case "plugin":
 			pc, err := convertPluginCall(child, defs)
 			if err != nil {
@@ -783,6 +808,243 @@ func convertPluginCall(n *sexpr.Node, defs map[string]string) (*PluginCallStep, 
 		}
 	}
 	return pc, nil
+}
+
+// nodeToJSON converts a sexpr node to JSON bytes.
+// Map nodes (IsMap=true) become JSON objects, list nodes become arrays, atoms become strings.
+func nodeToJSON(n *sexpr.Node) ([]byte, error) {
+	if n.IsAtom() {
+		return json.Marshal(n.StringVal())
+	}
+	if n.IsMap {
+		// Map: children are alternating key, value
+		result := make(map[string]json.RawMessage)
+		for i := 0; i+1 < len(n.Children); i += 2 {
+			key := n.Children[i].StringVal()
+			val, err := nodeToJSON(n.Children[i+1])
+			if err != nil {
+				return nil, err
+			}
+			result[key] = val
+		}
+		return json.Marshal(result)
+	}
+	// List: children become array
+	var items []json.RawMessage
+	for _, child := range n.Children {
+		val, err := nodeToJSON(child)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, val)
+	}
+	return json.Marshal(items)
+}
+
+func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
+	children := n.Children[1:] // skip "search"
+	sr := &SearchStep{Size: 10}
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+			}
+			val := children[i]
+			switch key {
+			case "index":
+				sr.IndexName = resolveVal(val, defs)
+			case "query":
+				b, err := nodeToJSON(val)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: query to JSON: %w", val.Line, err)
+				}
+				sr.Query = string(b)
+			case "size":
+				n, err := strconv.Atoi(resolveVal(val, defs))
+				if err != nil {
+					return nil, fmt.Errorf("line %d: :size must be an integer", val.Line)
+				}
+				sr.Size = n
+			case "fields":
+				if val.IsList() {
+					for _, f := range val.Children {
+						sr.Fields = append(sr.Fields, resolveVal(f, defs))
+					}
+				} else {
+					sr.Fields = append(sr.Fields, resolveVal(val, defs))
+				}
+			case "es":
+				sr.ESURL = resolveVal(val, defs)
+			default:
+				return nil, fmt.Errorf("line %d: unknown search keyword :%s", child.Line, key)
+			}
+			i++
+			continue
+		}
+		return nil, fmt.Errorf("line %d: unexpected form in search", child.Line)
+	}
+	if sr.IndexName == "" {
+		return nil, fmt.Errorf("line %d: search missing :index", n.Line)
+	}
+	if sr.Query == "" {
+		return nil, fmt.Errorf("line %d: search missing :query", n.Line)
+	}
+	return sr, nil
+}
+
+func convertIndex(n *sexpr.Node, defs map[string]string) (*IndexStep, error) {
+	children := n.Children[1:] // skip "index"
+	idx := &IndexStep{}
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			switch key {
+			case "embed":
+				// :embed is followed by sub-keywords :field, :provider, :model
+				i++
+				for i < len(children) {
+					sub := children[i]
+					if !sub.IsAtom() || sub.Atom.Type != sexpr.TokenKeyword {
+						break
+					}
+					subKey := sub.KeywordVal()
+					if subKey != "field" && subKey != "provider" && subKey != "model" {
+						break
+					}
+					i++
+					if i >= len(children) {
+						return nil, fmt.Errorf("line %d: embed :%s missing value", sub.Line, subKey)
+					}
+					val := children[i]
+					switch subKey {
+					case "field":
+						idx.EmbedField = resolveVal(val, defs)
+					case "provider":
+						idx.EmbedProvider = resolveVal(val, defs)
+					case "model":
+						idx.EmbedModel = resolveVal(val, defs)
+					}
+					i++
+				}
+				continue
+			default:
+				i++
+				if i >= len(children) {
+					return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+				}
+				val := children[i]
+				switch key {
+				case "index":
+					idx.IndexName = resolveVal(val, defs)
+				case "doc":
+					idx.Doc = resolveVal(val, defs)
+				case "id":
+					idx.DocID = resolveVal(val, defs)
+				case "es":
+					idx.ESURL = resolveVal(val, defs)
+				default:
+					return nil, fmt.Errorf("line %d: unknown index keyword :%s", child.Line, key)
+				}
+				i++
+				continue
+			}
+		}
+		return nil, fmt.Errorf("line %d: unexpected form in index", child.Line)
+	}
+	if idx.IndexName == "" {
+		return nil, fmt.Errorf("line %d: index missing :index", n.Line)
+	}
+	if idx.Doc == "" {
+		return nil, fmt.Errorf("line %d: index missing :doc", n.Line)
+	}
+	return idx, nil
+}
+
+func convertDelete(n *sexpr.Node, defs map[string]string) (*DeleteStep, error) {
+	children := n.Children[1:] // skip "delete"
+	del := &DeleteStep{}
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+			}
+			val := children[i]
+			switch key {
+			case "index":
+				del.IndexName = resolveVal(val, defs)
+			case "query":
+				b, err := nodeToJSON(val)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: query to JSON: %w", val.Line, err)
+				}
+				del.Query = string(b)
+			case "es":
+				del.ESURL = resolveVal(val, defs)
+			default:
+				return nil, fmt.Errorf("line %d: unknown delete keyword :%s", child.Line, key)
+			}
+			i++
+			continue
+		}
+		return nil, fmt.Errorf("line %d: unexpected form in delete", child.Line)
+	}
+	if del.IndexName == "" {
+		return nil, fmt.Errorf("line %d: delete missing :index", n.Line)
+	}
+	if del.Query == "" {
+		return nil, fmt.Errorf("line %d: delete missing :query", n.Line)
+	}
+	return del, nil
+}
+
+func convertEmbed(n *sexpr.Node, defs map[string]string) (*EmbedStep, error) {
+	children := n.Children[1:] // skip "embed"
+	emb := &EmbedStep{}
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+			}
+			val := children[i]
+			switch key {
+			case "input":
+				emb.Input = resolveVal(val, defs)
+			case "provider":
+				emb.Provider = resolveVal(val, defs)
+			case "model":
+				emb.Model = resolveVal(val, defs)
+			default:
+				return nil, fmt.Errorf("line %d: unknown embed keyword :%s", child.Line, key)
+			}
+			i++
+			continue
+		}
+		return nil, fmt.Errorf("line %d: unexpected form in embed", child.Line)
+	}
+	if emb.Input == "" {
+		return nil, fmt.Errorf("line %d: embed missing :input", n.Line)
+	}
+	if emb.Provider == "" {
+		return nil, fmt.Errorf("line %d: embed missing :provider", n.Line)
+	}
+	if emb.Model == "" {
+		return nil, fmt.Errorf("line %d: embed missing :model", n.Line)
+	}
+	return emb, nil
 }
 
 func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
