@@ -504,3 +504,208 @@ func TestLoadBytes_Sexpr_LLMNoTier(t *testing.T) {
 		t.Errorf("tier should be nil when not set, got %v", *llm.Tier)
 	}
 }
+
+func TestSexprWorkflow_JsonPick(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "fetch"
+    (run "curl http://example.com/api"))
+  (step "pick"
+    (json-pick ".a" :from "fetch")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.JsonPick == nil {
+		t.Fatal("expected JsonPick step")
+	}
+	if s.JsonPick.Expr != ".a" {
+		t.Fatalf("expected expr %q, got %q", ".a", s.JsonPick.Expr)
+	}
+	if s.JsonPick.From != "fetch" {
+		t.Fatalf("expected from %q, got %q", "fetch", s.JsonPick.From)
+	}
+}
+
+func TestSexprWorkflow_Lines(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "list"
+    (run "echo -e 'a\nb\nc'"))
+  (step "split"
+    (lines "list")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.Lines != "list" {
+		t.Fatalf("expected lines %q, got %q", "list", s.Lines)
+	}
+}
+
+func TestSexprWorkflow_Merge(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "a"
+    (run "echo a"))
+  (step "b"
+    (run "echo b"))
+  (step "combined"
+    (merge "a" "b")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[2]
+	if len(s.Merge) != 2 {
+		t.Fatalf("expected 2 merge IDs, got %d", len(s.Merge))
+	}
+	if s.Merge[0] != "a" || s.Merge[1] != "b" {
+		t.Fatalf("expected merge [a b], got %v", s.Merge)
+	}
+}
+
+func TestSexprWorkflow_HttpGet(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "fetch"
+    (http-get "https://api.example.com" :headers {"Auth" "Bearer token"})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.HttpCall == nil {
+		t.Fatal("expected HttpCall step")
+	}
+	if s.HttpCall.Method != "GET" {
+		t.Fatalf("expected method %q, got %q", "GET", s.HttpCall.Method)
+	}
+	if s.HttpCall.URL != "https://api.example.com" {
+		t.Fatalf("expected URL, got %q", s.HttpCall.URL)
+	}
+	if s.HttpCall.Headers["Auth"] != "Bearer token" {
+		t.Fatalf("expected header Auth=%q, got %q", "Bearer token", s.HttpCall.Headers["Auth"])
+	}
+}
+
+func TestSexprWorkflow_HttpPost(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "post"
+    (http-post "https://api.example.com" :body "{}" :headers {"Content-Type" "application/json"})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.HttpCall == nil {
+		t.Fatal("expected HttpCall step")
+	}
+	if s.HttpCall.Method != "POST" {
+		t.Fatalf("expected method %q, got %q", "POST", s.HttpCall.Method)
+	}
+	if s.HttpCall.Body != "{}" {
+		t.Fatalf("expected body %q, got %q", "{}", s.HttpCall.Body)
+	}
+	if s.HttpCall.Headers["Content-Type"] != "application/json" {
+		t.Fatalf("expected header Content-Type=%q, got %q", "application/json", s.HttpCall.Headers["Content-Type"])
+	}
+}
+
+func TestSexprWorkflow_ReadFile(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "cfg"
+    (read-file "config.json")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.ReadFile != "config.json" {
+		t.Fatalf("expected read-file %q, got %q", "config.json", s.ReadFile)
+	}
+}
+
+func TestSexprWorkflow_WriteFile(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "gen"
+    (llm :prompt "generate"))
+  (step "save"
+    (write-file "output.json" :from "gen")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[1]
+	if s.WriteFile == nil {
+		t.Fatal("expected WriteFile step")
+	}
+	if s.WriteFile.Path != "output.json" {
+		t.Fatalf("expected path %q, got %q", "output.json", s.WriteFile.Path)
+	}
+	if s.WriteFile.From != "gen" {
+		t.Fatalf("expected from %q, got %q", "gen", s.WriteFile.From)
+	}
+}
+
+func TestSexprWorkflow_Glob(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "find"
+    (glob "*.yaml" :dir "configs/")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.GlobPat == nil {
+		t.Fatal("expected GlobPat step")
+	}
+	if s.GlobPat.Pattern != "*.yaml" {
+		t.Fatalf("expected pattern %q, got %q", "*.yaml", s.GlobPat.Pattern)
+	}
+	if s.GlobPat.Dir != "configs/" {
+		t.Fatalf("expected dir %q, got %q", "configs/", s.GlobPat.Dir)
+	}
+}
+
+func TestSexprWorkflow_PluginCall(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "prs"
+    (plugin "github" "prs" :since "yesterday" :authored)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.PluginCall == nil {
+		t.Fatal("expected PluginCall step")
+	}
+	if s.PluginCall.Plugin != "github" {
+		t.Fatalf("expected plugin %q, got %q", "github", s.PluginCall.Plugin)
+	}
+	if s.PluginCall.Subcommand != "prs" {
+		t.Fatalf("expected subcommand %q, got %q", "prs", s.PluginCall.Subcommand)
+	}
+	if s.PluginCall.Args["since"] != "yesterday" {
+		t.Fatalf("expected since=%q, got %q", "yesterday", s.PluginCall.Args["since"])
+	}
+	if s.PluginCall.Args["authored"] != "true" {
+		t.Fatalf("expected authored=%q, got %q", "true", s.PluginCall.Args["authored"])
+	}
+}

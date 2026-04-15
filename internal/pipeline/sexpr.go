@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/8op-org/gl1tch/internal/sexpr"
 )
@@ -358,11 +359,208 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 					}
 				}
 			}
+		case "json-pick":
+			jp, err := convertJsonPick(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.JsonPick = jp
+		case "lines":
+			ref, err := convertLines(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Lines = ref
+		case "merge":
+			ids, err := convertMerge(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.Merge = ids
+		case "http-get":
+			hc, err := convertHttpCall(child, "GET", defs)
+			if err != nil {
+				return s, err
+			}
+			s.HttpCall = hc
+		case "http-post":
+			hc, err := convertHttpCall(child, "POST", defs)
+			if err != nil {
+				return s, err
+			}
+			s.HttpCall = hc
+		case "read-file":
+			path, err := convertReadFile(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.ReadFile = path
+		case "write-file":
+			wf, err := convertWriteFile(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.WriteFile = wf
+		case "glob":
+			g, err := convertGlobStep(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.GlobPat = g
+		case "plugin":
+			pc, err := convertPluginCall(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.PluginCall = pc
 		default:
 			return s, fmt.Errorf("line %d: unknown step type %q", child.Line, head)
 		}
 	}
 	return s, nil
+}
+
+func convertJsonPick(n *sexpr.Node, defs map[string]string) (*JsonPickStep, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return nil, fmt.Errorf("line %d: (json-pick) missing expression", n.Line)
+	}
+	jp := &JsonPickStep{Expr: resolveVal(children[0], defs)}
+	for i := 1; i < len(children); i++ {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword && child.KeywordVal() == "from" {
+			i++
+			if i < len(children) {
+				jp.From = resolveVal(children[i], defs)
+			}
+		}
+	}
+	return jp, nil
+}
+
+func convertLines(n *sexpr.Node, defs map[string]string) (string, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return "", fmt.Errorf("line %d: (lines) missing step ID", n.Line)
+	}
+	return resolveVal(children[0], defs), nil
+}
+
+func convertMerge(n *sexpr.Node, defs map[string]string) ([]string, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return nil, fmt.Errorf("line %d: (merge) missing step IDs", n.Line)
+	}
+	ids := make([]string, len(children))
+	for i, c := range children {
+		ids[i] = resolveVal(c, defs)
+	}
+	return ids, nil
+}
+
+func convertReadFile(n *sexpr.Node, defs map[string]string) (string, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return "", fmt.Errorf("line %d: (read-file) missing path", n.Line)
+	}
+	return resolveVal(children[0], defs), nil
+}
+
+func convertWriteFile(n *sexpr.Node, defs map[string]string) (*WriteFileStep, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return nil, fmt.Errorf("line %d: (write-file) missing path", n.Line)
+	}
+	wf := &WriteFileStep{Path: resolveVal(children[0], defs)}
+	for i := 1; i < len(children); i++ {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword && child.KeywordVal() == "from" {
+			i++
+			if i < len(children) {
+				wf.From = resolveVal(children[i], defs)
+			}
+		}
+	}
+	return wf, nil
+}
+
+func convertGlobStep(n *sexpr.Node, defs map[string]string) (*GlobStep, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return nil, fmt.Errorf("line %d: (glob) missing pattern", n.Line)
+	}
+	g := &GlobStep{Pattern: resolveVal(children[0], defs)}
+	for i := 1; i < len(children); i++ {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword && child.KeywordVal() == "dir" {
+			i++
+			if i < len(children) {
+				g.Dir = resolveVal(children[i], defs)
+			}
+		}
+	}
+	return g, nil
+}
+
+func convertHttpCall(n *sexpr.Node, method string, defs map[string]string) (*HttpCallStep, error) {
+	children := n.Children[1:]
+	if len(children) < 1 {
+		return nil, fmt.Errorf("line %d: (%s) missing URL", n.Line, strings.ToLower("http-"+method))
+	}
+	hc := &HttpCallStep{
+		Method:  method,
+		URL:     resolveVal(children[0], defs),
+		Headers: make(map[string]string),
+	}
+	for i := 1; i < len(children); i++ {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				break
+			}
+			val := children[i]
+			switch key {
+			case "body":
+				hc.Body = resolveVal(val, defs)
+			case "headers":
+				if val.IsList() {
+					src := val.Children
+					for j := 0; j+1 < len(src); j += 2 {
+						hc.Headers[src[j].StringVal()] = resolveVal(src[j+1], defs)
+					}
+				}
+			}
+		}
+	}
+	return hc, nil
+}
+
+func convertPluginCall(n *sexpr.Node, defs map[string]string) (*PluginCallStep, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return nil, fmt.Errorf("line %d: (plugin) needs name and subcommand", n.Line)
+	}
+	pc := &PluginCallStep{
+		Plugin:     resolveVal(children[0], defs),
+		Subcommand: resolveVal(children[1], defs),
+		Args:       make(map[string]string),
+	}
+	for i := 2; i < len(children); i++ {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			// Check if next token is another keyword or end-of-list (flag mode)
+			if i+1 >= len(children) || (children[i+1].IsAtom() && children[i+1].Atom.Type == sexpr.TokenKeyword) {
+				pc.Args[key] = "true"
+			} else {
+				i++
+				pc.Args[key] = resolveVal(children[i], defs)
+			}
+		}
+	}
+	return pc, nil
 }
 
 func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
