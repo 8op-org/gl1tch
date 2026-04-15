@@ -1,54 +1,68 @@
 <script>
-  import { onMount } from 'svelte'
-  import { link } from 'svelte-spa-router'
-  import { api } from '../lib/api.js'
+  import { onMount } from 'svelte';
+  import { push } from 'svelte-spa-router';
+  import { listRuns } from '../lib/api.js';
+  import StatusBadge from '../lib/components/StatusBadge.svelte';
 
-  let runs = $state([])
-  let error = $state(null)
+  let runs = $state([]);
+  let error = $state(null);
+  let loading = $state(true);
+  let filterStatus = $state('all');
+
+  const filtered = $derived(filterStatus === 'all' ? runs : runs.filter(r => r.status?.toUpperCase() === filterStatus));
+
+  function duration(started, finished) {
+    if (!started) return '--';
+    const start = new Date(started);
+    const end = finished ? new Date(finished) : new Date();
+    const sec = Math.round((end - start) / 1000);
+    if (sec < 60) return `${sec}s`;
+    const min = Math.floor(sec / 60);
+    return `${min}m ${sec % 60}s`;
+  }
+
+  function relativeTime(ts) {
+    if (!ts) return '';
+    const diff = Date.now() - new Date(ts).getTime();
+    const min = Math.round(diff / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.round(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    return `${Math.round(hr / 24)}d ago`;
+  }
 
   onMount(async () => {
-    try {
-      runs = await api.listRuns()
-    } catch (e) {
-      error = e.message
-    }
-  })
-
-  function formatTime(ms) {
-    if (!ms) return '-'
-    return new Date(ms).toLocaleString()
-  }
-
-  function duration(run) {
-    if (!run.finished_at || !run.started_at) return '-'
-    const secs = (run.finished_at - run.started_at) / 1000
-    return `${secs.toFixed(1)}s`
-  }
+    try { runs = await listRuns(); } catch (e) { error = e.message; } finally { loading = false; }
+  });
 </script>
 
-<div class="run-list">
-  <h2>Runs</h2>
-  {#if error}
-    <p class="error">{error}</p>
-  {:else if runs.length === 0}
-    <p class="muted">No runs yet.</p>
+<div class="page-header">
+  <h1>Runs</h1>
+  <div class="flex gap-sm">
+    <select bind:value={filterStatus}>
+      <option value="all">All</option>
+      <option value="PASS">Pass</option>
+      <option value="FAIL">Fail</option>
+      <option value="RUNNING">Running</option>
+    </select>
+  </div>
+</div>
+<div class="page-content">
+  {#if loading}<p class="text-muted">Loading runs...</p>
+  {:else if error}<p class="status-fail">{error}</p>
+  {:else if filtered.length === 0}<p class="text-muted">No runs found.</p>
   {:else}
     <table>
-      <thead>
-        <tr><th>ID</th><th>Workflow</th><th>Status</th><th>Duration</th><th>Started</th></tr>
-      </thead>
+      <thead><tr><th>ID</th><th>Workflow</th><th>Status</th><th>Duration</th><th>Started</th></tr></thead>
       <tbody>
-        {#each runs as run}
-          <tr>
-            <td><a href="/run/{run.id}" use:link>#{run.id}</a></td>
-            <td class="mono">{run.name}</td>
-            <td>
-              <span class="badge" class:success={run.exit_status === 0 && run.finished_at} class:fail={run.exit_status !== 0 && run.finished_at} class:pending={!run.finished_at}>
-                {#if !run.finished_at}RUNNING{:else if run.exit_status === 0}PASS{:else}FAIL{/if}
-              </span>
-            </td>
-            <td>{duration(run)}</td>
-            <td class="muted">{formatTime(run.started_at)}</td>
+        {#each filtered as run}
+          <tr class="clickable" on:click={() => push(`/run/${run.id}`)}>
+            <td class="mono text-cyan">#{run.id}</td>
+            <td class="mono">{run.workflow || run.name || ''}</td>
+            <td><StatusBadge status={run.status} /></td>
+            <td class="mono">{duration(run.started, run.finished)}</td>
+            <td class="text-muted">{relativeTime(run.started)}</td>
           </tr>
         {/each}
       </tbody>
@@ -57,17 +71,7 @@
 </div>
 
 <style>
-  h2 { margin-bottom: 1rem; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 13px; }
-  th { color: var(--text-muted); font-weight: normal; }
-  .mono { font-family: var(--font-mono); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-  .badge.success { background: var(--success); color: #000; }
-  .badge.fail { background: var(--danger); color: #fff; }
-  .badge.pending { background: var(--border); color: var(--text); }
-  .error { color: var(--danger); }
-  .muted { color: var(--text-muted); }
+  .clickable { cursor: pointer; }
+  .mono { font-family: var(--font-mono); font-size: 12px; }
+  .text-cyan { color: var(--neon-cyan); }
 </style>

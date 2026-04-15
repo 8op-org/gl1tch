@@ -1,90 +1,84 @@
 <script>
-  import { onMount } from 'svelte'
-  import { api } from '../lib/api.js'
-  import { renderMarkdown } from '../lib/markdown.js'
+  import { onMount } from 'svelte';
+  import { push } from 'svelte-spa-router';
+  import { getRun, getKibanaRun } from '../lib/api.js';
+  import { renderMarkdown } from '../lib/markdown.js';
+  import { icon } from '../lib/icons.js';
+  import Breadcrumb from '../lib/components/Breadcrumb.svelte';
+  import StatusBadge from '../lib/components/StatusBadge.svelte';
 
-  let { params = {} } = $props()
+  let { params } = $props();
+  let id = $derived(params?.id || '');
+  let run = $state(null);
+  let kibanaUrl = $state(null);
+  let error = $state(null);
+  let showTelemetry = $state(false);
 
-  let run = $state(null)
-  let steps = $state([])
-  let kibanaURL = $state(null)
-  let error = $state(null)
+  const breadcrumbs = $derived([{ label: 'Runs', href: '#/runs' }, { label: `#${id}${run?.workflow ? ' ' + run.workflow : ''}` }]);
+
+  function duration(started, finished) {
+    if (!started) return '--';
+    const sec = Math.round((new Date(finished || Date.now()) - new Date(started)) / 1000);
+    if (sec < 60) return `${sec}s`;
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+  }
 
   onMount(async () => {
-    try {
-      const data = await api.getRun(params.id)
-      run = data.run
-      steps = data.steps || []
-      const kibana = await api.getKibanaRun(params.id)
-      kibanaURL = kibana.url
-    } catch (e) {
-      error = e.message
-    }
-  })
-
-  function formatTime(ms) {
-    if (!ms) return '-'
-    return new Date(ms).toLocaleString()
-  }
+    try { run = await getRun(id); try { kibanaUrl = (await getKibanaRun(id)).url; } catch (_) {} } catch (e) { error = e.message; }
+  });
 </script>
 
-<div class="run-view">
-  {#if error}
-    <p class="error">{error}</p>
-  {:else if !run}
-    <p>Loading...</p>
+<div class="page-header">
+  <Breadcrumb segments={breadcrumbs} onnavigate={(href) => push(href.replace('#', ''))} />
+  <div class="flex items-center gap-sm">{#if run}<StatusBadge status={run.status} size="md" />{/if}</div>
+</div>
+
+<div class="page-content">
+  {#if error}<p class="status-fail">{error}</p>
+  {:else if !run}<p class="text-muted">Loading...</p>
   {:else}
-    <div class="header">
-      <h2>{run.name}</h2>
-      <span class="badge" class:success={run.exit_status === 0} class:fail={run.exit_status !== 0}>
-        {run.exit_status === 0 ? 'PASS' : 'FAIL'}
-      </span>
+    <div class="meta-row">
+      <div class="meta-item"><span class="meta-label">Started</span><span class="mono">{run.started ? new Date(run.started).toLocaleString() : '--'}</span></div>
+      <div class="meta-item"><span class="meta-label">Duration</span><span class="mono">{duration(run.started, run.finished)}</span></div>
+      {#if run.model}<div class="meta-item"><span class="meta-label">Model</span><span class="mono">{run.model}</span></div>{/if}
+      {#if run.tokens}<div class="meta-item"><span class="meta-label">Tokens</span><span class="mono">{Number(run.tokens).toLocaleString()}</span></div>{/if}
     </div>
 
-    <div class="meta">
-      <span>Started: {formatTime(run.started_at)}</span>
-      <span>Finished: {formatTime(run.finished_at)}</span>
-    </div>
-
-    <h3>Steps</h3>
-    <table>
-      <thead><tr><th>Step</th><th>Model</th><th>Duration</th></tr></thead>
-      <tbody>
-        {#each steps as step}
-          <tr>
-            <td class="mono">{step.step_id}</td>
-            <td>{step.model || '-'}</td>
-            <td>{step.duration_ms ? `${(step.duration_ms / 1000).toFixed(1)}s` : '-'}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-
-    {#if run.output}
-      <h3>Output</h3>
-      <div class="output">{@html renderMarkdown(run.output)}</div>
+    {#if run.steps?.length}
+      <section class="section"><h3>Steps</h3>
+        <table><thead><tr><th>#</th><th>Step</th><th>Model</th><th>Duration</th><th>Status</th></tr></thead>
+          <tbody>{#each run.steps as step, i}<tr>
+            <td class="mono text-muted">{i + 1}</td><td class="mono">{step.step_id || step.name || ''}</td>
+            <td class="mono text-muted">{step.model || ''}</td><td class="mono">{duration(step.started, step.finished)}</td>
+            <td><StatusBadge status={step.status || 'pass'} /></td>
+          </tr>{/each}</tbody>
+        </table>
+      </section>
     {/if}
 
-    {#if kibanaURL}
-      <h3>Telemetry</h3>
-      <iframe src={kibanaURL} title="Kibana" class="kibana-frame"></iframe>
+    {#if run.output}<section class="section"><h3>Output</h3><div class="output-content">{@html renderMarkdown(run.output)}</div></section>{/if}
+
+    {#if kibanaUrl}
+      <section class="section">
+        <button class="section-toggle" on:click={() => showTelemetry = !showTelemetry}>
+          <h3>{@html icon(showTelemetry ? 'chevronDown' : 'chevronRight')} Telemetry</h3>
+        </button>
+        {#if showTelemetry}<iframe src={kibanaUrl} title="Kibana telemetry" class="kibana-frame"></iframe>{/if}
+      </section>
     {/if}
   {/if}
 </div>
 
 <style>
-  .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
-  h2 { font-family: var(--font-mono); }
-  .badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-  .badge.success { background: var(--success); color: #000; }
-  .badge.fail { background: var(--danger); color: #fff; }
-  .meta { color: var(--text-muted); font-size: 12px; display: flex; gap: 1.5rem; margin-bottom: 1rem; }
-  h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 13px; }
-  th { color: var(--text-muted); font-weight: normal; }
-  .mono { font-family: var(--font-mono); }
-  .output { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; }
-  .kibana-frame { width: 100%; height: 400px; border: 1px solid var(--border); border-radius: 4px; margin-top: 0.5rem; }
-  .error { color: var(--danger); }
+  .meta-row { display: flex; gap: 32px; padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; }
+  .meta-item { display: flex; flex-direction: column; gap: 4px; }
+  .meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  .mono { font-family: var(--font-mono); font-size: 12px; }
+  .section { margin-bottom: 24px; }
+  .section h3 { margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .section-toggle { background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0; }
+  .output-content { line-height: 1.6; }
+  .output-content :global(pre) { margin: 12px 0; }
+  .kibana-frame { width: 100%; height: 400px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-deep); }
+  .text-muted { color: var(--text-muted); }
 </style>

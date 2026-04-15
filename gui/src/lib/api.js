@@ -14,22 +14,26 @@ async function request(path, opts = {}) {
   return res.text()
 }
 
-export const api = {
-  listWorkflows: () => request('/api/workflows'),
-  getWorkflow: (name) => request(`/api/workflows/${encodeURIComponent(name)}`),
-  saveWorkflow: (name, source) =>
-    request(`/api/workflows/${encodeURIComponent(name)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ source }),
-    }),
-  runWorkflow: (name, params) =>
-    request(`/api/workflows/${encodeURIComponent(name)}/run`, {
-      method: 'POST',
-      body: JSON.stringify({ params }),
-    }),
-  listRuns: () => request('/api/runs'),
-  getRun: (id) => request(`/api/runs/${id}`),
-  getResult: (path) => request(`/api/results/${path}`),
-  getKibanaWorkflow: (name) => request(`/api/kibana/workflow/${encodeURIComponent(name)}`),
-  getKibanaRun: (id) => request(`/api/kibana/run/${id}`),
+export function listWorkflows() { return request('/api/workflows'); }
+export function getWorkflow(name) { return request(`/api/workflows/${encodeURIComponent(name)}`); }
+export function saveWorkflow(name, source) {
+  return request(`/api/workflows/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify({ source }) });
+}
+export function runWorkflow(name, params) {
+  return request(`/api/workflows/${encodeURIComponent(name)}/run`, { method: 'POST', body: JSON.stringify({ params }) });
+}
+export function listRuns() { return request('/api/runs'); }
+export function getRun(id) { return request(`/api/runs/${id}`); }
+export function getResult(path) { return request(`/api/results/${path}`); }
+export function getKibanaWorkflow(name) { return request(`/api/kibana/workflow/${encodeURIComponent(name)}`); }
+export function getKibanaRun(id) { return request(`/api/kibana/run/${id}`); }
+
+export function saveResult(path, content) {
+  return request(`/api/results/${path}`, { method: 'PUT', body: JSON.stringify({ content }) });
+}
+export function getResultText(path) {
+  return fetch(`/api/results/${path}`).then(res => { if (!res.ok) throw new Error(res.statusText); return res.text(); });
+}
+export function getWorkflowActions(context) {
+  return request(`/api/workflows/actions/${context}`);
 }

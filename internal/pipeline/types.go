@@ -17,6 +17,7 @@ type Workflow struct {
 	Author      string         `yaml:"author,omitempty"`
 	Version     string         `yaml:"version,omitempty"`
 	Created     string         `yaml:"created,omitempty"`
+	Actions     []string       `yaml:"actions,omitempty"`
 	Steps       []Step         `yaml:"steps"`
 	Items       []WorkflowItem `yaml:"-"`
 }
