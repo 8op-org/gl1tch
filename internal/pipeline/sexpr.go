@@ -91,6 +91,8 @@ func convertWorkflow(n *sexpr.Node, defs map[string]string) (*Workflow, error) {
 				} else {
 					w.Tags = append(w.Tags, resolveVal(val, defs))
 				}
+			case "action":
+				w.Actions = append(w.Actions, resolveVal(val, defs))
 			default:
 				return nil, fmt.Errorf("line %d: unknown workflow keyword :%s", child.Line, key)
 			}

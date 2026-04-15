@@ -26,6 +26,7 @@ type workflowEntry struct {
 	Author      string   `json:"author,omitempty"`
 	Version     string   `json:"version,omitempty"`
 	Created     string   `json:"created,omitempty"`
+	Actions     []string `json:"actions,omitempty"`
 }
 
 func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +58,7 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 			Author:      wf.Author,
 			Version:     wf.Version,
 			Created:     wf.Created,
+			Actions:     wf.Actions,
 		})
 	}
 	if workflows == nil {
@@ -225,6 +227,53 @@ func loadGUIConfig() guiConfig {
 		cfg.EvalThreshold = raw.EvalThreshold
 	}
 	return cfg
+}
+
+func (s *Server) handleGetWorkflowActions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.PathValue("context")
+	prefix := ctx + ":"
+
+	dir := s.workflowsDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	var matches []workflowEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(e.Name())
+		if ext != ".glitch" && ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		wf, err := pipeline.LoadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		for _, action := range wf.Actions {
+			if action == ctx || strings.HasPrefix(action, prefix) {
+				matches = append(matches, workflowEntry{
+					Name:        wf.Name,
+					File:        e.Name(),
+					Description: wf.Description,
+					Tags:        wf.Tags,
+					Author:      wf.Author,
+					Version:     wf.Version,
+					Actions:     wf.Actions,
+				})
+				break
+			}
+		}
+	}
+	if matches == nil {
+		matches = []workflowEntry{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(matches)
 }
 
 func extractParams(source string) []string {
