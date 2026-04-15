@@ -174,5 +174,45 @@ func SaveLoopResult(baseDir string, result LoopResult) error {
 		}
 	}
 
+	if err := writeReadme(dir, result); err != nil {
+		return fmt.Errorf("results: write README.md: %w", err)
+	}
+
 	return nil
+}
+
+// writeReadme generates a README.md rollup artifact with frontmatter and content.
+func writeReadme(dir string, result LoopResult) error {
+	refType := "issue"
+	if result.Document.Source == "github_pr" {
+		refType = "pr"
+	}
+	number := result.Document.Metadata["number"]
+	ref := refType + "-" + number
+
+	status := "researched"
+	if result.Goal == GoalImplement {
+		status = "planned"
+	}
+
+	var buf strings.Builder
+	buf.WriteString("---\n")
+	fmt.Fprintf(&buf, "repo: %s\n", result.Document.Repo)
+	fmt.Fprintf(&buf, "ref: %s\n", ref)
+	fmt.Fprintf(&buf, "title: %q\n", result.Document.Title)
+	fmt.Fprintf(&buf, "status: %s\n", status)
+	fmt.Fprintf(&buf, "source_url: %s\n", result.Document.SourceURL)
+	buf.WriteString("---\n\n")
+
+	buf.WriteString(result.Output)
+
+	if len(result.ToolCalls) > 0 {
+		buf.WriteString("\n\n## Evidence Index\n\n")
+		for i, tc := range result.ToolCalls {
+			name := fmt.Sprintf("%03d-%s.txt", i+1, tc.Tool)
+			fmt.Fprintf(&buf, "- [%s](evidence/%s)\n", name, name)
+		}
+	}
+
+	return os.WriteFile(filepath.Join(dir, "README.md"), []byte(buf.String()), 0o644)
 }

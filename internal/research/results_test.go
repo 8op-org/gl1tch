@@ -140,6 +140,55 @@ func TestRunJSON_StandardFields(t *testing.T) {
 	}
 }
 
+func TestSaveLoopResult_WritesReadme(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "results")
+
+	result := LoopResult{
+		RunID: "test-readme-001",
+		Document: ResearchDocument{
+			Source:    "github_issue",
+			SourceURL: "https://github.com/elastic/ensemble/issues/42",
+			Title:     "Fix flaky CI test",
+			Repo:      "elastic/ensemble",
+			Metadata:  map[string]string{"number": "42"},
+		},
+		Goal:   GoalSummarize,
+		Output: "# Summary\n\nThe CI test is flaky because of a race condition.\n\n## Recommendation\n\nAdd a mutex around the shared state.\n\n## Response Draft\n\nI investigated the flaky CI test and found a race condition in the shared state handler.",
+		ToolCalls: []ToolResult{
+			{Tool: "grep_code", Output: "found race"},
+		},
+		LLMCalls: 2,
+		Duration: 3 * time.Second,
+	}
+
+	if err := SaveLoopResult(base, result); err != nil {
+		t.Fatalf("SaveLoopResult: %v", err)
+	}
+
+	dir := filepath.Join(base, "elastic", "ensemble", "issue-42")
+	readme, err := os.ReadFile(filepath.Join(dir, "README.md"))
+	if err != nil {
+		t.Fatal("README.md not created")
+	}
+
+	content := string(readme)
+	if !strings.Contains(content, "repo: elastic/ensemble") {
+		t.Fatal("README.md missing repo frontmatter")
+	}
+	if !strings.Contains(content, "ref: issue-42") {
+		t.Fatal("README.md missing ref frontmatter")
+	}
+	if !strings.Contains(content, "title: \"Fix flaky CI test\"") {
+		t.Fatal("README.md missing title frontmatter")
+	}
+	if !strings.Contains(content, "race condition") {
+		t.Fatal("README.md missing output content")
+	}
+	if !strings.Contains(content, "001-grep_code.txt") {
+		t.Fatal("README.md missing evidence index")
+	}
+}
+
 func TestResultDir_IssuePrefix(t *testing.T) {
 	result := LoopResult{
 		Document: ResearchDocument{
