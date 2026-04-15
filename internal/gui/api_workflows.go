@@ -11,14 +11,20 @@ import (
 	"strings"
 
 	"github.com/8op-org/gl1tch/internal/pipeline"
+	"github.com/8op-org/gl1tch/internal/provider"
+	"gopkg.in/yaml.v3"
 )
 
 var paramRe = regexp.MustCompile(`\{\{\.param\.(\w+)\}\}`)
 
 type workflowEntry struct {
-	Name        string `json:"name"`
-	File        string `json:"file"`
-	Description string `json:"description"`
+	Name        string   `json:"name"`
+	File        string   `json:"file"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags,omitempty"`
+	Author      string   `json:"author,omitempty"`
+	Version     string   `json:"version,omitempty"`
+	Created     string   `json:"created,omitempty"`
 }
 
 func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
@@ -125,16 +131,91 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := pipeline.LoadFile(filepath.Join(s.workflowsDir(), name))
+	wf, err := pipeline.LoadFile(filepath.Join(s.workflowsDir(), name))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("load workflow: %v", err), 400)
 		return
 	}
 
-	// For now, just acknowledge the run request.
-	// Full execution with pipeline.Run will be wired in Task 8.
+	// Record the run in the store so the GUI can track it
+	var runID int64
+	if s.store != nil {
+		runID, _ = s.store.RecordRun("workflow", wf.Name, "")
+	}
+
+	// Load config for model/provider/tiers
+	cfg := loadGUIConfig()
+
+	// Run in background goroutine
+	go func() {
+		tel := newTelemetry()
+		result, err := pipeline.Run(wf, "", cfg.DefaultModel, body.Params, s.providerReg, pipeline.RunOpts{
+			Telemetry:        tel,
+			ProviderResolver: cfg.ProviderResolver,
+			Tiers:            cfg.Tiers,
+			EvalThreshold:    cfg.EvalThreshold,
+		})
+		if s.store != nil {
+			exitStatus := 0
+			output := ""
+			if err != nil {
+				exitStatus = 1
+				output = err.Error()
+			} else if result != nil {
+				output = result.Output
+			}
+			s.store.FinishRun(runID, output, exitStatus)
+		}
+	}()
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	json.NewEncoder(w).Encode(map[string]any{"status": "started", "run_id": runID})
+}
+
+// guiConfig holds the minimal config needed to run workflows from the GUI.
+type guiConfig struct {
+	DefaultModel     string
+	DefaultProvider  string
+	ProviderResolver provider.ResolverFunc
+	Tiers            []provider.TierConfig
+	EvalThreshold    int
+}
+
+// loadGUIConfig reads ~/.config/glitch/config.yaml for the GUI.
+func loadGUIConfig() guiConfig {
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, ".config", "glitch", "config.yaml")
+
+	cfg := guiConfig{
+		DefaultModel:    "qwen3:8b",
+		DefaultProvider: "ollama",
+		Tiers:           provider.DefaultTiers(),
+		EvalThreshold:   4,
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cfg
+	}
+
+	var raw struct {
+		DefaultModel  string                `yaml:"default_model"`
+		EvalThreshold int                   `yaml:"eval_threshold"`
+		Tiers         []provider.TierConfig `yaml:"tiers"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return cfg
+	}
+	if raw.DefaultModel != "" {
+		cfg.DefaultModel = raw.DefaultModel
+	}
+	if len(raw.Tiers) > 0 {
+		cfg.Tiers = raw.Tiers
+	}
+	if raw.EvalThreshold > 0 {
+		cfg.EvalThreshold = raw.EvalThreshold
+	}
+	return cfg
 }
 
 func extractParams(source string) []string {

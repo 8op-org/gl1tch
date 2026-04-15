@@ -1,4 +1,5 @@
 <script>
+  import { push } from 'svelte-spa-router'
   import { api } from '../lib/api.js'
 
   let { name, params = [], onclose } = $props()
@@ -9,8 +10,11 @@
   async function run() {
     running = true
     try {
-      await api.runWorkflow(name, values)
+      const resp = await api.runWorkflow(name, values)
       onclose?.()
+      if (resp.run_id) {
+        push(`/run/${resp.run_id}`)
+      }
     } catch (e) {
       alert(e.message)
     }

@@ -1,12 +1,17 @@
 package gui
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/8op-org/gl1tch/internal/esearch"
+	"github.com/8op-org/gl1tch/internal/provider"
 	"github.com/8op-org/gl1tch/internal/store"
 )
 
@@ -15,11 +20,12 @@ var distFS embed.FS
 
 // Server is the workflow GUI HTTP server.
 type Server struct {
-	addr      string
-	workspace string
-	dev       bool
-	store     *store.Store
-	mux       *http.ServeMux
+	addr        string
+	workspace   string
+	dev         bool
+	store       *store.Store
+	mux         *http.ServeMux
+	providerReg *provider.ProviderRegistry
 }
 
 // New creates a GUI server for the given workspace.
@@ -28,15 +34,31 @@ func New(addr, workspace string, dev bool) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
+	var reg *provider.ProviderRegistry
+	if home, err := os.UserHomeDir(); err == nil {
+		reg, _ = provider.LoadProviders(filepath.Join(home, ".config", "glitch", "providers"))
+	}
 	s := &Server{
-		addr:      addr,
-		workspace: workspace,
-		dev:       dev,
-		store:     st,
-		mux:       http.NewServeMux(),
+		addr:        addr,
+		workspace:   workspace,
+		dev:         dev,
+		store:       st,
+		mux:         http.NewServeMux(),
+		providerReg: reg,
 	}
 	s.routes()
 	return s, nil
+}
+
+// newTelemetry creates a telemetry client if ES is reachable.
+func newTelemetry() *esearch.Telemetry {
+	esClient := esearch.NewClient("http://localhost:9200")
+	if err := esClient.Ping(context.Background()); err == nil {
+		tel := esearch.NewTelemetry(esClient)
+		tel.EnsureIndices(context.Background())
+		return tel
+	}
+	return nil
 }
 
 func (s *Server) routes() {
@@ -54,7 +76,16 @@ func (s *Server) routes() {
 	if !s.dev {
 		dist, _ := fs.Sub(distFS, "dist")
 		fileServer := http.FileServer(http.FS(dist))
-		s.mux.Handle("GET /", fileServer)
+		s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+			// SPA fallback: if the path isn't a real file, serve index.html
+			if r.URL.Path != "/" {
+				_, err := fs.Stat(dist, r.URL.Path[1:])
+				if err != nil {
+					r.URL.Path = "/"
+				}
+			}
+			fileServer.ServeHTTP(w, r)
+		})
 	}
 }
 

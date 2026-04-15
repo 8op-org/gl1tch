@@ -37,9 +37,16 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	var runs []runEntry
 	for rows.Next() {
 		var re runEntry
-		rows.Scan(&re.ID, &re.Kind, &re.Name, &re.Input, &re.Output,
-			&re.ExitStatus, &re.StartedAt, &re.FinishedAt)
+		if err := rows.Scan(&re.ID, &re.Kind, &re.Name, &re.Input, &re.Output,
+			&re.ExitStatus, &re.StartedAt, &re.FinishedAt); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
 		runs = append(runs, re)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 	if runs == nil {
 		runs = []runEntry{}
@@ -87,7 +94,9 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		defer stepRows.Close()
 		for stepRows.Next() {
 			var se stepEntry
-			stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs)
+			if err := stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs); err != nil {
+				continue
+			}
 			steps = append(steps, se)
 		}
 	}
