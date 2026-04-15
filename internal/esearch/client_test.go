@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -149,6 +150,92 @@ func TestParseIndexStats(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected glitch-events with 150 docs")
+	}
+}
+
+func TestIndexDoc_BuildsCorrectRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		if r.URL.Path != "/test-index/_doc/doc1" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		var got map[string]string
+		json.Unmarshal(body, &got)
+		if got["title"] != "hello" {
+			t.Errorf("unexpected body: %s", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"_id":"doc1","_version":1,"result":"created"}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	resp, err := c.IndexDoc(context.Background(), "test-index", "doc1", json.RawMessage(`{"title":"hello"}`))
+	if err != nil {
+		t.Fatalf("IndexDoc() error: %v", err)
+	}
+	if resp.ID != "doc1" {
+		t.Errorf("ID = %q, want %q", resp.ID, "doc1")
+	}
+	if resp.Version != 1 {
+		t.Errorf("Version = %d, want 1", resp.Version)
+	}
+	if resp.Result != "created" {
+		t.Errorf("Result = %q, want %q", resp.Result, "created")
+	}
+}
+
+func TestIndexDoc_AutoID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/test-index/_doc" {
+			t.Errorf("unexpected path %s, want /test-index/_doc", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"_id":"auto-generated-id","_version":1,"result":"created"}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	resp, err := c.IndexDoc(context.Background(), "test-index", "", json.RawMessage(`{"title":"hello"}`))
+	if err != nil {
+		t.Fatalf("IndexDoc() error: %v", err)
+	}
+	if resp.ID != "auto-generated-id" {
+		t.Errorf("ID = %q, want %q", resp.ID, "auto-generated-id")
+	}
+}
+
+func TestDeleteByQuery_BuildsCorrectRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/test-index/_delete_by_query" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "match_all") {
+			t.Errorf("unexpected query body: %s", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"deleted":5}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	query := json.RawMessage(`{"query":{"match_all":{}}}`)
+	resp, err := c.DeleteByQuery(context.Background(), "test-index", query)
+	if err != nil {
+		t.Fatalf("DeleteByQuery() error: %v", err)
+	}
+	if resp.Deleted != 5 {
+		t.Errorf("Deleted = %d, want 5", resp.Deleted)
 	}
 }
 
