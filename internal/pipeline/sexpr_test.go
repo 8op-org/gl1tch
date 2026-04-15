@@ -244,6 +244,249 @@ func TestLoadBytes_Sexpr_LLMTierAndFormat(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_Retry(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (retry 3
+    (step "flaky"
+      (run "curl http://example.com"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.ID != "flaky" {
+		t.Fatalf("expected id %q, got %q", "flaky", s.ID)
+	}
+	if s.Retry != 3 {
+		t.Fatalf("expected retry 3, got %d", s.Retry)
+	}
+	if s.Run != "curl http://example.com" {
+		t.Fatalf("expected run command, got %q", s.Run)
+	}
+}
+
+func TestSexprWorkflow_Timeout(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (timeout "30s"
+    (step "slow"
+      (llm :prompt "think hard"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.ID != "slow" {
+		t.Fatalf("expected id %q, got %q", "slow", s.ID)
+	}
+	if s.Timeout != "30s" {
+		t.Fatalf("expected timeout %q, got %q", "30s", s.Timeout)
+	}
+	if s.LLM == nil || s.LLM.Prompt != "think hard" {
+		t.Fatal("expected LLM step with prompt")
+	}
+}
+
+func TestSexprWorkflow_RetryAndTimeout(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (retry 2
+    (timeout "10s"
+      (step "both"
+        (run "flaky-thing")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Retry != 2 {
+		t.Fatalf("expected retry 2, got %d", s.Retry)
+	}
+	if s.Timeout != "10s" {
+		t.Fatalf("expected timeout %q, got %q", "10s", s.Timeout)
+	}
+}
+
+func TestSexprWorkflow_Let(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (let ((api-url "https://api.example.com")
+        (token "abc123"))
+    (step "call"
+      (run api-url))
+    (step "auth"
+      (run token))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	if w.Steps[0].Run != "https://api.example.com" {
+		t.Fatalf("expected resolved api-url, got %q", w.Steps[0].Run)
+	}
+	if w.Steps[1].Run != "abc123" {
+		t.Fatalf("expected resolved token, got %q", w.Steps[1].Run)
+	}
+}
+
+func TestSexprWorkflow_LetScoped(t *testing.T) {
+	src := []byte(`
+(def x "outer")
+
+(workflow "test"
+  (let ((x "inner"))
+    (step "inside"
+      (run x)))
+  (step "outside"
+    (run x)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Steps[0].Run != "inner" {
+		t.Fatalf("expected inner binding, got %q", w.Steps[0].Run)
+	}
+	if w.Steps[1].Run != "outer" {
+		t.Fatalf("expected outer binding, got %q", w.Steps[1].Run)
+	}
+}
+
+func TestSexprWorkflow_Catch(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (catch
+    (step "try"
+      (run "risky-command"))
+    (step "fallback"
+      (run "safe-command"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.ID != "try" {
+		t.Fatalf("expected id %q, got %q", "try", s.ID)
+	}
+	if s.Form != "catch" {
+		t.Fatalf("expected form %q, got %q", "catch", s.Form)
+	}
+	if s.Fallback == nil {
+		t.Fatal("expected fallback step")
+	}
+	if s.Fallback.ID != "fallback" {
+		t.Fatalf("expected fallback id %q, got %q", "fallback", s.Fallback.ID)
+	}
+	if s.Fallback.Run != "safe-command" {
+		t.Fatalf("expected fallback run, got %q", s.Fallback.Run)
+	}
+}
+
+func TestSexprWorkflow_Cond(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (cond
+    ("test -f critical.log"
+      (step "critical"
+        (run "alert critical")))
+    ("test -f warning.log"
+      (step "warn"
+        (run "alert warning")))
+    (else
+      (step "ok"
+        (run "echo all-clear")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.Form != "cond" {
+		t.Fatalf("expected form %q, got %q", "cond", s.Form)
+	}
+	if len(s.Branches) != 3 {
+		t.Fatalf("expected 3 branches, got %d", len(s.Branches))
+	}
+	if s.Branches[0].Pred != "test -f critical.log" {
+		t.Fatalf("branch 0: expected pred, got %q", s.Branches[0].Pred)
+	}
+	if s.Branches[0].Step.ID != "critical" {
+		t.Fatalf("branch 0: expected step id %q, got %q", "critical", s.Branches[0].Step.ID)
+	}
+	if s.Branches[2].Pred != "else" {
+		t.Fatalf("branch 2: expected %q, got %q", "else", s.Branches[2].Pred)
+	}
+}
+
+func TestSexprWorkflow_Map(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "list"
+    (run "echo -e 'a\nb\nc'"))
+  (map "list"
+    (step "process"
+      (run "echo handling item"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "map" {
+		t.Fatalf("expected form %q, got %q", "map", s.Form)
+	}
+	if s.MapOver != "list" {
+		t.Fatalf("expected map-over %q, got %q", "list", s.MapOver)
+	}
+	if s.MapBody == nil {
+		t.Fatal("expected map body step")
+	}
+	if s.MapBody.ID != "process" {
+		t.Fatalf("expected map body id %q, got %q", "process", s.MapBody.ID)
+	}
+}
+
+func TestSexprWorkflow_LetWithRetry(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (let ((endpoint "https://api.example.com"))
+    (retry 5
+      (step "call"
+        (run endpoint)))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.Run != "https://api.example.com" {
+		t.Fatalf("expected resolved endpoint, got %q", s.Run)
+	}
+	if s.Retry != 5 {
+		t.Fatalf("expected retry 5, got %d", s.Retry)
+	}
+}
+
 func TestLoadBytes_Sexpr_LLMNoTier(t *testing.T) {
 	src := []byte(`
 (workflow "test-no-tier"

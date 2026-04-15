@@ -17,12 +17,30 @@ type Workflow struct {
 }
 
 // Step is a single unit of work — either a shell command, an LLM call, or a save-to-file.
+// Control-flow forms (retry, timeout, catch, cond, map) wrap or replace regular steps.
 type Step struct {
 	ID       string   `yaml:"id"`
 	Run      string   `yaml:"run,omitempty"`       // shell command
 	LLM      *LLMStep `yaml:"llm,omitempty"`       // LLM call
 	Save     string   `yaml:"save,omitempty"`      // write to file path (template-rendered)
 	SaveStep string   `yaml:"save_step,omitempty"` // which step's output to save (default: previous)
+
+	// Control-flow modifiers (applied to any step type)
+	Retry   int    `yaml:"retry,omitempty"`   // max retries on failure (0 = no retry)
+	Timeout string `yaml:"timeout,omitempty"` // deadline duration, e.g. "30s", "2m"
+
+	// Compound forms — Form discriminates the variant.
+	Form     string       `yaml:"-"` // "cond", "map", "catch", or "" for regular steps
+	Fallback *Step        `yaml:"-"` // catch: step to run on failure
+	Branches []CondBranch `yaml:"-"` // cond: ordered predicate→step pairs
+	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
+	MapBody  *Step        `yaml:"-"` // map: template step executed per item
+}
+
+// CondBranch is one arm of a (cond ...) form.
+type CondBranch struct {
+	Pred string // shell command predicate (exit 0 = true), or "else"
+	Step Step   // step to execute if predicate succeeds
 }
 
 // LLMStep configures an LLM invocation.
