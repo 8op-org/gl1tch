@@ -1,3 +1,4 @@
+import 'highlight.js/styles/github-dark.min.css';
 import { marked } from 'marked'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'

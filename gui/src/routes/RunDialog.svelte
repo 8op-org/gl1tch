@@ -1,86 +1,43 @@
 <script>
-  import { push } from 'svelte-spa-router'
-  import { api } from '../lib/api.js'
+  import { push } from 'svelte-spa-router';
+  import { runWorkflow } from '../lib/api.js';
+  import { icon } from '../lib/icons.js';
+  import Modal from '../lib/components/Modal.svelte';
 
-  let { name, params = [], onclose } = $props()
+  let { name, params = [], onclose } = $props();
+  let values = $state({});
+  let running = $state(false);
+  let error = $state(null);
 
-  let values = $state(Object.fromEntries(params.map((p) => [p, ''])))
-  let running = $state(false)
-
-  async function run() {
-    running = true
-    try {
-      const resp = await api.runWorkflow(name, values)
-      onclose?.()
-      if (resp.run_id) {
-        push(`/run/${resp.run_id}`)
-      }
-    } catch (e) {
-      alert(e.message)
-    }
-    running = false
-  }
-
-  function handleOverlayClick(e) {
-    if (e.target === e.currentTarget) onclose?.()
+  async function handleSubmit() {
+    running = true; error = null;
+    try { const result = await runWorkflow(name, values); onclose?.(); if (result.run_id) push(`/run/${result.run_id}`); } catch (e) { error = e.message; running = false; }
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={handleOverlayClick}>
-  <div class="dialog">
-    <h3>Run {name}</h3>
-    {#if params.length > 0}
-      {#each params as param}
-        <label>
-          <span>{param}</span>
-          <input bind:value={values[param]} placeholder={param} />
-        </label>
-      {/each}
-    {:else}
-      <p class="muted">No parameters required.</p>
-    {/if}
-    <div class="actions">
-      <button onclick={() => onclose?.()}>Cancel</button>
-      <button class="primary" onclick={run} disabled={running}>
-        {running ? 'Starting...' : 'Start Run'}
-      </button>
+<Modal title="Run {name}" {onclose}>
+  {#if params.length > 0}
+    <form on:submit|preventDefault={handleSubmit} class="flex flex-col gap-md">
+      {#each params as param}<label class="field"><span class="field-label">{param}</span><input type="text" bind:value={values[param]} placeholder={param} /></label>{/each}
+      {#if error}<p class="status-fail" style="font-size:12px">{error}</p>{/if}
+      <div class="flex justify-between" style="margin-top:8px">
+        <button type="button" on:click={onclose}>Cancel</button>
+        <button type="submit" class="primary" disabled={running}>{#if running}Running...{:else}{@html icon('play', 14)} Start Run{/if}</button>
+      </div>
+    </form>
+  {:else}
+    <div class="flex flex-col gap-md">
+      <p class="text-muted">No parameters required.</p>
+      {#if error}<p class="status-fail" style="font-size:12px">{error}</p>{/if}
+      <div class="flex justify-between">
+        <button on:click={onclose}>Cancel</button>
+        <button class="primary" disabled={running} on:click={handleSubmit}>{#if running}Running...{:else}{@html icon('play', 14)} Start Run{/if}</button>
+      </div>
     </div>
-  </div>
-</div>
+  {/if}
+</Modal>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-  .dialog {
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    min-width: 400px;
-    max-width: 500px;
-  }
-  h3 { font-family: var(--font-mono); margin-bottom: 1rem; }
-  label { display: block; margin-bottom: 0.75rem; }
-  label span { display: block; color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
-  input {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.5rem;
-    border-radius: 4px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-  }
-  .actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-  .muted { color: var(--text-muted); }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field-label { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
 </style>
