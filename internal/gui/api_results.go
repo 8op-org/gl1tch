@@ -2,6 +2,7 @@ package gui
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,4 +67,44 @@ func (s *Server) handleGetResult(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 	}
 	w.Write(data)
+}
+
+func (s *Server) handlePutResult(w http.ResponseWriter, r *http.Request) {
+	path := r.PathValue("path")
+	if strings.Contains(path, "..") {
+		http.Error(w, "invalid path", 400)
+		return
+	}
+
+	fullPath := filepath.Join(s.resultsDir(), path)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		http.Error(w, "not found", 404)
+		return
+	}
+	if info.IsDir() {
+		http.Error(w, "cannot write to directory", 400)
+		return
+	}
+
+	var body struct {
+		Content string `json:"content"`
+	}
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if err := json.Unmarshal(data, &body); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	if err := os.WriteFile(fullPath, []byte(body.Content), 0644); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

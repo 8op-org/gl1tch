@@ -85,12 +85,24 @@ func (s *Server) handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	params := extractParams(string(data))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"name":   name,
 		"source": string(data),
 		"params": params,
-	})
+	}
+
+	// Parse workflow to extract metadata
+	wf, err := pipeline.LoadFile(path)
+	if err == nil {
+		resp["tags"] = wf.Tags
+		resp["author"] = wf.Author
+		resp["version"] = wf.Version
+		resp["created"] = wf.Created
+		resp["actions"] = wf.Actions
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handlePutWorkflow(w http.ResponseWriter, r *http.Request) {

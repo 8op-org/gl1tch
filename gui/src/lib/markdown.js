@@ -1,5 +1,6 @@
 import 'highlight.js/styles/github-dark.min.css';
 import { marked } from 'marked'
+import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
 import bash from 'highlight.js/lib/languages/bash'
@@ -13,14 +14,15 @@ hljs.registerLanguage('yaml', yaml)
 hljs.registerLanguage('python', python)
 hljs.registerLanguage('go', go)
 
-marked.setOptions({
+marked.use(markedHighlight({
+  langPrefix: 'hljs language-',
   highlight(code, lang) {
     if (lang && hljs.getLanguage(lang)) {
       return hljs.highlight(code, { language: lang }).value
     }
     return hljs.highlightAuto(code).value
   },
-})
+}))
 
 export function renderMarkdown(src) {
   return marked.parse(src)
