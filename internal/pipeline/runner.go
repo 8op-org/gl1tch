@@ -598,6 +598,28 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 			f.Close()
 			return f.Name()
 		},
+
+		// String functions
+		"split":      func(sep, s string) []string { return strings.Split(s, sep) },
+		"join":       func(sep string, parts []string) string { return strings.Join(parts, sep) },
+		"last":       func(s []string) string { if len(s) == 0 { return "" }; return s[len(s)-1] },
+		"first":      func(s []string) string { if len(s) == 0 { return "" }; return s[0] },
+		"upper":      strings.ToUpper,
+		"lower":      strings.ToLower,
+		"trim":       strings.TrimSpace,
+		"trimPrefix": func(prefix, s string) string { return strings.TrimPrefix(s, prefix) },
+		"trimSuffix": func(suffix, s string) string { return strings.TrimSuffix(s, suffix) },
+		"replace":    func(old, new, s string) string { return strings.ReplaceAll(s, old, new) },
+		"truncate": func(n int, s string) string {
+			runes := []rune(s)
+			if len(runes) <= n {
+				return s
+			}
+			return string(runes[:n])
+		},
+		"contains":  strings.Contains,
+		"hasPrefix": strings.HasPrefix,
+		"hasSuffix": strings.HasSuffix,
 	}
 	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
 	if err != nil {
