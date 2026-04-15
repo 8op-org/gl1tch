@@ -36,7 +36,7 @@ func TestExecutePluginCall_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := RunPluginSubcommand(root, "greeter", "say", map[string]string{"name": "alice"})
+	out, err := RunPluginSubcommand(root, "greeter", "say", map[string]string{"name": "alice"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

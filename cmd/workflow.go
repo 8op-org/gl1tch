@@ -126,12 +126,15 @@ var workflowRunCmd = &cobra.Command{
 
 		cfg, _ := loadConfig()
 
-		// Try to load workspace config for ES URL
+		// Try to load workspace config for ES URL and resolve workspace name
 		var wsESURL string
-		wsFile := ".glitch/workspace.glitch"
-		if workspacePath != "" {
-			wsFile = filepath.Join(workspacePath, "workspace.glitch")
+		wsDir := workspacePath
+		if wsDir == "" {
+			wsDir, _ = os.Getwd()
 		}
+		wsName := workspace.ResolveWorkspace(wsDir)
+
+		wsFile := filepath.Join(wsDir, "workspace.glitch")
 		if wsData, err := os.ReadFile(wsFile); err == nil {
 			if ws, err := workspace.ParseFile(wsData); err == nil {
 				if ws.Defaults.Elasticsearch != "" {
@@ -146,6 +149,7 @@ var workflowRunCmd = &cobra.Command{
 			Tiers:            cfg.Tiers,
 			EvalThreshold:    cfg.EvalThreshold,
 			ESURL:            wsESURL,
+			Workspace:        wsName,
 		})
 		if err != nil {
 			return err

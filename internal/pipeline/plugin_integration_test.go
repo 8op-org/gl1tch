@@ -53,7 +53,7 @@ func TestPluginIntegration_FullPath(t *testing.T) {
 	}
 
 	t.Run("basic subcommand with manifest defs", func(t *testing.T) {
-		out, err := RunPluginSubcommand(root, "echo-tool", "say", map[string]string{"message": "world"})
+		out, err := RunPluginSubcommand(root, "echo-tool", "say", map[string]string{"message": "world"}, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -63,7 +63,7 @@ func TestPluginIntegration_FullPath(t *testing.T) {
 	})
 
 	t.Run("default arg value", func(t *testing.T) {
-		out, err := RunPluginSubcommand(root, "echo-tool", "say", nil)
+		out, err := RunPluginSubcommand(root, "echo-tool", "say", nil, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -73,7 +73,7 @@ func TestPluginIntegration_FullPath(t *testing.T) {
 	})
 
 	t.Run("SDK form lines in plugin", func(t *testing.T) {
-		out, err := RunPluginSubcommand(root, "echo-tool", "count", map[string]string{"items": "a b c"})
+		out, err := RunPluginSubcommand(root, "echo-tool", "count", map[string]string{"items": "a b c"}, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -101,7 +101,7 @@ func TestPluginIntegration_WorkflowInvokesPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := RunPluginSubcommand(root, "greet", "hello", map[string]string{"name": "alice"})
+	out, err := RunPluginSubcommand(root, "greet", "hello", map[string]string{"name": "alice"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

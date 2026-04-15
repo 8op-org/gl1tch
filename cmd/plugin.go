@@ -12,6 +12,7 @@ import (
 
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/plugin"
+	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
 func init() {
@@ -82,7 +83,12 @@ var pluginCmd = &cobra.Command{
 			return err
 		}
 
-		result, err := pipeline.RunPluginSubcommand(pluginRoot, pluginName, subcommand, flags, providerReg)
+		wsDir := workspacePath
+		if wsDir == "" {
+			wsDir, _ = os.Getwd()
+		}
+		wsName := workspace.ResolveWorkspace(wsDir)
+		result, err := pipeline.RunPluginSubcommand(pluginRoot, pluginName, subcommand, flags, providerReg, pipeline.RunOpts{Workspace: wsName})
 		if err != nil {
 			return err
 		}

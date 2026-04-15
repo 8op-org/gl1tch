@@ -478,7 +478,9 @@ test.describe('Results browser', () => {
     await page.waitForSelector('.tree-item', { timeout: 5000 })
     await page.locator('.tree-item', { hasText: 'elastic' }).click()
     await page.locator('.tree-item', { hasText: 'observability-robots' }).click({ timeout: 3000 })
-    // Navigate to any available sub-dir and file
+    // Click into an issue subfolder to reach files
+    await page.waitForSelector('.tree-item.dir >> text=/issue-/')
+    await page.locator('.tree-item.dir', { hasText: /issue-/ }).first().click()
     await page.waitForSelector('.tree-item.file', { timeout: 5000 })
     await page.locator('.tree-item.file').first().click()
     await expect(page.locator('button', { hasText: 'Preview' })).toBeVisible()
@@ -490,6 +492,8 @@ test.describe('Results browser', () => {
     await page.waitForSelector('.tree-item', { timeout: 5000 })
     await page.locator('.tree-item', { hasText: 'elastic' }).click()
     await page.locator('.tree-item', { hasText: 'observability-robots' }).click({ timeout: 3000 })
+    await page.waitForSelector('.tree-item.dir >> text=/issue-/')
+    await page.locator('.tree-item.dir', { hasText: /issue-/ }).first().click()
     await page.waitForSelector('.tree-item.file', { timeout: 5000 })
     await page.locator('.tree-item.file').first().click()
     await page.locator('button', { hasText: 'Edit' }).click()
@@ -501,6 +505,8 @@ test.describe('Results browser', () => {
     await page.waitForSelector('.tree-item', { timeout: 5000 })
     await page.locator('.tree-item', { hasText: 'elastic' }).click()
     await page.locator('.tree-item', { hasText: 'observability-robots' }).click({ timeout: 3000 })
+    await page.waitForSelector('.tree-item.dir >> text=/issue-/')
+    await page.locator('.tree-item.dir', { hasText: /issue-/ }).first().click()
     await page.waitForSelector('.tree-item.file', { timeout: 5000 })
     await page.locator('.tree-item.file').first().click()
     await page.locator('button', { hasText: 'Edit' }).click()
@@ -514,27 +520,68 @@ test.describe('Results browser', () => {
     await expect(page.locator('main').locator('text=Results')).toBeVisible({ timeout: 3000 })
   })
 
-  test('selecting a folder does not cause errors', async ({ page }) => {
+  test('no action bar before folder is selected', async ({ page }) => {
+    await page.goto('#/results')
+    await page.waitForSelector('.tree-item', { timeout: 5000 })
+    await expect(page.locator('.action-bar')).not.toBeVisible()
+  })
+
+  test('action bar appears when folder is clicked', async ({ page }) => {
     const errors = []
     page.on('pageerror', (err) => errors.push(err.message))
     await page.goto('#/results')
     await page.waitForSelector('.tree-item', { timeout: 5000 })
     await page.locator('.tree-item.dir').first().click()
-    await page.waitForTimeout(1000)
+    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
     expect(errors).toEqual([])
   })
 
-  test('action bar shows when folder selected and actions exist', async ({ page }) => {
+  test('action bar shows folder name and action buttons', async ({ page }) => {
     await page.goto('#/results')
     await page.waitForSelector('.tree-item', { timeout: 5000 })
     await page.locator('.tree-item.dir').first().click()
-    await page.waitForTimeout(1000)
-    const actionBar = page.locator('.action-bar')
-    const isVisible = await actionBar.isVisible().catch(() => false)
-    if (isVisible) {
-      const buttons = actionBar.locator('button')
-      const count = await buttons.count()
-      expect(count).toBeGreaterThan(0)
+    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
+    // Shows the folder name
+    await expect(page.locator('.action-context')).toBeVisible()
+    // Has action buttons
+    const buttons = page.locator('.action-bar .action-btn')
+    await expect(buttons.first()).toBeVisible()
+    const count = await buttons.count()
+    expect(count).toBeGreaterThan(0)
+  })
+
+  test('clicking action button opens RunDialog with path pre-filled', async ({ page }) => {
+    await page.goto('#/results')
+    await page.waitForSelector('.tree-item', { timeout: 5000 })
+    await page.locator('.tree-item.dir').first().click()
+    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
+    await page.locator('.action-bar .action-btn').first().click()
+    await expect(page.locator('.modal')).toBeVisible({ timeout: 3000 })
+    // path param should be pre-filled
+    const pathInput = page.locator('.modal input[placeholder="path"]')
+    if (await pathInput.isVisible()) {
+      const val = await pathInput.inputValue()
+      expect(val.length).toBeGreaterThan(0)
+    }
+  })
+
+  test('action bar updates when different folder clicked', async ({ page }) => {
+    await page.goto('#/results')
+    await page.waitForSelector('.tree-item', { timeout: 5000 })
+    // Click first folder
+    const firstDir = page.locator('.tree-item.dir').first()
+    const firstName = await firstDir.locator('.tree-name').textContent()
+    await firstDir.click()
+    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.action-context')).toContainText(firstName.trim())
+    // Click a different folder if available
+    const dirs = page.locator('.tree-item.dir')
+    const dirCount = await dirs.count()
+    if (dirCount > 1) {
+      const secondDir = dirs.nth(1)
+      const secondName = await secondDir.locator('.tree-name').textContent()
+      await secondDir.click()
+      await expect(page.locator('.action-context')).toContainText(secondName.trim())
     }
   })
 })

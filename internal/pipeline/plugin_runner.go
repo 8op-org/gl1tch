@@ -25,7 +25,7 @@ type cachedSubcommand struct {
 
 // RunPluginSubcommand loads and executes a plugin subcommand from a plugin directory root.
 // pluginRoot is the parent directory containing plugin directories (e.g., ~/.config/glitch/plugins).
-func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[string]string, reg ...*provider.ProviderRegistry) (string, error) {
+func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[string]string, reg *provider.ProviderRegistry, opts ...RunOpts) (string, error) {
 	pluginDir := filepath.Join(pluginRoot, pluginName)
 	if _, err := os.Stat(pluginDir); os.IsNotExist(err) {
 		return "", fmt.Errorf("plugin %q not found in %s", pluginName, pluginRoot)
@@ -61,13 +61,13 @@ func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[str
 	}
 
 	var provReg *provider.ProviderRegistry
-	if len(reg) > 0 && reg[0] != nil {
-		provReg = reg[0]
+	if reg != nil {
+		provReg = reg
 	} else {
 		provReg, _ = provider.LoadProviders("")
 	}
 
-	result, err := Run(cached.wf, "", "", params, provReg)
+	result, err := Run(cached.wf, "", "", params, provReg, opts...)
 	if err != nil {
 		return "", fmt.Errorf("plugin %q %q run: %w", pluginName, subcommand, err)
 	}

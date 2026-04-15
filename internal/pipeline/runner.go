@@ -43,6 +43,7 @@ type runCtx struct {
 	ctx              context.Context
 	input            string
 	params           map[string]string
+	workspace        string
 	defaultModel     string
 	reg              *provider.ProviderRegistry
 	providerResolver provider.ResolverFunc
@@ -93,6 +94,7 @@ type RunOpts struct {
 	EvalThreshold    int
 	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
 	ESURL            string            // default ES URL from workspace config
+	Workspace        string            // resolved workspace name for {{.workspace}} template var
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -170,10 +172,16 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		esURL = opts[0].ESURL
 	}
 
+	var workspaceName string
+	if len(opts) > 0 {
+		workspaceName = opts[0].Workspace
+	}
+
 	rctx := &runCtx{
 		ctx:              context.Background(),
 		input:            input,
 		params:           params,
+		workspace:        workspaceName,
 		defaultModel:     defaultModel,
 		reg:              reg,
 		providerResolver: providerResolver,
@@ -723,7 +731,7 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 			return executeStep(ctx, rctx, branch.Step)
 		}
 		// Render predicate template
-		data := map[string]any{"input": rctx.input, "param": rctx.params}
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
 		rendered, err := render(branch.Pred, data, rctx.stepsSnapshot())
 		if err != nil {
 			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
@@ -841,8 +849,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	stepsSnap := rctx.stepsSnapshot()
 
 	data := map[string]any{
-		"input": rctx.input,
-		"param": rctx.params,
+		"input":     rctx.input,
+		"param":     rctx.params,
+		"workspace": rctx.workspace,
 	}
 
 	if step.Save != "" {
@@ -1338,7 +1347,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		for _, dir := range searchDirs {
 			pluginDir := filepath.Join(dir, pc.Plugin)
 			if _, err := os.Stat(pluginDir); err == nil {
-				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, renderedArgs, rctx.reg)
+				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, renderedArgs, rctx.reg, RunOpts{Workspace: rctx.workspace})
 				if err != nil {
 					return nil, fmt.Errorf("step %s: %w", step.ID, err)
 				}
