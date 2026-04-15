@@ -13,7 +13,7 @@ import (
 
 // RunPluginSubcommand loads and executes a plugin subcommand from a plugin directory root.
 // pluginRoot is the parent directory containing plugin directories (e.g., ~/.config/glitch/plugins).
-func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[string]string) (string, error) {
+func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[string]string, reg ...*provider.ProviderRegistry) (string, error) {
 	pluginDir := filepath.Join(pluginRoot, pluginName)
 	if _, err := os.Stat(pluginDir); os.IsNotExist(err) {
 		return "", fmt.Errorf("plugin %q not found in %s", pluginName, pluginRoot)
@@ -63,9 +63,14 @@ func RunPluginSubcommand(pluginRoot, pluginName, subcommand string, args map[str
 		return "", fmt.Errorf("plugin %q %q parse: %w", pluginName, subcommand, err)
 	}
 
-	reg, _ := provider.LoadProviders("")
+	var provReg *provider.ProviderRegistry
+	if len(reg) > 0 && reg[0] != nil {
+		provReg = reg[0]
+	} else {
+		provReg, _ = provider.LoadProviders("")
+	}
 
-	result, err := Run(w, "", "", params, reg)
+	result, err := Run(w, "", "", params, provReg)
 	if err != nil {
 		return "", fmt.Errorf("plugin %q %q run: %w", pluginName, subcommand, err)
 	}

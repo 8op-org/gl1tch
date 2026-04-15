@@ -122,7 +122,7 @@ func BuildParams(defs []ArgDef, provided map[string]string) (map[string]string, 
 		case def.Default != "":
 			out[def.Name] = def.Default
 		case def.Required:
-			return nil, fmt.Errorf("missing required arg: %s", def.Name)
+			return nil, fmt.Errorf("requires argument %q", def.Name)
 		default:
 			out[def.Name] = ""
 		}

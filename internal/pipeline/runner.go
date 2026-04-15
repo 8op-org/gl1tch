@@ -718,7 +718,8 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			if l == "" {
 				continue
 			}
-			parts = append(parts, fmt.Sprintf("%q", l))
+			b, _ := json.Marshal(l)
+			parts = append(parts, string(b))
 		}
 		out := "[" + strings.Join(parts, ",") + "]"
 		fmt.Printf("  > %s (lines)\n", step.ID)
@@ -847,7 +848,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		for _, dir := range searchDirs {
 			pluginDir := filepath.Join(dir, pc.Plugin)
 			if _, err := os.Stat(pluginDir); err == nil {
-				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, pc.Args)
+				out, err := RunPluginSubcommand(dir, pc.Plugin, pc.Subcommand, pc.Args, rctx.reg)
 				if err != nil {
 					return nil, fmt.Errorf("step %s: %w", step.ID, err)
 				}

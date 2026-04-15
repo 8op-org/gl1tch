@@ -108,7 +108,7 @@ func TestExecutePluginCall_RequiredArgMissing(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing required arg, got nil")
 	}
-	if !strings.Contains(err.Error(), "missing required arg") {
-		t.Fatalf("expected 'missing required arg' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "requires argument") {
+		t.Fatalf("expected 'requires argument' in error, got: %v", err)
 	}
 }

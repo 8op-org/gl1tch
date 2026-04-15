@@ -36,7 +36,7 @@ func findPlugin(name string) (string, *plugin.PluginInfo, error) {
 	plugins := plugin.DiscoverPlugins(localDir, globalDir)
 	info, ok := plugins[name]
 	if !ok {
-		return "", nil, fmt.Errorf("plugin %q not found", name)
+		return "", nil, fmt.Errorf("plugin %q not found, searched: %s, %s", name, localDir, globalDir)
 	}
 	// pluginRoot is the parent dir of the plugin's dir
 	pluginRoot := filepath.Dir(info.Dir)
@@ -82,7 +82,7 @@ var pluginCmd = &cobra.Command{
 			return err
 		}
 
-		result, err := pipeline.RunPluginSubcommand(pluginRoot, pluginName, subcommand, flags)
+		result, err := pipeline.RunPluginSubcommand(pluginRoot, pluginName, subcommand, flags, providerReg)
 		if err != nil {
 			return err
 		}
