@@ -31,6 +31,14 @@ func TestNilTelemetrySafe(t *testing.T) {
 	}
 }
 
+func TestNilTelemetryIndexRun(t *testing.T) {
+	var tel *Telemetry
+	err := tel.IndexRun(context.Background(), RunDoc{})
+	if err != nil {
+		t.Errorf("nil telemetry IndexRun should be nil-safe: %v", err)
+	}
+}
+
 func TestNewRunIDUnique(t *testing.T) {
 	a := NewRunID()
 	b := NewRunID()

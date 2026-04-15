@@ -82,16 +82,33 @@ type WorkflowRunDoc struct {
 
 // CrossReviewDoc represents one variant's score from a cross-review.
 type CrossReviewDoc struct {
-	RunID        string  `json:"run_id"`
-	Issue        string  `json:"issue"`
-	Iteration    string  `json:"iteration"`
-	Variant      string  `json:"variant"`
-	Passed       int     `json:"passed"`
-	Total        int     `json:"total"`
-	Confidence   float64 `json:"confidence"`
-	Winner       bool    `json:"winner"`
-	WorkflowName string  `json:"workflow_name"`
-	Timestamp    string  `json:"timestamp"`
+	RunID         string  `json:"run_id"`
+	Issue         string  `json:"issue"`
+	Iteration     string  `json:"iteration"`
+	Variant       string  `json:"variant"`
+	Passed        int     `json:"passed"`
+	Total         int     `json:"total"`
+	Confidence    float64 `json:"confidence"`
+	Winner        bool    `json:"winner"`
+	WorkflowName  string  `json:"workflow_name"`
+	Timestamp     string  `json:"timestamp"`
+	CompareID     string  `json:"compare_id,omitempty"`
+	Scope         string  `json:"scope,omitempty"`
+	CriteriaName  string  `json:"criteria_name,omitempty"`
+	CriteriaScore int     `json:"criteria_score,omitempty"`
+	Workspace     string  `json:"workspace,omitempty"`
+}
+
+// RunDoc represents a single workflow run for the runs index.
+type RunDoc struct {
+	RunID        string `json:"run_id"`
+	WorkflowName string `json:"workflow_name"`
+	Workspace    string `json:"workspace"`
+	Source       string `json:"source"`
+	Status       string `json:"status"`
+	HasCompare   bool   `json:"has_compare"`
+	DurationMs   int64  `json:"duration_ms"`
+	Timestamp    string `json:"timestamp"`
 }
 
 // Telemetry provides nil-safe methods for indexing research telemetry into ES.
@@ -157,6 +174,14 @@ func (t *Telemetry) IndexWorkflowRun(ctx context.Context, doc WorkflowRunDoc) er
 		return nil
 	}
 	return t.indexDoc(ctx, IndexWorkflowRuns, doc.RunID, doc)
+}
+
+// IndexRun indexes a workflow run document.
+func (t *Telemetry) IndexRun(ctx context.Context, doc RunDoc) error {
+	if t == nil {
+		return nil
+	}
+	return t.indexDoc(ctx, IndexRuns, doc.RunID, doc)
 }
 
 // IndexCrossReview indexes a cross-review per-variant score document.

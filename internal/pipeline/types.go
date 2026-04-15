@@ -73,6 +73,11 @@ type Step struct {
 	// Parallel execution
 	ParSteps []Step `yaml:"-"` // par: concurrent child steps
 
+	// Compare execution
+	CompareBranches []CompareBranch `yaml:"-"` // compare: named alternative branches
+	CompareReview   *ReviewConfig   `yaml:"-"` // compare: review config (nil = default judge)
+	CompareID       string          `yaml:"-"` // compare: id for top-level compare blocks
+
 	// Plugin invocation
 	PluginCall *PluginCallStep `yaml:"-"`
 
@@ -105,6 +110,19 @@ type Step struct {
 type CondBranch struct {
 	Pred string // shell command predicate (exit 0 = true), or "else"
 	Step Step   // step to execute if predicate succeeds
+}
+
+// CompareBranch is one named alternative in a (compare ...) form.
+type CompareBranch struct {
+	Name  string // branch name
+	Steps []Step // steps to execute in this branch
+}
+
+// ReviewConfig configures the judge for a (compare ...) form.
+type ReviewConfig struct {
+	Criteria []string // scoring criteria names (criteria mode)
+	Prompt   string   // custom review prompt (prompt mode)
+	Model    string   // model override for the judge
 }
 
 // LLMStep configures an LLM invocation.

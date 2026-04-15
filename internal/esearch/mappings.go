@@ -7,6 +7,7 @@ const (
 	IndexLLMCalls        = "glitch-llm-calls"
 	IndexWorkflowRuns    = "glitch-workflow-runs"
 	IndexCrossReviews    = "glitch-cross-reviews"
+	IndexRuns            = "glitch-runs"
 	IndexKnowledgePrefix = "glitch-knowledge-"
 )
 
@@ -114,15 +115,36 @@ const CrossReviewsMapping = `{
   "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
   "mappings": {
     "properties": {
+      "run_id":          { "type": "keyword" },
+      "issue":           { "type": "keyword" },
+      "iteration":       { "type": "keyword" },
+      "variant":         { "type": "keyword" },
+      "passed":          { "type": "integer" },
+      "total":           { "type": "integer" },
+      "confidence":      { "type": "float" },
+      "winner":          { "type": "boolean" },
+      "workflow_name":   { "type": "keyword" },
+      "timestamp":       { "type": "date" },
+      "compare_id":      { "type": "keyword" },
+      "scope":           { "type": "keyword" },
+      "criteria_name":   { "type": "keyword" },
+      "criteria_score":  { "type": "integer" },
+      "workspace":       { "type": "keyword" }
+    }
+  }
+}`
+
+const RunsMapping = `{
+  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": {
+    "properties": {
       "run_id":        { "type": "keyword" },
-      "issue":         { "type": "keyword" },
-      "iteration":     { "type": "keyword" },
-      "variant":       { "type": "keyword" },
-      "passed":        { "type": "integer" },
-      "total":         { "type": "integer" },
-      "confidence":    { "type": "float" },
-      "winner":        { "type": "boolean" },
       "workflow_name": { "type": "keyword" },
+      "workspace":     { "type": "keyword" },
+      "source":        { "type": "keyword" },
+      "status":        { "type": "keyword" },
+      "has_compare":   { "type": "boolean" },
+      "duration_ms":   { "type": "long" },
       "timestamp":     { "type": "date" }
     }
   }
@@ -137,5 +159,6 @@ func AllIndices() map[string]string {
 		IndexLLMCalls:     LLMCallsMapping,
 		IndexWorkflowRuns:  WorkflowRunsMapping,
 		IndexCrossReviews:  CrossReviewsMapping,
+		IndexRuns:          RunsMapping,
 	}
 }
