@@ -85,3 +85,17 @@ func TestProviderConfig_ResolveAPIKey_NeitherSet(t *testing.T) {
 		t.Fatal("expected error when no API key configured")
 	}
 }
+
+func TestLoadConfig_WorkflowsDir(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	os.WriteFile(cfgPath, []byte("default_model: qwen3:8b\nworkflows_dir: /custom/workflows\n"), 0o644)
+
+	cfg, err := loadConfigFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("loadConfigFrom: %v", err)
+	}
+	if cfg.WorkflowsDir != "/custom/workflows" {
+		t.Fatalf("WorkflowsDir: got %q, want /custom/workflows", cfg.WorkflowsDir)
+	}
+}

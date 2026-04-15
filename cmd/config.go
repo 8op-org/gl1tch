@@ -20,6 +20,7 @@ type Config struct {
 	DefaultModel    string                    `yaml:"default_model"`
 	DefaultProvider string                    `yaml:"default_provider"`
 	EvalThreshold   int                       `yaml:"eval_threshold,omitempty"`
+	WorkflowsDir    string                    `yaml:"workflows_dir,omitempty"`
 	Tiers           []provider.TierConfig     `yaml:"tiers,omitempty"`
 	Providers       map[string]ProviderConfig `yaml:"providers,omitempty"`
 }
@@ -79,6 +80,8 @@ var configSetCmd = &cobra.Command{
 			cfg.DefaultModel = args[1]
 		case "default_provider":
 			cfg.DefaultProvider = args[1]
+		case "workflows_dir":
+			cfg.WorkflowsDir = args[1]
 		default:
 			return fmt.Errorf("unknown config key: %s", args[0])
 		}
