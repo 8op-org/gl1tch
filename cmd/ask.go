@@ -93,7 +93,7 @@ var askCmd = &cobra.Command{
 					Issues:     issues,
 					Repo:       resolved,
 					RepoPath:   repoPath,
-					ResultsDir: askResultsDir,
+					ResultsDir: resolveResultsDir(),
 					Variants:   variants,
 					Iterations: iterations,
 					Workflows:  workflows,
@@ -111,11 +111,7 @@ var askCmd = &cobra.Command{
 				}
 
 				// Print handoff
-				rdir := askResultsDir
-				if rdir == "" {
-					cwd, _ := os.Getwd()
-					rdir = filepath.Join(cwd, ".glitch", "results")
-				}
+				rdir := resolveResultsDir()
 				fmt.Printf("\nResults ready:\n")
 				for _, issue := range issues {
 					fmt.Printf("  #%s: %s/%s/manifest.md\n", issue, rdir, issue)
@@ -185,11 +181,7 @@ var askCmd = &cobra.Command{
 		fmt.Println(result.Output)
 
 		if research.IsSubstantive(result.Output) {
-			resultsBase := askResultsDir
-			if resultsBase == "" {
-				cwd, _ := os.Getwd()
-				resultsBase = filepath.Join(cwd, "results")
-			}
+			resultsBase := resolveResultsDir()
 			if err := research.SaveLoopResult(resultsBase, result); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: save results: %v\n", err)
 			} else {
@@ -232,11 +224,7 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 	fmt.Println(result.Output)
 
 	// Print handoff
-	rdir := askResultsDir
-	if rdir == "" {
-		cwd, _ := os.Getwd()
-		rdir = filepath.Join(cwd, ".glitch", "results")
-	}
+	rdir := resolveResultsDir()
 	singleResultsDir := filepath.Join(rdir, issue)
 	if _, err := os.Stat(singleResultsDir); err == nil {
 		fmt.Printf("\nResults: %s/\n", singleResultsDir)
@@ -273,6 +261,19 @@ func resolveWorkflowsDir(cfg *Config) string {
 		return filepath.Join(workspacePath, "workflows")
 	}
 	return ""
+}
+
+// resolveResultsDir returns the results directory based on flags and workspace.
+// Priority: --results-dir flag > <workspace>/results/ > CWD/.glitch/results
+func resolveResultsDir() string {
+	if askResultsDir != "" {
+		return askResultsDir
+	}
+	if workspacePath != "" {
+		return filepath.Join(workspacePath, "results")
+	}
+	cwd, _ := os.Getwd()
+	return filepath.Join(cwd, ".glitch", "results")
 }
 
 func loadWorkflows() (map[string]*pipeline.Workflow, error) {
