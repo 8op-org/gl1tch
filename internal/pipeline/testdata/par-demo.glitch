@@ -1,0 +1,11 @@
+(workflow "par-demo"
+  :description "parallel step smoke test"
+
+  (step "setup" (run "echo ready"))
+
+  (par
+    (step "left" (run "echo left-branch"))
+    (step "right" (run "echo right-branch")))
+
+  (step "merge"
+    (run "echo left={{step \"left\"}} right={{step \"right\"}}")))
