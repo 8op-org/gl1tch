@@ -150,12 +150,13 @@ type SearchStep struct {
 
 // IndexStep indexes a single document into Elasticsearch.
 type IndexStep struct {
-	IndexName     string
-	Doc           string // template-rendered JSON document
-	DocID         string // optional explicit _id
-	ESURL         string
+	IndexName  string
+	Doc        string // template-rendered JSON document
+	DocID      string // optional explicit _id
+	ESURL      string
 	EmbedField string // field in doc to embed (empty = no embedding)
 	EmbedModel string
+	Upsert     *bool // nil = default (upsert), false = skip if exists (op_type=create)
 }
 
 // DeleteStep deletes documents matching a query from Elasticsearch.

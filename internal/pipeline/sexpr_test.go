@@ -1420,3 +1420,22 @@ func TestSexprWorkflow_SearchQueryOptional(t *testing.T) {
 		t.Fatalf("expected empty query, got %q", s.Search.Query)
 	}
 }
+
+func TestSexprWorkflow_IndexUpsertFalse(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (index :index "my-index" :doc "{}" :id "doc1" :upsert false)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[0]
+	if s.Index == nil {
+		t.Fatal("expected index step")
+	}
+	if s.Index.Upsert == nil || *s.Index.Upsert {
+		t.Fatal("expected upsert to be false")
+	}
+}

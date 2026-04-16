@@ -250,6 +250,40 @@ func (c *Client) IndexDoc(ctx context.Context, index, docID string, doc json.Raw
 	return &result, nil
 }
 
+// IndexDocCreate indexes a document only if it doesn't already exist (op_type=create).
+// Returns (response, existed, error). If the doc already exists, existed=true and response is nil.
+func (c *Client) IndexDocCreate(ctx context.Context, index, docID string, doc json.RawMessage) (*IndexDocResponse, bool, error) {
+	path := "/" + index + "/_doc/" + docID + "?op_type=create"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+path, bytes.NewReader(doc))
+	if err != nil {
+		return nil, false, fmt.Errorf("index doc create: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, false, fmt.Errorf("index doc create: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 409 Conflict means doc already exists — not an error for dedup
+	if resp.StatusCode == 409 {
+		return nil, true, nil
+	}
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, false, fmt.Errorf("index doc create: status %s — %s", resp.Status, truncate(string(body), 256))
+	}
+
+	var result IndexDocResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, false, fmt.Errorf("index doc create: decode response: %w", err)
+	}
+	return &result, false, nil
+}
+
 // DeleteByQueryResponse holds the parsed result of a delete-by-query operation.
 type DeleteByQueryResponse struct {
 	Deleted int `json:"deleted"`

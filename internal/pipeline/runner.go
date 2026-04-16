@@ -1390,6 +1390,19 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		esURL := resolveESURL(step.Index.ESURL, rctx)
 		es := esearch.NewClient(esURL)
 		ui.StepSDK(step.ID, "index")
+
+		if step.Index.Upsert != nil && !*step.Index.Upsert && idRendered != "" {
+			resp, existed, err := es.IndexDocCreate(ctx, indexRendered, idRendered, docBytes)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: %w", step.ID, err)
+			}
+			if existed {
+				return &stepOutcome{output: fmt.Sprintf(`{"result":"noop","_id":"%s"}`, idRendered)}, nil
+			}
+			out, _ := json.Marshal(resp)
+			return &stepOutcome{output: string(out)}, nil
+		}
+
 		resp, err := es.IndexDoc(ctx, indexRendered, idRendered, docBytes)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)

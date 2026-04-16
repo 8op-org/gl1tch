@@ -960,6 +960,10 @@ func convertIndex(n *sexpr.Node, defs map[string]string) (*IndexStep, error) {
 					idx.DocID = resolveVal(val, defs)
 				case "es":
 					idx.ESURL = resolveVal(val, defs)
+				case "upsert":
+					v := strings.ToLower(resolveVal(val, defs))
+					b := v != "false" && v != "0" && v != "no"
+					idx.Upsert = &b
 				default:
 					return nil, fmt.Errorf("line %d: unknown index keyword :%s", child.Line, key)
 				}
