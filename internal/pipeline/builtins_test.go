@@ -91,3 +91,19 @@ func indexOf(s string, ch byte) int {
 	}
 	return -1
 }
+
+func TestJSONBuiltins(t *testing.T) {
+	obj := `{"title":"bug fix","nested":{"k":"v"}}`
+	got, err := callBuiltin("pick", []string{"title", obj}, NewScope())
+	if err != nil || got != "bug fix" {
+		t.Errorf("pick: got %q err=%v", got, err)
+	}
+	got2, _ := callBuiltin("pick", []string{"nested.k", obj}, NewScope())
+	if got2 != "v" {
+		t.Errorf("pick nested: got %q", got2)
+	}
+	got3, _ := callBuiltin("assoc", []string{"status", "done", `{"a":1}`}, NewScope())
+	if got3 != `{"a":1,"status":"done"}` && got3 != `{"status":"done","a":1}` {
+		t.Errorf("assoc: got %q", got3)
+	}
+}

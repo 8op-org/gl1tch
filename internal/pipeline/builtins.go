@@ -184,6 +184,47 @@ func boolStr(b bool) string {
 }
 
 func tryJSONBuiltin(name string, args []string) (string, bool, error) {
-	_ = json.Valid // keep import for next task
+	switch name {
+	case "pick":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("pick: need (key json)")
+		}
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(args[1]), &obj); err != nil {
+			return "", true, fmt.Errorf("pick: invalid JSON: %w", err)
+		}
+		parts := strings.Split(args[0], ".")
+		var cur any = obj
+		for _, p := range parts {
+			m, ok := cur.(map[string]any)
+			if !ok {
+				return "", true, nil
+			}
+			cur = m[p]
+		}
+		switch v := cur.(type) {
+		case string:
+			return v, true, nil
+		case nil:
+			return "", true, nil
+		default:
+			b, _ := json.Marshal(v)
+			return string(b), true, nil
+		}
+	case "assoc":
+		if len(args) < 3 {
+			return "", true, fmt.Errorf("assoc: need (key val json)")
+		}
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(args[2]), &obj); err != nil {
+			return "", true, err
+		}
+		obj[args[0]] = args[1]
+		b, err := json.Marshal(obj)
+		if err != nil {
+			return "", true, err
+		}
+		return string(b), true, nil
+	}
 	return "", false, nil
 }
