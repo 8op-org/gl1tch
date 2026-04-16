@@ -206,6 +206,8 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "->":
+		return convertThread(n, defs)
 	default:
 		return nil, fmt.Errorf("line %d: unknown form %q", n.Line, head)
 	}
@@ -486,6 +488,124 @@ func convertPar(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:     "par",
 		ParSteps: parSteps,
 	}, nil
+}
+
+// convertThread: (-> form1 form2 form3 ...)
+// Desugars into a sequence of steps where each form implicitly references the previous.
+// SDK forms (search, index, etc.) are wrapped in auto-named steps.
+// Collection forms (each/map, filter, reduce) have their source set to the previous step.
+// (flatten) with no args becomes (flatten "prev-step-id").
+func convertThread(n *sexpr.Node, defs map[string]string) ([]Step, error) {
+	children := n.Children[1:] // skip "->"
+	if len(children) < 2 {
+		return nil, fmt.Errorf("line %d: (->) needs at least 2 forms", n.Line)
+	}
+
+	var steps []Step
+	prevID := ""
+
+	for i, child := range children {
+		if !child.IsList() || len(child.Children) == 0 {
+			return nil, fmt.Errorf("line %d: (->) children must be forms", child.Line)
+		}
+		head := child.Children[0].SymbolVal()
+		if head == "" {
+			head = child.Children[0].StringVal()
+		}
+		threadID := fmt.Sprintf("thread-%d-%d", n.Line, i)
+
+		switch head {
+		case "search", "index", "delete", "embed", "run", "llm",
+			"json-pick", "pick", "lines", "merge", "http-get", "fetch",
+			"http-post", "send", "read-file", "read", "write-file", "write", "glob", "plugin":
+			// SDK/primitive form — wrap in a step
+			wrappedNode := &sexpr.Node{
+				Children: []*sexpr.Node{
+					{Atom: &sexpr.Token{Type: sexpr.TokenSymbol, Val: "step"}},
+					{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: threadID}},
+					child,
+				},
+				Line: child.Line,
+			}
+			s, err := convertStep(wrappedNode, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = threadID
+
+		case "flatten":
+			// (flatten) with no args or (flatten "explicit") — auto-fill source if missing
+			s := Step{ID: threadID, Flatten: prevID}
+			if len(child.Children) >= 2 {
+				s.Flatten = resolveVal(child.Children[1], defs)
+			}
+			steps = append(steps, s)
+			prevID = threadID
+
+		case "each", "map":
+			// Rewrite source to prevID
+			if prevID == "" {
+				return nil, fmt.Errorf("line %d: (->) each/map has no preceding step", child.Line)
+			}
+			newChildren := make([]*sexpr.Node, 0, len(child.Children)+1)
+			newChildren = append(newChildren, child.Children[0]) // "each"/"map"
+			newChildren = append(newChildren, &sexpr.Node{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: prevID}})
+			newChildren = append(newChildren, child.Children[1:]...) // body
+			rewritten := &sexpr.Node{Children: newChildren, Line: child.Line}
+			s, err := convertMap(rewritten, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		case "filter":
+			if prevID == "" {
+				return nil, fmt.Errorf("line %d: (->) filter has no preceding step", child.Line)
+			}
+			newChildren := make([]*sexpr.Node, 0, len(child.Children)+1)
+			newChildren = append(newChildren, child.Children[0])
+			newChildren = append(newChildren, &sexpr.Node{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: prevID}})
+			newChildren = append(newChildren, child.Children[1:]...)
+			rewritten := &sexpr.Node{Children: newChildren, Line: child.Line}
+			s, err := convertFilter(rewritten, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		case "reduce":
+			if prevID == "" {
+				return nil, fmt.Errorf("line %d: (->) reduce has no preceding step", child.Line)
+			}
+			newChildren := make([]*sexpr.Node, 0, len(child.Children)+1)
+			newChildren = append(newChildren, child.Children[0])
+			newChildren = append(newChildren, &sexpr.Node{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: prevID}})
+			newChildren = append(newChildren, child.Children[1:]...)
+			rewritten := &sexpr.Node{Children: newChildren, Line: child.Line}
+			s, err := convertReduce(rewritten, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		case "step":
+			// Named step — just convert normally
+			s, err := convertStep(child, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		default:
+			return nil, fmt.Errorf("line %d: unknown form %q in (->)", child.Line, head)
+		}
+	}
+	return steps, nil
 }
 
 // convertPhase: (phase "name" [:retries N] (step ...) ... (gate ...) ...)
