@@ -23,6 +23,7 @@ type Workflow struct {
 	Items       []WorkflowItem `yaml:"-"`
 	SourceFile  string         `yaml:"-"`
 	Args        []plugin.ArgDef `yaml:"-"`
+	Input       *InputDef       `yaml:"-"`
 }
 
 // WorkflowItem is a union type for the ordered sequence of workflow elements.
@@ -237,11 +238,16 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", filename, err)
 		}
+		input, err := ParseInput(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filename, err)
+		}
 		w, err := parseSexprWorkflow(data)
 		if err != nil {
 			return nil, err
 		}
 		w.Args = args
+		w.Input = input
 		w.SourceFile = filename
 		return w, nil
 	default:
