@@ -4,19 +4,35 @@ import Base from './Base.astro';
 interface Props {
   title: string;
   description?: string;
+  headings?: { depth: number; slug: string; text: string }[];
 }
 
-const { title, description } = Astro.props;
+const { title, description, headings = [] } = Astro.props;
+const tocHeadings = headings.filter((h) => h.depth === 2);
 ---
 
 <Base title={`${title} — gl1tch`} description={description}>
   <main>
     <section style="padding-top: 160px;">
-      <div class="wrap">
-        <h2>{title}</h2>
-        <div class="doc-content">
-          <slot />
+      <div class="doc-layout">
+        <div class="doc-main">
+          <h2>{title}</h2>
+          <div class="doc-content">
+            <slot />
+          </div>
         </div>
+        {tocHeadings.length > 0 && (
+          <aside class="doc-toc">
+            <div class="doc-toc-inner">
+              <div class="doc-toc-label">On this page</div>
+              <nav>
+                {tocHeadings.map((h) => (
+                  <a href={`#${h.slug}`} class={h.text === 'Next steps' ? 'doc-toc-next' : ''}>{h.text}</a>
+                ))}
+              </nav>
+            </div>
+          </aside>
+        )}
       </div>
     </section>
   </main>

@@ -575,6 +575,10 @@ code {
   font-size: 0.78rem;
   padding: 16px 24px;
   background: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* ── Footer ────────────────────────────────── */
@@ -634,6 +638,81 @@ footer {
 @media (max-width: 480px) {
   .hero-title { font-size: 2.5rem; }
   .wrap, .wrap-wide { padding: 0 16px; }
+}
+
+/* ── Doc layout ───────────────────────────── */
+.doc-layout {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 40px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 64px;
+  position: relative;
+  z-index: 1;
+}
+
+.doc-layout:has(.doc-toc) {
+  grid-template-columns: 1fr 200px;
+}
+
+.doc-main {
+  min-width: 0;
+}
+
+.doc-toc {
+  position: relative;
+}
+
+.doc-toc-inner {
+  position: sticky;
+  top: 80px;
+}
+
+.doc-toc-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--teal);
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.doc-toc nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doc-toc nav a {
+  font-size: 0.72rem;
+  color: var(--dim);
+  text-decoration: none;
+  line-height: 1.5;
+  transition: color 0.2s;
+  border-left: 1px solid transparent;
+  padding-left: 12px;
+}
+
+.doc-toc nav a:hover {
+  color: var(--teal);
+  border-left-color: var(--teal);
+}
+
+.doc-toc nav a.doc-toc-next {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--teal);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .doc-layout {
+    grid-template-columns: 1fr;
+    padding: 0 24px;
+  }
+  .doc-toc { display: none; }
 }
 
 /* ── Doc content ───────────────────────────── */

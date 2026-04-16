@@ -10,12 +10,15 @@ description: "brew install 8op-org/tap/glitch"
 brew install 8op-org/tap/glitch
 ```
 
-gl1tch routes LLM steps through Ollama by default. Install it and pull a model:
+gl1tch routes LLM steps through a local model by default. We recommend [LM Studio](https://lmstudio.ai) — download it, enable the local server in **Settings → Server** (port 1234), and pull **qwen3-8b**. gl1tch auto-detects it and will download missing models on demand.
+
+Alternatively, you can use Ollama:
 
 ```bash
-brew install ollama
-ollama pull qwen2.5:7b
+brew install ollama && ollama pull qwen2.5:7b
 ```
+
+See [Local Models](/docs/local-models) for GPU tuning, model recommendations, and how to use both providers together.
 
 You also need GitHub CLI authenticated:
 
@@ -243,6 +246,29 @@ Project-local workflows override globals with the same name.
 ```bash
 glitch workflow list
 ```
+
+## Knowledge index
+
+gl1tch can index your repos into Elasticsearch and query them in natural language. Start the stack with Docker:
+
+```bash
+glitch up
+```
+
+This launches Elasticsearch and Kibana via Docker Compose and seeds default dashboards. Once running:
+
+```bash
+glitch index --repo .              # index the current repo
+glitch observe "PRs that failed CI this week"
+```
+
+To stop the stack:
+
+```bash
+glitch down
+```
+
+Requires Docker Desktop or `docker compose` on your machine.
 
 ## Next steps
 
