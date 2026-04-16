@@ -199,6 +199,37 @@ func evalNode(n *sexpr.Node, scope *Scope) (string, error) {
 	return callBuiltin(name, args, scope)
 }
 
+// isNumericLiteral reports whether sym looks like an integer or decimal literal
+// (optional leading -, digits, optional single decimal point with digits).
+// These are returned as-is rather than passed to scope.Resolve.
+func isNumericLiteral(sym string) bool {
+	if sym == "" {
+		return false
+	}
+	i := 0
+	if sym[0] == '-' || sym[0] == '+' {
+		i = 1
+		if i >= len(sym) {
+			return false
+		}
+	}
+	sawDigit := false
+	sawDot := false
+	for ; i < len(sym); i++ {
+		ch := sym[i]
+		if ch >= '0' && ch <= '9' {
+			sawDigit = true
+			continue
+		}
+		if ch == '.' && !sawDot {
+			sawDot = true
+			continue
+		}
+		return false
+	}
+	return sawDigit
+}
+
 func evalAtom(n *sexpr.Node, scope *Scope) (string, error) {
 	switch n.Atom.Type {
 	case sexpr.TokenString:
@@ -207,6 +238,9 @@ func evalAtom(n *sexpr.Node, scope *Scope) (string, error) {
 		return n.KeywordVal(), nil
 	case sexpr.TokenSymbol:
 		sym := n.Atom.Val
+		if isNumericLiteral(sym) {
+			return sym, nil
+		}
 		if strings.Contains(sym, ".") {
 			parts := strings.Split(sym, ".")
 			return scope.ResolvePath(parts[0], parts[1:])

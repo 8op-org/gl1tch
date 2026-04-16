@@ -22,7 +22,7 @@ func TestRender_WithParams(t *testing.T) {
 			"issue": "3442",
 		},
 	}
-	result, err := render(`gh issue view {{.param.issue}} --repo {{.param.repo}}`, data, steps)
+	result, err := render(`gh issue view {{.param.issue}} --repo {{.param.repo}}`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRender_WithStepRefs(t *testing.T) {
 	data := map[string]any{
 		"input": "test",
 	}
-	result, err := render(`Issue: {{step "fetch"}}`, data, steps)
+	result, err := render(`Issue: {{step "fetch"}}`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -890,7 +890,7 @@ func TestRender_Pick(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | pick "subject"}}`, data, steps)
+	result, err := render(`{{.param.item | pick "subject"}}`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -907,7 +907,7 @@ func TestRender_PickNested(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | pick "email.subject"}}`, data, steps)
+	result, err := render(`{{.param.item | pick "email.subject"}}`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -924,7 +924,7 @@ func TestRender_Assoc(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | assoc "status" "triaged"}}`, data, steps)
+	result, err := render(`{{.param.item | assoc "status" "triaged"}}`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -948,7 +948,7 @@ func TestRender_AssocOverwrite(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | assoc "status" "closed"}}`, data, steps)
+	result, err := render(`{{.param.item | assoc "status" "closed"}}`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
