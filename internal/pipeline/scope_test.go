@@ -90,3 +90,15 @@ func TestScopeResourceMissingFailsLoud(t *testing.T) {
 		t.Fatal("expected UndefinedRefError on missing resource")
 	}
 }
+
+func TestScopeParamSuggestsClose(t *testing.T) {
+	s := NewScope()
+	s.SetParam("issue", "123")
+	_, err := s.ResolvePath("param", []string{"issu"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "param.issue") {
+		t.Errorf("expected suggestion 'param.issue' in error, got: %v", err)
+	}
+}

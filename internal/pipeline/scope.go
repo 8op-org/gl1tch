@@ -78,7 +78,7 @@ func (s *Scope) ResolvePath(base string, path []string) (string, error) {
 		if v, ok := s.params[path[0]]; ok {
 			return v, nil
 		}
-		return "", &UndefinedRefError{Symbol: "param." + path[0]}
+		return "", &UndefinedRefError{Symbol: "param." + path[0], Suggestion: s.suggestDottedNS("param", path[0])}
 	case "env":
 		if len(path) != 1 {
 			return "", &UndefinedRefError{Symbol: "env." + joinDots(path)}
@@ -101,7 +101,7 @@ func (s *Scope) ResolvePath(base string, path []string) (string, error) {
 				return v, nil
 			}
 		}
-		return "", &UndefinedRefError{Symbol: "resource." + joinDots(path)}
+		return "", &UndefinedRefError{Symbol: "resource." + joinDots(path), Suggestion: s.suggestDottedNS("resource", path[0])}
 	}
 	return "", &UndefinedRefError{Symbol: base + "." + joinDots(path)}
 }
@@ -115,6 +115,38 @@ func joinDots(parts []string) string {
 		out += p
 	}
 	return out
+}
+
+// suggestDottedNS returns the closest key in the namespace named by base
+// (e.g. "param" or "resource") as a fully-qualified "<base>.<key>" string,
+// or "" when no close match exists. Empty string means "no suggestion" —
+// callers should wire that into UndefinedRefError.Suggestion directly so
+// the error formatter omits the "did you mean" clause.
+func (s *Scope) suggestDottedNS(base, key string) string {
+	var keys []string
+	switch base {
+	case "param":
+		for k := range s.params {
+			keys = append(keys, k)
+		}
+	case "resource":
+		for k := range s.resources {
+			keys = append(keys, k)
+		}
+	}
+	best := ""
+	bestDist := len(key) + 1
+	for _, c := range keys {
+		d := levenshtein(key, c)
+		if d < bestDist && d <= 2 {
+			bestDist = d
+			best = c
+		}
+	}
+	if best == "" {
+		return ""
+	}
+	return base + "." + best
 }
 
 // suggest returns the closest known symbol by Levenshtein distance, or "".
