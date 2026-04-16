@@ -40,6 +40,26 @@ func init() {
 	runCmd.Flags().BoolVar(&runCompare, "compare", false, "discover variant workflows and cross-review")
 	runCmd.Flags().StringVar(&runReviewCriteria, "review-criteria", "", "comma-separated review criteria for comparison")
 	runCmd.Flags().StringVar(&runResultsDir, "results-dir", "", "output directory for results (defaults to <workspace>/results)")
+	runCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		// cobra passes args as [cmdName, positional...] so the workflow name
+		// is at index 1.  Fall back to cobra's default when it's missing.
+		if len(args) < 2 {
+			cmd.Root().HelpFunc()(cmd, args)
+			return
+		}
+		name := args[1]
+		path, err := resolveWorkflowPath(name)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%v\n", err)
+			return
+		}
+		w, err := pipeline.LoadFile(path)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "load %s: %v\n", name, err)
+			return
+		}
+		fmt.Fprint(cmd.OutOrStdout(), pipeline.FormatHelp(w))
+	})
 	rootCmd.AddCommand(runCmd)
 }
 
