@@ -259,7 +259,11 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 			return nil, fmt.Errorf("parse %s: %w", filename, err)
 		}
 		if w.Name == "" {
-			w.Name = filename
+			// Fallback name is the file's basename without extension — the
+			// full path lives on SourceFile, which keeps the two concerns
+			// separate.
+			base := filepath.Base(filename)
+			w.Name = strings.TrimSuffix(base, filepath.Ext(base))
 		}
 		w.SourceFile = filename
 		return &w, nil

@@ -41,13 +41,21 @@ func init() {
 	runCmd.Flags().StringVar(&runReviewCriteria, "review-criteria", "", "comma-separated review criteria for comparison")
 	runCmd.Flags().StringVar(&runResultsDir, "results-dir", "", "output directory for results (defaults to <workspace>/results)")
 	runCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		// cobra passes args as [cmdName, positional...] so the workflow name
-		// is at index 1.  Fall back to cobra's default when it's missing.
-		if len(args) < 2 {
+		// Cobra hands the full raw arg slice to HelpFunc, including the
+		// subcommand name and any flag tokens. Pick the first non-flag
+		// argument that isn't the subcommand itself as the workflow name.
+		name := ""
+		for _, a := range args {
+			if a == "run" || strings.HasPrefix(a, "-") {
+				continue
+			}
+			name = a
+			break
+		}
+		if name == "" {
 			cmd.Root().HelpFunc()(cmd, args)
 			return
 		}
-		name := args[1]
 		path, err := resolveWorkflowPath(name)
 		if err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "%v\n", err)
