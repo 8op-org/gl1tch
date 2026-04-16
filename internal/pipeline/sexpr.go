@@ -194,6 +194,12 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "reduce":
+		s, err := convertReduce(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	case "par":
 		s, err := convertPar(n, defs)
 		if err != nil {
@@ -421,6 +427,25 @@ func convertFilter(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:       "filter",
 		FilterOver: source,
 		FilterBody: &body,
+	}, nil
+}
+
+// convertReduce: (reduce "step-id" (step "fold" ...))
+func convertReduce(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (reduce) needs source step ID and body step", n.Line)
+	}
+	source := resolveVal(children[0], defs)
+	body, err := convertStep(children[1], defs)
+	if err != nil {
+		return Step{}, fmt.Errorf("line %d: reduce body: %w", n.Line, err)
+	}
+	return Step{
+		ID:         fmt.Sprintf("reduce-%d", n.Line),
+		Form:       "reduce",
+		ReduceOver: source,
+		ReduceBody: &body,
 	}, nil
 }
 

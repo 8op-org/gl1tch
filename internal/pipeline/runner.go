@@ -770,6 +770,8 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executeMap(ctx, rctx, step)
 	case "filter":
 		return executeFilter(ctx, rctx, step)
+	case "reduce":
+		return executeReduce(ctx, rctx, step)
 	case "par":
 		return executePar(ctx, rctx, step)
 	}
@@ -963,6 +965,50 @@ func executeFilter(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	rctx.steps[step.ID] = combined
 	rctx.mu.Unlock()
 	return &stepOutcome{output: combined}, nil
+}
+
+// executeReduce folds over NDJSON lines from a source step.
+// Each iteration receives {{.param.item}} and {{.param.accumulator}}.
+// The accumulator starts as "" and is updated with each step's output.
+func executeReduce(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	source, ok := snap[step.ReduceOver]
+	if !ok {
+		return nil, fmt.Errorf("reduce %s: source step %q has no output", step.ID, step.ReduceOver)
+	}
+
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	accumulator := ""
+
+	for idx, item := range lines {
+		if item == "" {
+			continue
+		}
+		body := *step.ReduceBody
+		body.ID = fmt.Sprintf("%s-%d", step.ReduceBody.ID, idx)
+
+		origParams := rctx.params
+		reduceParams := make(map[string]string, len(origParams)+3)
+		for k, v := range origParams {
+			reduceParams[k] = v
+		}
+		reduceParams["item"] = item
+		reduceParams["item_index"] = fmt.Sprintf("%d", idx)
+		reduceParams["accumulator"] = accumulator
+		rctx.params = reduceParams
+
+		outcome, err := executeStep(ctx, rctx, body)
+		rctx.params = origParams
+		if err != nil {
+			return nil, fmt.Errorf("reduce %s item %d: %w", step.ID, idx, err)
+		}
+		accumulator = outcome.output
+	}
+
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = accumulator
+	rctx.mu.Unlock()
+	return &stepOutcome{output: accumulator}, nil
 }
 
 // executePar runs all child steps concurrently and waits for completion.

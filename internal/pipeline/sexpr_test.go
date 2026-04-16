@@ -1508,3 +1508,29 @@ func TestSexprWorkflow_Filter(t *testing.T) {
 		t.Fatal("expected filter body")
 	}
 }
+
+func TestSexprWorkflow_Reduce(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "data" (run "echo 'a\nb\nc'"))
+  (reduce "data"
+    (step "fold" (run "echo '{{.param.accumulator}},{{.param.item}}'"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "reduce" {
+		t.Fatalf("expected form %q, got %q", "reduce", s.Form)
+	}
+	if s.ReduceOver != "data" {
+		t.Fatalf("expected reduce over %q, got %q", "data", s.ReduceOver)
+	}
+	if s.ReduceBody == nil {
+		t.Fatal("expected reduce body")
+	}
+}

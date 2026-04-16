@@ -66,6 +66,10 @@ type Step struct {
 	FilterOver string `yaml:"-"` // filter: step ID whose output to iterate
 	FilterBody *Step  `yaml:"-"` // filter: predicate step (truthy output = keep)
 
+	// Reduce collection form
+	ReduceOver string `yaml:"-"` // reduce: step ID whose output to iterate
+	ReduceBody *Step  `yaml:"-"` // reduce: body step (receives item + accumulator)
+
 	// Parallel execution
 	ParSteps []Step `yaml:"-"` // par: concurrent child steps
 
