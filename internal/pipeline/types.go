@@ -113,6 +113,10 @@ type Step struct {
 	CallWorkflow string            `yaml:"-"` // workflow name
 	CallInput    string            `yaml:"-"` // template-rendered input for child
 	CallSet      map[string]string `yaml:"-"` // :set key=value params
+
+	// Source location (populated from sexpr nodes; zero for YAML-loaded steps).
+	Line int `yaml:"-"`
+	Col  int `yaml:"-"`
 }
 
 // CondBranch is one arm of a (cond ...) form.

@@ -48,6 +48,29 @@ func TestSexprWorkflow_Basic(t *testing.T) {
 	}
 }
 
+func TestConvertStep_PopulatesLineCol(t *testing.T) {
+	src := []byte(`
+(workflow "pos"
+  (step "a"
+    (run "echo a"))
+  (step "b"
+    (run "echo b")))
+`)
+	w, err := LoadBytes(src, "pos.glitch")
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(w.Steps))
+	}
+	if w.Steps[0].Line != 3 {
+		t.Errorf("Steps[0].Line = %d, want 3", w.Steps[0].Line)
+	}
+	if w.Steps[1].Line != 5 {
+		t.Errorf("Steps[1].Line = %d, want 5", w.Steps[1].Line)
+	}
+}
+
 func TestSexprWorkflow_Flatten(t *testing.T) {
 	src := []byte(`
 (workflow "test"
