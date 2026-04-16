@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -184,6 +185,12 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 		return []Step{s}, nil
 	case "map", "each":
 		s, err := convertMap(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
+	case "map-resources":
+		s, err := convertMapResources(n, defs)
 		if err != nil {
 			return nil, err
 		}
@@ -455,6 +462,51 @@ func convertReduce(n *sexpr.Node, defs map[string]string) (Step, error) {
 		ReduceOver: source,
 		ReduceBody: &body,
 	}, nil
+}
+
+// convertMapResources: (map-resources [:type "git"] (step "name" ...))
+// Iterates over active workspace resources. Optional :type filter keeps only
+// resources of the matching type. The trailing list form is the body step
+// executed per resource with .resource.item bound to the current entry.
+func convertMapResources(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	s := Step{
+		ID:   fmt.Sprintf("map-resources-%d", n.Line),
+		Form: "map-resources",
+	}
+
+	var bodyNode *sexpr.Node
+	for i := 0; i < len(children); i++ {
+		c := children[i]
+		if c.IsAtom() && c.Atom.Type == sexpr.TokenKeyword {
+			key := c.KeywordVal()
+			if i+1 >= len(children) {
+				return Step{}, fmt.Errorf("line %d: map-resources keyword :%s missing value", c.Line, key)
+			}
+			val := resolveVal(children[i+1], defs)
+			switch key {
+			case "type":
+				s.MapResourcesType = val
+			default:
+				return Step{}, fmt.Errorf("line %d: map-resources: unknown keyword :%s", c.Line, key)
+			}
+			i++
+			continue
+		}
+		if c.IsList() {
+			// The body is the trailing list form (usually `step`).
+			bodyNode = c
+		}
+	}
+	if bodyNode == nil {
+		return Step{}, fmt.Errorf("line %d: map-resources needs a body step", n.Line)
+	}
+	body, err := convertStep(bodyNode, defs)
+	if err != nil {
+		return Step{}, fmt.Errorf("line %d: map-resources body: %w", n.Line, err)
+	}
+	s.MapResourcesBody = &body
+	return s, nil
 }
 
 // convertPar: (par (step ...) (step ...) ...)
@@ -1016,6 +1068,34 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.PluginCall = pc
+		case "call-workflow":
+			sub := child.Children[1:]
+			if len(sub) < 1 {
+				return s, fmt.Errorf("line %d: call-workflow needs workflow name", child.Line)
+			}
+			s.Form = "call-workflow"
+			s.CallWorkflow = resolveVal(sub[0], defs)
+			if s.CallSet == nil {
+				s.CallSet = map[string]string{}
+			}
+			rest := sub[1:]
+			for i := 0; i+1 < len(rest); i += 2 {
+				if !(rest[i].IsAtom() && rest[i].Atom.Type == sexpr.TokenKeyword) {
+					continue
+				}
+				key := rest[i].KeywordVal()
+				val := resolveVal(rest[i+1], defs)
+				switch key {
+				case "input":
+					s.CallInput = val
+				case "set":
+					if kv := splitKV(val); kv != nil {
+						for k, v := range kv {
+							s.CallSet[k] = v
+						}
+					}
+				}
+			}
 		default:
 			// github/prs → plugin "github", subcommand "prs"
 			if parts := strings.SplitN(head, "/", 2); len(parts) == 2 {
@@ -1473,4 +1553,25 @@ func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
 		return nil, fmt.Errorf("line %d: llm missing :prompt", n.Line)
 	}
 	return llm, nil
+}
+
+// splitKV parses a single "key=value" string into a map. Returns nil if the
+// string lacks an "=" separator or the key is empty.
+func splitKV(s string) map[string]string {
+	if s == "" {
+		return nil
+	}
+	if i := strings.Index(s, "="); i > 0 {
+		return map[string]string{s[:i]: s[i+1:]}
+	}
+	return nil
+}
+
+// ParseSexprWorkflowFromFile loads and parses a .glitch workflow file.
+func ParseSexprWorkflowFromFile(path string) (*Workflow, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return parseSexprWorkflow(data)
 }

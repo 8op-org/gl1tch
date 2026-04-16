@@ -10,13 +10,19 @@ func TestWorkspaceFlag(t *testing.T) {
 	// Reset for test
 	workspacePath = ""
 
-	rootCmd.SetArgs([]string{"--workspace", "/tmp/test-ws", "config", "show"})
+	// Create a real workspace dir so Resolve() succeeds and preserves the path.
+	wsDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(wsDir, "workspace.glitch"), []byte("(workspace \"flag-ws\")\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"--workspace", wsDir, "config", "show"})
 	if err := rootCmd.Execute(); err != nil {
 		// config show may fail, that's ok — we just check the flag was parsed
 	}
 
-	if workspacePath != "/tmp/test-ws" {
-		t.Fatalf("workspacePath: got %q, want /tmp/test-ws", workspacePath)
+	if workspacePath != wsDir {
+		t.Fatalf("workspacePath: got %q, want %q", workspacePath, wsDir)
 	}
 }
 
@@ -48,8 +54,8 @@ func TestLoadWorkflows_ConfigOverride(t *testing.T) {
 	defer func() { workspacePath = "" }()
 
 	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("default_model: qwen3:8b\nworkflows_dir: "+customDir+"\n"), 0o644)
+	cfgPath := filepath.Join(cfgDir, "config.glitch")
+	os.WriteFile(cfgPath, []byte(`(config :default-model "qwen3:8b" :workflows-dir "`+customDir+`")`+"\n"), 0o644)
 
 	cfg, _ := loadConfigFrom(cfgPath)
 	wfDir := resolveWorkflowsDir(cfg)

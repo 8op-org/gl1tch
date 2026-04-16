@@ -56,6 +56,26 @@ func ParseReview(path string) (Score, error) {
 	return Score{Passed: passed, Total: total, Pass: overallPass}, nil
 }
 
+// findChildDir resolves the on-disk directory for a (variant, iteration) pair
+// under the new children/<variant>-<iter>-<runid>/ layout. The runid segment
+// is unknown ahead of time, so we glob. If multiple rows exist for the same
+// (variant, iter) we pick the lexicographically-last match (highest runid).
+// Returns "" when no directory matches.
+func findChildDir(issueDir, variant string, iter int) string {
+	pattern := filepath.Join(issueDir, "children", fmt.Sprintf("%s-%d-*", variant, iter))
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		return ""
+	}
+	best := matches[0]
+	for _, m := range matches[1:] {
+		if m > best {
+			best = m
+		}
+	}
+	return best
+}
+
 // GenerateManifest scans results and picks the best variant/iteration.
 func GenerateManifest(issueDir, issue string, variants []string, iterations int) (*Manifest, error) {
 	m := &Manifest{Issue: issue}
@@ -63,7 +83,11 @@ func GenerateManifest(issueDir, issue string, variants []string, iterations int)
 	for iter := 1; iter <= iterations; iter++ {
 		is := IterationScores{Iteration: iter, Variants: make(map[string]Score)}
 		for _, variant := range variants {
-			reviewPath := filepath.Join(issueDir, fmt.Sprintf("iteration-%d", iter), variant, "review.md")
+			childDir := findChildDir(issueDir, variant, iter)
+			if childDir == "" {
+				continue
+			}
+			reviewPath := filepath.Join(childDir, "review.md")
 			score, err := ParseReview(reviewPath)
 			if err != nil {
 				continue
@@ -114,7 +138,7 @@ func WriteManifest(issueDir string, m *Manifest, variants []string, iterations i
 		fmt.Fprintf(&b, "\n## Best Result\n\n")
 		fmt.Fprintf(&b, "**Winner:** %s (iteration %d, %d/%d)\n\n", m.BestVariant, m.BestIteration, m.BestScore, m.BestTotal)
 
-		bestDir := filepath.Join(issueDir, fmt.Sprintf("iteration-%d", m.BestIteration), m.BestVariant)
+		bestDir := findChildDir(issueDir, m.BestVariant, m.BestIteration)
 
 		b.WriteString("### PR Title\n\n")
 		if data, err := os.ReadFile(filepath.Join(bestDir, "pr-title.txt")); err == nil {
@@ -136,7 +160,11 @@ func WriteManifest(issueDir string, m *Manifest, variants []string, iterations i
 
 	b.WriteString("\n\n## Cross-Review Summary\n\n")
 	for iter := 1; iter <= iterations; iter++ {
-		crPath := filepath.Join(issueDir, fmt.Sprintf("iteration-%d", iter), "cross-review.md")
+		crDir := findChildDir(issueDir, "cross-review", iter)
+		if crDir == "" {
+			continue
+		}
+		crPath := filepath.Join(crDir, "cross-review.md")
 		if data, err := os.ReadFile(crPath); err == nil {
 			fmt.Fprintf(&b, "### Iteration %d\n\n%s\n\n", iter, strings.TrimSpace(string(data)))
 		}

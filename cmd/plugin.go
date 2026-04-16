@@ -88,7 +88,14 @@ var pluginCmd = &cobra.Command{
 			wsDir, _ = os.Getwd()
 		}
 		wsName := workspace.ResolveWorkspace(wsDir)
-		result, err := pipeline.RunPluginSubcommand(pluginRoot, pluginName, subcommand, flags, providerReg, pipeline.RunOpts{Workspace: wsName})
+		// Resolve workflows directory so plugin-invoked workflows can call-workflow
+		// against the active workspace. Empty string is fine — call-workflow will
+		// error cleanly if actually used without a resolvable target.
+		workflowsDir := ""
+		if resolved := resolveWorkspaceForCommand(); resolved.Path != "" {
+			workflowsDir = filepath.Join(resolved.Path, "workflows")
+		}
+		result, err := pipeline.RunPluginSubcommand(pluginRoot, pluginName, subcommand, flags, providerReg, pipeline.RunOpts{Workspace: wsName, WorkflowsDir: workflowsDir})
 		if err != nil {
 			return err
 		}

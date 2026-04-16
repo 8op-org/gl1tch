@@ -52,7 +52,7 @@ func OpenAt(path string) (*Store, error) {
 
 	// Detect schema drift: if runs table exists but is missing expected columns, drop all and recreate.
 	var count int
-	err = db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name = 'input'`).Scan(&count)
+	err = db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name = 'parent_run_id'`).Scan(&count)
 	if err == nil && count == 0 {
 		// Check if the table actually exists (count == 0 also when table doesn't exist)
 		var tableCount int
@@ -91,6 +91,8 @@ type RunRecord struct {
 	Model        string
 	Variant      string
 	Workspace    string
+	ParentRunID  int64  // 0 means no parent
+	WorkflowName string // logical workflow name (for tree rendering)
 }
 
 // RunTotals holds accumulated totals for finishing a run.
@@ -117,11 +119,16 @@ type StepRecord struct {
 
 // RecordRun inserts a new run record and returns the new row ID.
 func (s *Store) RecordRun(rec RunRecord) (int64, error) {
+	var parent interface{}
+	if rec.ParentRunID > 0 {
+		parent = rec.ParentRunID
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO runs (kind, name, input, started_at, workflow_file, repo, model, variant, workspace)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO runs (kind, name, input, started_at, workflow_file, repo, model, variant, workspace, parent_run_id, workflow_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		rec.Kind, rec.Name, rec.Input, time.Now().UnixMilli(),
 		rec.WorkflowFile, rec.Repo, rec.Model, rec.Variant, rec.Workspace,
+		parent, rec.WorkflowName,
 	)
 	if err != nil {
 		return 0, err

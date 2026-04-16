@@ -13,6 +13,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/router"
+	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
 var (
@@ -45,6 +46,17 @@ var askCmd = &cobra.Command{
 		workflows, err := loadWorkflows()
 		if err != nil {
 			return err
+		}
+
+		wsDir := workspacePath
+		if wsDir == "" {
+			wsDir, _ = os.Getwd()
+		}
+		wsName := workspace.ResolveWorkspace(wsDir)
+		resources := loadResourceBindings(wsDir)
+		workflowsDir := resolveWorkflowsDir(cfg)
+		if workflowsDir == "" && wsDir != "" {
+			workflowsDir = filepath.Join(wsDir, "workflows")
 		}
 
 		// Wire ES telemetry
@@ -84,12 +96,13 @@ var askCmd = &cobra.Command{
 				fmt.Printf("Repo: %s (%s)\n\n", resolved, repoPath)
 
 				err := batch.Run(context.Background(), batch.RunOpts{
-					Items:      issues,
-					Params:     map[string]string{"repo": resolved},
-					ResultsDir: resolveResultsDir(),
-					Variants:   variants,
-					Iterations: iterations,
-					Workflows:  workflows,
+					Items:        issues,
+					Params:       map[string]string{"repo": resolved},
+					ResultsDir:   resolveResultsDir(),
+					Variants:     variants,
+					Iterations:   iterations,
+					Workflows:    workflows,
+					WorkflowsDir: workflowsDir,
 					Config: batch.BatchConfig{
 						DefaultModel:     cfg.DefaultModel,
 						ProviderRegistry: providerReg,
@@ -97,6 +110,8 @@ var askCmd = &cobra.Command{
 						Telemetry:        tel,
 						Tiers:            cfg.Tiers,
 						EvalThreshold:    cfg.EvalThreshold,
+						Workspace:        wsName,
+						Resources:        resources,
 					},
 				})
 				if err != nil {
@@ -115,7 +130,7 @@ var askCmd = &cobra.Command{
 
 			// Single issue — run the default workflow
 			issue := issues[0]
-			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel)
+			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel, wsName, resources, workflowsDir)
 		}
 
 		// Not an issue ref — try workflow routing
@@ -127,6 +142,9 @@ var askCmd = &cobra.Command{
 				ProviderResolver: cfg.BuildProviderResolver(),
 				Tiers:            cfg.Tiers,
 				EvalThreshold:    cfg.EvalThreshold,
+				Workspace:        wsName,
+				Resources:        resources,
+				WorkflowsDir:     workflowsDir,
 			})
 			if err != nil {
 				return err
@@ -144,12 +162,12 @@ var askCmd = &cobra.Command{
 			}
 			fmt.Fprintf(os.Stderr, "  %s — %s\n", name, desc)
 		}
-		return fmt.Errorf("use 'glitch workflow run <name>' to run directly")
+		return fmt.Errorf("use 'glitch run <name>' to run directly")
 	},
 }
 
 // runSingleIssue runs the issue-to-pr workflow for one issue.
-func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry) error {
+func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry, wsName string, resources map[string]map[string]string, workflowsDir string) error {
 	// Pick the workflow
 	wfName := "issue-to-pr"
 	if askVariant != "" {
@@ -172,6 +190,9 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 		ProviderResolver: cfg.BuildProviderResolver(),
 		Tiers:            cfg.Tiers,
 		EvalThreshold:    cfg.EvalThreshold,
+		Workspace:        wsName,
+		Resources:        resources,
+		WorkflowsDir:     workflowsDir,
 	})
 	if err != nil {
 		return err
@@ -186,7 +207,7 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 		fmt.Printf("\nTo create the PR:\n")
 		fmt.Printf("  claude \"Create a PR for %s#%s using the plan and PR body in %s/\"\n", repo, issue, singleResultsDir)
 		fmt.Printf("\nAfter creating the PR, run post-impl review:\n")
-		fmt.Printf("  glitch workflow run post-impl-review --param repo=%s --param issue=%s --param pr=<PR_NUMBER>\n", repo, issue)
+		fmt.Printf("  glitch run post-impl-review --set repo=%s --set issue=%s --set pr=<PR_NUMBER>\n", repo, issue)
 	}
 
 	return nil
@@ -235,10 +256,13 @@ func ensureWorkspaceDir(wsPath string) error {
 }
 
 // resolveResultsDir returns the results directory based on flags and workspace.
-// Priority: --results-dir flag > <workspace>/results/ > CWD/.glitch/results
+// Priority: --results-dir flag (ask or run) > <workspace>/results/ > CWD/.glitch/results
 func resolveResultsDir() string {
 	if askResultsDir != "" {
 		return askResultsDir
+	}
+	if runResultsDir != "" {
+		return runResultsDir
 	}
 	if workspacePath != "" {
 		return filepath.Join(workspacePath, "results")

@@ -13,6 +13,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/provider"
+	"github.com/8op-org/gl1tch/internal/store"
 )
 
 // DefaultVariants is the list of variant suffixes for comparison mode.
@@ -20,13 +21,16 @@ var DefaultVariants = []string{"local", "claude", "copilot", "gemma", "grok"}
 
 // RunOpts configures a batch run.
 type RunOpts struct {
-	Items      []string          // items to iterate (issues, prompts, test IDs, etc.)
-	Params     map[string]string // base params passed to every workflow run
-	ResultsDir string            // explicit results dir; empty = CWD/.glitch/results
-	Variants   []string
-	Iterations int
-	Workflows  map[string]*pipeline.Workflow
-	Config     BatchConfig
+	Items        []string          // items to iterate (issues, prompts, test IDs, etc.)
+	Params       map[string]string // base params passed to every workflow run
+	ResultsDir   string            // explicit results dir; empty = CWD/.glitch/results
+	Variants     []string
+	Iterations   int
+	Workflows    map[string]*pipeline.Workflow
+	WorkflowsDir string // directory for resolving call-workflow targets in nested invocations
+	Config       BatchConfig
+	Name         string       // optional human-readable name for the parent batch run row
+	Store        *store.Store // when non-nil, records parent + child run rows with parent_run_id linkage
 }
 
 // BatchConfig holds dependencies for running workflows.
@@ -37,6 +41,8 @@ type BatchConfig struct {
 	Telemetry        *esearch.Telemetry
 	Tiers            []provider.TierConfig
 	EvalThreshold    int
+	Workspace        string                       // resolved workspace name
+	Resources        map[string]map[string]string // resource bindings for .resource.<name>.<field>
 }
 
 // variantWorkflows groups loaded workflows into variant sets for a given item.
@@ -72,6 +78,29 @@ func Run(ctx context.Context, opts RunOpts) error {
 	if resultsBase == "" {
 		cwd, _ := os.Getwd()
 		resultsBase = filepath.Join(cwd, ".glitch", "results")
+	}
+
+	// Create the parent batch run row. Children (per variant × iteration) will
+	// link to this row via parent_run_id. If Store is nil (tests), skip and use
+	// 0 as the parent id — child rows will be skipped too.
+	var parentID int64
+	if opts.Store != nil {
+		name := opts.Name
+		if name == "" {
+			name = "batch"
+		}
+		id, err := opts.Store.RecordRun(store.RunRecord{
+			Kind:         "batch",
+			Name:         name,
+			WorkflowName: "batch",
+			Workspace:    opts.Config.Workspace,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: record batch parent run: %v\n", err)
+		} else {
+			parentID = id
+			defer func() { _ = opts.Store.FinishRun(parentID, "", 0) }()
+		}
 	}
 
 	for iter := 1; iter <= opts.Iterations; iter++ {
@@ -119,6 +148,39 @@ func Run(ctx context.Context, opts RunOpts) error {
 				go func(v string, wf *pipeline.Workflow) {
 					defer wg.Done()
 					fmt.Printf("\n>>> %s (%s, iter %d)\n", item, v, iter)
+
+					// Pre-create the child run row so the on-disk path can include
+					// its DB row id. If Store is nil or RecordRun fails, fall back
+					// to childID=0 (layout will embed 0 for the runid segment).
+					var childID int64
+					var childCreator func(int64, string) (int64, error)
+					if opts.Store != nil {
+						id, err := opts.Store.RecordRun(store.RunRecord{
+							Kind:         "workflow",
+							Name:         item,
+							Variant:      v,
+							WorkflowName: wf.Name,
+							ParentRunID:  parentID,
+							Workspace:    opts.Config.Workspace,
+						})
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "WARN: record child run %s (%s, iter %d): %v\n", item, v, iter, err)
+						} else {
+							childID = id
+							defer func() { _ = opts.Store.FinishRun(childID, "", 0) }()
+						}
+						ws := opts.Config.Workspace
+						childCreator = func(parent int64, wfName string) (int64, error) {
+							return opts.Store.RecordRun(store.RunRecord{
+								Kind:         "workflow",
+								Name:         wfName,
+								WorkflowName: wfName,
+								ParentRunID:  parent,
+								Workspace:    ws,
+							})
+						}
+					}
+
 					result, err := pipeline.Run(wf, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 						Telemetry:        opts.Config.Telemetry,
 						ProviderResolver: opts.Config.ProviderResolver,
@@ -127,11 +189,16 @@ func Run(ctx context.Context, opts RunOpts) error {
 						Issue:            item,
 						ComparisonGroup:  v,
 						SeedSteps:        seedSteps,
+						Workspace:        opts.Config.Workspace,
+						Resources:        opts.Config.Resources,
+						WorkflowsDir:     opts.WorkflowsDir,
+						ParentRunID:      childID,
+						ChildRunCreator:  childCreator,
 					})
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "WARN: %s (%s, iter %d) failed: %v\n", item, v, iter, err)
 					} else {
-						saveResults(resultsBase, item, v, iter, result)
+						saveResults(resultsBase, item, v, iter, childID, result)
 					}
 					fmt.Printf(">>> %s (%s, iter %d) complete\n", item, v, iter)
 				}(variant, wf)
@@ -141,16 +208,50 @@ func Run(ctx context.Context, opts RunOpts) error {
 			// Cross-review
 			if crW, ok := opts.Workflows["cross-review"]; ok {
 				fmt.Printf("\n>>> %s (cross-review, iter %d)\n", item, iter)
+				var crChildID int64
+				var crCreator func(int64, string) (int64, error)
+				if opts.Store != nil {
+					id, err := opts.Store.RecordRun(store.RunRecord{
+						Kind:         "workflow",
+						Name:         item,
+						Variant:      "cross-review",
+						WorkflowName: crW.Name,
+						ParentRunID:  parentID,
+						Workspace:    opts.Config.Workspace,
+					})
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "WARN: record cross-review run %s iter %d: %v\n", item, iter, err)
+					} else {
+						crChildID = id
+						defer func() { _ = opts.Store.FinishRun(crChildID, "", 0) }()
+					}
+					ws := opts.Config.Workspace
+					crCreator = func(parent int64, wfName string) (int64, error) {
+						return opts.Store.RecordRun(store.RunRecord{
+							Kind:         "workflow",
+							Name:         wfName,
+							WorkflowName: wfName,
+							ParentRunID:  parent,
+							Workspace:    ws,
+						})
+					}
+				}
 				result, err := pipeline.Run(crW, "", opts.Config.DefaultModel, params, opts.Config.ProviderRegistry, pipeline.RunOpts{
 					Telemetry:        opts.Config.Telemetry,
 					ProviderResolver: opts.Config.ProviderResolver,
 					Tiers:            opts.Config.Tiers,
 					EvalThreshold:    opts.Config.EvalThreshold,
+					Workspace:        opts.Config.Workspace,
+					Resources:        opts.Config.Resources,
+					WorkflowsDir:     opts.WorkflowsDir,
+					ParentRunID:      crChildID,
+					ChildRunCreator:  crCreator,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: %s cross-review iter %d failed: %v\n", item, iter, err)
 				} else if cr, ok := result.Steps["cross-review"]; ok {
-					crDir := resultPath(resultsBase, item, "", iter)
+					itemDir := filepath.Join(resultsBase, item)
+					crDir := resultPath(itemDir, "cross-review", iter, crChildID)
 					os.MkdirAll(crDir, 0o755)
 					os.WriteFile(filepath.Join(crDir, "cross-review.md"), []byte(cr), 0o644)
 				}
@@ -180,19 +281,19 @@ func Run(ctx context.Context, opts RunOpts) error {
 	return nil
 }
 
-// resultPath computes the result directory for a batch run.
-// Pattern: baseDir/<item>/iteration-<n>[/<variant>]
-func resultPath(baseDir, item, variant string, iter int) string {
-	dir := filepath.Join(baseDir, item, fmt.Sprintf("iteration-%d", iter))
-	if variant != "" {
-		dir = filepath.Join(dir, variant)
-	}
-	return dir
+// resultPath computes the result directory for one child run inside a batch.
+// Pattern: baseDir/children/<variant>-<iter>-<runid>
+// Callers pass the per-item directory (e.g. resultsBase/<item>) as baseDir so
+// each item keeps its own children/ pool; runID is the DB row id of the child
+// run (0 when Store is not wired).
+func resultPath(baseDir string, variant string, iter int, runID int64) string {
+	return filepath.Join(baseDir, "children", fmt.Sprintf("%s-%d-%d", variant, iter, runID))
 }
 
 // saveResults writes workflow step outputs to the results directory.
-func saveResults(resultsBase, item, variant string, iter int, result *pipeline.Result) {
-	dir := resultPath(resultsBase, item, variant, iter)
+func saveResults(resultsBase, item, variant string, iter int, runID int64, result *pipeline.Result) {
+	itemDir := filepath.Join(resultsBase, item)
+	dir := resultPath(itemDir, variant, iter, runID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: mkdir %s: %v\n", dir, err)
 		return
@@ -211,6 +312,7 @@ func saveResults(resultsBase, item, variant string, iter int, result *pipeline.R
 		"item":      item,
 		"variant":   variant,
 		"iteration": iter,
+		"run_id":    runID,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 	metaJSON, _ := json.Marshal(meta)

@@ -2,24 +2,27 @@ package store
 
 const createSchema = `
 CREATE TABLE IF NOT EXISTS runs (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind          TEXT NOT NULL,
-  name          TEXT NOT NULL,
-  input         TEXT,
-  output        TEXT,
-  exit_status   INTEGER,
-  started_at    INTEGER NOT NULL,
-  finished_at   INTEGER,
-  metadata      TEXT,
-  workflow_file TEXT,
-  repo          TEXT,
-  model         TEXT,
-  tokens_in     INTEGER,
-  tokens_out    INTEGER,
-  cost_usd      REAL,
-  variant       TEXT,
-  workspace     TEXT NOT NULL DEFAULT ''
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind            TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  input           TEXT,
+  output          TEXT,
+  exit_status     INTEGER,
+  started_at      INTEGER NOT NULL,
+  finished_at     INTEGER,
+  metadata        TEXT,
+  workflow_file   TEXT,
+  repo            TEXT,
+  model           TEXT,
+  tokens_in       INTEGER,
+  tokens_out      INTEGER,
+  cost_usd        REAL,
+  variant         TEXT,
+  workspace       TEXT NOT NULL DEFAULT '',
+  parent_run_id   INTEGER REFERENCES runs(id),
+  workflow_name   TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_runs_parent ON runs(parent_run_id);
 
 CREATE TABLE IF NOT EXISTS steps (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

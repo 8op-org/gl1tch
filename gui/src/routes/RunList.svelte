@@ -4,11 +4,13 @@
   import { listRuns } from '../lib/api.js';
   import { icon } from '../lib/icons.js';
   import StatusBadge from '../lib/components/StatusBadge.svelte';
+  import RunTree from '../lib/components/RunTree.svelte';
 
   let runs = $state([]);
   let error = $state(null);
   let loading = $state(true);
   let filterStatus = $state('all');
+  let view = $state('flat'); // 'flat' | 'tree'
 
   // Derive status from API fields: exit_status + finished_at
   function deriveStatus(run) {
@@ -29,6 +31,8 @@
 
   const normalized = $derived(runs.map(normalize));
   const filtered = $derived(filterStatus === 'all' ? normalized : normalized.filter(r => r.status === filterStatus));
+  // Top-level runs (no parent) for tree view
+  const topLevel = $derived(runs.filter(r => !r.parent_run_id || r.parent_run_id === 0));
 
   function duration(started, finished) {
     if (!started) return '--';
@@ -63,39 +67,61 @@
 <div class="page-header">
   <h1>{@html icon('terminal', 20)} Runs</h1>
   <div class="flex gap-sm">
-    <select class="status-filter" bind:value={filterStatus}>
-      <option value="all">All statuses</option>
-      <option value="PASS">Pass</option>
-      <option value="FAIL">Fail</option>
-      <option value="RUNNING">Running</option>
-    </select>
+    <div class="tabs">
+      <button class:active={view === 'flat'} onclick={() => (view = 'flat')}>Flat</button>
+      <button class:active={view === 'tree'} onclick={() => (view = 'tree')}>Tree</button>
+    </div>
+    {#if view === 'flat'}
+      <select class="status-filter" bind:value={filterStatus}>
+        <option value="all">All statuses</option>
+        <option value="PASS">Pass</option>
+        <option value="FAIL">Fail</option>
+        <option value="RUNNING">Running</option>
+      </select>
+    {/if}
   </div>
 </div>
 <div class="page-content">
   {#if loading}<p class="text-muted">Loading runs...</p>
   {:else if error}<p class="status-fail">{error}</p>
-  {:else if filtered.length === 0}
-    <div class="empty-state">
-      <span class="empty-icon">{@html icon('terminal', 48)}</span>
-      <p class="text-muted">No runs found.</p>
-    </div>
+  {:else if view === 'flat'}
+    {#if filtered.length === 0}
+      <div class="empty-state">
+        <span class="empty-icon">{@html icon('terminal', 48)}</span>
+        <p class="text-muted">No runs found.</p>
+      </div>
+    {:else}
+      <div class="run-count text-muted">{filtered.length} run{filtered.length !== 1 ? 's' : ''}</div>
+      <table class="runs-table">
+        <thead><tr><th>ID</th><th>Workflow</th><th>Status</th><th>Duration</th><th>Started</th><th>Model</th></tr></thead>
+        <tbody>
+          {#each filtered as run}
+            <tr class="run-row" onclick={() => push(`/run/${run.id}`)}>
+              <td class="mono text-cyan run-id">#{run.id}</td>
+              <td class="mono run-name">{displayName(run.workflow)}</td>
+              <td><StatusBadge status={run.status} /></td>
+              <td class="mono run-duration">{duration(run.started, run.finished)}</td>
+              <td class="text-muted run-started">{relativeTime(run.started)}</td>
+              <td class="mono text-muted run-model">{run.model || '--'}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
   {:else}
-    <div class="run-count text-muted">{filtered.length} run{filtered.length !== 1 ? 's' : ''}</div>
-    <table class="runs-table">
-      <thead><tr><th>ID</th><th>Workflow</th><th>Status</th><th>Duration</th><th>Started</th><th>Model</th></tr></thead>
-      <tbody>
-        {#each filtered as run}
-          <tr class="run-row" onclick={() => push(`/run/${run.id}`)}>
-            <td class="mono text-cyan run-id">#{run.id}</td>
-            <td class="mono run-name">{displayName(run.workflow)}</td>
-            <td><StatusBadge status={run.status} /></td>
-            <td class="mono run-duration">{duration(run.started, run.finished)}</td>
-            <td class="text-muted run-started">{relativeTime(run.started)}</td>
-            <td class="mono text-muted run-model">{run.model || '--'}</td>
-          </tr>
+    {#if topLevel.length === 0}
+      <div class="empty-state">
+        <span class="empty-icon">{@html icon('terminal', 48)}</span>
+        <p class="text-muted">No runs found.</p>
+      </div>
+    {:else}
+      <div class="run-count text-muted">{topLevel.length} top-level run{topLevel.length !== 1 ? 's' : ''}</div>
+      <div class="tree-view">
+        {#each topLevel as r (r.id)}
+          <RunTree runId={r.id} />
         {/each}
-      </tbody>
-    </table>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -110,4 +136,9 @@
   .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 0; opacity: 0.5; }
   .empty-icon { color: var(--text-muted); }
   .runs-table { margin-top: 0; }
+  .tabs { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .tabs button { background: none; border: none; padding: 6px 12px; color: var(--text-muted); cursor: pointer; font-size: 12px; font-family: var(--font-mono); }
+  .tabs button:hover { color: var(--text-primary); background: var(--bg-elevated); }
+  .tabs button.active { background: var(--bg-elevated); color: var(--neon-cyan); }
+  .tree-view { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
 </style>

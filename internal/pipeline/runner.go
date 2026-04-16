@@ -45,6 +45,7 @@ type runCtx struct {
 	input            string
 	params           map[string]string
 	workspace        string
+	resources        map[string]map[string]string
 	defaultModel     string
 	reg              *provider.ProviderRegistry
 	providerResolver provider.ResolverFunc
@@ -57,6 +58,12 @@ type runCtx struct {
 	tel              *esearch.Telemetry
 	runID            string
 	workflow         string
+
+	// call-workflow threading
+	workflowsDir    string
+	parentRunID     int64
+	callStack       []string
+	childRunCreator func(parentID int64, workflowName string) (int64, error)
 }
 
 // stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
@@ -86,6 +93,12 @@ type Result struct {
 	Workflow string
 	Output   string            // output of the last step
 	Steps    map[string]string // all step outputs keyed by step ID
+	// RunID is the DB row id associated with this run. The pipeline package
+	// does not own store.RecordRun; when the caller pre-creates a row and
+	// passes its id via RunOpts.ParentRunID, that same value is echoed back
+	// here so downstream callers (batch, GUI) can correlate the run.
+	// Zero means unknown / no row created.
+	RunID int64
 }
 
 // RunOpts holds optional dependencies for a workflow run.
@@ -99,6 +112,20 @@ type RunOpts struct {
 	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
 	ESURL            string            // default ES URL from workspace config
 	Workspace        string            // resolved workspace name for {{.workspace}} template var
+	Resources        map[string]map[string]string // resource name → field → value (from active workspace)
+
+	// call-workflow support
+	WorkflowsDir string   // directory to resolve call-workflow targets
+	ParentRunID  int64    // if non-zero, this run is a child of this parent
+	CallStack    []string // workflow names already on the call stack (cycle guard)
+
+	// ChildRunCreator is called before starting a nested workflow via call-workflow.
+	// The callback should create a child run row in the store and return its id,
+	// which is then used as ParentRunID for the child invocation — giving correct
+	// per-level parent linkage in multi-level call-workflow trees.
+	// When nil, call-workflow falls back to grandparent chaining
+	// (child's ParentRunID = rctx.parentRunID).
+	ChildRunCreator func(parentID int64, workflowName string) (int64, error)
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -181,11 +208,20 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		workspaceName = opts[0].Workspace
 	}
 
+	var resources map[string]map[string]string
+	if len(opts) > 0 {
+		resources = opts[0].Resources
+	}
+	if resources == nil {
+		resources = map[string]map[string]string{}
+	}
+
 	rctx := &runCtx{
 		ctx:              context.Background(),
 		input:            input,
 		params:           params,
 		workspace:        workspaceName,
+		resources:        resources,
 		defaultModel:     defaultModel,
 		reg:              reg,
 		providerResolver: providerResolver,
@@ -196,6 +232,12 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		tel:              tel,
 		runID:            runID,
 		workflow:         w.Name,
+	}
+	if len(opts) > 0 {
+		rctx.workflowsDir = opts[0].WorkflowsDir
+		rctx.parentRunID = opts[0].ParentRunID
+		rctx.callStack = opts[0].CallStack
+		rctx.childRunCreator = opts[0].ChildRunCreator
 	}
 
 	// Emit run-start document
@@ -416,6 +458,10 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		Workflow: w.Name,
 		Output:   lastOutput,
 		Steps:    steps,
+		// The pipeline package doesn't create rows itself; callers that
+		// pre-create a row pass its id via RunOpts.ParentRunID, and we echo
+		// it back here so they can correlate. Zero when no row was created.
+		RunID: rctx.parentRunID,
 	}, nil
 }
 
@@ -842,9 +888,12 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 			return string(b)
 		},
 	}
-	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
+	t, err := template.New("t").Funcs(funcMap).Option("missingkey=zero").Parse(tmpl)
 	if err != nil {
 		return "", err
+	}
+	if _, ok := data["resource"]; !ok {
+		data["resource"] = map[string]map[string]string{}
 	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
@@ -874,6 +923,8 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executeWhen(ctx, rctx, step)
 	case "map":
 		return executeMap(ctx, rctx, step)
+	case "map-resources":
+		return executeMapResources(ctx, rctx, step)
 	case "filter":
 		return executeFilter(ctx, rctx, step)
 	case "reduce":
@@ -882,6 +933,15 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executePar(ctx, rctx, step)
 	case "compare":
 		return executeCompare(ctx, rctx, step)
+	case "call-workflow":
+		outcome, err := executeCallWorkflow(ctx, rctx, step)
+		if err != nil {
+			return nil, err
+		}
+		rctx.mu.Lock()
+		rctx.steps[step.ID] = outcome.output
+		rctx.mu.Unlock()
+		return outcome, nil
 	}
 
 	maxAttempts := 1 + step.Retry
@@ -931,7 +991,7 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 			return executeStep(ctx, rctx, branch.Step)
 		}
 		// Render predicate template
-		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
 		rendered, err := render(branch.Pred, data, rctx.stepsSnapshot())
 		if err != nil {
 			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
@@ -960,7 +1020,7 @@ func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		matched = strings.TrimSpace(output) != ""
 	} else {
 		// Treat as shell command
-		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
 		rendered, err := render(step.WhenPred, data, snap)
 		if err != nil {
 			return nil, fmt.Errorf("when %s: template: %w", step.ID, err)
@@ -1124,6 +1184,67 @@ func executeReduce(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	rctx.steps[step.ID] = accumulator
 	rctx.mu.Unlock()
 	return &stepOutcome{output: accumulator}, nil
+}
+
+// executeMapResources iterates over the active workspace's resources (from
+// RunOpts.Resources) and runs the body step per resource, binding the current
+// entry to .resource.item. An optional type filter narrows the set to
+// matching resource types ("git", "local", "tracker"). Outputs are joined
+// with newlines. Iteration order is deterministic (sorted by resource name).
+func executeMapResources(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	if step.MapResourcesBody == nil {
+		return nil, fmt.Errorf("map-resources %q: no body", step.ID)
+	}
+
+	// Stable iteration order: sort resource names.
+	names := make([]string, 0, len(rctx.resources))
+	for n := range rctx.resources {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	var outputs []string
+	for idx, name := range names {
+		res := rctx.resources[name]
+		if step.MapResourcesType != "" && res["type"] != step.MapResourcesType {
+			continue
+		}
+		// Bind item to the full field map (plus name, in case not present).
+		item := map[string]string{"name": name}
+		for k, v := range res {
+			item[k] = v
+		}
+
+		// Inject the per-iteration item under .resource.item via a shallow
+		// clone of rctx.resources so we don't mutate the caller's map.
+		origResources := rctx.resources
+		extended := make(map[string]map[string]string, len(origResources)+1)
+		for k, v := range origResources {
+			extended[k] = v
+		}
+		extended["item"] = item
+		rctx.resources = extended
+
+		// Clone the body step with a unique ID per iteration so step outputs
+		// don't collide across iterations.
+		body := *step.MapResourcesBody
+		body.ID = fmt.Sprintf("%s-%d", step.MapResourcesBody.ID, idx)
+
+		outcome, err := executeStep(ctx, rctx, body)
+		rctx.resources = origResources
+		if err != nil {
+			return nil, fmt.Errorf("map-resources %s: %w", name, err)
+		}
+		if outcome != nil && outcome.output != "" {
+			outputs = append(outputs, outcome.output)
+		}
+	}
+
+	combined := strings.Join(outputs, "\n")
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = combined
+	rctx.mu.Unlock()
+	return &stepOutcome{output: combined}, nil
 }
 
 // executePar runs all child steps concurrently and waits for completion.
@@ -1373,6 +1494,80 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 	return branchNames[0], branchOutputs[branchNames[0]], outcome.output
 }
 
+// executeCallWorkflow runs a sibling workflow as a nested child run.
+// The child inherits workspace, resources, and provider registry; its input
+// is the rendered :input string; :set pairs become the child's params.
+// A cycle guard rejects recursive chains where a workflow (transitively)
+// calls itself.
+func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	for _, n := range rctx.callStack {
+		if n == step.CallWorkflow {
+			chain := append(append([]string{}, rctx.callStack...), step.CallWorkflow)
+			return nil, fmt.Errorf("call-workflow cycle detected: %s", strings.Join(chain, " -> "))
+		}
+	}
+	if step.CallWorkflow == "" {
+		return nil, fmt.Errorf("step %s: call-workflow missing workflow name", step.ID)
+	}
+	if rctx.workflowsDir == "" {
+		return nil, fmt.Errorf("step %s: call-workflow requires WorkflowsDir in RunOpts", step.ID)
+	}
+	path := filepath.Join(rctx.workflowsDir, step.CallWorkflow+".glitch")
+	child, err := ParseSexprWorkflowFromFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("call-workflow %s: %w", step.CallWorkflow, err)
+	}
+	// Render the child's input string in the parent's context.
+	stepsSnap := rctx.stepsSnapshot()
+	data := map[string]any{
+		"input":     rctx.input,
+		"param":     rctx.params,
+		"workspace": rctx.workspace,
+		"resource":  rctx.resources,
+	}
+	rendered, err := render(step.CallInput, data, stepsSnap)
+	if err != nil {
+		return nil, fmt.Errorf("step %s: call-workflow input template: %w", step.ID, err)
+	}
+	childParams := map[string]string{}
+	for k, v := range step.CallSet {
+		childParams[k] = v
+	}
+	// The pipeline package does not own store.RecordRun. When the caller wires
+	// a ChildRunCreator, ask them to mint a new row for this nested workflow so
+	// the child's ParentRunID reflects its immediate parent (correct per-level
+	// linkage). When absent, fall back to grandparent chaining — every
+	// descendant inherits rctx.parentRunID. That's good enough for tests that
+	// don't care about DB rows, and matches pre-Task-12 behavior.
+	childParentID := rctx.parentRunID
+	if rctx.childRunCreator != nil {
+		id, err := rctx.childRunCreator(rctx.parentRunID, child.Name)
+		if err != nil {
+			return nil, fmt.Errorf("call-workflow %s: create child run: %w", step.CallWorkflow, err)
+		}
+		childParentID = id
+	}
+	childOpts := RunOpts{
+		Telemetry:        rctx.tel,
+		ProviderResolver: rctx.providerResolver,
+		Tiers:            rctx.tiers,
+		EvalThreshold:    rctx.evalThreshold,
+		ESURL:            rctx.esURL,
+		Workspace:        rctx.workspace,
+		Resources:        rctx.resources,
+		WorkflowsDir:     rctx.workflowsDir,
+		ParentRunID:      childParentID,
+		CallStack:        append(append([]string{}, rctx.callStack...), step.CallWorkflow),
+		ChildRunCreator:  rctx.childRunCreator,
+	}
+	_ = ctx // child run currently manages its own context; reserved for future cancellation threading.
+	res, err := Run(child, rendered, rctx.defaultModel, childParams, rctx.reg, childOpts)
+	if err != nil {
+		return nil, fmt.Errorf("call-workflow %s: %w", step.CallWorkflow, err)
+	}
+	return &stepOutcome{output: res.Output}, nil
+}
+
 func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	// Snapshot steps map for safe concurrent reads during par execution.
 	stepsSnap := rctx.stepsSnapshot()
@@ -1381,6 +1576,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		"input":     rctx.input,
 		"param":     rctx.params,
 		"workspace": rctx.workspace,
+		"resource":  rctx.resources,
 	}
 
 	if step.Save != "" {

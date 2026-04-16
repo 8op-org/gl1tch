@@ -230,3 +230,50 @@ func TestSerialize_Minimal(t *testing.T) {
 		t.Errorf("Name: got %q, want %q", w2.Name, "minimal")
 	}
 }
+
+func TestParseResources(t *testing.T) {
+	src := []byte(`(workspace "demo"
+  (resource "ensemble" :type "git" :url "https://github.com/elastic/ensemble" :ref "main" :pin "abc123")
+  (resource "notes"    :type "local" :path "~/my-notes")
+  (resource "obs-robots" :type "tracker" :repo "elastic/observability-robots"))`)
+	w, err := ParseFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Resources) != 3 {
+		t.Fatalf("want 3 resources, got %d", len(w.Resources))
+	}
+	if w.Resources[0].Name != "ensemble" || w.Resources[0].Type != "git" || w.Resources[0].URL != "https://github.com/elastic/ensemble" || w.Resources[0].Ref != "main" || w.Resources[0].Pin != "abc123" {
+		t.Errorf("git resource mismatch: %+v", w.Resources[0])
+	}
+	if w.Resources[1].Type != "local" || w.Resources[1].Path != "~/my-notes" {
+		t.Errorf("local resource mismatch: %+v", w.Resources[1])
+	}
+	if w.Resources[2].Type != "tracker" || w.Resources[2].Repo != "elastic/observability-robots" {
+		t.Errorf("tracker resource mismatch: %+v", w.Resources[2])
+	}
+}
+
+func TestSerializeResourcesRoundTrip(t *testing.T) {
+	in := &Workspace{
+		Name: "demo",
+		Resources: []Resource{
+			{Name: "ensemble", Type: "git", URL: "https://github.com/elastic/ensemble", Ref: "main", Pin: "abc"},
+			{Name: "notes", Type: "local", Path: "~/my-notes"},
+			{Name: "obs", Type: "tracker", Repo: "elastic/observability-robots"},
+		},
+	}
+	out := Serialize(in)
+	got, err := ParseFile(out)
+	if err != nil {
+		t.Fatalf("reparse failed: %v\nserialized:\n%s", err, out)
+	}
+	if len(got.Resources) != 3 {
+		t.Fatalf("round-trip resources: got %d, serialized:\n%s", len(got.Resources), out)
+	}
+	for i, r := range in.Resources {
+		if got.Resources[i] != r {
+			t.Errorf("resource %d mismatch:\nwant: %+v\n got: %+v", i, r, got.Resources[i])
+		}
+	}
+}
