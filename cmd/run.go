@@ -186,6 +186,26 @@ func runRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	var stepRecorder func(pipeline.StepRecord)
+	if s != nil && parentID != 0 {
+		stepRecorder = func(rec pipeline.StepRecord) {
+			if err := s.RecordStep(store.StepRecord{
+				RunID:      parentID,
+				StepID:     rec.StepID,
+				Prompt:     rec.Prompt,
+				Output:     rec.Output,
+				Model:      rec.Model,
+				DurationMs: rec.DurationMs,
+				Kind:       rec.Kind,
+				ExitStatus: rec.ExitStatus,
+				TokensIn:   rec.TokensIn,
+				TokensOut:  rec.TokensOut,
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "WARN: record step %s: %v\n", rec.StepID, err)
+			}
+		}
+	}
+
 	result, err := pipeline.Run(w, input, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 		Telemetry:        tel,
 		ProviderResolver: cfg.BuildProviderResolver(),
@@ -197,6 +217,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		WorkflowsDir:     filepath.Dir(workflowPath),
 		ParentRunID:      parentID,
 		ChildRunCreator:  childCreator,
+		StepRecorder:     stepRecorder,
 	})
 	if err != nil {
 		exitStatus = 1

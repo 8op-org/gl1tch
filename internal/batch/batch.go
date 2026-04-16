@@ -194,6 +194,7 @@ func Run(ctx context.Context, opts RunOpts) error {
 						WorkflowsDir:     opts.WorkflowsDir,
 						ParentRunID:      childID,
 						ChildRunCreator:  childCreator,
+						StepRecorder:     newStepRecorder(opts.Store, childID),
 					})
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "WARN: %s (%s, iter %d) failed: %v\n", item, v, iter, err)
@@ -246,6 +247,7 @@ func Run(ctx context.Context, opts RunOpts) error {
 					WorkflowsDir:     opts.WorkflowsDir,
 					ParentRunID:      crChildID,
 					ChildRunCreator:  crCreator,
+					StepRecorder:     newStepRecorder(opts.Store, crChildID),
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: %s cross-review iter %d failed: %v\n", item, iter, err)
@@ -319,4 +321,27 @@ func saveResults(resultsBase, item, variant string, iter int, runID int64, resul
 	os.WriteFile(filepath.Join(dir, "run.json"), metaJSON, 0o644)
 
 	fmt.Printf("  Results saved: %s/\n", dir)
+}
+
+// newStepRecorder returns a pipeline.StepRecorder that writes each completed
+// step into the given store under runID. Returns nil when the store is absent
+// or runID is zero so callers can pass the result directly into RunOpts.
+func newStepRecorder(s *store.Store, runID int64) func(pipeline.StepRecord) {
+	if s == nil || runID == 0 {
+		return nil
+	}
+	return func(rec pipeline.StepRecord) {
+		_ = s.RecordStep(store.StepRecord{
+			RunID:      runID,
+			StepID:     rec.StepID,
+			Prompt:     rec.Prompt,
+			Output:     rec.Output,
+			Model:      rec.Model,
+			DurationMs: rec.DurationMs,
+			Kind:       rec.Kind,
+			ExitStatus: rec.ExitStatus,
+			TokensIn:   rec.TokensIn,
+			TokensOut:  rec.TokensOut,
+		})
+	}
 }

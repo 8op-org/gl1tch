@@ -178,6 +178,23 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Run in background goroutine
 	go func() {
 		tel := newTelemetry()
+		var stepRecorder func(pipeline.StepRecord)
+		if s.store != nil && runID != 0 {
+			stepRecorder = func(rec pipeline.StepRecord) {
+				_ = s.store.RecordStep(store.StepRecord{
+					RunID:      runID,
+					StepID:     rec.StepID,
+					Prompt:     rec.Prompt,
+					Output:     rec.Output,
+					Model:      rec.Model,
+					DurationMs: rec.DurationMs,
+					Kind:       rec.Kind,
+					ExitStatus: rec.ExitStatus,
+					TokensIn:   rec.TokensIn,
+					TokensOut:  rec.TokensOut,
+				})
+			}
+		}
 		result, err := pipeline.Run(wf, "", cfg.DefaultModel, body.Params, s.providerReg, pipeline.RunOpts{
 			Telemetry:        tel,
 			ProviderResolver: cfg.ProviderResolver,
@@ -185,6 +202,7 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 			EvalThreshold:    cfg.EvalThreshold,
 			Resources:        resources,
 			WorkflowsDir:     workflowsDir,
+			StepRecorder:     stepRecorder,
 		})
 		if s.store != nil {
 			exitStatus := 0

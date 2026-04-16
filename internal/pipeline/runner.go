@@ -62,6 +62,8 @@ type runCtx struct {
 	parentRunID     int64
 	callStack       []string
 	childRunCreator func(parentID int64, workflowName string) (int64, error)
+
+	stepRecorder func(rec StepRecord)
 }
 
 // stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
@@ -124,6 +126,68 @@ type RunOpts struct {
 	// When nil, call-workflow falls back to grandparent chaining
 	// (child's ParentRunID = rctx.parentRunID).
 	ChildRunCreator func(parentID int64, workflowName string) (int64, error)
+
+	// StepRecorder, when non-nil, receives one StepRecord per completed
+	// top-level workflow step. Callers wire this to store.RecordStep so the
+	// steps table gets populated. Compound-form sub-steps are not reported
+	// here — only the items in Workflow.Steps / Workflow.Items.
+	StepRecorder func(rec StepRecord)
+}
+
+// StepRecord is a lightweight per-step record emitted to RunOpts.StepRecorder
+// on each completed workflow step. Field set mirrors store.StepRecord so
+// callers can forward directly. RunID is omitted because the caller's closure
+// already has the parent run id bound.
+type StepRecord struct {
+	StepID     string
+	Prompt     string
+	Output     string
+	Model      string
+	DurationMs int64
+	Kind       string
+	ExitStatus *int
+	TokensIn   int64
+	TokensOut  int64
+}
+
+func buildStepRecord(step Step, outcome *stepOutcome, runErr error, dur time.Duration, defaultModel string) StepRecord {
+	rec := StepRecord{
+		StepID:     step.ID,
+		Kind:       stepKind(step),
+		DurationMs: dur.Milliseconds(),
+	}
+	exit := 0
+	if runErr != nil {
+		exit = 1
+	}
+	rec.ExitStatus = &exit
+	if outcome != nil {
+		rec.Output = outcome.output
+		rec.TokensIn = int64(outcome.tokensIn)
+		rec.TokensOut = int64(outcome.tokensOut)
+	}
+	if step.LLM != nil {
+		rec.Prompt = step.LLM.Prompt
+		if step.LLM.Model != "" {
+			rec.Model = step.LLM.Model
+		} else {
+			rec.Model = defaultModel
+		}
+	}
+	return rec
+}
+
+func stepKind(step Step) string {
+	if step.Form != "" {
+		return step.Form
+	}
+	if step.LLM != nil {
+		return "llm"
+	}
+	if step.Run != "" {
+		return "run"
+	}
+	return "step"
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -236,6 +300,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		rctx.parentRunID = opts[0].ParentRunID
 		rctx.callStack = opts[0].CallStack
 		rctx.childRunCreator = opts[0].ChildRunCreator
+		rctx.stepRecorder = opts[0].StepRecorder
 	}
 
 	// Emit run-start document
@@ -260,7 +325,11 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 			return nil
 		}
 
+		stepStart := time.Now()
 		outcome, err := executeStep(rctx.ctx, rctx, step)
+		if rctx.stepRecorder != nil {
+			rctx.stepRecorder(buildStepRecord(step, outcome, err, time.Since(stepStart), defaultModel))
+		}
 		if err != nil {
 			return err
 		}
