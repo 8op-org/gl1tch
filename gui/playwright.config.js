@@ -17,7 +17,7 @@ export default defineConfig({
     { name: 'chromium', use: { browserName: 'chromium' } },
   ],
   webServer: {
-    command: `${ROOT}/glitch --workspace ${WORKSPACE} workflow gui`,
+    command: `GLITCH_WORKSPACE=${WORKSPACE} ${ROOT}/glitch workspace gui`,
     url: 'http://127.0.0.1:8374',
     reuseExistingServer: true,
     timeout: 15000,
