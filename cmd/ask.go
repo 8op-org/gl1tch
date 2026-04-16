@@ -156,7 +156,7 @@ var askCmd = &cobra.Command{
 			}
 			fmt.Fprintf(os.Stderr, "  %s — %s\n", name, desc)
 		}
-		return fmt.Errorf("use 'glitch workflow run <name>' to run directly")
+		return fmt.Errorf("use 'glitch run <name>' to run directly")
 	},
 }
 
@@ -200,7 +200,7 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 		fmt.Printf("\nTo create the PR:\n")
 		fmt.Printf("  claude \"Create a PR for %s#%s using the plan and PR body in %s/\"\n", repo, issue, singleResultsDir)
 		fmt.Printf("\nAfter creating the PR, run post-impl review:\n")
-		fmt.Printf("  glitch workflow run post-impl-review --param repo=%s --param issue=%s --param pr=<PR_NUMBER>\n", repo, issue)
+		fmt.Printf("  glitch run post-impl-review --set repo=%s --set issue=%s --set pr=<PR_NUMBER>\n", repo, issue)
 	}
 
 	return nil
@@ -249,10 +249,13 @@ func ensureWorkspaceDir(wsPath string) error {
 }
 
 // resolveResultsDir returns the results directory based on flags and workspace.
-// Priority: --results-dir flag > <workspace>/results/ > CWD/.glitch/results
+// Priority: --results-dir flag (ask or run) > <workspace>/results/ > CWD/.glitch/results
 func resolveResultsDir() string {
 	if askResultsDir != "" {
 		return askResultsDir
+	}
+	if runResultsDir != "" {
+		return runResultsDir
 	}
 	if workspacePath != "" {
 		return filepath.Join(workspacePath, "results")
