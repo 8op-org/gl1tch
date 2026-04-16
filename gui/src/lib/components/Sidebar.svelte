@@ -43,8 +43,14 @@
   </nav>
 
   <div class="sidebar-footer">
-    <span class="nav-icon">{@html icon('settings')}</span>
-    <span class="nav-label text-muted">Settings</span>
+    <a
+      href="#/settings"
+      class="nav-item"
+      class:active={isActive('/settings', $location)}
+    >
+      <span class="nav-icon">{@html icon('settings')}</span>
+      <span class="nav-label">Settings</span>
+    </a>
   </div>
 </aside>
 

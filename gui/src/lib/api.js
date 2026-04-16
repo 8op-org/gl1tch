@@ -37,3 +37,8 @@ export function getResultText(path) {
 export function getWorkflowActions(context) {
   return request(`/api/workflows/actions/${context}`);
 }
+export function getWorkspace() { return request('/api/workspace'); }
+export function updateWorkspace(data) {
+  return request('/api/workspace', { method: 'PUT', body: JSON.stringify(data) });
+}
+export function getProviders() { return request('/api/providers'); }

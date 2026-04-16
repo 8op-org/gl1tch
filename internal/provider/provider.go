@@ -29,6 +29,19 @@ type ProviderRegistry struct {
 	providers map[string]*Provider
 }
 
+// Names returns a sorted list of registered provider names.
+func (r *ProviderRegistry) Names() []string {
+	if r == nil {
+		return nil
+	}
+	names := make([]string, 0, len(r.providers))
+	for k := range r.providers {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // LoadProviders reads all .yaml files from dir, parses them into Provider
 // structs, and returns a registry. If dir doesn't exist, returns an empty
 // registry (not an error).

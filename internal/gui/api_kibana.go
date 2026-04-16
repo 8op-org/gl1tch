@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
 const defaultKibanaURL = "http://localhost:5601"
@@ -15,13 +19,29 @@ func sanitizeKQL(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
+// kibanaBaseURL reads the workspace elasticsearch field and derives the Kibana
+// URL. Falls back to defaultKibanaURL if not configured.
+func (s *Server) kibanaBaseURL() string {
+	path := filepath.Join(s.workspace, "workspace.glitch")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return defaultKibanaURL
+	}
+	ws, err := workspace.ParseFile(data)
+	if err != nil || ws.Defaults.Elasticsearch == "" {
+		return defaultKibanaURL
+	}
+	return ws.Defaults.Elasticsearch
+}
+
 func (s *Server) handleKibanaWorkflow(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	base := s.kibanaBaseURL()
 
 	filter := fmt.Sprintf(`(query:(match_phrase:(workflow_name:'%s')))`, sanitizeKQL(name))
 	iframeURL := fmt.Sprintf(
 		"%s/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(dataView:glitch-llm-calls,filters:!(%s),columns:!(step,model,tokens_in,tokens_out,latency_ms,cost_usd))",
-		defaultKibanaURL, url.PathEscape(filter),
+		base, url.PathEscape(filter),
 	)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -34,11 +54,12 @@ func (s *Server) handleKibanaWorkflow(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleKibanaRun(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	base := s.kibanaBaseURL()
 
 	filter := fmt.Sprintf(`(query:(match_phrase:(run_id:'%s')))`, sanitizeKQL(id))
 	iframeURL := fmt.Sprintf(
 		"%s/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(dataView:glitch-llm-calls,filters:!(%s),columns:!(step,model,tokens_in,tokens_out,latency_ms,cost_usd,escalated))",
-		defaultKibanaURL, url.PathEscape(filter),
+		base, url.PathEscape(filter),
 	)
 
 	w.Header().Set("Content-Type", "application/json")

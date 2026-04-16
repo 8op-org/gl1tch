@@ -6,6 +6,7 @@
   import RunList from './routes/RunList.svelte';
   import RunView from './routes/RunView.svelte';
   import ResultsBrowser from './routes/ResultsBrowser.svelte';
+  import Settings from './routes/Settings.svelte';
 
   const routes = {
     '/': WorkflowList,
@@ -13,6 +14,7 @@
     '/runs': RunList,
     '/run/:id': RunView,
     '/results': ResultsBrowser,
+    '/settings': Settings,
   };
 </script>
 

@@ -81,6 +81,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/kibana/workflow/{name}", s.handleKibanaWorkflow)
 	s.mux.HandleFunc("GET /api/kibana/run/{id}", s.handleKibanaRun)
 	s.mux.HandleFunc("GET /api/workspace", s.handleGetWorkspace)
+	s.mux.HandleFunc("PUT /api/workspace", s.handlePutWorkspace)
+	s.mux.HandleFunc("GET /api/providers", s.handleGetProviders)
 
 	if !s.dev {
 		dist, _ := fs.Sub(distFS, "dist")

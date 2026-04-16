@@ -18,17 +18,18 @@ type workspaceResponse struct {
 }
 
 type workspaceDefaults struct {
-	Model    string `json:"model,omitempty"`
-	Provider string `json:"provider,omitempty"`
+	Model         string            `json:"model,omitempty"`
+	Provider      string            `json:"provider,omitempty"`
+	Elasticsearch string            `json:"elasticsearch,omitempty"`
+	Params        map[string]string `json:"params"`
 }
 
 func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join(s.workspace, "workspace.glitch")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// No workspace.glitch — return empty response
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(workspaceResponse{Repos: []string{}})
+		json.NewEncoder(w).Encode(workspaceResponse{Repos: []string{}, Defaults: workspaceDefaults{Params: map[string]string{}}})
 		return
 	}
 
@@ -38,6 +39,11 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	params := ws.Defaults.Params
+	if params == nil {
+		params = map[string]string{}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(workspaceResponse{
 		Name:        ws.Name,
@@ -45,8 +51,63 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 		Owner:       ws.Owner,
 		Repos:       ws.Repos,
 		Defaults: workspaceDefaults{
-			Model:    ws.Defaults.Model,
-			Provider: ws.Defaults.Provider,
+			Model:         ws.Defaults.Model,
+			Provider:      ws.Defaults.Provider,
+			Elasticsearch: ws.Defaults.Elasticsearch,
+			Params:        params,
 		},
 	})
+}
+
+func (s *Server) handlePutWorkspace(w http.ResponseWriter, r *http.Request) {
+	var req workspaceResponse
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), 400)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "workspace name is required", 400)
+		return
+	}
+
+	repos := req.Repos
+	if repos == nil {
+		repos = []string{}
+	}
+	params := req.Defaults.Params
+	if params == nil {
+		params = map[string]string{}
+	}
+
+	ws := &workspace.Workspace{
+		Name:        req.Name,
+		Description: req.Description,
+		Owner:       req.Owner,
+		Repos:       repos,
+		Defaults: workspace.Defaults{
+			Model:         req.Defaults.Model,
+			Provider:      req.Defaults.Provider,
+			Elasticsearch: req.Defaults.Elasticsearch,
+			Params:        params,
+		},
+	}
+
+	data := workspace.Serialize(ws)
+	path := filepath.Join(s.workspace, "workspace.glitch")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		http.Error(w, "write workspace: "+err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleGetProviders(w http.ResponseWriter, r *http.Request) {
+	names := []string{}
+	if s.providerReg != nil {
+		names = s.providerReg.Names()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(names)
 }

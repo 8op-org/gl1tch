@@ -160,3 +160,73 @@ func TestParseWorkspace_NoParams(t *testing.T) {
 		t.Errorf("Params should be empty, got %v", w.Defaults.Params)
 	}
 }
+
+func TestSerialize_Full(t *testing.T) {
+	w := &Workspace{
+		Name:        "stokagent",
+		Description: "Cross-repo research and automation",
+		Owner:       "adam",
+		Repos:       []string{"elastic/kibana", "elastic/ensemble"},
+		Defaults: Defaults{
+			Model:         "qwen2.5:7b",
+			Provider:      "ollama",
+			Elasticsearch: "http://localhost:9200",
+			Params:        map[string]string{"repo": "elastic/kibana", "results-dir": "results/kibana"},
+		},
+	}
+
+	data := Serialize(w)
+	// Round-trip: parse the serialized output
+	w2, err := ParseFile(data)
+	if err != nil {
+		t.Fatalf("round-trip parse failed: %v\n%s", err, data)
+	}
+	if w2.Name != w.Name {
+		t.Errorf("Name: got %q, want %q", w2.Name, w.Name)
+	}
+	if w2.Description != w.Description {
+		t.Errorf("Description: got %q, want %q", w2.Description, w.Description)
+	}
+	if w2.Owner != w.Owner {
+		t.Errorf("Owner: got %q, want %q", w2.Owner, w.Owner)
+	}
+	if len(w2.Repos) != len(w.Repos) {
+		t.Fatalf("Repos len: got %d, want %d", len(w2.Repos), len(w.Repos))
+	}
+	for i, r := range w.Repos {
+		if w2.Repos[i] != r {
+			t.Errorf("Repos[%d]: got %q, want %q", i, w2.Repos[i], r)
+		}
+	}
+	if w2.Defaults.Model != w.Defaults.Model {
+		t.Errorf("Model: got %q, want %q", w2.Defaults.Model, w.Defaults.Model)
+	}
+	if w2.Defaults.Provider != w.Defaults.Provider {
+		t.Errorf("Provider: got %q, want %q", w2.Defaults.Provider, w.Defaults.Provider)
+	}
+	if w2.Defaults.Elasticsearch != w.Defaults.Elasticsearch {
+		t.Errorf("Elasticsearch: got %q, want %q", w2.Defaults.Elasticsearch, w.Defaults.Elasticsearch)
+	}
+	if w2.Defaults.Params["repo"] != w.Defaults.Params["repo"] {
+		t.Errorf("Params[repo]: got %q, want %q", w2.Defaults.Params["repo"], w.Defaults.Params["repo"])
+	}
+	if w2.Defaults.Params["results-dir"] != w.Defaults.Params["results-dir"] {
+		t.Errorf("Params[results-dir]: got %q, want %q", w2.Defaults.Params["results-dir"], w.Defaults.Params["results-dir"])
+	}
+}
+
+func TestSerialize_Minimal(t *testing.T) {
+	w := &Workspace{
+		Name:     "minimal",
+		Repos:    []string{},
+		Defaults: Defaults{Params: map[string]string{}},
+	}
+	data := Serialize(w)
+	w2, err := ParseFile(data)
+	if err != nil {
+		t.Fatalf("round-trip parse failed: %v\n%s", err, data)
+	}
+	if w2.Name != "minimal" {
+		t.Errorf("Name: got %q, want %q", w2.Name, "minimal")
+	}
+}
