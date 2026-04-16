@@ -9,6 +9,7 @@ import (
 
 	"github.com/8op-org/gl1tch/internal/provider"
 	"github.com/8op-org/gl1tch/internal/workspace"
+	"github.com/8op-org/gl1tch/internal/workspace/registry"
 )
 
 var (
@@ -34,23 +35,35 @@ var rootCmd = &cobra.Command{
 	Use:   "glitch",
 	Short: "your GitHub co-pilot",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if workspacePath == "" {
+		resolved := resolveWorkspaceForCommand()
+		workspacePath = resolved.Path
+		if resolved.Path == "" {
 			return nil
 		}
-		if err := ensureWorkspaceDir(workspacePath); err != nil {
+		if err := ensureWorkspaceDir(resolved.Path); err != nil {
 			return err
 		}
 		cfg, _ := loadConfig()
-		wsFile := filepath.Join(workspacePath, "workspace.glitch")
+		wsFile := filepath.Join(resolved.Path, "workspace.glitch")
 		if data, err := os.ReadFile(wsFile); err == nil {
 			if ws, err := workspace.ParseFile(data); err == nil {
 				ApplyWorkspace(ws, cfg)
 			}
 		}
-		// Store merged config for subcommands
 		mergedConfig = cfg
 		return nil
 	},
+}
+
+func resolveWorkspaceForCommand() workspace.Resolved {
+	cwd, _ := os.Getwd()
+	active, _ := registry.GetActive()
+	return workspace.Resolve(workspace.ResolveOpts{
+		ExplicitPath: workspacePath,
+		EnvPath:      os.Getenv("GLITCH_WORKSPACE"),
+		StartDir:     cwd,
+		ActiveName:   active,
+	})
 }
 
 func Execute() {
