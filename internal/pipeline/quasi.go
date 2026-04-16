@@ -270,6 +270,26 @@ func evalAtom(n *sexpr.Node, scope *Scope) (string, error) {
 	return "", fmt.Errorf("line %d: unsupported atom type", n.Line)
 }
 
+// renderInStep wraps render and stamps source location onto any
+// UndefinedRefError returned. Call this from the runner instead of
+// render() directly.
+func renderInStep(s string, scope *Scope, steps map[string]string, w *Workflow, step *Step) (string, error) {
+	out, err := render(s, scope, steps)
+	if err != nil {
+		var ue *UndefinedRefError
+		if errors.As(err, &ue) && ue.File == "" {
+			if w != nil {
+				ue.File = w.SourceFile
+			}
+			if step != nil {
+				ue.Line = step.Line
+				ue.Col = step.Col
+			}
+		}
+	}
+	return out, err
+}
+
 // renderQuasi interpolates ~name, ~param.x, and ~(form) references in src
 // against the given scope. Strings without "~" pass through unchanged.
 // Undefined refs return an error.

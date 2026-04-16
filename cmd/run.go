@@ -40,6 +40,34 @@ func init() {
 	runCmd.Flags().BoolVar(&runCompare, "compare", false, "discover variant workflows and cross-review")
 	runCmd.Flags().StringVar(&runReviewCriteria, "review-criteria", "", "comma-separated review criteria for comparison")
 	runCmd.Flags().StringVar(&runResultsDir, "results-dir", "", "output directory for results (defaults to <workspace>/results)")
+	runCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		// Cobra hands the full raw arg slice to HelpFunc, including the
+		// subcommand name and any flag tokens. Pick the first non-flag
+		// argument that isn't the subcommand itself as the workflow name.
+		name := ""
+		for _, a := range args {
+			if a == "run" || strings.HasPrefix(a, "-") {
+				continue
+			}
+			name = a
+			break
+		}
+		if name == "" {
+			cmd.Root().HelpFunc()(cmd, args)
+			return
+		}
+		path, err := resolveWorkflowPath(name)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%v\n", err)
+			return
+		}
+		w, err := pipeline.LoadFile(path)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "load %s: %v\n", name, err)
+			return
+		}
+		fmt.Fprint(cmd.OutOrStdout(), pipeline.FormatHelp(w))
+	})
 	rootCmd.AddCommand(runCmd)
 }
 

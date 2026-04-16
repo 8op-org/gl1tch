@@ -48,6 +48,29 @@ func TestSexprWorkflow_Basic(t *testing.T) {
 	}
 }
 
+func TestConvertStep_PopulatesLineCol(t *testing.T) {
+	src := []byte(`
+(workflow "pos"
+  (step "a"
+    (run "echo a"))
+  (step "b"
+    (run "echo b")))
+`)
+	w, err := LoadBytes(src, "pos.glitch")
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(w.Steps))
+	}
+	if w.Steps[0].Line != 3 {
+		t.Errorf("Steps[0].Line = %d, want 3", w.Steps[0].Line)
+	}
+	if w.Steps[1].Line != 5 {
+		t.Errorf("Steps[1].Line = %d, want 5", w.Steps[1].Line)
+	}
+}
+
 func TestSexprWorkflow_Flatten(t *testing.T) {
 	src := []byte(`
 (workflow "test"
@@ -1784,5 +1807,44 @@ func TestSexprWorkflow_CompareTooFewBranches(t *testing.T) {
 	_, err := parseSexprWorkflow([]byte(src))
 	if err == nil {
 		t.Fatal("expected error for <2 branches")
+	}
+}
+
+func TestLoadBytes_PopulatesSourceFile(t *testing.T) {
+	src := []byte(`(workflow "x" (step "s" (run "echo ok")))`)
+	w, err := LoadBytes(src, "path/to/x.glitch")
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if w.SourceFile != "path/to/x.glitch" {
+		t.Errorf("SourceFile = %q, want %q", w.SourceFile, "path/to/x.glitch")
+	}
+}
+
+func TestLoadBytes_CollectsArgForms(t *testing.T) {
+	src := []byte(`
+(arg "topic" :required true :description "Topic" :example "batch comparison")
+(arg "audience" :default "developers" :description "Target audience")
+
+(workflow "w"
+  (step "s" (run "echo ~param.topic")))
+`)
+	w, err := LoadBytes(src, "w.glitch")
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if len(w.Args) != 2 {
+		t.Fatalf("Args len = %d, want 2", len(w.Args))
+	}
+	if w.Args[0].Name != "topic" || w.Args[0].Example != "batch comparison" {
+		t.Errorf("Args[0] = %+v", w.Args[0])
+	}
+	if w.Args[1].Name != "audience" || w.Args[1].Default != "developers" {
+		t.Errorf("Args[1] = %+v", w.Args[1])
+	}
+	for _, a := range w.Args {
+		if a.Implicit {
+			t.Errorf("declared arg %q marked Implicit=true", a.Name)
+		}
 	}
 }

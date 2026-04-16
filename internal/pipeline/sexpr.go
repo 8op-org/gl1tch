@@ -249,6 +249,7 @@ func convertRetry(n *sexpr.Node, defs map[string]string) (Step, error) {
 		return Step{}, fmt.Errorf("line %d: (retry) inner form must produce exactly one step", inner.Line)
 	}
 	steps[0].Retry = count
+	steps[0].Line = n.Line
 	return steps[0], nil
 }
 
@@ -272,6 +273,7 @@ func convertTimeout(n *sexpr.Node, defs map[string]string) (Step, error) {
 		return Step{}, fmt.Errorf("line %d: (timeout) inner form must produce exactly one step", inner.Line)
 	}
 	steps[0].Timeout = dur
+	steps[0].Line = n.Line
 	return steps[0], nil
 }
 
@@ -337,6 +339,7 @@ func convertCatch(n *sexpr.Node, defs map[string]string) (Step, error) {
 	}
 	primary.Form = "catch"
 	primary.Fallback = &fallback
+	primary.Line = n.Line
 	return primary, nil
 }
 
@@ -372,6 +375,7 @@ func convertCond(n *sexpr.Node, defs map[string]string) (Step, error) {
 		}
 		s.Branches = append(s.Branches, CondBranch{Pred: predStr, Step: step})
 	}
+	s.Line = n.Line
 	return s, nil
 }
 
@@ -404,6 +408,7 @@ func convertWhen(n *sexpr.Node, defs map[string]string, negate bool) (Step, erro
 		WhenPred: pred,
 		WhenBody: &body,
 		WhenNot:  negate,
+		Line:     n.Line,
 	}, nil
 }
 
@@ -423,6 +428,7 @@ func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:    "map",
 		MapOver: source,
 		MapBody: &body,
+		Line:    n.Line,
 	}, nil
 }
 
@@ -442,6 +448,7 @@ func convertFilter(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:       "filter",
 		FilterOver: source,
 		FilterBody: &body,
+		Line:       n.Line,
 	}, nil
 }
 
@@ -461,6 +468,7 @@ func convertReduce(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:       "reduce",
 		ReduceOver: source,
 		ReduceBody: &body,
+		Line:       n.Line,
 	}, nil
 }
 
@@ -506,6 +514,7 @@ func convertMapResources(n *sexpr.Node, defs map[string]string) (Step, error) {
 		return Step{}, fmt.Errorf("line %d: map-resources body: %w", n.Line, err)
 	}
 	s.MapResourcesBody = &body
+	s.Line = n.Line
 	return s, nil
 }
 
@@ -545,6 +554,7 @@ func convertPar(n *sexpr.Node, defs map[string]string) (Step, error) {
 		ID:       fmt.Sprintf("par-%d", n.Line),
 		Form:     "par",
 		ParSteps: parSteps,
+		Line:     n.Line,
 	}, nil
 }
 
@@ -594,7 +604,7 @@ func convertThread(n *sexpr.Node, defs map[string]string) ([]Step, error) {
 
 		case "flatten":
 			// (flatten) with no args or (flatten "explicit") — auto-fill source if missing
-			s := Step{ID: threadID, Flatten: prevID}
+			s := Step{ID: threadID, Flatten: prevID, Line: child.Line}
 			if len(child.Children) >= 2 {
 				s.Flatten = resolveVal(child.Children[1], defs)
 			}
@@ -721,6 +731,7 @@ func convertCompare(n *sexpr.Node, defs map[string]string) (Step, error) {
 	if len(s.CompareBranches) < 2 {
 		return s, fmt.Errorf("line %d: (compare) needs at least 2 branches, got %d", n.Line, len(s.CompareBranches))
 	}
+	s.Line = n.Line
 	return s, nil
 }
 
@@ -1122,6 +1133,7 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 			}
 		}
 	}
+	s.Line = n.Line
 	return s, nil
 }
 

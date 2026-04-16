@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/8op-org/gl1tch/internal/plugin"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,6 +21,9 @@ type Workflow struct {
 	Actions     []string       `yaml:"actions,omitempty"`
 	Steps       []Step         `yaml:"steps"`
 	Items       []WorkflowItem `yaml:"-"`
+	SourceFile  string         `yaml:"-"`
+	Args        []plugin.ArgDef `yaml:"-"`
+	Input       *InputDef       `yaml:"-"`
 }
 
 // WorkflowItem is a union type for the ordered sequence of workflow elements.
@@ -113,6 +117,10 @@ type Step struct {
 	CallWorkflow string            `yaml:"-"` // workflow name
 	CallInput    string            `yaml:"-"` // template-rendered input for child
 	CallSet      map[string]string `yaml:"-"` // :set key=value params
+
+	// Source location (populated from sexpr nodes; zero for YAML-loaded steps).
+	Line int `yaml:"-"`
+	Col  int `yaml:"-"`
 }
 
 // CondBranch is one arm of a (cond ...) form.
@@ -218,7 +226,7 @@ func LoadFile(path string) (*Workflow, error) {
 	if err != nil {
 		return nil, err
 	}
-	return LoadBytes(data, filepath.Base(path))
+	return LoadBytes(data, path)
 }
 
 // LoadBytes parses a workflow from raw bytes, dispatching on file extension.
@@ -226,15 +234,38 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".glitch":
-		return parseSexprWorkflow(data)
+		args, err := plugin.ParseArgs(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filename, err)
+		}
+		input, err := ParseInput(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filename, err)
+		}
+		w, err := parseSexprWorkflow(data)
+		if err != nil {
+			return nil, err
+		}
+		w.Args = args
+		w.Input = input
+		w.SourceFile = filename
+		for _, warn := range MergeImplicitArgs(w) {
+			fmt.Fprintf(os.Stderr, "warning: %s: %s\n", filename, warn)
+		}
+		return w, nil
 	default:
 		var w Workflow
 		if err := yaml.Unmarshal(data, &w); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", filename, err)
 		}
 		if w.Name == "" {
-			w.Name = filename
+			// Fallback name is the file's basename without extension — the
+			// full path lives on SourceFile, which keeps the two concerns
+			// separate.
+			base := filepath.Base(filename)
+			w.Name = strings.TrimSuffix(base, filepath.Ext(base))
 		}
+		w.SourceFile = filename
 		return &w, nil
 	}
 }
