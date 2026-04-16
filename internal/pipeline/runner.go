@@ -866,7 +866,14 @@ func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	}
 
 	if matched {
-		return executeStep(ctx, rctx, *step.WhenBody)
+		outcome, err := executeStep(ctx, rctx, *step.WhenBody)
+		if err != nil {
+			return nil, err
+		}
+		rctx.mu.Lock()
+		rctx.steps[step.ID] = outcome.output
+		rctx.mu.Unlock()
+		return outcome, nil
 	}
 
 	// Not matched — empty outcome
