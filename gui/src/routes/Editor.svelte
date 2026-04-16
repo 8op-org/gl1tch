@@ -4,6 +4,7 @@
   import { EditorView, basicSetup } from 'codemirror';
   import { EditorState } from '@codemirror/state';
   import { oneDark } from '@codemirror/theme-one-dark';
+  import { glitchLanguage } from '../lib/lang-glitch.js';
   import { getWorkflow, saveWorkflow, listRuns } from '../lib/api.js';
   import { icon } from '../lib/icons.js';
   import Breadcrumb from '../lib/components/Breadcrumb.svelte';
@@ -42,7 +43,7 @@
     editorView = new EditorView({
       state: EditorState.create({
         doc: content,
-        extensions: [basicSetup, oneDark, EditorView.updateListener.of(update => { if (update.docChanged) dirty = true; })],
+        extensions: [basicSetup, oneDark, glitchLanguage, EditorView.updateListener.of(update => { if (update.docChanged) dirty = true; })],
       }),
       parent: editorEl,
     });

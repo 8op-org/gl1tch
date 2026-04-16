@@ -20,7 +20,7 @@ func (s *Server) handleKibanaWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	filter := fmt.Sprintf(`(query:(match_phrase:(workflow_name:'%s')))`, sanitizeKQL(name))
 	iframeURL := fmt.Sprintf(
-		"%s/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(dataView:glitch-llm-calls,filters:!(%s),columns:!(step_id,model,tokens_in,tokens_out,latency_ms,cost_usd))",
+		"%s/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(dataView:glitch-llm-calls,filters:!(%s),columns:!(step,model,tokens_in,tokens_out,latency_ms,cost_usd))",
 		defaultKibanaURL, url.PathEscape(filter),
 	)
 
@@ -37,7 +37,7 @@ func (s *Server) handleKibanaRun(w http.ResponseWriter, r *http.Request) {
 
 	filter := fmt.Sprintf(`(query:(match_phrase:(run_id:'%s')))`, sanitizeKQL(id))
 	iframeURL := fmt.Sprintf(
-		"%s/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(dataView:glitch-llm-calls,filters:!(%s),columns:!(step_id,model,tokens_in,tokens_out,latency_ms,cost_usd,escalated))",
+		"%s/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(dataView:glitch-llm-calls,filters:!(%s),columns:!(step,model,tokens_in,tokens_out,latency_ms,cost_usd,escalated))",
 		defaultKibanaURL, url.PathEscape(filter),
 	)
 

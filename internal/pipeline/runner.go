@@ -759,6 +759,27 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 			return f.Name()
 		},
 
+		// itemfile writes the current map item to a temp file and returns the path.
+		// Use in map body steps where {{.param.item}} would break shell escaping:
+		//   SUBJECT=$(jq -r '.subject' "{{itemfile}}")
+		"itemfile": func() string {
+			params, _ := data["param"].(map[string]string)
+			if params == nil {
+				return ""
+			}
+			item, ok := params["item"]
+			if !ok {
+				return ""
+			}
+			f, err := os.CreateTemp("", "glitch-item-*")
+			if err != nil {
+				return ""
+			}
+			f.WriteString(item)
+			f.Close()
+			return f.Name()
+		},
+
 		// String functions
 		"split":      func(sep, s string) []string { return strings.Split(s, sep) },
 		"join":       func(sep string, parts []string) string { return strings.Join(parts, sep) },

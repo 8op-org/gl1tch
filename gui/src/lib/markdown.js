@@ -14,6 +14,20 @@ hljs.registerLanguage('yaml', yaml)
 hljs.registerLanguage('python', python)
 hljs.registerLanguage('go', go)
 
+hljs.registerLanguage('glitch', () => ({
+  name: 'glitch',
+  contains: [
+    { scope: 'comment', begin: ';;', end: '$' },
+    { scope: 'string', begin: '```', end: '```', contains: [{ scope: 'template-variable', begin: '\\{\\{', end: '\\}\\}' }] },
+    { scope: 'string', begin: '"', end: '"', contains: [{ begin: '\\\\.' }] },
+    { scope: 'attr', begin: ':[a-zA-Z_][a-zA-Z0-9_-]*' },
+    { scope: 'number', begin: '\\b[0-9]+\\b' },
+    { scope: 'keyword', begin: '(?<=\\()\\s*(workflow|step|run|llm|phase|gate|retry|timeout|par|when|each|def|plugin|env)\\b' },
+    { scope: 'title.function', begin: '(?<=\\()\\s*[a-zA-Z_][a-zA-Z0-9_-]*' },
+    { scope: 'punctuation', begin: '[()]' },
+  ],
+}))
+
 marked.use(markedHighlight({
   langPrefix: 'hljs language-',
   highlight(code, lang) {

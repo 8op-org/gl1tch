@@ -3,6 +3,7 @@
   import { EditorView, basicSetup } from 'codemirror';
   import { EditorState } from '@codemirror/state';
   import { oneDark } from '@codemirror/theme-one-dark';
+  import { glitchLanguage } from '../lib/lang-glitch.js';
   import { getResult, getResultText, saveResult } from '../lib/api.js';
   import { renderMarkdown } from '../lib/markdown.js';
   import { icon } from '../lib/icons.js';
@@ -23,6 +24,8 @@
   let selectedFolder = $state('');
   let editorEl = $state(null);
   let editorView = $state(null);
+  let previewEl = $state(null);
+  let previewView = $state(null);
 
   const breadcrumbSegments = $derived(() => {
     const parts = selectedPath.split('/').filter(Boolean);
@@ -32,6 +35,7 @@
   const isMarkdown = $derived(selectedPath.endsWith('.md'));
   const isDiff = $derived(selectedPath.endsWith('.diff') || selectedPath.endsWith('.patch'));
   const isJson = $derived(selectedPath.endsWith('.json'));
+  const isGlitch = $derived(selectedPath.endsWith('.glitch'));
 
   async function loadTree(path) {
     try {
@@ -67,9 +71,23 @@
 
   async function selectFile(path) {
     if (editorView) { editorView.destroy(); editorView = null; }
+    if (previewView) { previewView.destroy(); previewView = null; }
     selectedPath = path; mode = 'preview'; dirty = false;
     try { fileContent = await getResultText(path); } catch (e) { fileContent = `Error loading file: ${e.message}`; }
   }
+
+  $effect(() => {
+    if (isGlitch && previewEl && fileContent) {
+      if (previewView) previewView.destroy();
+      previewView = new EditorView({
+        state: EditorState.create({
+          doc: fileContent,
+          extensions: [basicSetup, oneDark, glitchLanguage, EditorState.readOnly.of(true)],
+        }),
+        parent: previewEl,
+      });
+    }
+  });
 
   function switchToEdit() {
     mode = 'edit';
@@ -79,7 +97,7 @@
       editorView = new EditorView({
         state: EditorState.create({
           doc: fileContent,
-          extensions: [basicSetup, oneDark, EditorView.updateListener.of(update => { if (update.docChanged) dirty = true; })],
+          extensions: [basicSetup, oneDark, ...(selectedPath.endsWith('.glitch') ? [glitchLanguage] : []), EditorView.updateListener.of(update => { if (update.docChanged) dirty = true; })],
         }),
         parent: editorEl,
       });
@@ -139,6 +157,8 @@
         <div class="rendered-content">{@html renderMarkdown(fileContent)}</div>
       {:else if isJson}
         <pre class="json-content">{(() => { try { return JSON.stringify(JSON.parse(fileContent), null, 2); } catch { return fileContent; } })()}</pre>
+      {:else if isGlitch}
+        <div class="glitch-preview" bind:this={previewEl}></div>
       {:else if isDiff}
         <pre class="diff-content">{fileContent}</pre>
       {:else}
@@ -163,6 +183,9 @@
   .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; opacity: 0.5; }
   .rendered-content { padding: 24px; }
   .editor-wrap { flex: 1; }
+  .glitch-preview { flex: 1; }
+  .glitch-preview :global(.cm-editor) { height: 100%; }
+  .glitch-preview :global(.cm-editor .cm-scroller) { font-family: var(--font-mono); font-size: 13px; }
   .editor-wrap :global(.cm-editor) { height: 100%; }
   pre { margin: 0; }
 </style>
