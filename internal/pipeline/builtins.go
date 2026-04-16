@@ -86,8 +86,101 @@ func callBuiltin(name string, args []string, scope *Scope) (string, error) {
 }
 
 func tryStringBuiltin(name string, args []string) (string, bool, error) {
-	// Implemented in Task 5.
+	switch name {
+	case "upper":
+		if len(args) < 1 {
+			return "", true, fmt.Errorf("upper: missing arg")
+		}
+		return strings.ToUpper(args[0]), true, nil
+	case "lower":
+		if len(args) < 1 {
+			return "", true, fmt.Errorf("lower: missing arg")
+		}
+		return strings.ToLower(args[0]), true, nil
+	case "trim":
+		if len(args) < 1 {
+			return "", true, fmt.Errorf("trim: missing arg")
+		}
+		return strings.TrimSpace(args[0]), true, nil
+	case "trimPrefix":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("trimPrefix: need (prefix s)")
+		}
+		return strings.TrimPrefix(args[1], args[0]), true, nil
+	case "trimSuffix":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("trimSuffix: need (suffix s)")
+		}
+		return strings.TrimSuffix(args[1], args[0]), true, nil
+	case "replace":
+		if len(args) < 3 {
+			return "", true, fmt.Errorf("replace: need (old new s)")
+		}
+		return strings.ReplaceAll(args[2], args[0], args[1]), true, nil
+	case "truncate":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("truncate: need (n s)")
+		}
+		n := 0
+		fmt.Sscanf(args[0], "%d", &n)
+		runes := []rune(args[1])
+		if len(runes) <= n {
+			return args[1], true, nil
+		}
+		return string(runes[:n]), true, nil
+	case "contains":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("contains: need (haystack needle)")
+		}
+		return boolStr(strings.Contains(args[0], args[1])), true, nil
+	case "hasPrefix":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("hasPrefix: need (s prefix)")
+		}
+		return boolStr(strings.HasPrefix(args[0], args[1])), true, nil
+	case "hasSuffix":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("hasSuffix: need (s suffix)")
+		}
+		return boolStr(strings.HasSuffix(args[0], args[1])), true, nil
+	case "split":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("split: need (sep s)")
+		}
+		return strings.Join(strings.Split(args[1], args[0]), "\n"), true, nil
+	case "join":
+		if len(args) < 2 {
+			return "", true, fmt.Errorf("join: need (sep s)")
+		}
+		lines := strings.Split(args[1], "\n")
+		return strings.Join(lines, args[0]), true, nil
+	case "first":
+		if len(args) < 1 {
+			return "", true, fmt.Errorf("first: missing arg")
+		}
+		lines := strings.Split(args[0], "\n")
+		if len(lines) == 0 {
+			return "", true, nil
+		}
+		return lines[0], true, nil
+	case "last":
+		if len(args) < 1 {
+			return "", true, fmt.Errorf("last: missing arg")
+		}
+		lines := strings.Split(args[0], "\n")
+		if len(lines) == 0 {
+			return "", true, nil
+		}
+		return lines[len(lines)-1], true, nil
+	}
 	return "", false, nil
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func tryJSONBuiltin(name string, args []string) (string, bool, error) {

@@ -39,3 +39,55 @@ func TestBuiltinUnknown(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestStringBuiltins(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"upper", []string{"hello"}, "HELLO"},
+		{"lower", []string{"HI"}, "hi"},
+		{"trim", []string{"  x  "}, "x"},
+		{"trimPrefix", []string{"pre-", "pre-thing"}, "thing"},
+		{"trimSuffix", []string{"-end", "thing-end"}, "thing"},
+		{"replace", []string{"/", "-", "a/b/c"}, "a-b-c"},
+		{"truncate", []string{"5", "abcdefg"}, "abcde"},
+		{"truncate noop", []string{"100", "abc"}, "abc"},
+		{"contains", []string{"foobar", "foo"}, "true"},
+		{"hasPrefix", []string{"elastic/x", "elastic"}, "true"},
+		{"hasSuffix", []string{"elastic/x", "/x"}, "true"},
+		{"split", []string{"/", "a/b/c"}, "a\nb\nc"},
+		{"join", []string{"-", "a\nb\nc"}, "a-b-c"},
+		{"first", []string{"a\nb\nc"}, "a"},
+		{"last", []string{"a\nb\nc"}, "c"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := callBuiltin(strings_functionName(tc.name), tc.args, NewScope())
+			if err != nil {
+				t.Fatalf("err: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// strings_functionName strips any " noop"/" short" suffix used only for test naming.
+func strings_functionName(n string) string {
+	if i := indexOf(n, ' '); i >= 0 {
+		return n[:i]
+	}
+	return n
+}
+
+func indexOf(s string, ch byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == ch {
+			return i
+		}
+	}
+	return -1
+}
