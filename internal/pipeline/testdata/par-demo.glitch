@@ -8,4 +8,4 @@
     (step "right" (run "echo right-branch")))
 
   (step "merge"
-    (run "echo left={{step \"left\"}} right={{step \"right\"}}")))
+    (run "echo left=~(step left) right=~(step right)")))

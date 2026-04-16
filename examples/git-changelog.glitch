@@ -16,7 +16,7 @@
       :prompt ```
         Here are the last 20 git commits:
 
-        {{step "commits"}}
+        ~(step commits)
 
         Write a concise changelog grouped by theme (features, fixes, chores).
         Use markdown. No preamble.

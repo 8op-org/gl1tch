@@ -8,7 +8,7 @@
     (llm
       :provider "claude"
       :skill "reviewer-verify"
-      :prompt "Review these staged changes for correctness, security, and style:\n\n{{step \"diff\"}}"))
+      :prompt "Review these staged changes for correctness, security, and style:\n\n~(step diff)"))
 
   (step "save-review"
     (save "review-output.md" :from "review")))

@@ -14,11 +14,11 @@
     (compare
       (branch "local"
         (llm :model "qwen2.5:7b"
-          :prompt "Explain {{.param.topic}} in 3 sentences."))
+          :prompt "Explain ~param.topic in 3 sentences."))
       (branch "large"
         (llm :model "llama3.2"
-          :prompt "Explain {{.param.topic}} in 3 sentences."))
+          :prompt "Explain ~param.topic in 3 sentences."))
       (review :criteria ("accuracy" "clarity" "conciseness"))))
 
   (step "report"
-    (save "results/compare-{{.param.topic}}.md" :from "explain")))
+    (save "results/compare-~param.topic.md" :from "explain")))

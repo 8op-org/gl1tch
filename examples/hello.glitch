@@ -21,7 +21,7 @@
       :model model
       :prompt ```
         You received this message from a shell command:
-        {{step "gather"}}
+        ~(step gather)
 
         Respond with a short, enthusiastic acknowledgment.
         ```)))

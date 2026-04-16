@@ -7,7 +7,7 @@
 
   (step "gather"
     (run ```
-DIR="{{.param.path}}"
+DIR="~param.path"
 if [ -z "$DIR" ]; then echo "ERROR: no path provided" >&2; exit 1; fi
 echo "## Files in $DIR"
 find "$DIR" -type f | head -50
@@ -24,7 +24,7 @@ done
       :prompt ```
 Review the following results folder contents against this checklist:
 
-{{step "gather"}}
+~(step gather)
 
 Checklist — mark each PASS, FAIL, or N/A:
 - Functionality: do changes accomplish their stated goal?
@@ -38,4 +38,4 @@ End with a summary and suggested actions.
 ```))
 
   (step "save-review"
-    (save "{{.param.path}}/review.md" :from "review")))
+    (save "~param.path/review.md" :from "review")))

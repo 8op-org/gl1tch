@@ -7,7 +7,7 @@
 
   (step "detect-repo"
     (run ```
-DIR="{{.param.path}}"
+DIR="~param.path"
 ORG=$(echo "$DIR" | awk -F/ '{for(i=1;i<=NF;i++) if($(i+1) != "") {print $i; exit}}')
 REPO=$(echo "$DIR" | awk -F/ '{for(i=1;i<=NF;i++) if($(i+1) != "") {print $(i+1); exit}}')
 echo "${ORG}/${REPO}"
@@ -15,7 +15,7 @@ echo "${ORG}/${REPO}"
 
   (step "read-review"
     (run ```
-DIR="{{.param.path}}"
+DIR="~param.path"
 if [ -f "$DIR/review.md" ]; then
   cat "$DIR/review.md"
 else
@@ -28,7 +28,7 @@ fi
       :prompt ```
 Create a pull request description from this review:
 
-{{step "read-review"}}
+~(step read-review)
 
 Format as:
 ## Summary
@@ -43,14 +43,14 @@ Format as:
 
   (step "create-draft"
     (run ```
-REPO="{{step "detect-repo"}}"
-TITLE="{{.param.title}}"
-BRANCH="{{.param.branch}}"
+REPO="~(step detect-repo)"
+TITLE="~param.title"
+BRANCH="~param.branch"
 if [ -z "$TITLE" ]; then TITLE="Draft PR from gl1tch results"; fi
 if [ -z "$BRANCH" ]; then echo "ERROR: branch param required" >&2; exit 1; fi
-BODY='{{step "build-pr-body"}}'
+BODY='~(step build-pr-body)'
 gh pr create --repo "$REPO" --head "$BRANCH" --draft --title "$TITLE" --body "$BODY"
 ```))
 
   (step "save-url"
-    (save "{{.param.path}}/pr-url.txt" :from "create-draft")))
+    (save "~param.path/pr-url.txt" :from "create-draft")))

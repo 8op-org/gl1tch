@@ -49,16 +49,16 @@
         [{"slug": "getting-started", "title": "...", "order": 1, "description": "...", "content": "markdown body"}]
 
         STUBS (your starting point):
-        {{step "stubs"}}
+        ~(step stubs)
 
         REAL EXAMPLES (use verbatim):
-        {{step "examples"}}
+        ~(step examples)
 
         REAL WORKFLOWS:
-        {{step "workflows"}}
+        ~(step workflows)
 
         REPO STRUCTURE:
-        {{step "repo-structure"}}
+        ~(step repo-structure)
         ```))
 
   ;; ── Save with fallback ────────────────────────────
@@ -68,7 +68,7 @@
       python3 -c "
 import json, sys, re, glob, os
 
-raw = '''{{step \"enrich-docs\"}}'''
+raw = '''~(step enrich-docs)'''
 
 # Try to parse JSON array from LLM output
 pages = []
@@ -128,7 +128,7 @@ print(f'wrote {len(pages)} pages to site/generated/docs.json')
         Output as markdown. Each entry: ### heading, then bullet points.
 
         Commits:
-        {{step "changelog-raw"}}
+        ~(step changelog-raw)
         ```))
 
   (step "save-changelog"
