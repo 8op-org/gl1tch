@@ -9,11 +9,18 @@ end = raw.rindex("]")
 docs = json.loads(raw[start : end + 1])
 
 VALID_COMMANDS = {
-    "glitch ask", "glitch workflow run", "glitch workflow list",
+    "glitch ask", "glitch run", "glitch batch",
+    "glitch workflow run", "glitch workflow list",  # legacy, still referenced in older docs
     "glitch wf list", "glitch plugin list", "glitch plugin",
     "glitch observe", "glitch up", "glitch down", "glitch index",
-    "glitch config show", "glitch config set", "glitch --help",
-    "glitch --workspace",
+    "glitch config show", "glitch config set", "glitch config",
+    "glitch version", "glitch --help", "glitch --workspace",
+    "glitch workspace init", "glitch workspace use", "glitch workspace list",
+    "glitch workspace status", "glitch workspace gui",
+    "glitch workspace register", "glitch workspace unregister",
+    "glitch workspace add", "glitch workspace rm",
+    "glitch workspace sync", "glitch workspace pin",
+    "glitch workspace workflow", "glitch workspace",
 }
 
 # Every valid keyword in the sexpr language
@@ -22,6 +29,12 @@ VALID_KEYWORDS = {
     ":description", ":from", ":default", ":type", ":dir", ":headers",
     ":body", ":retries", ":version", ":flag", ":string", ":number",
     ":since", ":authored", ":reviewing", ":assigned",  # common plugin args
+    # workspace mechanics
+    ":owner", ":url", ":ref", ":pin", ":path", ":repo", ":as",
+    ":set", ":elasticsearch", ":fetched", ":active-workspace",
+    # global config
+    ":default-model", ":default-provider", ":eval-threshold",
+    ":base-url", ":api-key-env",
 }
 
 # Every valid form name
@@ -31,6 +44,12 @@ VALID_FORMS = {
     "phase", "gate", "par",
     "json-pick", "lines", "merge",
     "http-get", "http-post", "read-file", "write-file", "glob",
+    # workspace mechanics
+    "workspace", "workspaces", "defaults", "params", "repos",
+    "resource", "resources", "resource-state", "map-resources",
+    "call-workflow",
+    # global config
+    "config", "providers", "provider", "tiers", "tier", "state",
 }
 
 errors = []
