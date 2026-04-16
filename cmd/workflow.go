@@ -143,14 +143,17 @@ var workflowRunCmd = &cobra.Command{
 		}
 		wsName := workspace.ResolveWorkspace(wsDir)
 
+		var wsParsed *workspace.Workspace
 		wsFile := filepath.Join(wsDir, "workspace.glitch")
 		if wsData, err := os.ReadFile(wsFile); err == nil {
 			if ws, err := workspace.ParseFile(wsData); err == nil {
+				wsParsed = ws
 				if ws.Defaults.Elasticsearch != "" {
 					wsESURL = ws.Defaults.Elasticsearch
 				}
 			}
 		}
+		resources := ResourceBindings(wsParsed, wsDir)
 
 		// Handle --compare: discover sibling variant workflows (before --variant injection)
 		if workflowCompare {
@@ -158,7 +161,7 @@ var workflowRunCmd = &cobra.Command{
 			if len(workflowVariants) > 0 {
 				variants = workflowVariants
 			}
-			return runCompareWorkflows(name, workflows, variants, params, cfg, tel, wsESURL, wsName)
+			return runCompareWorkflows(name, workflows, variants, params, cfg, tel, wsESURL, wsName, resources)
 		}
 
 		// Handle --variant: inject implicit compare blocks around LLM steps
@@ -176,6 +179,7 @@ var workflowRunCmd = &cobra.Command{
 			EvalThreshold:    cfg.EvalThreshold,
 			ESURL:            wsESURL,
 			Workspace:        wsName,
+			Resources:        resources,
 		})
 		if err != nil {
 			return err
@@ -254,7 +258,7 @@ func injectImplicitCompare(w *pipeline.Workflow, variants []string, reviewCriter
 }
 
 // runCompareWorkflows discovers sibling variant workflows and runs them as a batch compare.
-func runCompareWorkflows(name string, workflows map[string]*pipeline.Workflow, variants []string, params map[string]string, cfg *Config, tel *esearch.Telemetry, esURL, wsName string) error {
+func runCompareWorkflows(name string, workflows map[string]*pipeline.Workflow, variants []string, params map[string]string, cfg *Config, tel *esearch.Telemetry, esURL, wsName string, resources map[string]map[string]string) error {
 	found := make(map[string]*pipeline.Workflow)
 	for _, v := range variants {
 		variantName := name + "-" + v
@@ -286,6 +290,8 @@ func runCompareWorkflows(name string, workflows map[string]*pipeline.Workflow, v
 			Telemetry:        tel,
 			Tiers:            cfg.Tiers,
 			EvalThreshold:    cfg.EvalThreshold,
+			Workspace:        wsName,
+			Resources:        resources,
 		},
 	})
 }

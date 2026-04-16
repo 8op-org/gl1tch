@@ -45,6 +45,7 @@ type runCtx struct {
 	input            string
 	params           map[string]string
 	workspace        string
+	resources        map[string]map[string]string
 	defaultModel     string
 	reg              *provider.ProviderRegistry
 	providerResolver provider.ResolverFunc
@@ -99,6 +100,7 @@ type RunOpts struct {
 	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
 	ESURL            string            // default ES URL from workspace config
 	Workspace        string            // resolved workspace name for {{.workspace}} template var
+	Resources        map[string]map[string]string // resource name → field → value (from active workspace)
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -181,11 +183,20 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		workspaceName = opts[0].Workspace
 	}
 
+	var resources map[string]map[string]string
+	if len(opts) > 0 {
+		resources = opts[0].Resources
+	}
+	if resources == nil {
+		resources = map[string]map[string]string{}
+	}
+
 	rctx := &runCtx{
 		ctx:              context.Background(),
 		input:            input,
 		params:           params,
 		workspace:        workspaceName,
+		resources:        resources,
 		defaultModel:     defaultModel,
 		reg:              reg,
 		providerResolver: providerResolver,
@@ -842,9 +853,12 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 			return string(b)
 		},
 	}
-	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
+	t, err := template.New("t").Funcs(funcMap).Option("missingkey=zero").Parse(tmpl)
 	if err != nil {
 		return "", err
+	}
+	if _, ok := data["resource"]; !ok {
+		data["resource"] = map[string]map[string]string{}
 	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
@@ -931,7 +945,7 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 			return executeStep(ctx, rctx, branch.Step)
 		}
 		// Render predicate template
-		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
 		rendered, err := render(branch.Pred, data, rctx.stepsSnapshot())
 		if err != nil {
 			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
@@ -960,7 +974,7 @@ func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		matched = strings.TrimSpace(output) != ""
 	} else {
 		// Treat as shell command
-		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
 		rendered, err := render(step.WhenPred, data, snap)
 		if err != nil {
 			return nil, fmt.Errorf("when %s: template: %w", step.ID, err)
@@ -1381,6 +1395,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		"input":     rctx.input,
 		"param":     rctx.params,
 		"workspace": rctx.workspace,
+		"resource":  rctx.resources,
 	}
 
 	if step.Save != "" {

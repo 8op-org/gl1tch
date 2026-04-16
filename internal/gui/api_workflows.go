@@ -170,6 +170,10 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Load config for model/provider/tiers
 	cfg := loadGUIConfig()
 
+	// Build resource bindings once before the goroutine to avoid races on
+	// concurrent workspace.glitch writes.
+	resources := s.resourceBindings()
+
 	// Run in background goroutine
 	go func() {
 		tel := newTelemetry()
@@ -178,6 +182,7 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 			ProviderResolver: cfg.ProviderResolver,
 			Tiers:            cfg.Tiers,
 			EvalThreshold:    cfg.EvalThreshold,
+			Resources:        resources,
 		})
 		if s.store != nil {
 			exitStatus := 0

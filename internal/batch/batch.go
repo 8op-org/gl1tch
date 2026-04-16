@@ -37,6 +37,8 @@ type BatchConfig struct {
 	Telemetry        *esearch.Telemetry
 	Tiers            []provider.TierConfig
 	EvalThreshold    int
+	Workspace        string                       // resolved workspace name
+	Resources        map[string]map[string]string // resource bindings for .resource.<name>.<field>
 }
 
 // variantWorkflows groups loaded workflows into variant sets for a given item.
@@ -127,6 +129,8 @@ func Run(ctx context.Context, opts RunOpts) error {
 						Issue:            item,
 						ComparisonGroup:  v,
 						SeedSteps:        seedSteps,
+						Workspace:        opts.Config.Workspace,
+						Resources:        opts.Config.Resources,
 					})
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "WARN: %s (%s, iter %d) failed: %v\n", item, v, iter, err)
@@ -146,6 +150,8 @@ func Run(ctx context.Context, opts RunOpts) error {
 					ProviderResolver: opts.Config.ProviderResolver,
 					Tiers:            opts.Config.Tiers,
 					EvalThreshold:    opts.Config.EvalThreshold,
+					Workspace:        opts.Config.Workspace,
+					Resources:        opts.Config.Resources,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARN: %s cross-review iter %d failed: %v\n", item, iter, err)

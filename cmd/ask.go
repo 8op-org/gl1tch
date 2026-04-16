@@ -13,6 +13,7 @@ import (
 	"github.com/8op-org/gl1tch/internal/esearch"
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/router"
+	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
 var (
@@ -46,6 +47,13 @@ var askCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		wsDir := workspacePath
+		if wsDir == "" {
+			wsDir, _ = os.Getwd()
+		}
+		wsName := workspace.ResolveWorkspace(wsDir)
+		resources := loadResourceBindings(wsDir)
 
 		// Wire ES telemetry
 		var tel *esearch.Telemetry
@@ -97,6 +105,8 @@ var askCmd = &cobra.Command{
 						Telemetry:        tel,
 						Tiers:            cfg.Tiers,
 						EvalThreshold:    cfg.EvalThreshold,
+						Workspace:        wsName,
+						Resources:        resources,
 					},
 				})
 				if err != nil {
@@ -115,7 +125,7 @@ var askCmd = &cobra.Command{
 
 			// Single issue — run the default workflow
 			issue := issues[0]
-			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel)
+			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel, wsName, resources)
 		}
 
 		// Not an issue ref — try workflow routing
@@ -127,6 +137,8 @@ var askCmd = &cobra.Command{
 				ProviderResolver: cfg.BuildProviderResolver(),
 				Tiers:            cfg.Tiers,
 				EvalThreshold:    cfg.EvalThreshold,
+				Workspace:        wsName,
+				Resources:        resources,
 			})
 			if err != nil {
 				return err
@@ -149,7 +161,7 @@ var askCmd = &cobra.Command{
 }
 
 // runSingleIssue runs the issue-to-pr workflow for one issue.
-func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry) error {
+func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry, wsName string, resources map[string]map[string]string) error {
 	// Pick the workflow
 	wfName := "issue-to-pr"
 	if askVariant != "" {
@@ -172,6 +184,8 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 		ProviderResolver: cfg.BuildProviderResolver(),
 		Tiers:            cfg.Tiers,
 		EvalThreshold:    cfg.EvalThreshold,
+		Workspace:        wsName,
+		Resources:        resources,
 	})
 	if err != nil {
 		return err
