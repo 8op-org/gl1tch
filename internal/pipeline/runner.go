@@ -768,6 +768,8 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executeWhen(ctx, rctx, step)
 	case "map":
 		return executeMap(ctx, rctx, step)
+	case "filter":
+		return executeFilter(ctx, rctx, step)
 	case "par":
 		return executePar(ctx, rctx, step)
 	}
@@ -910,6 +912,53 @@ func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 	}
 
 	combined := strings.Join(outputs, "\n")
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = combined
+	rctx.mu.Unlock()
+	return &stepOutcome{output: combined}, nil
+}
+
+// executeFilter iterates over NDJSON lines from a source step, runs the predicate
+// step per item, and keeps items where the output is truthy (non-empty, not "false", not "0").
+func executeFilter(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	source, ok := snap[step.FilterOver]
+	if !ok {
+		return nil, fmt.Errorf("filter %s: source step %q has no output", step.ID, step.FilterOver)
+	}
+
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	var kept []string
+
+	for idx, item := range lines {
+		if item == "" {
+			continue
+		}
+		body := *step.FilterBody
+		body.ID = fmt.Sprintf("%s-%d", step.FilterBody.ID, idx)
+
+		origParams := rctx.params
+		filterParams := make(map[string]string, len(origParams)+2)
+		for k, v := range origParams {
+			filterParams[k] = v
+		}
+		filterParams["item"] = item
+		filterParams["item_index"] = fmt.Sprintf("%d", idx)
+		rctx.params = filterParams
+
+		outcome, err := executeStep(ctx, rctx, body)
+		rctx.params = origParams
+		if err != nil {
+			return nil, fmt.Errorf("filter %s item %d: %w", step.ID, idx, err)
+		}
+
+		result := strings.TrimSpace(outcome.output)
+		if result != "" && result != "false" && result != "0" {
+			kept = append(kept, item)
+		}
+	}
+
+	combined := strings.Join(kept, "\n")
 	rctx.mu.Lock()
 	rctx.steps[step.ID] = combined
 	rctx.mu.Unlock()

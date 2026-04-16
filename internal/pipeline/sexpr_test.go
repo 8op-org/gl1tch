@@ -1482,3 +1482,29 @@ func TestSexprWorkflow_WhenNot(t *testing.T) {
 		t.Fatal("expected when-not to be true")
 	}
 }
+
+func TestSexprWorkflow_Filter(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "data" (run "echo 'a\nb\nc'"))
+  (filter "data"
+    (step "keep" (run "test '{{.param.item}}' = 'b' && echo true"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "filter" {
+		t.Fatalf("expected form %q, got %q", "filter", s.Form)
+	}
+	if s.FilterOver != "data" {
+		t.Fatalf("expected filter over %q, got %q", "data", s.FilterOver)
+	}
+	if s.FilterBody == nil {
+		t.Fatal("expected filter body")
+	}
+}

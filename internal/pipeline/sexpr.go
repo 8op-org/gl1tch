@@ -188,6 +188,12 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "filter":
+		s, err := convertFilter(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	case "par":
 		s, err := convertPar(n, defs)
 		if err != nil {
@@ -396,6 +402,25 @@ func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:    "map",
 		MapOver: source,
 		MapBody: &body,
+	}, nil
+}
+
+// convertFilter: (filter "step-id" (step "pred" ...))
+func convertFilter(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (filter) needs source step ID and predicate step", n.Line)
+	}
+	source := resolveVal(children[0], defs)
+	body, err := convertStep(children[1], defs)
+	if err != nil {
+		return Step{}, fmt.Errorf("line %d: filter body: %w", n.Line, err)
+	}
+	return Step{
+		ID:         fmt.Sprintf("filter-%d", n.Line),
+		Form:       "filter",
+		FilterOver: source,
+		FilterBody: &body,
 	}, nil
 }
 

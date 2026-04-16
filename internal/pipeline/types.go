@@ -62,6 +62,10 @@ type Step struct {
 	WhenBody *Step  `yaml:"-"` // when: step to execute if predicate is true
 	WhenNot  bool   `yaml:"-"` // when-not: invert the predicate
 
+	// Filter collection form
+	FilterOver string `yaml:"-"` // filter: step ID whose output to iterate
+	FilterBody *Step  `yaml:"-"` // filter: predicate step (truthy output = keep)
+
 	// Parallel execution
 	ParSteps []Step `yaml:"-"` // par: concurrent child steps
 
