@@ -58,6 +58,11 @@ type runCtx struct {
 	tel              *esearch.Telemetry
 	runID            string
 	workflow         string
+
+	// call-workflow threading
+	workflowsDir string
+	parentRunID  int64
+	callStack    []string
 }
 
 // stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
@@ -101,6 +106,11 @@ type RunOpts struct {
 	ESURL            string            // default ES URL from workspace config
 	Workspace        string            // resolved workspace name for {{.workspace}} template var
 	Resources        map[string]map[string]string // resource name → field → value (from active workspace)
+
+	// call-workflow support
+	WorkflowsDir string   // directory to resolve call-workflow targets
+	ParentRunID  int64    // if non-zero, this run is a child of this parent
+	CallStack    []string // workflow names already on the call stack (cycle guard)
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -207,6 +217,11 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		tel:              tel,
 		runID:            runID,
 		workflow:         w.Name,
+	}
+	if len(opts) > 0 {
+		rctx.workflowsDir = opts[0].WorkflowsDir
+		rctx.parentRunID = opts[0].ParentRunID
+		rctx.callStack = opts[0].CallStack
 	}
 
 	// Emit run-start document
@@ -896,6 +911,15 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executePar(ctx, rctx, step)
 	case "compare":
 		return executeCompare(ctx, rctx, step)
+	case "call-workflow":
+		outcome, err := executeCallWorkflow(ctx, rctx, step)
+		if err != nil {
+			return nil, err
+		}
+		rctx.mu.Lock()
+		rctx.steps[step.ID] = outcome.output
+		rctx.mu.Unlock()
+		return outcome, nil
 	}
 
 	maxAttempts := 1 + step.Retry
@@ -1385,6 +1409,69 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 
 	// No winner parsed — pick first alphabetically
 	return branchNames[0], branchOutputs[branchNames[0]], outcome.output
+}
+
+// executeCallWorkflow runs a sibling workflow as a nested child run.
+// The child inherits workspace, resources, and provider registry; its input
+// is the rendered :input string; :set pairs become the child's params.
+// A cycle guard rejects recursive chains where a workflow (transitively)
+// calls itself.
+func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	for _, n := range rctx.callStack {
+		if n == step.CallWorkflow {
+			chain := append(append([]string{}, rctx.callStack...), step.CallWorkflow)
+			return nil, fmt.Errorf("call-workflow cycle detected: %s", strings.Join(chain, " -> "))
+		}
+	}
+	if step.CallWorkflow == "" {
+		return nil, fmt.Errorf("step %s: call-workflow missing workflow name", step.ID)
+	}
+	if rctx.workflowsDir == "" {
+		return nil, fmt.Errorf("step %s: call-workflow requires WorkflowsDir in RunOpts", step.ID)
+	}
+	path := filepath.Join(rctx.workflowsDir, step.CallWorkflow+".glitch")
+	child, err := ParseSexprWorkflowFromFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("call-workflow %s: %w", step.CallWorkflow, err)
+	}
+	// Render the child's input string in the parent's context.
+	stepsSnap := rctx.stepsSnapshot()
+	data := map[string]any{
+		"input":     rctx.input,
+		"param":     rctx.params,
+		"workspace": rctx.workspace,
+		"resource":  rctx.resources,
+	}
+	rendered, err := render(step.CallInput, data, stepsSnap)
+	if err != nil {
+		return nil, fmt.Errorf("step %s: call-workflow input template: %w", step.ID, err)
+	}
+	childParams := map[string]string{}
+	for k, v := range step.CallSet {
+		childParams[k] = v
+	}
+	// NOTE: The pipeline package does not itself call store.RecordRun; the DB
+	// row ID for parent/child linkage is owned by the caller (cmd/* or GUI).
+	// We thread rctx.parentRunID through as a best-effort grandparent pass;
+	// Task 12 will tighten batch-driven parent_run_id threading.
+	childOpts := RunOpts{
+		Telemetry:        rctx.tel,
+		ProviderResolver: rctx.providerResolver,
+		Tiers:            rctx.tiers,
+		EvalThreshold:    rctx.evalThreshold,
+		ESURL:            rctx.esURL,
+		Workspace:        rctx.workspace,
+		Resources:        rctx.resources,
+		WorkflowsDir:     rctx.workflowsDir,
+		ParentRunID:      rctx.parentRunID,
+		CallStack:        append(append([]string{}, rctx.callStack...), step.CallWorkflow),
+	}
+	_ = ctx // child run currently manages its own context; reserved for future cancellation threading.
+	res, err := Run(child, rendered, rctx.defaultModel, childParams, rctx.reg, childOpts)
+	if err != nil {
+		return nil, fmt.Errorf("call-workflow %s: %w", step.CallWorkflow, err)
+	}
+	return &stepOutcome{output: res.Output}, nil
 }
 
 func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {

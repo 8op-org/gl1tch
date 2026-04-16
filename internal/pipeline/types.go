@@ -104,6 +104,11 @@ type Step struct {
 
 	// Embedding
 	Embed *EmbedStep `yaml:"-"`
+
+	// call-workflow: invokes a sibling workflow by name as a nested run.
+	CallWorkflow string            `yaml:"-"` // workflow name
+	CallInput    string            `yaml:"-"` // template-rendered input for child
+	CallSet      map[string]string `yaml:"-"` // :set key=value params
 }
 
 // CondBranch is one arm of a (cond ...) form.

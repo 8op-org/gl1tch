@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -1016,6 +1017,34 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.PluginCall = pc
+		case "call-workflow":
+			sub := child.Children[1:]
+			if len(sub) < 1 {
+				return s, fmt.Errorf("line %d: call-workflow needs workflow name", child.Line)
+			}
+			s.Form = "call-workflow"
+			s.CallWorkflow = resolveVal(sub[0], defs)
+			if s.CallSet == nil {
+				s.CallSet = map[string]string{}
+			}
+			rest := sub[1:]
+			for i := 0; i+1 < len(rest); i += 2 {
+				if !(rest[i].IsAtom() && rest[i].Atom.Type == sexpr.TokenKeyword) {
+					continue
+				}
+				key := rest[i].KeywordVal()
+				val := resolveVal(rest[i+1], defs)
+				switch key {
+				case "input":
+					s.CallInput = val
+				case "set":
+					if kv := splitKV(val); kv != nil {
+						for k, v := range kv {
+							s.CallSet[k] = v
+						}
+					}
+				}
+			}
 		default:
 			// github/prs → plugin "github", subcommand "prs"
 			if parts := strings.SplitN(head, "/", 2); len(parts) == 2 {
@@ -1473,4 +1502,25 @@ func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {
 		return nil, fmt.Errorf("line %d: llm missing :prompt", n.Line)
 	}
 	return llm, nil
+}
+
+// splitKV parses a single "key=value" string into a map. Returns nil if the
+// string lacks an "=" separator or the key is empty.
+func splitKV(s string) map[string]string {
+	if s == "" {
+		return nil
+	}
+	if i := strings.Index(s, "="); i > 0 {
+		return map[string]string{s[:i]: s[i+1:]}
+	}
+	return nil
+}
+
+// ParseSexprWorkflowFromFile loads and parses a .glitch workflow file.
+func ParseSexprWorkflowFromFile(path string) (*Workflow, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return parseSexprWorkflow(data)
 }
