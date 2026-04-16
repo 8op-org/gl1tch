@@ -94,11 +94,24 @@ import Base from '../layouts/Base.astro';
 
     <div class="feature-card">
       <div class="feature-number">06</div>
-      <h3>Batch comparison</h3>
-      <p>Run the same workflow across Ollama, Claude, and Copilot. A neutral local model grades the outputs. Same inputs, different brains.</p>
-      <pre class="code feature-code"><span class="p">$</span> for v in local claude copilot; do
-    glitch workflow run "issue-to-pr-$v"
-  done</pre>
+      <h3>Built-in A/B testing</h3>
+      <p>Run the same prompt through different models or strategies. A neutral judge scores each branch. One form, automatic winner selection.</p>
+      <pre class="code feature-code">(<span class="k">compare</span>
+  (<span class="k">branch</span> <span class="s">"local"</span>
+    (<span class="k">llm</span> <span class="r">:model</span> <span class="s">"qwen2.5:7b"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+  (<span class="k">branch</span> <span class="s">"cloud"</span>
+    (<span class="k">llm</span> <span class="r">:model</span> <span class="s">"claude"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+  (<span class="k">review</span> <span class="r">:criteria</span> (<span class="s">"accuracy"</span> <span class="s">"clarity"</span>)))</pre>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-number">07</div>
+      <h3>Composable transforms</h3>
+      <p>Thread data through steps, filter collections, fold results. Lisp-inspired forms that compose without glue scripts.</p>
+      <pre class="code feature-code">(<span class="k">-></span> <span class="s">"raw-data"</span>
+  (<span class="k">filter</span> <span class="s">"jq '.severity > 3'"</span>)
+  (<span class="k">reduce</span> <span class="s">"summarize"</span>
+    (<span class="k">llm</span> <span class="r">:prompt</span> <span class="s">"..."</span>)))</pre>
     </div>
 
   </div>
@@ -134,6 +147,16 @@ import Base from '../layouts/Base.astro';
   (<span class="k">gate</span> <span class="s">"no-hallucinations"</span>
     (<span class="k">run</span> <span class="s">"python3 scripts/gate.py"</span>)))</pre>
       <p>Shell-based gates catch hallucinated features, leaked internals, and missing coverage. Retries on failure.</p>
+    </div>
+    <div class="how-step">
+      <div class="how-num">04 compare and pick the best</div>
+      <pre class="code">(<span class="k">compare</span>
+  (<span class="k">branch</span> <span class="s">"local"</span>
+    (<span class="k">llm</span> <span class="r">:model</span> <span class="s">"qwen2.5:7b"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+  (<span class="k">branch</span> <span class="s">"cloud"</span>
+    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"claude"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+  (<span class="k">review</span> <span class="r">:criteria</span> (<span class="s">"accuracy"</span> <span class="s">"depth"</span>)))</pre>
+      <p>Run branches in parallel, let a neutral judge score them. Pick the winner automatically — or review the comparison yourself.</p>
     </div>
   </div>
 </div>

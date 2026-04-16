@@ -15,16 +15,16 @@ test('homepage has all sections', async ({ page }) => {
   }
 });
 
-test('feature grid has 6 cards', async ({ page }) => {
+test('feature grid has 7 cards', async ({ page }) => {
   await page.goto('/');
   const cards = page.locator('.feature-card');
-  await expect(cards).toHaveCount(6);
+  await expect(cards).toHaveCount(7);
 });
 
-test('how-it-works has 3 steps', async ({ page }) => {
+test('how-it-works has 4 steps', async ({ page }) => {
   await page.goto('/');
   const steps = page.locator('.how-step');
-  await expect(steps).toHaveCount(3);
+  await expect(steps).toHaveCount(4);
 });
 
 test('meta section shows both gate phases', async ({ page }) => {
@@ -82,8 +82,28 @@ test('local-models page loads', async ({ page }) => {
   await expect(page.locator('h2').first()).toContainText('Local Models');
 });
 
+test('compare page loads', async ({ page }) => {
+  await page.goto('/docs/compare');
+  await expect(page.locator('h2').first()).toContainText('Compare');
+});
+
+test('dsl-reference page loads', async ({ page }) => {
+  await page.goto('/docs/dsl-reference');
+  await expect(page.locator('h2').first()).toContainText('DSL Reference');
+});
+
+test('workspaces page loads', async ({ page }) => {
+  await page.goto('/docs/workspaces');
+  await expect(page.locator('h2').first()).toContainText('Workspaces');
+});
+
+test('phases-and-gates page loads', async ({ page }) => {
+  await page.goto('/docs/phases-and-gates');
+  await expect(page.locator('h2').first()).toContainText('Phases');
+});
+
 test('doc pages have content (not empty shells)', async ({ page }) => {
-  const pages = ['getting-started', 'workflow-syntax', 'plugins', 'local-models'];
+  const pages = ['getting-started', 'workflow-syntax', 'plugins', 'local-models', 'compare', 'dsl-reference', 'workspaces', 'phases-and-gates'];
   for (const slug of pages) {
     await page.goto(`/docs/${slug}`);
     const content = page.locator('.doc-content');
@@ -103,7 +123,7 @@ test('changelog page loads', async ({ page }) => {
 
 test('no BubbleTea/SQLite/tmux on any page', async ({ page, }, testInfo) => {
   testInfo.setTimeout(30000);
-  const pages = ['/', '/docs/getting-started', '/docs/workflow-syntax', '/docs/plugins', '/docs/local-models'];
+  const pages = ['/', '/docs/getting-started', '/docs/workflow-syntax', '/docs/plugins', '/docs/local-models', '/docs/compare', '/docs/dsl-reference', '/docs/workspaces', '/docs/phases-and-gates'];
   const banned = ['BubbleTea', 'bubbletea', 'tea.Model', 'SQLite', 'sqlite3', 'internal/tui'];
   for (const url of pages) {
     await page.goto(url);

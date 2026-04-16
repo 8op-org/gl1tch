@@ -1,0 +1,21 @@
+# DSL Reference — stub
+
+Sister page to workflow-syntax. Covers new forms shipped in the DSL improvements branch.
+
+## Sections
+
+- **Threading macro** — `(-> ...)` pipes data between forms
+- **Collection forms** — `filter`, `reduce` for data pipelines
+- **Conditionals** — `when`, `when-not` for predicate-gated execution
+- **Elasticsearch forms** — `search`, `index`, `delete` native ES integration
+- **Embedding** — `embed` for vector embeddings via Ollama
+- **Data transforms** — `flatten`, `assoc`, `pick` for reshaping JSON
+
+## Tone cues
+
+- "your" framing, never "the user"
+- Examples before explanation
+- No internals (no BubbleTea, tmux, SQLite, Go types)
+- Build on Workflow Syntax: "This page builds on Workflow Syntax. If you haven't read it, start there."
+- Every form gets a short example + one-line description
+- End with "Next steps" links

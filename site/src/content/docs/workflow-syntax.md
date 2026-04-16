@@ -560,3 +560,6 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
 ## Next steps
 
 - [Plugins](/docs/plugins) — package reusable subcommands and compose them into workflows
+- [Compare Runs](/docs/compare) — built-in A/B testing with branch and review forms
+- [DSL Reference](/docs/dsl-reference) — threading macro, collection forms, and Elasticsearch integration
+- [Phases & Gates](/docs/phases-and-gates) — structured verification checkpoints

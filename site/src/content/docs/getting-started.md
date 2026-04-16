@@ -248,3 +248,5 @@ glitch workflow list
 
 - [Workflow Syntax](/docs/workflow-syntax) — the full s-expression reference with control flow, tiered routing, and every form
 - [Plugins](/docs/plugins) — reusable data-gathering subcommands you compose into workflows
+- [Compare Runs](/docs/compare) — A/B test different models or strategies in a single workflow
+- [DSL Reference](/docs/dsl-reference) — threading, filtering, reducing, and Elasticsearch forms
