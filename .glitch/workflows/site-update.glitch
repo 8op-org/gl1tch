@@ -64,54 +64,7 @@
   ;; ── Save with fallback ────────────────────────────
 
   (step "save-docs"
-    (run ```
-      python3 -c "
-import json, sys, re, glob, os
-
-raw = '''~(step enrich-docs)'''
-
-# Try to parse JSON array from LLM output
-pages = []
-match = re.search(r'\[[\s\S]*\]', raw)
-if match:
-    try:
-        pages = json.loads(match.group())
-    except json.JSONDecodeError:
-        pass
-
-# Fallback: if LLM output didn't parse, use raw stubs
-if not pages or not all('slug' in p and 'content' in p for p in pages):
-    print('WARN: LLM output failed to parse, falling back to raw stubs', file=sys.stderr)
-    pages = []
-    order = 1
-    for path in sorted(glob.glob('docs/site/*.md')):
-        slug = os.path.splitext(os.path.basename(path))[0]
-        with open(path) as f:
-            content = f.read()
-        title = slug.replace('-', ' ').title()
-        for line in content.splitlines():
-            if line.startswith('# '):
-                title = line[2:].strip()
-                break
-        lines = content.splitlines()
-        if lines and lines[0].startswith('# '):
-            content = chr(10).join(lines[1:]).lstrip(chr(10))
-        desc = ''
-        for line in content.splitlines():
-            s = line.strip()
-            if s and not s.startswith('#') and not s.startswith(chr(96)):
-                desc = s[:120]
-                break
-        pages.append({'slug': slug, 'title': title, 'order': order, 'description': desc, 'content': content})
-        order += 1
-
-pages.sort(key=lambda p: p.get('order', 99))
-
-with open('site/generated/docs.json', 'w') as f:
-    json.dump(pages, f, indent=2)
-print(f'wrote {len(pages)} pages to site/generated/docs.json')
-"
-      ```))
+    (run "python3 scripts/save-enrich-docs.py < '~(stepfile enrich-docs)'"))
 
   (step "split-docs"
     (run "python3 scripts/split-docs.py"))

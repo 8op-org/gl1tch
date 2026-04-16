@@ -9,7 +9,7 @@
   ;; ── Gather context ────────────────────────────────
 
   (step "current-page"
-    (run "cat docs/site/~param.page.md"))
+    (run "cat docs/site/~(trim param.page).md"))
 
   (step "examples"
     (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
@@ -63,12 +63,7 @@
   ;; ── Save ──────────────────────────────────────────
 
   (step "save"
-    (run ```
-      cat > "docs/site/~param.page.md" << 'STUBEOF'
-~(step rewrite)
-STUBEOF
-      echo "updated docs/site/~param.page.md"
-      ```))
+    (save "docs/site/~(trim param.page).md" :from "rewrite"))
 
   ;; ── Rebuild and verify ────────────────────────────
 
