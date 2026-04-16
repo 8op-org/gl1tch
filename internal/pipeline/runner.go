@@ -1085,6 +1085,20 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		return &stepOutcome{output: out}, nil
 	}
 
+	if step.Flatten != "" {
+		from := stepsSnap[step.Flatten]
+		var items []json.RawMessage
+		if err := json.Unmarshal([]byte(from), &items); err != nil {
+			return nil, fmt.Errorf("step %s: flatten: source is not a JSON array: %w", step.ID, err)
+		}
+		lines := make([]string, len(items))
+		for i, item := range items {
+			lines[i] = string(item)
+		}
+		ui.StepSDK(step.ID, "flatten")
+		return &stepOutcome{output: strings.Join(lines, "\n")}, nil
+	}
+
 	if len(step.Merge) > 0 {
 		merged := make(map[string]any)
 		for _, id := range step.Merge {

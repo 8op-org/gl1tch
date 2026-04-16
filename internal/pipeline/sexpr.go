@@ -572,6 +572,11 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.Lines = ref
+		case "flatten":
+			if len(child.Children) < 2 {
+				return s, fmt.Errorf("line %d: (flatten) missing step ID", child.Line)
+			}
+			s.Flatten = resolveVal(child.Children[1], defs)
 		case "merge":
 			ids, err := convertMerge(child, defs)
 			if err != nil {

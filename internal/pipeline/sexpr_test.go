@@ -48,6 +48,27 @@ func TestSexprWorkflow_Basic(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_Flatten(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "fetch"
+    (run "echo '[{\"a\":1},{\"b\":2}]'"))
+  (step "flat"
+    (flatten "fetch")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Flatten != "fetch" {
+		t.Fatalf("expected flatten %q, got %q", "fetch", s.Flatten)
+	}
+}
+
 func TestSexprWorkflow_LLMWithProviderAndModel(t *testing.T) {
 	src := []byte(`
 (workflow "test"

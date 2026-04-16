@@ -72,6 +72,7 @@ type Step struct {
 	// SDK forms
 	JsonPick  *JsonPickStep  `yaml:"-"`
 	Lines     string         `yaml:"-"` // step ID to split by newlines
+	Flatten   string         `yaml:"-"` // step ID whose JSON array output to flatten to NDJSON
 	Merge     []string       `yaml:"-"` // step IDs to merge
 	HttpCall  *HttpCallStep  `yaml:"-"`
 	ReadFile  string         `yaml:"-"` // file path to read
