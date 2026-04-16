@@ -1,8 +1,10 @@
 package pipeline
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/8op-org/gl1tch/internal/plugin"
 	"github.com/8op-org/gl1tch/internal/sexpr"
 )
 
@@ -125,6 +127,43 @@ func scanString(s string) (params []string, usesInput bool) {
 		}
 	}
 	return params, usesInput
+}
+
+// MergeImplicitArgs reconciles the declared Workflow.Args and Workflow.Input
+// with references discovered by ExtractImplicitRefs. Implicit entries are
+// appended for any referenced param with no declaration, and for ~input
+// references without an (input ...) form. Returns warnings (one per
+// declared arg/input with no matching reference).
+func MergeImplicitArgs(w *Workflow) []string {
+	params, usesInput := ExtractImplicitRefs(w)
+
+	declared := map[string]bool{}
+	for _, a := range w.Args {
+		declared[a.Name] = true
+	}
+
+	referenced := map[string]bool{}
+	for _, name := range params {
+		referenced[name] = true
+		if !declared[name] {
+			w.Args = append(w.Args, plugin.ArgDef{Name: name, Implicit: true})
+		}
+	}
+
+	var warnings []string
+	for _, a := range w.Args {
+		if !a.Implicit && !referenced[a.Name] {
+			warnings = append(warnings, fmt.Sprintf(`arg "%s" declared but not referenced in any step`, a.Name))
+		}
+	}
+
+	if w.Input == nil && usesInput {
+		w.Input = &InputDef{Implicit: true}
+	} else if w.Input != nil && !w.Input.Implicit && !usesInput {
+		warnings = append(warnings, "input declared but no ~input reference in any step")
+	}
+
+	return warnings
 }
 
 // collectFromForm walks a form AST node, collecting param references in every

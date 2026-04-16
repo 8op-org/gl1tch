@@ -249,6 +249,9 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 		w.Args = args
 		w.Input = input
 		w.SourceFile = filename
+		for _, warn := range MergeImplicitArgs(w) {
+			fmt.Fprintf(os.Stderr, "warning: %s: %s\n", filename, warn)
+		}
 		return w, nil
 	default:
 		var w Workflow
