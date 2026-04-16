@@ -1,0 +1,36 @@
+;; compare-branches.glitch — compare different analysis strategies
+;;
+;; Run with: glitch workflow run compare-branches --set repo=gl1tch
+
+(workflow "compare-branches"
+  :description "Compare analysis strategies for a repo"
+
+  (step "files" (run "find {{.param.repo}} -name '*.go' -type f | head -20"))
+
+  (compare
+    :id "analysis"
+    (branch "breadth-first"
+      (step "scan"
+        (llm :model "qwen2.5:7b"
+          :prompt ```
+          List all packages and their responsibilities:
+          {{step "files"}}
+          ```))
+      (step "summary"
+        (llm :model "qwen2.5:7b"
+          :prompt "Summarize this package map:\n{{step \"scan\"}}")))
+    (branch "depth-first"
+      (step "pick"
+        (run "echo '{{step \"files\"}}' | head -5"))
+      (step "deep-dive"
+        (llm :model "qwen2.5:7b"
+          :prompt ```
+          Do a deep analysis of these files:
+          {{step "pick"}}
+          ```)))
+    (review
+      :criteria ("insight_depth" "actionability" "coverage")
+      :model "qwen2.5:7b"))
+
+  (step "winner-report"
+    (save "results/{{.param.repo}}/analysis.md" :from "analysis")))
