@@ -1,7 +1,7 @@
 <script>
   import { untrack } from 'svelte';
   import { push } from 'svelte-spa-router';
-  import { runWorkflow } from '../lib/api.js';
+  import { runWorkflow, getWorkspace } from '../lib/api.js';
   import { icon } from '../lib/icons.js';
   import Modal from '../lib/components/Modal.svelte';
 
@@ -9,19 +9,34 @@
   let values = $state({});
   let running = $state(false);
   let error = $state(null);
+  let workspaceDefaults = $state({});
+
+  // Fetch workspace defaults on mount
+  $effect(() => {
+    getWorkspace().then(ws => {
+      workspaceDefaults = ws.defaults?.params || {};
+    }).catch(() => {});
+  });
 
   // Merge autoParams keys into params so fields appear, and pre-fill values
   const allParams = $derived(() => {
     const set = new Set(params);
     for (const k of Object.keys(autoParams)) set.add(k);
+    for (const k of Object.keys(workspaceDefaults)) set.add(k);
     return [...set];
   });
 
+  // Pre-fill from workspace defaults first, then autoParams override
+  // Priority: autoParams > workspace defaults > empty
   $effect(() => {
+    const wd = workspaceDefaults;
     const ap = autoParams;
     untrack(() => {
-      for (const [k, v] of Object.entries(ap)) {
+      for (const [k, v] of Object.entries(wd)) {
         if (v && !values[k]) values[k] = v;
+      }
+      for (const [k, v] of Object.entries(ap)) {
+        if (v) values[k] = v;
       }
     });
   });
