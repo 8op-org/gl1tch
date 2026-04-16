@@ -32,8 +32,8 @@ func TestGenerateManifest_PicksHighestConfidence(t *testing.T) {
 	dir := t.TempDir()
 	issueDir := filepath.Join(dir, "3642")
 
-	// Create iteration-1/local with 3/5 review
-	localDir := filepath.Join(issueDir, "iteration-1", "local")
+	// New layout: issueDir/children/<variant>-<iter>-<runid>/
+	localDir := filepath.Join(issueDir, "children", "local-1-101")
 	os.MkdirAll(localDir, 0o755)
 	os.WriteFile(filepath.Join(localDir, "review.md"), []byte(
 		"1. Specificity — PASS — good\n2. Completeness — FAIL — missing\n3. Feasibility — PASS — ok\n4. Testing — PASS — yes\n5. PR Quality — FAIL — weak\nOVERALL: FAIL\n",
@@ -42,8 +42,7 @@ func TestGenerateManifest_PicksHighestConfidence(t *testing.T) {
 	os.WriteFile(filepath.Join(localDir, "pr-body.md"), []byte("## Summary\nAdds telemetry"), 0o644)
 	os.WriteFile(filepath.Join(localDir, "plan.md"), []byte("# Plan\nDo the thing"), 0o644)
 
-	// Create iteration-1/claude with 5/5 review
-	claudeDir := filepath.Join(issueDir, "iteration-1", "claude")
+	claudeDir := filepath.Join(issueDir, "children", "claude-1-102")
 	os.MkdirAll(claudeDir, 0o755)
 	os.WriteFile(filepath.Join(claudeDir, "review.md"), []byte(
 		"1. Specificity — PASS — good\n2. Completeness — PASS — all covered\n3. Feasibility — PASS — ok\n4. Testing — PASS — yes\n5. PR Quality — PASS — strong\nOVERALL: PASS\n",
@@ -109,17 +108,17 @@ func TestWriteManifest(t *testing.T) {
 
 func TestResultPath_Convention(t *testing.T) {
 	dir := t.TempDir()
-	got := resultPath(dir, "3920", "claude", 1)
-	want := filepath.Join(dir, "3920", "iteration-1", "claude")
+	got := resultPath(filepath.Join(dir, "3920"), "claude", 1, 42)
+	want := filepath.Join(dir, "3920", "children", "claude-1-42")
 	if got != want {
 		t.Fatalf("resultPath: got %q, want %q", got, want)
 	}
 }
 
-func TestResultPath_NoVariant(t *testing.T) {
+func TestResultPath_ZeroRunID(t *testing.T) {
 	dir := t.TempDir()
-	got := resultPath(dir, "100", "", 1)
-	want := filepath.Join(dir, "100", "iteration-1")
+	got := resultPath(filepath.Join(dir, "100"), "local", 2, 0)
+	want := filepath.Join(dir, "100", "children", "local-2-0")
 	if got != want {
 		t.Fatalf("resultPath: got %q, want %q", got, want)
 	}

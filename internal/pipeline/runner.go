@@ -60,9 +60,10 @@ type runCtx struct {
 	workflow         string
 
 	// call-workflow threading
-	workflowsDir string
-	parentRunID  int64
-	callStack    []string
+	workflowsDir    string
+	parentRunID     int64
+	callStack       []string
+	childRunCreator func(parentID int64, workflowName string) (int64, error)
 }
 
 // stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
@@ -92,6 +93,12 @@ type Result struct {
 	Workflow string
 	Output   string            // output of the last step
 	Steps    map[string]string // all step outputs keyed by step ID
+	// RunID is the DB row id associated with this run. The pipeline package
+	// does not own store.RecordRun; when the caller pre-creates a row and
+	// passes its id via RunOpts.ParentRunID, that same value is echoed back
+	// here so downstream callers (batch, GUI) can correlate the run.
+	// Zero means unknown / no row created.
+	RunID int64
 }
 
 // RunOpts holds optional dependencies for a workflow run.
@@ -111,6 +118,14 @@ type RunOpts struct {
 	WorkflowsDir string   // directory to resolve call-workflow targets
 	ParentRunID  int64    // if non-zero, this run is a child of this parent
 	CallStack    []string // workflow names already on the call stack (cycle guard)
+
+	// ChildRunCreator is called before starting a nested workflow via call-workflow.
+	// The callback should create a child run row in the store and return its id,
+	// which is then used as ParentRunID for the child invocation — giving correct
+	// per-level parent linkage in multi-level call-workflow trees.
+	// When nil, call-workflow falls back to grandparent chaining
+	// (child's ParentRunID = rctx.parentRunID).
+	ChildRunCreator func(parentID int64, workflowName string) (int64, error)
 }
 
 // parseWorkflowName extracts issue number and comparison group from a workflow name.
@@ -222,6 +237,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		rctx.workflowsDir = opts[0].WorkflowsDir
 		rctx.parentRunID = opts[0].ParentRunID
 		rctx.callStack = opts[0].CallStack
+		rctx.childRunCreator = opts[0].ChildRunCreator
 	}
 
 	// Emit run-start document
@@ -442,6 +458,10 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		Workflow: w.Name,
 		Output:   lastOutput,
 		Steps:    steps,
+		// The pipeline package doesn't create rows itself; callers that
+		// pre-create a row pass its id via RunOpts.ParentRunID, and we echo
+		// it back here so they can correlate. Zero when no row was created.
+		RunID: rctx.parentRunID,
 	}, nil
 }
 
@@ -1450,10 +1470,20 @@ func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOut
 	for k, v := range step.CallSet {
 		childParams[k] = v
 	}
-	// NOTE: The pipeline package does not itself call store.RecordRun; the DB
-	// row ID for parent/child linkage is owned by the caller (cmd/* or GUI).
-	// We thread rctx.parentRunID through as a best-effort grandparent pass;
-	// Task 12 will tighten batch-driven parent_run_id threading.
+	// The pipeline package does not own store.RecordRun. When the caller wires
+	// a ChildRunCreator, ask them to mint a new row for this nested workflow so
+	// the child's ParentRunID reflects its immediate parent (correct per-level
+	// linkage). When absent, fall back to grandparent chaining — every
+	// descendant inherits rctx.parentRunID. That's good enough for tests that
+	// don't care about DB rows, and matches pre-Task-12 behavior.
+	childParentID := rctx.parentRunID
+	if rctx.childRunCreator != nil {
+		id, err := rctx.childRunCreator(rctx.parentRunID, child.Name)
+		if err != nil {
+			return nil, fmt.Errorf("call-workflow %s: create child run: %w", step.CallWorkflow, err)
+		}
+		childParentID = id
+	}
 	childOpts := RunOpts{
 		Telemetry:        rctx.tel,
 		ProviderResolver: rctx.providerResolver,
@@ -1463,8 +1493,9 @@ func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOut
 		Workspace:        rctx.workspace,
 		Resources:        rctx.resources,
 		WorkflowsDir:     rctx.workflowsDir,
-		ParentRunID:      rctx.parentRunID,
+		ParentRunID:      childParentID,
 		CallStack:        append(append([]string{}, rctx.callStack...), step.CallWorkflow),
+		ChildRunCreator:  rctx.childRunCreator,
 	}
 	_ = ctx // child run currently manages its own context; reserved for future cancellation threading.
 	res, err := Run(child, rendered, rctx.defaultModel, childParams, rctx.reg, childOpts)

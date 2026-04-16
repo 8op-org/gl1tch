@@ -43,3 +43,43 @@ func TestCallWorkflowCycleRejected(t *testing.T) {
 		t.Fatalf("expected cycle error, got %v", err)
 	}
 }
+
+func TestCallWorkflowCallsChildRunCreator(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "parent.glitch"),
+		[]byte(`(workflow "parent" (step "o" (call-workflow "child")))`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "child.glitch"),
+		[]byte(`(workflow "child" (step "e" (run "echo ok")))`), 0o644)
+	w, err := ParseSexprWorkflowFromFile(filepath.Join(dir, "parent.glitch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls []struct {
+		Parent   int64
+		Workflow string
+	}
+	creator := func(parent int64, name string) (int64, error) {
+		calls = append(calls, struct {
+			Parent   int64
+			Workflow string
+		}{parent, name})
+		return int64(len(calls) + 1000), nil // fake child row id
+	}
+	_, err = Run(w, "", "", nil, nil, RunOpts{
+		WorkflowsDir:    dir,
+		ParentRunID:     42,
+		ChildRunCreator: creator,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("expected one creator call, got %d", len(calls))
+	}
+	if calls[0].Parent != 42 {
+		t.Errorf("expected child to be linked to parent 42, got %d", calls[0].Parent)
+	}
+	if calls[0].Workflow != "child" {
+		t.Errorf("expected workflow name 'child', got %q", calls[0].Workflow)
+	}
+}
