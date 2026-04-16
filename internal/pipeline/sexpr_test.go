@@ -1355,6 +1355,44 @@ func TestSexprWorkflow_Embed(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_SearchSort(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (search :index "my-index" :size 10 :sort {"indexed_at" "desc"})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if s.Search.Sort == "" {
+		t.Fatal("expected sort to be set")
+	}
+}
+
+func TestSexprWorkflow_SearchNDJSON(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (search :index "my-index" :ndjson)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if !s.Search.NDJSON {
+		t.Fatal("expected ndjson to be true")
+	}
+}
+
 func TestSexprWorkflow_SearchQueryOptional(t *testing.T) {
 	src := []byte(`
 (workflow "test"

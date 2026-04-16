@@ -1309,6 +1309,13 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if len(step.Search.Fields) > 0 {
 			queryBody["_source"] = step.Search.Fields
 		}
+		if step.Search.Sort != "" {
+			var sortClause any
+			if err := json.Unmarshal([]byte(step.Search.Sort), &sortClause); err != nil {
+				return nil, fmt.Errorf("step %s: sort parse: %w", step.ID, err)
+			}
+			queryBody["sort"] = []any{sortClause}
+		}
 
 		queryJSON, err := json.Marshal(queryBody)
 		if err != nil {
@@ -1325,6 +1332,15 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		for _, hit := range resp.Results {
 			sources = append(sources, hit.Source)
 		}
+
+		if step.Search.NDJSON {
+			lines := make([]string, len(sources))
+			for i, s := range sources {
+				lines[i] = string(s)
+			}
+			return &stepOutcome{output: strings.Join(lines, "\n")}, nil
+		}
+
 		out, err := json.Marshal(sources)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: marshal results: %w", step.ID, err)

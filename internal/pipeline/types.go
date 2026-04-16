@@ -144,6 +144,8 @@ type SearchStep struct {
 	Size      int      // max hits (default 10)
 	Fields    []string // _source field filter
 	ESURL     string   // override ES URL (empty = workspace default)
+	Sort      string   // raw JSON sort clause
+	NDJSON    bool     // output as NDJSON instead of JSON array
 }
 
 // IndexStep indexes a single document into Elasticsearch.

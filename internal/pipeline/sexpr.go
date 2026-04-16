@@ -854,6 +854,12 @@ func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
 		child := children[i]
 		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
 			key := child.KeywordVal()
+			switch key {
+			case "ndjson":
+				sr.NDJSON = true
+				i++
+				continue
+			}
 			i++
 			if i >= len(children) {
 				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
@@ -884,6 +890,12 @@ func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
 				}
 			case "es":
 				sr.ESURL = resolveVal(val, defs)
+			case "sort":
+				b, err := nodeToJSON(val)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: sort to JSON: %w", val.Line, err)
+				}
+				sr.Sort = string(b)
 			default:
 				return nil, fmt.Errorf("line %d: unknown search keyword :%s", child.Line, key)
 			}
