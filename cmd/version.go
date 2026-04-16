@@ -19,6 +19,14 @@ var (
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	// Wire cobra's built-in --version / -v flag
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate("glitch {{.Version}}\n")
+}
+
+// SetVersionString updates the root command version after ldflags are forwarded from main.
+func SetVersionString() {
+	rootCmd.Version = fmt.Sprintf("%s (commit %s, built %s)", Version, Commit, Date)
 }
 
 var versionCmd = &cobra.Command{

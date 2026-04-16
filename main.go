@@ -20,6 +20,7 @@ func main() {
 	cmd.Version = version
 	cmd.Commit = commit
 	cmd.Date = date
+	cmd.SetVersionString()
 
 	if home, err := os.UserHomeDir(); err == nil {
 		loadDotenv(filepath.Join(home, ".config", "glitch", ".env"))
