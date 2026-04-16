@@ -923,6 +923,8 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		return executeWhen(ctx, rctx, step)
 	case "map":
 		return executeMap(ctx, rctx, step)
+	case "map-resources":
+		return executeMapResources(ctx, rctx, step)
 	case "filter":
 		return executeFilter(ctx, rctx, step)
 	case "reduce":
@@ -1182,6 +1184,67 @@ func executeReduce(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	rctx.steps[step.ID] = accumulator
 	rctx.mu.Unlock()
 	return &stepOutcome{output: accumulator}, nil
+}
+
+// executeMapResources iterates over the active workspace's resources (from
+// RunOpts.Resources) and runs the body step per resource, binding the current
+// entry to .resource.item. An optional type filter narrows the set to
+// matching resource types ("git", "local", "tracker"). Outputs are joined
+// with newlines. Iteration order is deterministic (sorted by resource name).
+func executeMapResources(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	if step.MapResourcesBody == nil {
+		return nil, fmt.Errorf("map-resources %q: no body", step.ID)
+	}
+
+	// Stable iteration order: sort resource names.
+	names := make([]string, 0, len(rctx.resources))
+	for n := range rctx.resources {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	var outputs []string
+	for idx, name := range names {
+		res := rctx.resources[name]
+		if step.MapResourcesType != "" && res["type"] != step.MapResourcesType {
+			continue
+		}
+		// Bind item to the full field map (plus name, in case not present).
+		item := map[string]string{"name": name}
+		for k, v := range res {
+			item[k] = v
+		}
+
+		// Inject the per-iteration item under .resource.item via a shallow
+		// clone of rctx.resources so we don't mutate the caller's map.
+		origResources := rctx.resources
+		extended := make(map[string]map[string]string, len(origResources)+1)
+		for k, v := range origResources {
+			extended[k] = v
+		}
+		extended["item"] = item
+		rctx.resources = extended
+
+		// Clone the body step with a unique ID per iteration so step outputs
+		// don't collide across iterations.
+		body := *step.MapResourcesBody
+		body.ID = fmt.Sprintf("%s-%d", step.MapResourcesBody.ID, idx)
+
+		outcome, err := executeStep(ctx, rctx, body)
+		rctx.resources = origResources
+		if err != nil {
+			return nil, fmt.Errorf("map-resources %s: %w", name, err)
+		}
+		if outcome != nil && outcome.output != "" {
+			outputs = append(outputs, outcome.output)
+		}
+	}
+
+	combined := strings.Join(outputs, "\n")
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = combined
+	rctx.mu.Unlock()
+	return &stepOutcome{output: combined}, nil
 }
 
 // executePar runs all child steps concurrently and waits for completion.

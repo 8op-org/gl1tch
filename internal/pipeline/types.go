@@ -51,7 +51,7 @@ type Step struct {
 	Timeout string `yaml:"timeout,omitempty"` // deadline duration, e.g. "30s", "2m"
 
 	// Compound forms — Form discriminates the variant.
-	Form     string       `yaml:"-"` // "cond", "map", "catch", or "" for regular steps
+	Form     string       `yaml:"-"` // "cond", "map", "map-resources", "catch", or "" for regular steps
 	Fallback *Step        `yaml:"-"` // catch: step to run on failure
 	Branches []CondBranch `yaml:"-"` // cond: ordered predicate→step pairs
 	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
@@ -69,6 +69,10 @@ type Step struct {
 	// Reduce collection form
 	ReduceOver string `yaml:"-"` // reduce: step ID whose output to iterate
 	ReduceBody *Step  `yaml:"-"` // reduce: body step (receives item + accumulator)
+
+	// map-resources: iterate over RunOpts.Resources, binding each to .resource.item.
+	MapResourcesType string `yaml:"-"` // optional type filter ("git" / "local" / "tracker" or empty)
+	MapResourcesBody *Step  `yaml:"-"` // body step executed per resource
 
 	// Parallel execution
 	ParSteps []Step `yaml:"-"` // par: concurrent child steps

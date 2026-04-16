@@ -189,6 +189,12 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "map-resources":
+		s, err := convertMapResources(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	case "filter":
 		s, err := convertFilter(n, defs)
 		if err != nil {
@@ -456,6 +462,51 @@ func convertReduce(n *sexpr.Node, defs map[string]string) (Step, error) {
 		ReduceOver: source,
 		ReduceBody: &body,
 	}, nil
+}
+
+// convertMapResources: (map-resources [:type "git"] (step "name" ...))
+// Iterates over active workspace resources. Optional :type filter keeps only
+// resources of the matching type. The trailing list form is the body step
+// executed per resource with .resource.item bound to the current entry.
+func convertMapResources(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	s := Step{
+		ID:   fmt.Sprintf("map-resources-%d", n.Line),
+		Form: "map-resources",
+	}
+
+	var bodyNode *sexpr.Node
+	for i := 0; i < len(children); i++ {
+		c := children[i]
+		if c.IsAtom() && c.Atom.Type == sexpr.TokenKeyword {
+			key := c.KeywordVal()
+			if i+1 >= len(children) {
+				return Step{}, fmt.Errorf("line %d: map-resources keyword :%s missing value", c.Line, key)
+			}
+			val := resolveVal(children[i+1], defs)
+			switch key {
+			case "type":
+				s.MapResourcesType = val
+			default:
+				return Step{}, fmt.Errorf("line %d: map-resources: unknown keyword :%s", c.Line, key)
+			}
+			i++
+			continue
+		}
+		if c.IsList() {
+			// The body is the trailing list form (usually `step`).
+			bodyNode = c
+		}
+	}
+	if bodyNode == nil {
+		return Step{}, fmt.Errorf("line %d: map-resources needs a body step", n.Line)
+	}
+	body, err := convertStep(bodyNode, defs)
+	if err != nil {
+		return Step{}, fmt.Errorf("line %d: map-resources body: %w", n.Line, err)
+	}
+	s.MapResourcesBody = &body
+	return s, nil
 }
 
 // convertPar: (par (step ...) (step ...) ...)
