@@ -4,15 +4,15 @@ import "fmt"
 
 // RunNode is a minimal run record used by tree queries.
 type RunNode struct {
-	ID           int64
-	Name         string
-	WorkflowName string
-	Kind         string
-	ExitStatus   *int
-	StartedAt    int64
-	FinishedAt   *int64
-	ParentRunID  int64
-	Children     []RunNode
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	WorkflowName string    `json:"workflow_name"`
+	Kind         string    `json:"kind"`
+	ExitStatus   *int      `json:"exit_status,omitempty"`
+	StartedAt    int64     `json:"started_at"`
+	FinishedAt   *int64    `json:"finished_at,omitempty"`
+	ParentRunID  int64     `json:"parent_run_id,omitempty"`
+	Children     []RunNode `json:"children"`
 }
 
 // ListChildren returns direct children of a run.

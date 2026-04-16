@@ -24,6 +24,7 @@ type runEntry struct {
 	TokensIn     int64   `json:"tokens_in"`
 	TokensOut    int64   `json:"tokens_out"`
 	CostUSD      float64 `json:"cost_usd"`
+	ParentRunID  int64   `json:"parent_run_id,omitempty"`
 }
 
 func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +55,8 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, kind, name, COALESCE(input,''), COALESCE(output,''),
 		        COALESCE(exit_status,0), started_at, COALESCE(finished_at,0),
 		        COALESCE(workflow_file,''), COALESCE(repo,''), COALESCE(model,''),
-		        COALESCE(tokens_in,0), COALESCE(tokens_out,0), COALESCE(cost_usd,0)
+		        COALESCE(tokens_in,0), COALESCE(tokens_out,0), COALESCE(cost_usd,0),
+		        COALESCE(parent_run_id,0)
 		 FROM runs ORDER BY id DESC LIMIT 100`,
 	)
 	if err != nil {
@@ -69,7 +71,7 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&re.ID, &re.Kind, &re.Name, &re.Input, &re.Output,
 			&re.ExitStatus, &re.StartedAt, &re.FinishedAt,
 			&re.WorkflowFile, &re.Repo, &re.Model,
-			&re.TokensIn, &re.TokensOut, &re.CostUSD); err != nil {
+			&re.TokensIn, &re.TokensOut, &re.CostUSD, &re.ParentRunID); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
