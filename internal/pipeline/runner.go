@@ -649,6 +649,32 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 		"contains":  strings.Contains,
 		"hasPrefix": strings.HasPrefix,
 		"hasSuffix": strings.HasSuffix,
+		// pick extracts a field from a JSON string by key.
+		// Supports dot notation for nested access: pick "email.subject"
+		"pick": func(key, jsonStr string) string {
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+				return ""
+			}
+			parts := strings.Split(key, ".")
+			var cur any = obj
+			for _, p := range parts {
+				m, ok := cur.(map[string]any)
+				if !ok {
+					return ""
+				}
+				cur = m[p]
+			}
+			switch v := cur.(type) {
+			case string:
+				return v
+			case nil:
+				return ""
+			default:
+				b, _ := json.Marshal(v)
+				return string(b)
+			}
+		},
 	}
 	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
 	if err != nil {

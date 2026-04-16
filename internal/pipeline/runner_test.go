@@ -881,6 +881,40 @@ func TestRun_Par_InPhase(t *testing.T) {
 	}
 }
 
+func TestRender_Pick(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"subject":"help me","from":"alice@example.com"}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | pick "subject"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "help me" {
+		t.Fatalf("expected %q, got %q", "help me", result)
+	}
+}
+
+func TestRender_PickNested(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"email":{"subject":"nested"}}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | pick "email.subject"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "nested" {
+		t.Fatalf("expected %q, got %q", "nested", result)
+	}
+}
+
 func TestRun_Par_FromFile(t *testing.T) {
 	w, err := LoadFile("testdata/par-demo.glitch")
 	if err != nil {
