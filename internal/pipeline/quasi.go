@@ -2,6 +2,7 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -179,6 +180,25 @@ func evalNode(n *sexpr.Node, scope *Scope) (string, error) {
 	}
 	if name == "" {
 		return "", fmt.Errorf("line %d: invalid form head", n.Line)
+	}
+	if name == "or" {
+		for _, c := range n.Children[1:] {
+			v, err := evalNode(c, scope)
+			if err != nil {
+				// Undefined refs in an `or` chain are treated as empty strings —
+				// that's the whole point of `or`: it's the escape hatch for refs
+				// that may legitimately be missing.
+				var ure *UndefinedRefError
+				if errors.As(err, &ure) {
+					continue
+				}
+				return "", err
+			}
+			if v != "" {
+				return v, nil
+			}
+		}
+		return "", nil
 	}
 	args := make([]string, 0, len(n.Children)-1)
 	for i, c := range n.Children[1:] {

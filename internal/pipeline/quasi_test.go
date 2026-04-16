@@ -222,3 +222,45 @@ func TestRenderQuasi_PlainPassthrough(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestEvalForm_OrWithMissingRef(t *testing.T) {
+	scope := NewScope()
+	got, err := evalForm(`(or param.missing "fallback")`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "fallback" {
+		t.Errorf("got %q, want fallback", got)
+	}
+}
+
+func TestEvalForm_OrFirstWins(t *testing.T) {
+	scope := NewScope()
+	scope.SetParam("repo", "elastic/x")
+	got, _ := evalForm(`(or param.repo "fallback")`, scope)
+	if got != "elastic/x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEvalForm_OrAllMissing(t *testing.T) {
+	scope := NewScope()
+	got, err := evalForm(`(or param.a param.b)`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}
+
+func TestRenderQuasi_OrFallback(t *testing.T) {
+	scope := NewScope()
+	got, err := renderQuasi(`prefix:~(or param.missing "default")`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "prefix:default" {
+		t.Errorf("got %q", got)
+	}
+}
