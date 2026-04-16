@@ -118,7 +118,7 @@ test.describe('App shell', () => {
     expect(errors).toEqual([])
   })
 
-  test('sidebar is visible with 3 nav items', async ({ page }) => {
+  test('sidebar is visible with 4 nav items', async ({ page }) => {
     await page.goto('/')
     const sidebar = page.locator('aside.sidebar')
     await expect(sidebar).toBeVisible()

@@ -121,6 +121,16 @@ test.describe('Settings page', () => {
     await expect(page.locator('.page-header h1 svg')).toBeVisible()
   })
 
+  test('invalid Kibana URL shows validation feedback', async ({ page }) => {
+    await page.goto('#/settings')
+    await expect(page.locator('h2', { hasText: 'Workflow Defaults' })).toBeVisible({ timeout: 5000 })
+    const kibanaInput = page.locator('input[placeholder="http://localhost:5601"]')
+    await kibanaInput.fill('not-a-url')
+    await expect(page.locator('.url-hint')).toBeVisible()
+    await kibanaInput.fill('http://valid:5601')
+    await expect(page.locator('.url-hint')).not.toBeVisible()
+  })
+
   test('no JS errors during interaction', async ({ page }) => {
     const errors = []
     page.on('pageerror', (err) => errors.push(err.message))

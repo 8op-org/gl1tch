@@ -185,6 +185,9 @@
           oninput={markDirty}
           placeholder="http://localhost:5601"
         />
+        {#if workspace.defaults.elasticsearch && !workspace.defaults.elasticsearch.startsWith('http://') && !workspace.defaults.elasticsearch.startsWith('https://')}
+          <span class="status-fail url-hint" style="font-size:11px">URL should start with http:// or https://</span>
+        {/if}
       </label>
 
       <div class="settings-field">
