@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/8op-org/gl1tch/internal/plugin"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,6 +22,7 @@ type Workflow struct {
 	Steps       []Step         `yaml:"steps"`
 	Items       []WorkflowItem `yaml:"-"`
 	SourceFile  string         `yaml:"-"`
+	Args        []plugin.ArgDef `yaml:"-"`
 }
 
 // WorkflowItem is a union type for the ordered sequence of workflow elements.
@@ -231,10 +233,15 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".glitch":
+		args, err := plugin.ParseArgs(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filename, err)
+		}
 		w, err := parseSexprWorkflow(data)
 		if err != nil {
 			return nil, err
 		}
+		w.Args = args
 		w.SourceFile = filename
 		return w, nil
 	default:
