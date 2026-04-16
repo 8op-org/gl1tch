@@ -252,7 +252,13 @@ func LoadDir(dir string) (map[string]*Workflow, error) {
 	}
 	workflows := make(map[string]*Workflow)
 	filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != resolved && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		ext := filepath.Ext(d.Name())

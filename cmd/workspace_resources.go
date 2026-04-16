@@ -34,7 +34,14 @@ func ResourceBindings(ws *workspace.Workspace, wsPath string) map[string]map[str
 		return out
 	}
 	for _, r := range ws.Resources {
-		m := map[string]string{"url": r.URL, "ref": r.Ref, "pin": r.Pin, "repo": r.Repo}
+		m := map[string]string{
+			"name": r.Name,
+			"type": r.Type,
+			"url":  r.URL,
+			"ref":  r.Ref,
+			"pin":  r.Pin,
+			"repo": r.Repo,
+		}
 		switch r.Type {
 		case "git":
 			m["path"] = filepath.Join(wsPath, "resources", r.Name)
