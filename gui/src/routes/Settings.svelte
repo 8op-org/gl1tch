@@ -1,6 +1,7 @@
 <script>
   import { getWorkspace, updateWorkspace, getProviders } from '../lib/api.js';
   import { icon } from '../lib/icons.js';
+  import ResourcesPanel from '../lib/components/ResourcesPanel.svelte';
 
   let workspace = $state(null);
   let providers = $state([]);
@@ -205,6 +206,11 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- Workspace Resources -->
+    <section class="settings-section">
+      <ResourcesPanel />
     </section>
   {/if}
 </div>

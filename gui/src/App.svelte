@@ -1,6 +1,7 @@
 <script>
   import Router from 'svelte-spa-router';
   import Sidebar from './lib/components/Sidebar.svelte';
+  import WorkspaceSwitcher from './lib/components/WorkspaceSwitcher.svelte';
   import WorkflowList from './routes/WorkflowList.svelte';
   import Editor from './routes/Editor.svelte';
   import RunList from './routes/RunList.svelte';
@@ -20,5 +21,6 @@
 
 <Sidebar />
 <main class="main-area">
+  <WorkspaceSwitcher />
   <Router {routes} />
 </main>

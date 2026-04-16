@@ -42,3 +42,29 @@ export function updateWorkspace(data) {
   return request('/api/workspace', { method: 'PUT', body: JSON.stringify(data) });
 }
 export function getProviders() { return request('/api/providers'); }
+
+// Workspaces (registry)
+export function listWorkspaces() { return request('/api/workspaces'); }
+export function useWorkspace(name) {
+  return request('/api/workspaces/use', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+// Workspace resources
+export function listResources() { return request('/api/workspace/resources'); }
+export function addResource(payload) {
+  return request('/api/workspace/resources', { method: 'POST', body: JSON.stringify(payload) });
+}
+export function removeResource(name) {
+  return request(`/api/workspace/resources/${encodeURIComponent(name)}`, { method: 'DELETE' });
+}
+export function syncWorkspace(name) {
+  const path = name ? `/api/workspace/sync/${encodeURIComponent(name)}` : '/api/workspace/sync';
+  return request(path, { method: 'POST' });
+}
+export function pinResource(name, ref) {
+  return request('/api/workspace/pin', { method: 'POST', body: JSON.stringify({ name, ref }) });
+}
+
+// Run tree
+export function getRunTree(id) { return request(`/api/runs/${id}/tree`); }
+export function listRunChildren(parentId) { return request(`/api/runs?parent_id=${encodeURIComponent(parentId)}`); }
