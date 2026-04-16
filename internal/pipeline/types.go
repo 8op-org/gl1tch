@@ -57,6 +57,11 @@ type Step struct {
 	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
 	MapBody  *Step        `yaml:"-"` // map: template step executed per item
 
+	// Conditional execution
+	WhenPred string `yaml:"-"` // when: step ID or shell command predicate
+	WhenBody *Step  `yaml:"-"` // when: step to execute if predicate is true
+	WhenNot  bool   `yaml:"-"` // when-not: invert the predicate
+
 	// Parallel execution
 	ParSteps []Step `yaml:"-"` // par: concurrent child steps
 

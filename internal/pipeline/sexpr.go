@@ -170,6 +170,18 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "when":
+		s, err := convertWhen(n, defs, false)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
+	case "when-not":
+		s, err := convertWhen(n, defs, true)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	case "map", "each":
 		s, err := convertMap(n, defs)
 		if err != nil {
@@ -334,6 +346,38 @@ func convertCond(n *sexpr.Node, defs map[string]string) (Step, error) {
 		s.Branches = append(s.Branches, CondBranch{Pred: predStr, Step: step})
 	}
 	return s, nil
+}
+
+// convertWhen: (when "pred" (step ...)) or (when-not "pred" (step ...))
+func convertWhen(n *sexpr.Node, defs map[string]string, negate bool) (Step, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (when) needs predicate and body step", n.Line)
+	}
+	pred := resolveVal(children[0], defs)
+	body, err := convertStep(children[1], defs)
+	if err != nil {
+		// Body might be a compound form (map, par, etc.), not just a step
+		head := children[1].Children[0].SymbolVal()
+		if head == "" {
+			head = children[1].Children[0].StringVal()
+		}
+		steps, formErr := convertForm(children[1], head, defs)
+		if formErr != nil {
+			return Step{}, fmt.Errorf("line %d: when body: %w", n.Line, err)
+		}
+		if len(steps) != 1 {
+			return Step{}, fmt.Errorf("line %d: when body must be a single form", n.Line)
+		}
+		body = steps[0]
+	}
+	return Step{
+		ID:       fmt.Sprintf("when-%d", n.Line),
+		Form:     "when",
+		WhenPred: pred,
+		WhenBody: &body,
+		WhenNot:  negate,
+	}, nil
 }
 
 // convertMap: (map "step-id" (step ...))

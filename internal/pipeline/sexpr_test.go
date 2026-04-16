@@ -1439,3 +1439,46 @@ func TestSexprWorkflow_IndexUpsertFalse(t *testing.T) {
 		t.Fatal("expected upsert to be false")
 	}
 }
+
+func TestSexprWorkflow_When(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "check" (run "echo found"))
+  (when "check"
+    (step "notify" (run "echo notifying"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "when" {
+		t.Fatalf("expected form %q, got %q", "when", s.Form)
+	}
+	if s.WhenPred != "check" {
+		t.Fatalf("expected when pred %q, got %q", "check", s.WhenPred)
+	}
+}
+
+func TestSexprWorkflow_WhenNot(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "check" (run "echo found"))
+  (when-not "check"
+    (step "fallback" (run "echo fallback"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[1]
+	if s.Form != "when" {
+		t.Fatalf("expected form %q, got %q", "when", s.Form)
+	}
+	if !s.WhenNot {
+		t.Fatal("expected when-not to be true")
+	}
+}

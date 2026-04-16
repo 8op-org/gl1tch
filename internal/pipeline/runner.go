@@ -764,6 +764,8 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	switch step.Form {
 	case "cond":
 		return executeCond(ctx, rctx, step)
+	case "when":
+		return executeWhen(ctx, rctx, step)
 	case "map":
 		return executeMap(ctx, rctx, step)
 	case "par":
@@ -829,6 +831,41 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		}
 	}
 	// No branch matched — return empty outcome
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = ""
+	rctx.mu.Unlock()
+	return &stepOutcome{}, nil
+}
+
+// executeWhen checks a predicate and runs the body step if it passes.
+// Predicate is a step ID (non-empty output = true) or a shell command (exit 0 = true).
+func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	matched := false
+
+	// Check if predicate is a step reference
+	if output, ok := snap[step.WhenPred]; ok {
+		matched = strings.TrimSpace(output) != ""
+	} else {
+		// Treat as shell command
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
+		rendered, err := render(step.WhenPred, data, snap)
+		if err != nil {
+			return nil, fmt.Errorf("when %s: template: %w", step.ID, err)
+		}
+		cmd := exec.CommandContext(ctx, "sh", "-c", rendered)
+		matched = cmd.Run() == nil
+	}
+
+	if step.WhenNot {
+		matched = !matched
+	}
+
+	if matched {
+		return executeStep(ctx, rctx, *step.WhenBody)
+	}
+
+	// Not matched — empty outcome
 	rctx.mu.Lock()
 	rctx.steps[step.ID] = ""
 	rctx.mu.Unlock()
