@@ -606,6 +606,52 @@ func parseCrossReviewPassFail(output string) []CrossReviewScore {
 	return scores
 }
 
+// extractJSON strips <think> tags and markdown fences, then extracts
+// the first valid JSON object or array from LLM output.
+func extractJSON(s string) (string, error) {
+	// Strip <think>...</think> blocks (multiline)
+	for {
+		start := strings.Index(s, "<think>")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(s, "</think>")
+		if end == -1 {
+			s = s[:start]
+			break
+		}
+		s = s[:start] + s[end+len("</think>"):]
+	}
+
+	// Strip markdown fences
+	s = strings.TrimSpace(s)
+	lines := strings.Split(s, "\n")
+	var cleaned []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			continue
+		}
+		cleaned = append(cleaned, line)
+	}
+	s = strings.TrimSpace(strings.Join(cleaned, "\n"))
+
+	// Find first { or [ and extract valid JSON
+	for i, ch := range s {
+		if ch == '{' || ch == '[' {
+			// Try progressively longer substrings from this point
+			for j := len(s); j > i; j-- {
+				candidate := strings.TrimSpace(s[i:j])
+				var v any
+				if json.Unmarshal([]byte(candidate), &v) == nil {
+					return candidate, nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("no valid JSON found in LLM output")
+}
+
 func render(tmpl string, data map[string]any, steps map[string]string) (string, error) {
 	funcMap := template.FuncMap{
 		"step": func(id string) string {
@@ -1062,6 +1108,15 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		}
 
 		ui.StepLLMDone(step.ID, prov, displayModel, int64(stepTokensIn), int64(stepTokensOut), time.Since(llmStart))
+
+		// Post-process structured output
+		if step.LLM.Format == "json" {
+			extracted, err := extractJSON(out)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: format json: %w", step.ID, err)
+			}
+			out = extracted
+		}
 
 		return &stepOutcome{
 			output:     out,

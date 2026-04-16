@@ -915,6 +915,63 @@ func TestRender_PickNested(t *testing.T) {
 	}
 }
 
+func TestExtractJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+		err   bool
+	}{
+		{
+			name:  "clean json",
+			input: `{"category": "billing"}`,
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "with think tags",
+			input: "<think>\nlet me analyze this\n</think>\n{\"category\": \"billing\"}",
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "with markdown fences",
+			input: "```json\n{\"category\": \"billing\"}\n```",
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "with think and fences",
+			input: "<think>\nhmm\n</think>\nHere is the result:\n```json\n{\"category\": \"billing\"}\n```\nDone.",
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "no json",
+			input: "I cannot help with that",
+			err:   true,
+		},
+		{
+			name:  "json array",
+			input: "[1,2,3]",
+			want:  "[1,2,3]",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := extractJSON(tt.input)
+			if tt.err {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestRun_Par_FromFile(t *testing.T) {
 	w, err := LoadFile("testdata/par-demo.glitch")
 	if err != nil {
