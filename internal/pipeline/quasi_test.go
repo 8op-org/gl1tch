@@ -82,3 +82,47 @@ func stringSlicesEqual(a, b []string) bool {
 	}
 	return true
 }
+
+func TestLexQuasiForm(t *testing.T) {
+	parts, err := lexQuasi(`result: ~(step diff)`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(parts) != 2 {
+		t.Fatalf("want 2 parts, got %d: %+v", len(parts), parts)
+	}
+	if parts[0].Literal != "result: " {
+		t.Errorf("part 0 literal: got %q", parts[0].Literal)
+	}
+	if parts[1].Kind != partForm || parts[1].Form != "(step diff)" {
+		t.Errorf("part 1: got %+v", parts[1])
+	}
+}
+
+func TestLexQuasiFormNested(t *testing.T) {
+	parts, _ := lexQuasi(`~(upper (pick :title param.item))`)
+	if len(parts) != 1 || parts[0].Kind != partForm {
+		t.Fatalf("want 1 form part, got %+v", parts)
+	}
+	if parts[0].Form != "(upper (pick :title param.item))" {
+		t.Errorf("got form %q", parts[0].Form)
+	}
+}
+
+func TestLexQuasiFormUnterminated(t *testing.T) {
+	_, err := lexQuasi(`oops ~(step diff`)
+	if err == nil {
+		t.Fatal("expected error on unterminated form")
+	}
+}
+
+func TestLexQuasiFormWithStringLiteral(t *testing.T) {
+	// paren inside a string literal must not confuse depth tracking
+	parts, _ := lexQuasi(`~(join ")" xs)`)
+	if len(parts) != 1 || parts[0].Kind != partForm {
+		t.Fatalf("want 1 form part, got %+v", parts)
+	}
+	if parts[0].Form != `(join ")" xs)` {
+		t.Errorf("got form %q", parts[0].Form)
+	}
+}
