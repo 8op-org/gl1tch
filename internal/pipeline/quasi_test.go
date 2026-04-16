@@ -181,3 +181,44 @@ func TestEvalForm_UndefinedRef(t *testing.T) {
 		t.Fatal("expected undefined ref error")
 	}
 }
+
+func TestRenderQuasi_Mixed(t *testing.T) {
+	scope := NewScope()
+	scope.SetParam("repo", "elastic/elasticsearch")
+	scope.SetLet("model", "qwen2.5:7b")
+	scope.SetSteps(map[string]string{"diff": "hello"})
+	got, err := renderQuasi(`repo=~param.repo model=~model diff=~(step diff)`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	want := "repo=elastic/elasticsearch model=qwen2.5:7b diff=hello"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestRenderQuasi_UndefinedFails(t *testing.T) {
+	scope := NewScope()
+	_, err := renderQuasi("~nope", scope)
+	if err == nil {
+		t.Fatal("expected undefined ref error")
+	}
+}
+
+func TestRenderQuasi_EscapedTilde(t *testing.T) {
+	scope := NewScope()
+	got, _ := renderQuasi(`cp file \~/dest`, scope)
+	if got != "cp file ~/dest" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestRenderQuasi_PlainPassthrough(t *testing.T) {
+	got, err := renderQuasi("plain text", NewScope())
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "plain text" {
+		t.Errorf("got %q", got)
+	}
+}

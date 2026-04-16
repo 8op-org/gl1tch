@@ -215,3 +215,41 @@ func evalAtom(n *sexpr.Node, scope *Scope) (string, error) {
 	}
 	return "", fmt.Errorf("line %d: unsupported atom type", n.Line)
 }
+
+// renderQuasi interpolates ~name, ~param.x, and ~(form) references in src
+// against the given scope. Strings without "~" pass through unchanged.
+// Undefined refs return an error.
+func renderQuasi(src string, scope *Scope) (string, error) {
+	if !strings.ContainsRune(src, '~') {
+		return src, nil
+	}
+	parts, err := lexQuasi(src)
+	if err != nil {
+		return "", err
+	}
+	var out strings.Builder
+	for _, p := range parts {
+		switch p.Kind {
+		case partLiteral:
+			out.WriteString(p.Literal)
+		case partRef:
+			var v string
+			if len(p.RefPath) == 0 {
+				v, err = scope.Resolve(p.RefBase)
+			} else {
+				v, err = scope.ResolvePath(p.RefBase, p.RefPath)
+			}
+			if err != nil {
+				return "", err
+			}
+			out.WriteString(v)
+		case partForm:
+			v, err := evalForm(p.Form, scope)
+			if err != nil {
+				return "", err
+			}
+			out.WriteString(v)
+		}
+	}
+	return out.String(), nil
+}
