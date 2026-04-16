@@ -149,3 +149,36 @@ func TestBuildParams_RequiredMissing(t *testing.T) {
 		t.Fatal("expected error for missing required arg, got nil")
 	}
 }
+
+func TestParseArgs_ExampleKeyword(t *testing.T) {
+	src := []byte(`(arg "topic" :required true :description "The topic" :example "batch comparison")`)
+	defs, err := ParseArgs(src)
+	if err != nil {
+		t.Fatalf("ParseArgs: %v", err)
+	}
+	if len(defs) != 1 {
+		t.Fatalf("want 1 def, got %d", len(defs))
+	}
+	if defs[0].Example != "batch comparison" {
+		t.Errorf("Example = %q, want %q", defs[0].Example, "batch comparison")
+	}
+	if defs[0].Implicit {
+		t.Errorf("Implicit should default to false")
+	}
+}
+
+func TestParseArgs_UnknownKeywordRejected(t *testing.T) {
+	src := []byte(`(arg "topic" :defalt "oops")`)
+	_, err := ParseArgs(src)
+	if err == nil {
+		t.Fatal("expected parse error for unknown keyword :defalt")
+	}
+}
+
+func TestParseArgs_RequiredWithDefaultRejected(t *testing.T) {
+	src := []byte(`(arg "topic" :required true :default "x")`)
+	_, err := ParseArgs(src)
+	if err == nil {
+		t.Fatal("expected parse error when :required and :default both set")
+	}
+}

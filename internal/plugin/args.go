@@ -3,6 +3,7 @@ package plugin
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/8op-org/gl1tch/internal/sexpr"
 )
@@ -13,7 +14,9 @@ type ArgDef struct {
 	Default     string // empty = required (unless type is flag)
 	Type        string // "string", "flag", "number"
 	Description string
+	Example     string // concrete example value for help output
 	Required    bool
+	Implicit    bool // true when auto-extracted with no declaration
 }
 
 // ParseArgs parses a .glitch source file and extracts all (arg ...) forms.
@@ -65,6 +68,7 @@ func parseArgNode(node *sexpr.Node) (ArgDef, error) {
 	}
 
 	// Walk keyword/value pairs starting at index 2.
+	requiredExplicit := false
 	i := 2
 	for i < len(children) {
 		kw := children[i].KeywordVal()
@@ -97,11 +101,35 @@ func parseArgNode(node *sexpr.Node) (ArgDef, error) {
 				def.Description = children[i].StringVal()
 				i++
 			}
+		case "example":
+			if i < len(children) {
+				def.Example = children[i].StringVal()
+				i++
+			}
+		case "required":
+			if i < len(children) {
+				val := strings.ToLower(children[i].StringVal())
+				if val == "" {
+					// Keyword value form: :required true  (rare; :required :true)
+					val = children[i].KeywordVal()
+				}
+				def.Required = val == "true" || val == "t" || val == "yes"
+				requiredExplicit = true
+				i++
+			}
+		default:
+			return ArgDef{}, fmt.Errorf("line %d: unknown keyword :%s on (arg \"%s\")", node.Line, kw, def.Name)
 		}
 	}
 
-	// Required if no default and not a flag.
-	def.Required = def.Default == "" && def.Type != "flag"
+	// Mutual exclusion: :required true and :default "x" both set.
+	if requiredExplicit && def.Required && def.Default != "" {
+		return ArgDef{}, fmt.Errorf("line %d: (arg \"%s\") cannot set both :required and :default", node.Line, def.Name)
+	}
+	// Default Required inference when not explicitly set.
+	if !requiredExplicit {
+		def.Required = def.Default == "" && def.Type != "flag"
+	}
 
 	return def, nil
 }
