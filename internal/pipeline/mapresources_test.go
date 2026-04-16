@@ -16,7 +16,7 @@ func TestMapResourcesBasic(t *testing.T) {
 				MapResourcesType: "",
 				MapResourcesBody: &Step{
 					ID:  "inner",
-					Run: "echo {{.resource.item.name}}:{{.resource.item.path}}",
+					Run: "echo ~resource.item.name:~resource.item.path",
 				},
 			},
 		},
@@ -48,7 +48,7 @@ func TestMapResourcesTypeFilter(t *testing.T) {
 				MapResourcesType: "git",
 				MapResourcesBody: &Step{
 					ID:  "inner",
-					Run: "echo {{.resource.item.name}}",
+					Run: "echo ~resource.item.name",
 				},
 			},
 		},

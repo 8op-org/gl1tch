@@ -9,23 +9,25 @@ import (
 )
 
 type Scope struct {
-	lets     map[string]string
-	defs     map[string]string
-	params   map[string]string
-	item     string
-	itemIdx  int
-	hasItem  bool
-	steps    map[string]string
-	input    string
-	hasInput bool
+	lets      map[string]string
+	defs      map[string]string
+	params    map[string]string
+	item      string
+	itemIdx   int
+	hasItem   bool
+	steps     map[string]string
+	input     string
+	hasInput  bool
+	resources map[string]map[string]string
 }
 
 func NewScope() *Scope {
 	return &Scope{
-		lets:   map[string]string{},
-		defs:   map[string]string{},
-		params: map[string]string{},
-		steps:  map[string]string{},
+		lets:      map[string]string{},
+		defs:      map[string]string{},
+		params:    map[string]string{},
+		steps:     map[string]string{},
+		resources: map[string]map[string]string{},
 	}
 }
 
@@ -36,6 +38,9 @@ func (s *Scope) SetInput(v string)         { s.input = v; s.hasInput = true }
 func (s *Scope) SetItem(v string, idx int) { s.item = v; s.itemIdx = idx; s.hasItem = true }
 func (s *Scope) SetSteps(st map[string]string) {
 	s.steps = st
+}
+func (s *Scope) SetResources(r map[string]map[string]string) {
+	s.resources = r
 }
 
 // Resolve looks up a bare symbol in precedence order: let, def, specials.
@@ -79,6 +84,18 @@ func (s *Scope) ResolvePath(base string, path []string) (string, error) {
 			return "", &UndefinedRefError{Symbol: "env." + joinDots(path)}
 		}
 		return os.Getenv(path[0]), nil
+	case "resource":
+		// Two-level path: resource.<name>.<field>. Missing names or fields
+		// resolve to "" to preserve legacy template behaviour.
+		if len(path) != 2 {
+			return "", &UndefinedRefError{Symbol: "resource." + joinDots(path), Suggestion: "resource.<name>.<field>"}
+		}
+		if r, ok := s.resources[path[0]]; ok {
+			if v, ok := r[path[1]]; ok {
+				return v, nil
+			}
+		}
+		return "", nil
 	}
 	return "", &UndefinedRefError{Symbol: base + "." + joinDots(path)}
 }

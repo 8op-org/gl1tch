@@ -12,7 +12,7 @@ func TestSexprWorkflow_Basic(t *testing.T) {
   (step "fetch"
     (run "echo hello"))
   (step "analyze"
-    (llm :prompt "summarize: {{step \"fetch\"}}")))
+    (llm :prompt "summarize: ~(step fetch)")))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestSexprWorkflow_Basic(t *testing.T) {
 	if s1.LLM == nil {
 		t.Fatal("step 1: expected LLM step")
 	}
-	if s1.LLM.Prompt != `summarize: {{step "fetch"}}` {
+	if s1.LLM.Prompt != `summarize: ~(step fetch)` {
 		t.Fatalf("step 1: expected prompt with template, got %q", s1.LLM.Prompt)
 	}
 }
@@ -97,14 +97,14 @@ func TestSexprWorkflow_Save(t *testing.T) {
   (step "gen"
     (llm :prompt "write something"))
   (step "write"
-    (save "output/{{.param.repo}}/result.md" :from "gen")))
+    (save "output/~param.repo/result.md" :from "gen")))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := w.Steps[1]
-	if s.Save != "output/{{.param.repo}}/result.md" {
+	if s.Save != "output/~param.repo/result.md" {
 		t.Fatalf("expected save path, got %q", s.Save)
 	}
 	if s.SaveStep != "gen" {
@@ -870,7 +870,7 @@ func TestSexprWorkflow_PhaseWithLLMGate(t *testing.T) {
     (step "gen"
       (llm :prompt "generate something"))
     (gate "review"
-      (llm :tier 2 :prompt "review: {{step \"gen\"}}"))))
+      (llm :tier 2 :prompt "review: ~(step gen)"))))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -1488,7 +1488,7 @@ func TestSexprWorkflow_Filter(t *testing.T) {
 (workflow "test"
   (step "data" (run "echo 'a\nb\nc'"))
   (filter "data"
-    (step "keep" (run "test '{{.param.item}}' = 'b' && echo true"))))
+    (step "keep" (run "test '~item' = 'b' && echo true"))))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -1514,7 +1514,7 @@ func TestSexprWorkflow_Reduce(t *testing.T) {
 (workflow "test"
   (step "data" (run "echo 'a\nb\nc'"))
   (reduce "data"
-    (step "fold" (run "echo '{{.param.accumulator}},{{.param.item}}'"))))
+    (step "fold" (run "echo '~param.accumulator,~item'"))))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -1636,7 +1636,7 @@ func TestSexprWorkflow_ThreadWithFilter(t *testing.T) {
 (workflow "test"
   (-> (run "echo 'a\nb\nc'")
       (filter
-        (step "pred" (run "test '{{.param.item}}' = 'b' && echo true")))))
+        (step "pred" (run "test '~item' = 'b' && echo true")))))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {
@@ -1658,7 +1658,7 @@ func TestSexprWorkflow_ThreadWithReduce(t *testing.T) {
 (workflow "test"
   (-> (run "echo 'a\nb\nc'")
       (reduce
-        (step "fold" (run "echo '{{.param.accumulator}},{{.param.item}}'")))))
+        (step "fold" (run "echo '~param.accumulator,~item'")))))
 `)
 	w, err := parseSexprWorkflow(src)
 	if err != nil {

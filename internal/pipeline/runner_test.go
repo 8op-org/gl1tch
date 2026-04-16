@@ -22,7 +22,7 @@ func TestRender_WithParams(t *testing.T) {
 			"issue": "3442",
 		},
 	}
-	result, err := render(`gh issue view {{.param.issue}} --repo {{.param.repo}}`, scopeFromData(data), steps)
+	result, err := render(`gh issue view ~param.issue --repo ~param.repo`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRender_WithStepRefs(t *testing.T) {
 	data := map[string]any{
 		"input": "test",
 	}
-	result, err := render(`Issue: {{step "fetch"}}`, scopeFromData(data), steps)
+	result, err := render(`Issue: ~(step fetch)`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestRunWithParams(t *testing.T) {
 		Steps: []Step{
 			{
 				ID:  "echo-param",
-				Run: `echo "issue={{.param.issue}} repo={{.param.repo}}"`,
+				Run: `echo "issue=~param.issue repo=~param.repo"`,
 			},
 		},
 	}
@@ -791,7 +791,7 @@ func TestRun_Par_Basic(t *testing.T) {
   (par
     (step "a" (run "echo alpha"))
     (step "b" (run "echo bravo")))
-  (step "final" (run "echo a={{step \"a\"}} b={{step \"b\"}}")))
+  (step "final" (run "echo a=~(step a) b=~(step b)")))
 `)
 	w, err := LoadBytes(src, "test.glitch")
 	if err != nil {
@@ -890,7 +890,7 @@ func TestRender_Pick(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | pick "subject"}}`, scopeFromData(data), steps)
+	result, err := render(`~(pick "subject" param.item)`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -907,7 +907,7 @@ func TestRender_PickNested(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | pick "email.subject"}}`, scopeFromData(data), steps)
+	result, err := render(`~(pick "email.subject" param.item)`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -924,7 +924,7 @@ func TestRender_Assoc(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | assoc "status" "triaged"}}`, scopeFromData(data), steps)
+	result, err := render(`~(assoc "status" "triaged" param.item)`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -948,7 +948,7 @@ func TestRender_AssocOverwrite(t *testing.T) {
 		},
 	}
 
-	result, err := render(`{{.param.item | assoc "status" "closed"}}`, scopeFromData(data), steps)
+	result, err := render(`~(assoc "status" "closed" param.item)`, scopeFromData(data), steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1118,7 +1118,7 @@ func TestRun_Compare_StepAccessVariant(t *testing.T) {
 	      (step "out" (run "echo fast-output")))
 	    (branch "slow"
 	      (step "out" (run "echo slow-output"))))
-	  (step "check" (run "echo winner={{step \"impl\"}}")))
+	  (step "check" (run "echo winner=~(step impl)")))
 	`
 	w, err := parseSexprWorkflow([]byte(src))
 	if err != nil {

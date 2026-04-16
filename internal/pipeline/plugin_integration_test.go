@@ -32,7 +32,7 @@ func TestPluginIntegration_FullPath(t *testing.T) {
 (workflow "say"
   :description "Echo a message"
   (step "out"
-    (run "echo {{.param.prefix}} {{.param.message}}")))
+    (run "echo ~param.prefix ~param.message")))
 `)
 	if err := os.WriteFile(filepath.Join(pluginDir, "say.glitch"), say, 0o644); err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestPluginIntegration_FullPath(t *testing.T) {
 (workflow "count"
   :description "Count items"
   (step "list"
-    (run "echo {{.param.items}}"))
+    (run "echo ~param.items"))
   (step "result"
     (lines "list")))
 `)
@@ -95,7 +95,7 @@ func TestPluginIntegration_WorkflowInvokesPlugin(t *testing.T) {
 	hello := []byte(`(arg "name" :default "world")
 (workflow "hello"
   (step "out"
-    (run "echo hello {{.param.name}}")))
+    (run "echo hello ~param.name")))
 `)
 	if err := os.WriteFile(filepath.Join(pluginDir, "hello.glitch"), hello, 0o644); err != nil {
 		t.Fatal(err)

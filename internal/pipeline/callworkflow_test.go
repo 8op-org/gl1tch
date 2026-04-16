@@ -10,7 +10,7 @@ import (
 func TestCallWorkflowChildRun(t *testing.T) {
 	dir := t.TempDir()
 	parent := `(workflow "parent" (step "out" (call-workflow "child" :input "hi")))`
-	child := `(workflow "child" (step "echo" (run "echo got:{{.input}}")))`
+	child := `(workflow "child" (step "echo" (run "echo got:~input")))`
 	_ = os.WriteFile(filepath.Join(dir, "parent.glitch"), []byte(parent), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "child.glitch"), []byte(child), 0o644)
 

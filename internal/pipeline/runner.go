@@ -783,6 +783,9 @@ func scopeFromData(data map[string]any) *Scope {
 			s.SetDef(k, v)
 		}
 	}
+	if r, ok := data["resource"].(map[string]map[string]string); ok {
+		s.SetResources(r)
+	}
 	return s
 }
 

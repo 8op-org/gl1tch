@@ -10,7 +10,7 @@ func TestRenderResourceBinding(t *testing.T) {
 			"ensemble": {"path": "/tmp/ensemble", "url": "https://x", "ref": "main", "pin": "sha123"},
 		},
 	}
-	out, err := render("{{.resource.ensemble.path}}:{{.resource.ensemble.pin}}", scopeFromData(data), nil)
+	out, err := render("~resource.ensemble.path:~resource.ensemble.pin", scopeFromData(data), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestRenderResourceBinding(t *testing.T) {
 
 func TestRenderResourceMissingEmpty(t *testing.T) {
 	data := map[string]any{"input": "", "param": map[string]string{}, "resource": map[string]map[string]string{}}
-	out, err := render("x:{{.resource.missing.path}}:y", scopeFromData(data), nil)
+	out, err := render("x:~resource.missing.path:y", scopeFromData(data), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
