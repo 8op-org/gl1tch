@@ -606,6 +606,52 @@ func parseCrossReviewPassFail(output string) []CrossReviewScore {
 	return scores
 }
 
+// extractJSON strips <think> tags and markdown fences, then extracts
+// the first valid JSON object or array from LLM output.
+func extractJSON(s string) (string, error) {
+	// Strip <think>...</think> blocks (multiline)
+	for {
+		start := strings.Index(s, "<think>")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(s, "</think>")
+		if end == -1 {
+			s = s[:start]
+			break
+		}
+		s = s[:start] + s[end+len("</think>"):]
+	}
+
+	// Strip markdown fences
+	s = strings.TrimSpace(s)
+	lines := strings.Split(s, "\n")
+	var cleaned []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			continue
+		}
+		cleaned = append(cleaned, line)
+	}
+	s = strings.TrimSpace(strings.Join(cleaned, "\n"))
+
+	// Find first { or [ and extract valid JSON
+	for i, ch := range s {
+		if ch == '{' || ch == '[' {
+			// Try progressively longer substrings from this point
+			for j := len(s); j > i; j-- {
+				candidate := strings.TrimSpace(s[i:j])
+				var v any
+				if json.Unmarshal([]byte(candidate), &v) == nil {
+					return candidate, nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("no valid JSON found in LLM output")
+}
+
 func render(tmpl string, data map[string]any, steps map[string]string) (string, error) {
 	funcMap := template.FuncMap{
 		"step": func(id string) string {
@@ -649,6 +695,46 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 		"contains":  strings.Contains,
 		"hasPrefix": strings.HasPrefix,
 		"hasSuffix": strings.HasSuffix,
+		// pick extracts a field from a JSON string by key.
+		// Supports dot notation for nested access: pick "email.subject"
+		"pick": func(key, jsonStr string) string {
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+				return ""
+			}
+			parts := strings.Split(key, ".")
+			var cur any = obj
+			for _, p := range parts {
+				m, ok := cur.(map[string]any)
+				if !ok {
+					return ""
+				}
+				cur = m[p]
+			}
+			switch v := cur.(type) {
+			case string:
+				return v
+			case nil:
+				return ""
+			default:
+				b, _ := json.Marshal(v)
+				return string(b)
+			}
+		},
+		// assoc sets a key on a JSON object string and returns the updated JSON.
+		// Usage: {{.param.item | assoc "status" "triaged"}}
+		"assoc": func(key, val, jsonStr string) string {
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+				return jsonStr
+			}
+			obj[key] = val
+			b, err := json.Marshal(obj)
+			if err != nil {
+				return jsonStr
+			}
+			return string(b)
+		},
 	}
 	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
 	if err != nil {
@@ -678,8 +764,14 @@ func executeStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	switch step.Form {
 	case "cond":
 		return executeCond(ctx, rctx, step)
+	case "when":
+		return executeWhen(ctx, rctx, step)
 	case "map":
 		return executeMap(ctx, rctx, step)
+	case "filter":
+		return executeFilter(ctx, rctx, step)
+	case "reduce":
+		return executeReduce(ctx, rctx, step)
 	case "par":
 		return executePar(ctx, rctx, step)
 	}
@@ -749,6 +841,48 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	return &stepOutcome{}, nil
 }
 
+// executeWhen checks a predicate and runs the body step if it passes.
+// Predicate is a step ID (non-empty output = true) or a shell command (exit 0 = true).
+func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	matched := false
+
+	// Check if predicate is a step reference
+	if output, ok := snap[step.WhenPred]; ok {
+		matched = strings.TrimSpace(output) != ""
+	} else {
+		// Treat as shell command
+		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace}
+		rendered, err := render(step.WhenPred, data, snap)
+		if err != nil {
+			return nil, fmt.Errorf("when %s: template: %w", step.ID, err)
+		}
+		cmd := exec.CommandContext(ctx, "sh", "-c", rendered)
+		matched = cmd.Run() == nil
+	}
+
+	if step.WhenNot {
+		matched = !matched
+	}
+
+	if matched {
+		outcome, err := executeStep(ctx, rctx, *step.WhenBody)
+		if err != nil {
+			return nil, err
+		}
+		rctx.mu.Lock()
+		rctx.steps[step.ID] = outcome.output
+		rctx.mu.Unlock()
+		return outcome, nil
+	}
+
+	// Not matched — empty outcome
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = ""
+	rctx.mu.Unlock()
+	return &stepOutcome{}, nil
+}
+
 // executeMap splits a prior step's output by newlines and runs the body step for each item.
 func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	snap := rctx.stepsSnapshot()
@@ -791,6 +925,97 @@ func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 	rctx.steps[step.ID] = combined
 	rctx.mu.Unlock()
 	return &stepOutcome{output: combined}, nil
+}
+
+// executeFilter iterates over NDJSON lines from a source step, runs the predicate
+// step per item, and keeps items where the output is truthy (non-empty, not "false", not "0").
+func executeFilter(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	source, ok := snap[step.FilterOver]
+	if !ok {
+		return nil, fmt.Errorf("filter %s: source step %q has no output", step.ID, step.FilterOver)
+	}
+
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	var kept []string
+
+	for idx, item := range lines {
+		if item == "" {
+			continue
+		}
+		body := *step.FilterBody
+		body.ID = fmt.Sprintf("%s-%d", step.FilterBody.ID, idx)
+
+		origParams := rctx.params
+		filterParams := make(map[string]string, len(origParams)+2)
+		for k, v := range origParams {
+			filterParams[k] = v
+		}
+		filterParams["item"] = item
+		filterParams["item_index"] = fmt.Sprintf("%d", idx)
+		rctx.params = filterParams
+
+		outcome, err := executeStep(ctx, rctx, body)
+		rctx.params = origParams
+		if err != nil {
+			return nil, fmt.Errorf("filter %s item %d: %w", step.ID, idx, err)
+		}
+
+		result := strings.TrimSpace(outcome.output)
+		if result != "" && result != "false" && result != "0" {
+			kept = append(kept, item)
+		}
+	}
+
+	combined := strings.Join(kept, "\n")
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = combined
+	rctx.mu.Unlock()
+	return &stepOutcome{output: combined}, nil
+}
+
+// executeReduce folds over NDJSON lines from a source step.
+// Each iteration receives {{.param.item}} and {{.param.accumulator}}.
+// The accumulator starts as "" and is updated with each step's output.
+func executeReduce(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
+	snap := rctx.stepsSnapshot()
+	source, ok := snap[step.ReduceOver]
+	if !ok {
+		return nil, fmt.Errorf("reduce %s: source step %q has no output", step.ID, step.ReduceOver)
+	}
+
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	accumulator := ""
+
+	for idx, item := range lines {
+		if item == "" {
+			continue
+		}
+		body := *step.ReduceBody
+		body.ID = fmt.Sprintf("%s-%d", step.ReduceBody.ID, idx)
+
+		origParams := rctx.params
+		reduceParams := make(map[string]string, len(origParams)+3)
+		for k, v := range origParams {
+			reduceParams[k] = v
+		}
+		reduceParams["item"] = item
+		reduceParams["item_index"] = fmt.Sprintf("%d", idx)
+		reduceParams["accumulator"] = accumulator
+		rctx.params = reduceParams
+
+		outcome, err := executeStep(ctx, rctx, body)
+		rctx.params = origParams
+		if err != nil {
+			return nil, fmt.Errorf("reduce %s item %d: %w", step.ID, idx, err)
+		}
+		accumulator = outcome.output
+	}
+
+	rctx.mu.Lock()
+	rctx.steps[step.ID] = accumulator
+	rctx.mu.Unlock()
+	return &stepOutcome{output: accumulator}, nil
 }
 
 // executePar runs all child steps concurrently and waits for completion.
@@ -1037,6 +1262,15 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 
 		ui.StepLLMDone(step.ID, prov, displayModel, int64(stepTokensIn), int64(stepTokensOut), time.Since(llmStart))
 
+		// Post-process structured output
+		if step.LLM.Format == "json" {
+			extracted, err := extractJSON(out)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: format json: %w", step.ID, err)
+			}
+			out = extracted
+		}
+
 		return &stepOutcome{
 			output:     out,
 			tokensIn:   stepTokensIn,
@@ -1083,6 +1317,20 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		out := "[" + strings.Join(parts, ",") + "]"
 		ui.StepSDK(step.ID, "lines")
 		return &stepOutcome{output: out}, nil
+	}
+
+	if step.Flatten != "" {
+		from := stepsSnap[step.Flatten]
+		var items []json.RawMessage
+		if err := json.Unmarshal([]byte(from), &items); err != nil {
+			return nil, fmt.Errorf("step %s: flatten: source is not a JSON array: %w", step.ID, err)
+		}
+		lines := make([]string, len(items))
+		for i, item := range items {
+			lines[i] = string(item)
+		}
+		ui.StepSDK(step.ID, "flatten")
+		return &stepOutcome{output: strings.Join(lines, "\n")}, nil
 	}
 
 	if len(step.Merge) > 0 {
@@ -1214,6 +1462,13 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		if len(step.Search.Fields) > 0 {
 			queryBody["_source"] = step.Search.Fields
 		}
+		if step.Search.Sort != "" {
+			var sortClause any
+			if err := json.Unmarshal([]byte(step.Search.Sort), &sortClause); err != nil {
+				return nil, fmt.Errorf("step %s: sort parse: %w", step.ID, err)
+			}
+			queryBody["sort"] = []any{sortClause}
+		}
 
 		queryJSON, err := json.Marshal(queryBody)
 		if err != nil {
@@ -1230,6 +1485,15 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		for _, hit := range resp.Results {
 			sources = append(sources, hit.Source)
 		}
+
+		if step.Search.NDJSON {
+			lines := make([]string, len(sources))
+			for i, s := range sources {
+				lines[i] = string(s)
+			}
+			return &stepOutcome{output: strings.Join(lines, "\n")}, nil
+		}
+
 		out, err := json.Marshal(sources)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: marshal results: %w", step.ID, err)
@@ -1279,6 +1543,19 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		esURL := resolveESURL(step.Index.ESURL, rctx)
 		es := esearch.NewClient(esURL)
 		ui.StepSDK(step.ID, "index")
+
+		if step.Index.Upsert != nil && !*step.Index.Upsert && idRendered != "" {
+			resp, existed, err := es.IndexDocCreate(ctx, indexRendered, idRendered, docBytes)
+			if err != nil {
+				return nil, fmt.Errorf("step %s: %w", step.ID, err)
+			}
+			if existed {
+				return &stepOutcome{output: fmt.Sprintf(`{"result":"noop","_id":"%s"}`, idRendered)}, nil
+			}
+			out, _ := json.Marshal(resp)
+			return &stepOutcome{output: string(out)}, nil
+		}
+
 		resp, err := es.IndexDoc(ctx, indexRendered, idRendered, docBytes)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: %w", step.ID, err)

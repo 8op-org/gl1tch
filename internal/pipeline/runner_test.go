@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -878,6 +879,142 @@ func TestRun_Par_InPhase(t *testing.T) {
 	}
 	if result.Steps["g2"] == "" {
 		t.Fatal("expected gate g2 to have output")
+	}
+}
+
+func TestRender_Pick(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"subject":"help me","from":"alice@example.com"}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | pick "subject"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "help me" {
+		t.Fatalf("expected %q, got %q", "help me", result)
+	}
+}
+
+func TestRender_PickNested(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"email":{"subject":"nested"}}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | pick "email.subject"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "nested" {
+		t.Fatalf("expected %q, got %q", "nested", result)
+	}
+}
+
+func TestRender_Assoc(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"subject":"help me","from":"alice@example.com"}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | assoc "status" "triaged"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(result), &obj); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if obj["status"] != "triaged" {
+		t.Fatalf("expected status %q, got %v", "triaged", obj["status"])
+	}
+	if obj["subject"] != "help me" {
+		t.Fatalf("expected subject preserved, got %v", obj["subject"])
+	}
+}
+
+func TestRender_AssocOverwrite(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"status":"new"}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | assoc "status" "closed"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(result), &obj); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if obj["status"] != "closed" {
+		t.Fatalf("expected status %q, got %v", "closed", obj["status"])
+	}
+}
+
+func TestExtractJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+		err   bool
+	}{
+		{
+			name:  "clean json",
+			input: `{"category": "billing"}`,
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "with think tags",
+			input: "<think>\nlet me analyze this\n</think>\n{\"category\": \"billing\"}",
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "with markdown fences",
+			input: "```json\n{\"category\": \"billing\"}\n```",
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "with think and fences",
+			input: "<think>\nhmm\n</think>\nHere is the result:\n```json\n{\"category\": \"billing\"}\n```\nDone.",
+			want:  `{"category": "billing"}`,
+		},
+		{
+			name:  "no json",
+			input: "I cannot help with that",
+			err:   true,
+		},
+		{
+			name:  "json array",
+			input: "[1,2,3]",
+			want:  "[1,2,3]",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := extractJSON(tt.input)
+			if tt.err {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
 	}
 }
 

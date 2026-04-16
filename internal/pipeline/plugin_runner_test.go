@@ -48,7 +48,7 @@ func TestExecutePluginCall_Basic(t *testing.T) {
 // TestExecutePluginCall_MissingPlugin calls with a nonexistent plugin and expects an error.
 func TestExecutePluginCall_MissingPlugin(t *testing.T) {
 	root := t.TempDir()
-	_, err := RunPluginSubcommand(root, "nonexistent", "run", nil)
+	_, err := RunPluginSubcommand(root, "nonexistent", "run", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing plugin, got nil")
 	}
@@ -75,7 +75,7 @@ func TestExecutePluginCall_MissingSubcommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := RunPluginSubcommand(root, "myplugin", "nonexistent", nil)
+	_, err := RunPluginSubcommand(root, "myplugin", "nonexistent", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing subcommand, got nil")
 	}
@@ -104,7 +104,7 @@ func TestExecutePluginCall_RequiredArgMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := RunPluginSubcommand(root, "deployer", "deploy", nil)
+	_, err := RunPluginSubcommand(root, "deployer", "deploy", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing required arg, got nil")
 	}

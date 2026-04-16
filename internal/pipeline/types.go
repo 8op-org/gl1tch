@@ -57,6 +57,19 @@ type Step struct {
 	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
 	MapBody  *Step        `yaml:"-"` // map: template step executed per item
 
+	// Conditional execution
+	WhenPred string `yaml:"-"` // when: step ID or shell command predicate
+	WhenBody *Step  `yaml:"-"` // when: step to execute if predicate is true
+	WhenNot  bool   `yaml:"-"` // when-not: invert the predicate
+
+	// Filter collection form
+	FilterOver string `yaml:"-"` // filter: step ID whose output to iterate
+	FilterBody *Step  `yaml:"-"` // filter: predicate step (truthy output = keep)
+
+	// Reduce collection form
+	ReduceOver string `yaml:"-"` // reduce: step ID whose output to iterate
+	ReduceBody *Step  `yaml:"-"` // reduce: body step (receives item + accumulator)
+
 	// Parallel execution
 	ParSteps []Step `yaml:"-"` // par: concurrent child steps
 
@@ -72,6 +85,7 @@ type Step struct {
 	// SDK forms
 	JsonPick  *JsonPickStep  `yaml:"-"`
 	Lines     string         `yaml:"-"` // step ID to split by newlines
+	Flatten   string         `yaml:"-"` // step ID whose JSON array output to flatten to NDJSON
 	Merge     []string       `yaml:"-"` // step IDs to merge
 	HttpCall  *HttpCallStep  `yaml:"-"`
 	ReadFile  string         `yaml:"-"` // file path to read
@@ -143,16 +157,19 @@ type SearchStep struct {
 	Size      int      // max hits (default 10)
 	Fields    []string // _source field filter
 	ESURL     string   // override ES URL (empty = workspace default)
+	Sort      string   // raw JSON sort clause
+	NDJSON    bool     // output as NDJSON instead of JSON array
 }
 
 // IndexStep indexes a single document into Elasticsearch.
 type IndexStep struct {
-	IndexName     string
-	Doc           string // template-rendered JSON document
-	DocID         string // optional explicit _id
-	ESURL         string
+	IndexName  string
+	Doc        string // template-rendered JSON document
+	DocID      string // optional explicit _id
+	ESURL      string
 	EmbedField string // field in doc to embed (empty = no embedding)
 	EmbedModel string
+	Upsert     *bool // nil = default (upsert), false = skip if exists (op_type=create)
 }
 
 // DeleteStep deletes documents matching a query from Elasticsearch.

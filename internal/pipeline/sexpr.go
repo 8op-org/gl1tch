@@ -170,8 +170,32 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "when":
+		s, err := convertWhen(n, defs, false)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
+	case "when-not":
+		s, err := convertWhen(n, defs, true)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
 	case "map", "each":
 		s, err := convertMap(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
+	case "filter":
+		s, err := convertFilter(n, defs)
+		if err != nil {
+			return nil, err
+		}
+		return []Step{s}, nil
+	case "reduce":
+		s, err := convertReduce(n, defs)
 		if err != nil {
 			return nil, err
 		}
@@ -182,6 +206,8 @@ func convertForm(n *sexpr.Node, head string, defs map[string]string) ([]Step, er
 			return nil, err
 		}
 		return []Step{s}, nil
+	case "->":
+		return convertThread(n, defs)
 	default:
 		return nil, fmt.Errorf("line %d: unknown form %q", n.Line, head)
 	}
@@ -336,6 +362,38 @@ func convertCond(n *sexpr.Node, defs map[string]string) (Step, error) {
 	return s, nil
 }
 
+// convertWhen: (when "pred" (step ...)) or (when-not "pred" (step ...))
+func convertWhen(n *sexpr.Node, defs map[string]string, negate bool) (Step, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (when) needs predicate and body step", n.Line)
+	}
+	pred := resolveVal(children[0], defs)
+	body, err := convertStep(children[1], defs)
+	if err != nil {
+		// Body might be a compound form (map, par, etc.), not just a step
+		head := children[1].Children[0].SymbolVal()
+		if head == "" {
+			head = children[1].Children[0].StringVal()
+		}
+		steps, formErr := convertForm(children[1], head, defs)
+		if formErr != nil {
+			return Step{}, fmt.Errorf("line %d: when body: %w", n.Line, err)
+		}
+		if len(steps) != 1 {
+			return Step{}, fmt.Errorf("line %d: when body must be a single form", n.Line)
+		}
+		body = steps[0]
+	}
+	return Step{
+		ID:       fmt.Sprintf("when-%d", n.Line),
+		Form:     "when",
+		WhenPred: pred,
+		WhenBody: &body,
+		WhenNot:  negate,
+	}, nil
+}
+
 // convertMap: (map "step-id" (step ...))
 func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 	children := n.Children[1:]
@@ -352,6 +410,44 @@ func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:    "map",
 		MapOver: source,
 		MapBody: &body,
+	}, nil
+}
+
+// convertFilter: (filter "step-id" (step "pred" ...))
+func convertFilter(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (filter) needs source step ID and predicate step", n.Line)
+	}
+	source := resolveVal(children[0], defs)
+	body, err := convertStep(children[1], defs)
+	if err != nil {
+		return Step{}, fmt.Errorf("line %d: filter body: %w", n.Line, err)
+	}
+	return Step{
+		ID:         fmt.Sprintf("filter-%d", n.Line),
+		Form:       "filter",
+		FilterOver: source,
+		FilterBody: &body,
+	}, nil
+}
+
+// convertReduce: (reduce "step-id" (step "fold" ...))
+func convertReduce(n *sexpr.Node, defs map[string]string) (Step, error) {
+	children := n.Children[1:]
+	if len(children) < 2 {
+		return Step{}, fmt.Errorf("line %d: (reduce) needs source step ID and body step", n.Line)
+	}
+	source := resolveVal(children[0], defs)
+	body, err := convertStep(children[1], defs)
+	if err != nil {
+		return Step{}, fmt.Errorf("line %d: reduce body: %w", n.Line, err)
+	}
+	return Step{
+		ID:         fmt.Sprintf("reduce-%d", n.Line),
+		Form:       "reduce",
+		ReduceOver: source,
+		ReduceBody: &body,
 	}, nil
 }
 
@@ -392,6 +488,124 @@ func convertPar(n *sexpr.Node, defs map[string]string) (Step, error) {
 		Form:     "par",
 		ParSteps: parSteps,
 	}, nil
+}
+
+// convertThread: (-> form1 form2 form3 ...)
+// Desugars into a sequence of steps where each form implicitly references the previous.
+// SDK forms (search, index, etc.) are wrapped in auto-named steps.
+// Collection forms (each/map, filter, reduce) have their source set to the previous step.
+// (flatten) with no args becomes (flatten "prev-step-id").
+func convertThread(n *sexpr.Node, defs map[string]string) ([]Step, error) {
+	children := n.Children[1:] // skip "->"
+	if len(children) < 2 {
+		return nil, fmt.Errorf("line %d: (->) needs at least 2 forms", n.Line)
+	}
+
+	var steps []Step
+	prevID := ""
+
+	for i, child := range children {
+		if !child.IsList() || len(child.Children) == 0 {
+			return nil, fmt.Errorf("line %d: (->) children must be forms", child.Line)
+		}
+		head := child.Children[0].SymbolVal()
+		if head == "" {
+			head = child.Children[0].StringVal()
+		}
+		threadID := fmt.Sprintf("thread-%d-%d", n.Line, i)
+
+		switch head {
+		case "search", "index", "delete", "embed", "run", "llm",
+			"json-pick", "pick", "lines", "merge", "http-get", "fetch",
+			"http-post", "send", "read-file", "read", "write-file", "write", "glob", "plugin":
+			// SDK/primitive form — wrap in a step
+			wrappedNode := &sexpr.Node{
+				Children: []*sexpr.Node{
+					{Atom: &sexpr.Token{Type: sexpr.TokenSymbol, Val: "step"}},
+					{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: threadID}},
+					child,
+				},
+				Line: child.Line,
+			}
+			s, err := convertStep(wrappedNode, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = threadID
+
+		case "flatten":
+			// (flatten) with no args or (flatten "explicit") — auto-fill source if missing
+			s := Step{ID: threadID, Flatten: prevID}
+			if len(child.Children) >= 2 {
+				s.Flatten = resolveVal(child.Children[1], defs)
+			}
+			steps = append(steps, s)
+			prevID = threadID
+
+		case "each", "map":
+			// Rewrite source to prevID
+			if prevID == "" {
+				return nil, fmt.Errorf("line %d: (->) each/map has no preceding step", child.Line)
+			}
+			newChildren := make([]*sexpr.Node, 0, len(child.Children)+1)
+			newChildren = append(newChildren, child.Children[0]) // "each"/"map"
+			newChildren = append(newChildren, &sexpr.Node{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: prevID}})
+			newChildren = append(newChildren, child.Children[1:]...) // body
+			rewritten := &sexpr.Node{Children: newChildren, Line: child.Line}
+			s, err := convertMap(rewritten, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		case "filter":
+			if prevID == "" {
+				return nil, fmt.Errorf("line %d: (->) filter has no preceding step", child.Line)
+			}
+			newChildren := make([]*sexpr.Node, 0, len(child.Children)+1)
+			newChildren = append(newChildren, child.Children[0])
+			newChildren = append(newChildren, &sexpr.Node{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: prevID}})
+			newChildren = append(newChildren, child.Children[1:]...)
+			rewritten := &sexpr.Node{Children: newChildren, Line: child.Line}
+			s, err := convertFilter(rewritten, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		case "reduce":
+			if prevID == "" {
+				return nil, fmt.Errorf("line %d: (->) reduce has no preceding step", child.Line)
+			}
+			newChildren := make([]*sexpr.Node, 0, len(child.Children)+1)
+			newChildren = append(newChildren, child.Children[0])
+			newChildren = append(newChildren, &sexpr.Node{Atom: &sexpr.Token{Type: sexpr.TokenString, Val: prevID}})
+			newChildren = append(newChildren, child.Children[1:]...)
+			rewritten := &sexpr.Node{Children: newChildren, Line: child.Line}
+			s, err := convertReduce(rewritten, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		case "step":
+			// Named step — just convert normally
+			s, err := convertStep(child, defs)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: thread form %d: %w", child.Line, i, err)
+			}
+			steps = append(steps, s)
+			prevID = s.ID
+
+		default:
+			return nil, fmt.Errorf("line %d: unknown form %q in (->)", child.Line, head)
+		}
+	}
+	return steps, nil
 }
 
 // convertPhase: (phase "name" [:retries N] (step ...) ... (gate ...) ...)
@@ -572,6 +786,11 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.Lines = ref
+		case "flatten":
+			if len(child.Children) < 2 {
+				return s, fmt.Errorf("line %d: (flatten) missing step ID", child.Line)
+			}
+			s.Flatten = resolveVal(child.Children[1], defs)
 		case "merge":
 			ids, err := convertMerge(child, defs)
 			if err != nil {
@@ -849,6 +1068,12 @@ func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
 		child := children[i]
 		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
 			key := child.KeywordVal()
+			switch key {
+			case "ndjson":
+				sr.NDJSON = true
+				i++
+				continue
+			}
 			i++
 			if i >= len(children) {
 				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
@@ -879,6 +1104,12 @@ func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
 				}
 			case "es":
 				sr.ESURL = resolveVal(val, defs)
+			case "sort":
+				b, err := nodeToJSON(val)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: sort to JSON: %w", val.Line, err)
+				}
+				sr.Sort = string(b)
 			default:
 				return nil, fmt.Errorf("line %d: unknown search keyword :%s", child.Line, key)
 			}
@@ -889,9 +1120,6 @@ func convertSearch(n *sexpr.Node, defs map[string]string) (*SearchStep, error) {
 	}
 	if sr.IndexName == "" {
 		return nil, fmt.Errorf("line %d: search missing :index", n.Line)
-	}
-	if sr.Query == "" {
-		return nil, fmt.Errorf("line %d: search missing :query", n.Line)
 	}
 	return sr, nil
 }
@@ -946,6 +1174,10 @@ func convertIndex(n *sexpr.Node, defs map[string]string) (*IndexStep, error) {
 					idx.DocID = resolveVal(val, defs)
 				case "es":
 					idx.ESURL = resolveVal(val, defs)
+				case "upsert":
+					v := strings.ToLower(resolveVal(val, defs))
+					b := v != "false" && v != "0" && v != "no"
+					idx.Upsert = &b
 				default:
 					return nil, fmt.Errorf("line %d: unknown index keyword :%s", child.Line, key)
 				}

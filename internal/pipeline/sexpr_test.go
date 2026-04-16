@@ -48,6 +48,27 @@ func TestSexprWorkflow_Basic(t *testing.T) {
 	}
 }
 
+func TestSexprWorkflow_Flatten(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "fetch"
+    (run "echo '[{\"a\":1},{\"b\":2}]'"))
+  (step "flat"
+    (flatten "fetch")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Flatten != "fetch" {
+		t.Fatalf("expected flatten %q, got %q", "fetch", s.Flatten)
+	}
+}
+
 func TestSexprWorkflow_LLMWithProviderAndModel(t *testing.T) {
 	src := []byte(`
 (workflow "test"
@@ -1331,5 +1352,325 @@ func TestSexprWorkflow_Embed(t *testing.T) {
 	}
 	if s.Embed.Model != "nomic-embed-text" {
 		t.Fatalf("model = %q", s.Embed.Model)
+	}
+}
+
+func TestSexprWorkflow_SearchSort(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (search :index "my-index" :size 10 :sort {"indexed_at" "desc"})))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if s.Search.Sort == "" {
+		t.Fatal("expected sort to be set")
+	}
+}
+
+func TestSexprWorkflow_SearchNDJSON(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (search :index "my-index" :ndjson)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if !s.Search.NDJSON {
+		t.Fatal("expected ndjson to be true")
+	}
+}
+
+func TestSexprWorkflow_SearchQueryOptional(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (search :index "my-index" :size 5)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.Search == nil {
+		t.Fatal("expected search step")
+	}
+	if s.Search.IndexName != "my-index" {
+		t.Fatalf("expected index %q, got %q", "my-index", s.Search.IndexName)
+	}
+	if s.Search.Size != 5 {
+		t.Fatalf("expected size 5, got %d", s.Search.Size)
+	}
+	if s.Search.Query != "" {
+		t.Fatalf("expected empty query, got %q", s.Search.Query)
+	}
+}
+
+func TestSexprWorkflow_IndexUpsertFalse(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "s1"
+    (index :index "my-index" :doc "{}" :id "doc1" :upsert false)))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[0]
+	if s.Index == nil {
+		t.Fatal("expected index step")
+	}
+	if s.Index.Upsert == nil || *s.Index.Upsert {
+		t.Fatal("expected upsert to be false")
+	}
+}
+
+func TestSexprWorkflow_When(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "check" (run "echo found"))
+  (when "check"
+    (step "notify" (run "echo notifying"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "when" {
+		t.Fatalf("expected form %q, got %q", "when", s.Form)
+	}
+	if s.WhenPred != "check" {
+		t.Fatalf("expected when pred %q, got %q", "check", s.WhenPred)
+	}
+}
+
+func TestSexprWorkflow_WhenNot(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "check" (run "echo found"))
+  (when-not "check"
+    (step "fallback" (run "echo fallback"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	s := w.Steps[1]
+	if s.Form != "when" {
+		t.Fatalf("expected form %q, got %q", "when", s.Form)
+	}
+	if !s.WhenNot {
+		t.Fatal("expected when-not to be true")
+	}
+}
+
+func TestSexprWorkflow_Filter(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "data" (run "echo 'a\nb\nc'"))
+  (filter "data"
+    (step "keep" (run "test '{{.param.item}}' = 'b' && echo true"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "filter" {
+		t.Fatalf("expected form %q, got %q", "filter", s.Form)
+	}
+	if s.FilterOver != "data" {
+		t.Fatalf("expected filter over %q, got %q", "data", s.FilterOver)
+	}
+	if s.FilterBody == nil {
+		t.Fatal("expected filter body")
+	}
+}
+
+func TestSexprWorkflow_Reduce(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (step "data" (run "echo 'a\nb\nc'"))
+  (reduce "data"
+    (step "fold" (run "echo '{{.param.accumulator}},{{.param.item}}'"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	s := w.Steps[1]
+	if s.Form != "reduce" {
+		t.Fatalf("expected form %q, got %q", "reduce", s.Form)
+	}
+	if s.ReduceOver != "data" {
+		t.Fatalf("expected reduce over %q, got %q", "data", s.ReduceOver)
+	}
+	if s.ReduceBody == nil {
+		t.Fatal("expected reduce body")
+	}
+}
+
+func TestSexprWorkflow_Thread(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (-> (search :index "my-index" :ndjson)
+      (each
+        (step "classify" (run "echo classified")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	// -> with 2 forms: search becomes a step, each references it
+	if len(w.Steps) < 2 {
+		t.Fatalf("expected at least 2 steps, got %d", len(w.Steps))
+	}
+	// First step should be the search
+	if w.Steps[0].Search == nil {
+		t.Fatal("expected first step to be search")
+	}
+	// Second step should be map/each referencing first
+	s1 := w.Steps[1]
+	if s1.Form != "map" {
+		t.Fatalf("expected form %q, got %q", "map", s1.Form)
+	}
+	if s1.MapOver != w.Steps[0].ID {
+		t.Fatalf("expected map over %q, got %q", w.Steps[0].ID, s1.MapOver)
+	}
+}
+
+func TestSexprWorkflow_ThreadWithFlatten(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (-> (search :index "my-index")
+      (flatten)
+      (each
+        (step "process" (run "echo done")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(w.Steps))
+	}
+	// Step 0: search
+	if w.Steps[0].Search == nil {
+		t.Fatal("expected step 0 to be search")
+	}
+	// Step 1: flatten referencing step 0
+	if w.Steps[1].Flatten != w.Steps[0].ID {
+		t.Fatalf("expected flatten over %q, got %q", w.Steps[0].ID, w.Steps[1].Flatten)
+	}
+	// Step 2: each referencing step 1
+	if w.Steps[2].MapOver != w.Steps[1].ID {
+		t.Fatalf("expected each over %q, got %q", w.Steps[1].ID, w.Steps[2].MapOver)
+	}
+}
+
+func TestSexprWorkflow_ThreadTooFewForms(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (-> (search :index "my-index")))
+`)
+	_, err := parseSexprWorkflow(src)
+	if err == nil {
+		t.Fatal("expected error for thread with < 2 forms")
+	}
+	if !strings.Contains(err.Error(), "at least 2") {
+		t.Fatalf("expected 'at least 2' error, got: %v", err)
+	}
+}
+
+func TestSexprWorkflow_ThreadWithNamedStep(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (-> (run "echo hello")
+      (step "named" (llm :prompt "summarize"))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	if w.Steps[0].Run != "echo hello" {
+		t.Fatalf("expected run step, got %+v", w.Steps[0])
+	}
+	if w.Steps[1].ID != "named" {
+		t.Fatalf("expected named step ID %q, got %q", "named", w.Steps[1].ID)
+	}
+	if w.Steps[1].LLM == nil {
+		t.Fatal("expected LLM step")
+	}
+}
+
+func TestSexprWorkflow_ThreadWithFilter(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (-> (run "echo 'a\nb\nc'")
+      (filter
+        (step "pred" (run "test '{{.param.item}}' = 'b' && echo true")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	if w.Steps[1].Form != "filter" {
+		t.Fatalf("expected form %q, got %q", "filter", w.Steps[1].Form)
+	}
+	if w.Steps[1].FilterOver != w.Steps[0].ID {
+		t.Fatalf("expected filter over %q, got %q", w.Steps[0].ID, w.Steps[1].FilterOver)
+	}
+}
+
+func TestSexprWorkflow_ThreadWithReduce(t *testing.T) {
+	src := []byte(`
+(workflow "test"
+  (-> (run "echo 'a\nb\nc'")
+      (reduce
+        (step "fold" (run "echo '{{.param.accumulator}},{{.param.item}}'")))))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(w.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(w.Steps))
+	}
+	if w.Steps[1].Form != "reduce" {
+		t.Fatalf("expected form %q, got %q", "reduce", w.Steps[1].Form)
+	}
+	if w.Steps[1].ReduceOver != w.Steps[0].ID {
+		t.Fatalf("expected reduce over %q, got %q", w.Steps[0].ID, w.Steps[1].ReduceOver)
 	}
 }

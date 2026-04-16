@@ -256,3 +256,26 @@ func TestTruncate(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexDocCreate_Conflict(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.RawQuery, "op_type=create") {
+			t.Error("expected op_type=create in query")
+		}
+		w.WriteHeader(409)
+		w.Write([]byte(`{"error":{"type":"version_conflict_engine_exception"}}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	resp, existed, err := c.IndexDocCreate(context.Background(), "test-index", "doc1", []byte(`{"hello":"world"}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !existed {
+		t.Fatal("expected existed=true for 409")
+	}
+	if resp != nil {
+		t.Fatal("expected nil response for 409")
+	}
+}
