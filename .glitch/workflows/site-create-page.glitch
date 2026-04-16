@@ -40,22 +40,22 @@
         - start with a # Heading matching the topic
         - be thorough but concise — this is documentation, not a blog post
 
-        TOPIC: {{.param.topic}}
+        TOPIC: ~param.topic
 
         EXISTING PAGES (don't duplicate these):
-        {{step "existing-pages"}}
+        ~(step existing-pages)
 
         EXISTING DOC STUBS (for tone reference):
-        {{step "existing-docs"}}
+        ~(step existing-docs)
 
         REAL EXAMPLES FROM REPO:
-        {{step "examples"}}
+        ~(step examples)
 
         REPO STRUCTURE:
-        {{step "repo-structure"}}
+        ~(step repo-structure)
 
         RECENT CHANGES:
-        {{step "recent-commits"}}
+        ~(step recent-commits)
 
         OUTPUT: A single JSON object:
         {"slug": "kebab-case-name", "title": "Page Title", "order": N, "description": "one line", "content": "full markdown body starting after the title"}
@@ -67,7 +67,7 @@
   ;; ── Save generated page as a stub ─────────────────
 
   (step "save-stub"
-    (run "cat '{{stepfile \"generate\"}}' | python3 scripts/save-generated-page.py"))
+    (run "cat '~(stepfile generate)' | python3 scripts/save-generated-page.py"))
 
   ;; ── Rebuild docs.json with new page ───────────────
 

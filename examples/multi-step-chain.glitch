@@ -25,13 +25,13 @@
         Analyze this system snapshot:
 
         Disk usage:
-        {{step "disk"}}
+        ~(step disk)
 
         Memory:
-        {{step "memory"}}
+        ~(step memory)
 
         Top processes by memory:
-        {{step "processes"}}
+        ~(step processes)
 
         Give a brief health assessment and flag anything concerning.
         ```)))

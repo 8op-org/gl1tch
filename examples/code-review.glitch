@@ -20,10 +20,10 @@
         You are a code reviewer. Review this diff carefully.
 
         Files changed:
-        {{step "files"}}
+        ~(step files)
 
         Diff:
-        {{step "diff"}}
+        ~(step diff)
 
         For each file, note:
         - Bugs or logic errors

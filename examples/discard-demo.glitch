@@ -19,7 +19,7 @@
       :model model
       :prompt ```
         Do a very thorough analysis of:
-        {{step "data"}}
+        ~(step data)
         ```))
 
   ;; This step runs instead
@@ -28,5 +28,5 @@
       :model model
       :prompt ```
         Briefly summarize:
-        {{step "data"}}
+        ~(step data)
         ```)))

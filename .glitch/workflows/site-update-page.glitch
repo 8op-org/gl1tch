@@ -9,7 +9,7 @@
   ;; ── Gather context ────────────────────────────────
 
   (step "current-page"
-    (run "cat docs/site/{{.param.page}}.md"))
+    (run "cat docs/site/~param.page.md"))
 
   (step "examples"
     (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
@@ -39,22 +39,22 @@
         - preserve the page's slug and general structure
         - improve accuracy, add missing content, fix outdated information
 
-        INSTRUCTIONS: {{.param.instructions}}
+        INSTRUCTIONS: ~param.instructions
 
         CURRENT PAGE CONTENT:
-        {{step "current-page"}}
+        ~(step current-page)
 
         REAL EXAMPLES FROM REPO:
-        {{step "examples"}}
+        ~(step examples)
 
         REAL WORKFLOWS:
-        {{step "workflows"}}
+        ~(step workflows)
 
         REPO STRUCTURE:
-        {{step "repo-structure"}}
+        ~(step repo-structure)
 
         RECENT CHANGES:
-        {{step "recent-commits"}}
+        ~(step recent-commits)
 
         OUTPUT: The complete updated markdown page. Start with the # Heading.
         Include everything — this replaces the entire file.
@@ -64,10 +64,10 @@
 
   (step "save"
     (run ```
-      cat > "docs/site/{{.param.page}}.md" << 'STUBEOF'
-{{step "rewrite"}}
+      cat > "docs/site/~param.page.md" << 'STUBEOF'
+~(step rewrite)
 STUBEOF
-      echo "updated docs/site/{{.param.page}}.md"
+      echo "updated docs/site/~param.page.md"
       ```))
 
   ;; ── Rebuild and verify ────────────────────────────

@@ -163,7 +163,7 @@ symbols:
    - `input` — always available.
    - `item`, `item_index` — only inside a `(map …)` body. Outside that body,
      references to `~item` fail with `UndefinedRefError`.
-4. If nothing matches, return `UndefinedRefError{Symbol, File, Line, Col}`.
+4. If nothing matches, return `UndefinedRefError{Symbol, Suggestion}`.
 
 Dotted paths are a separate resolver. `param.x` reads from the workflow's
 `--set` params map. `env.x` reads from `os.Getenv`. Missing dotted-path keys
@@ -172,15 +172,19 @@ also raise `UndefinedRefError` — same fail-loud behavior as bare symbols.
 ## Error behavior
 
 `UndefinedRefError` fails the step immediately, not the whole workflow. The
-error message points at the exact ref:
+error message names the exact ref and suggests a close match when one
+exists:
 
 ```
-step "review" failed: undefined reference 'param.issu' at workflows/pr-review.glitch:23:14
-  suggestion: did you mean 'param.issue'?
+step "review" failed: undefined reference 'param.issu' (did you mean 'param.issue'?)
 ```
 
 Suggestion uses Levenshtein distance against available names in the current
 scope; omitted if no close match.
+
+Source location threading (file, line, column) is deferred to a follow-up
+spec — it pairs naturally with the AST-walk infrastructure needed for
+`glitch run <workflow> --help`.
 
 The escape hatch for genuinely optional refs is `~(or form default)`. `or`
 returns the first truthy argument, where truthy means non-empty string and

@@ -30,7 +30,7 @@ func TestExecutePluginCall_Basic(t *testing.T) {
 
 (workflow "say"
   (step "greet"
-    (run "echo {{.param.greeting}} {{.param.name}}")))
+    (run "echo ~param.greeting ~param.name")))
 `)
 	if err := os.WriteFile(filepath.Join(pluginDir, "say.glitch"), sub, 0o644); err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestExecutePluginCall_RequiredArgMissing(t *testing.T) {
 
 (workflow "deploy"
   (step "go"
-    (run "echo deploying {{.param.repo}}")))
+    (run "echo deploying ~param.repo")))
 `)
 	if err := os.WriteFile(filepath.Join(pluginDir, "deploy.glitch"), sub, 0o644); err != nil {
 		t.Fatal(err)

@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
 	"github.com/8op-org/gl1tch/internal/esearch"
@@ -111,7 +109,7 @@ type RunOpts struct {
 	EvalThreshold    int
 	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
 	ESURL            string            // default ES URL from workspace config
-	Workspace        string            // resolved workspace name for {{.workspace}} template var
+	Workspace        string            // resolved workspace name for ~workspace references
 	Resources        map[string]map[string]string // resource name → field → value (from active workspace)
 
 	// call-workflow support
@@ -148,7 +146,7 @@ func parseWorkflowName(name string) (issue, compGroup string) {
 }
 
 // Run executes a workflow with the given input string.
-// Templates use {{.input}} for user input and {{step "id"}} for prior step output.
+// Rendering uses sexpr unquote: ~input for user input, ~(step id) for prior step output.
 func Run(w *Workflow, input string, defaultModel string, params map[string]string, reg *provider.ProviderRegistry, opts ...RunOpts) (*Result, error) {
 	steps := make(map[string]string) // step ID → output
 
@@ -749,157 +747,46 @@ func extractJSON(s string) (string, error) {
 	return "", fmt.Errorf("no valid JSON found in LLM output")
 }
 
-func render(tmpl string, data map[string]any, steps map[string]string) (string, error) {
-	funcMap := template.FuncMap{
-		"step": func(args ...string) string {
-			if len(args) == 0 {
-				return ""
-			}
-			id := args[0]
-			for i := 1; i < len(args); i++ {
-				switch args[i] {
-				case ":variant":
-					if i+1 < len(args) {
-						i++
-						variantName := args[i]
-						// Return the branch's final step output (stored as id/variant/__output)
-						if v, ok := steps[id+"/"+variantName+"/__output"]; ok {
-							return v
-						}
-						// Fallback: try exact namespaced lookup
-						if v, ok := steps[id+"/"+variantName+"/"+id]; ok {
-							return v
-						}
-					}
-				case ":winner":
-					return steps[id+"/__winner"]
-				case ":scores":
-					return steps[id+"/__scores"]
-				}
-			}
-			return steps[id]
-		},
-		"branch": func(name string) string {
-			// Look for the branch's final output using the __output convention
-			for k, v := range steps {
-				if strings.HasSuffix(k, "/"+name+"/__output") {
-					return v
-				}
-			}
-			return steps[name]
-		},
-		// stepfile writes step output to a temp file and returns the path.
-		// Use in shell steps where inline content would break escaping:
-		//   cat "{{stepfile "fetch-issue"}}"
-		"stepfile": func(id string) string {
-			content, ok := steps[id]
-			if !ok {
-				return ""
-			}
-			f, err := os.CreateTemp("", "glitch-step-*")
-			if err != nil {
-				return ""
-			}
-			f.WriteString(content)
-			f.Close()
-			return f.Name()
-		},
+// render interpolates sexpr-level unquote (~name, ~param.x, ~(form)) in tmpl
+// against the given scope. steps is merged into scope before rendering.
+// Signature kept for backwards compat with call sites; steps map is now
+// threaded through Scope.
+func render(tmpl string, scope *Scope, steps map[string]string) (string, error) {
+	if steps != nil {
+		scope.SetSteps(steps)
+	}
+	return renderQuasi(tmpl, scope)
+}
 
-		// itemfile writes the current map item to a temp file and returns the path.
-		// Use in map body steps where {{.param.item}} would break shell escaping:
-		//   SUBJECT=$(jq -r '.subject' "{{itemfile}}")
-		"itemfile": func() string {
-			params, _ := data["param"].(map[string]string)
-			if params == nil {
-				return ""
+// scopeFromData translates the legacy data map (with "param", "input" keys)
+// into a *Scope. Transitional helper for call sites that still build a
+// map[string]any.
+func scopeFromData(data map[string]any) *Scope {
+	s := NewScope()
+	if p, ok := data["param"].(map[string]string); ok {
+		for k, v := range p {
+			s.SetParam(k, v)
+		}
+		if item, ok := p["item"]; ok {
+			idx := 0
+			if ix, ok := p["item_index"]; ok {
+				fmt.Sscanf(ix, "%d", &idx)
 			}
-			item, ok := params["item"]
-			if !ok {
-				return ""
-			}
-			f, err := os.CreateTemp("", "glitch-item-*")
-			if err != nil {
-				return ""
-			}
-			f.WriteString(item)
-			f.Close()
-			return f.Name()
-		},
-
-		// String functions
-		"split":      func(sep, s string) []string { return strings.Split(s, sep) },
-		"join":       func(sep string, parts []string) string { return strings.Join(parts, sep) },
-		"last":       func(s []string) string { if len(s) == 0 { return "" }; return s[len(s)-1] },
-		"first":      func(s []string) string { if len(s) == 0 { return "" }; return s[0] },
-		"upper":      strings.ToUpper,
-		"lower":      strings.ToLower,
-		"trim":       strings.TrimSpace,
-		"trimPrefix": func(prefix, s string) string { return strings.TrimPrefix(s, prefix) },
-		"trimSuffix": func(suffix, s string) string { return strings.TrimSuffix(s, suffix) },
-		"replace":    func(old, new, s string) string { return strings.ReplaceAll(s, old, new) },
-		"truncate": func(n int, s string) string {
-			runes := []rune(s)
-			if len(runes) <= n {
-				return s
-			}
-			return string(runes[:n])
-		},
-		"contains":  strings.Contains,
-		"hasPrefix": strings.HasPrefix,
-		"hasSuffix": strings.HasSuffix,
-		// pick extracts a field from a JSON string by key.
-		// Supports dot notation for nested access: pick "email.subject"
-		"pick": func(key, jsonStr string) string {
-			var obj map[string]any
-			if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
-				return ""
-			}
-			parts := strings.Split(key, ".")
-			var cur any = obj
-			for _, p := range parts {
-				m, ok := cur.(map[string]any)
-				if !ok {
-					return ""
-				}
-				cur = m[p]
-			}
-			switch v := cur.(type) {
-			case string:
-				return v
-			case nil:
-				return ""
-			default:
-				b, _ := json.Marshal(v)
-				return string(b)
-			}
-		},
-		// assoc sets a key on a JSON object string and returns the updated JSON.
-		// Usage: {{.param.item | assoc "status" "triaged"}}
-		"assoc": func(key, val, jsonStr string) string {
-			var obj map[string]any
-			if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
-				return jsonStr
-			}
-			obj[key] = val
-			b, err := json.Marshal(obj)
-			if err != nil {
-				return jsonStr
-			}
-			return string(b)
-		},
+			s.SetItem(item, idx)
+		}
 	}
-	t, err := template.New("t").Funcs(funcMap).Option("missingkey=zero").Parse(tmpl)
-	if err != nil {
-		return "", err
+	if in, ok := data["input"].(string); ok {
+		s.SetInput(in)
 	}
-	if _, ok := data["resource"]; !ok {
-		data["resource"] = map[string]map[string]string{}
+	if defs, ok := data["def"].(map[string]string); ok {
+		for k, v := range defs {
+			s.SetDef(k, v)
+		}
 	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return "", err
+	if r, ok := data["resource"].(map[string]map[string]string); ok {
+		s.SetResources(r)
 	}
-	return buf.String(), nil
+	return s
 }
 
 // executeStep handles control-flow forms (retry, timeout, catch, cond, map)
@@ -990,11 +877,11 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		if branch.Pred == "else" {
 			return executeStep(ctx, rctx, branch.Step)
 		}
-		// Render predicate template
+		// Render predicate (sexpr unquote)
 		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
-		rendered, err := render(branch.Pred, data, rctx.stepsSnapshot())
+		rendered, err := render(branch.Pred, scopeFromData(data), rctx.stepsSnapshot())
 		if err != nil {
-			return nil, fmt.Errorf("cond %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("cond %s: render: %w", step.ID, err)
 		}
 		cmd := exec.CommandContext(ctx, "sh", "-c", rendered)
 		if err := cmd.Run(); err == nil {
@@ -1021,9 +908,9 @@ func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	} else {
 		// Treat as shell command
 		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
-		rendered, err := render(step.WhenPred, data, snap)
+		rendered, err := render(step.WhenPred, scopeFromData(data), snap)
 		if err != nil {
-			return nil, fmt.Errorf("when %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("when %s: render: %w", step.ID, err)
 		}
 		cmd := exec.CommandContext(ctx, "sh", "-c", rendered)
 		matched = cmd.Run() == nil
@@ -1070,7 +957,7 @@ func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 		body := *step.MapBody
 		body.ID = fmt.Sprintf("%s-%d", step.MapBody.ID, idx)
 
-		// Make {{.item}} available in templates by injecting into params
+		// Make ~item available in the render scope by injecting into params
 		origParams := rctx.params
 		mapParams := make(map[string]string, len(origParams)+1)
 		for k, v := range origParams {
@@ -1143,7 +1030,7 @@ func executeFilter(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 }
 
 // executeReduce folds over NDJSON lines from a source step.
-// Each iteration receives {{.param.item}} and {{.param.accumulator}}.
+// Each iteration receives ~item and ~accumulator in the render scope.
 // The accumulator starts as "" and is updated with each step's output.
 func executeReduce(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
 	snap := rctx.stepsSnapshot()
@@ -1402,7 +1289,7 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 		winnerName, winnerOutput, reviewScores = runCompareReview(ctx, rctx, step, branchOutputs)
 	}
 
-	// Store results accessible via template
+	// Store results accessible via ~(step id) in later renders
 	rctx.mu.Lock()
 	rctx.steps[step.ID] = winnerOutput
 	rctx.steps[step.ID+"/__winner"] = winnerName
@@ -1525,9 +1412,9 @@ func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOut
 		"workspace": rctx.workspace,
 		"resource":  rctx.resources,
 	}
-	rendered, err := render(step.CallInput, data, stepsSnap)
+	rendered, err := render(step.CallInput, scopeFromData(data), stepsSnap)
 	if err != nil {
-		return nil, fmt.Errorf("step %s: call-workflow input template: %w", step.ID, err)
+		return nil, fmt.Errorf("step %s: call-workflow input render: %w", step.ID, err)
 	}
 	childParams := map[string]string{}
 	for k, v := range step.CallSet {
@@ -1580,9 +1467,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Save != "" {
-		rendered, err := render(step.Save, data, stepsSnap)
+		rendered, err := render(step.Save, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
 		ui.StepSave(step.ID, rendered)
 		sourceStep := step.SaveStep
@@ -1601,9 +1488,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Run != "" {
-		rendered, err := render(step.Run, data, stepsSnap)
+		rendered, err := render(step.Run, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
 		if !step.IsGate {
 			if step.Hint != "" {
@@ -1620,9 +1507,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.LLM != nil {
-		rendered, err := render(step.LLM.Prompt, data, stepsSnap)
+		rendered, err := render(step.LLM.Prompt, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
 
 		if step.LLM.Skill != "" {
@@ -1789,9 +1676,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 
 	if step.JsonPick != nil {
 		from := stepsSnap[step.JsonPick.From]
-		rendered, err := render(step.JsonPick.Expr, data, stepsSnap)
+		rendered, err := render(step.JsonPick.Expr, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
 		ui.StepSDK(step.ID, "json-pick")
 		cmd := exec.CommandContext(ctx, "jq", rendered)
@@ -1853,15 +1740,15 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.HttpCall != nil {
-		urlRendered, err := render(step.HttpCall.URL, data, stepsSnap)
+		urlRendered, err := render(step.HttpCall.URL, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: url template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: url render: %w", step.ID, err)
 		}
 		var bodyReader io.Reader
 		if step.HttpCall.Body != "" {
-			bodyRendered, err := render(step.HttpCall.Body, data, stepsSnap)
+			bodyRendered, err := render(step.HttpCall.Body, scopeFromData(data), stepsSnap)
 			if err != nil {
-				return nil, fmt.Errorf("step %s: body template: %w", step.ID, err)
+				return nil, fmt.Errorf("step %s: body render: %w", step.ID, err)
 			}
 			bodyReader = strings.NewReader(bodyRendered)
 		}
@@ -1874,9 +1761,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: http request: %w", step.ID, err)
 		}
 		for k, v := range step.HttpCall.Headers {
-			hv, err := render(v, data, stepsSnap)
+			hv, err := render(v, scopeFromData(data), stepsSnap)
 			if err != nil {
-				return nil, fmt.Errorf("step %s: header %q template: %w", step.ID, k, err)
+				return nil, fmt.Errorf("step %s: header %q render: %w", step.ID, k, err)
 			}
 			req.Header.Set(k, hv)
 		}
@@ -1897,9 +1784,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.ReadFile != "" {
-		rendered, err := render(step.ReadFile, data, stepsSnap)
+		rendered, err := render(step.ReadFile, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
 		ui.StepSDK(step.ID, "read-file")
 		content, err := os.ReadFile(rendered)
@@ -1910,9 +1797,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.WriteFile != nil {
-		rendered, err := render(step.WriteFile.Path, data, stepsSnap)
+		rendered, err := render(step.WriteFile.Path, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
 		content := stepsSnap[step.WriteFile.From]
 		if err := os.MkdirAll(filepath.Dir(rendered), 0o755); err != nil {
@@ -1928,9 +1815,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	if step.GlobPat != nil {
 		pattern := step.GlobPat.Pattern
 		if step.GlobPat.Dir != "" {
-			dirRendered, err := render(step.GlobPat.Dir, data, stepsSnap)
+			dirRendered, err := render(step.GlobPat.Dir, scopeFromData(data), stepsSnap)
 			if err != nil {
-				return nil, fmt.Errorf("step %s: dir template: %w", step.ID, err)
+				return nil, fmt.Errorf("step %s: dir render: %w", step.ID, err)
 			}
 			pattern = filepath.Join(dirRendered, pattern)
 		}
@@ -1943,9 +1830,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Search != nil {
-		indexRendered, err := render(step.Search.IndexName, data, stepsSnap)
+		indexRendered, err := render(step.Search.IndexName, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: index template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: index render: %w", step.ID, err)
 		}
 		esURL := resolveESURL(step.Search.ESURL, rctx)
 		es := esearch.NewClient(esURL)
@@ -2002,19 +1889,19 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Index != nil {
-		indexRendered, err := render(step.Index.IndexName, data, stepsSnap)
+		indexRendered, err := render(step.Index.IndexName, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: index template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: index render: %w", step.ID, err)
 		}
-		docRendered, err := render(step.Index.Doc, data, stepsSnap)
+		docRendered, err := render(step.Index.Doc, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: doc template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: doc render: %w", step.ID, err)
 		}
 		idRendered := step.Index.DocID
 		if idRendered != "" {
-			idRendered, err = render(idRendered, data, stepsSnap)
+			idRendered, err = render(idRendered, scopeFromData(data), stepsSnap)
 			if err != nil {
-				return nil, fmt.Errorf("step %s: id template: %w", step.ID, err)
+				return nil, fmt.Errorf("step %s: id render: %w", step.ID, err)
 			}
 		}
 
@@ -2065,9 +1952,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Delete != nil {
-		indexRendered, err := render(step.Delete.IndexName, data, stepsSnap)
+		indexRendered, err := render(step.Delete.IndexName, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: index template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: index render: %w", step.ID, err)
 		}
 		esURL := resolveESURL(step.Delete.ESURL, rctx)
 		es := esearch.NewClient(esURL)
@@ -2088,9 +1975,9 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Embed != nil {
-		rendered, err := render(step.Embed.Input, data, stepsSnap)
+		rendered, err := render(step.Embed.Input, scopeFromData(data), stepsSnap)
 		if err != nil {
-			return nil, fmt.Errorf("step %s: input template: %w", step.ID, err)
+			return nil, fmt.Errorf("step %s: input render: %w", step.ID, err)
 		}
 		ui.StepSDK(step.ID, "embed")
 		vec, err := provider.EmbedOllama(ctx, defaultOllamaURL, step.Embed.Model, rendered)
@@ -2105,10 +1992,10 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		ui.StepPlugin(step.ID, step.PluginCall.Plugin, step.PluginCall.Subcommand)
 		pc := step.PluginCall
 
-		// Render template expressions in plugin args (e.g., {{.param.repo}})
+		// Render sexpr unquote in plugin args (e.g., ~param.repo)
 		renderedArgs := make(map[string]string, len(pc.Args))
 		for k, v := range pc.Args {
-			rendered, err := render(v, data, stepsSnap)
+			rendered, err := render(v, scopeFromData(data), stepsSnap)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: plugin arg %q: %w", step.ID, k, err)
 			}

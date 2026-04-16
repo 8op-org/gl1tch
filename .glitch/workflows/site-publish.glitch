@@ -31,7 +31,7 @@
         Output as markdown. Each entry: ### heading, then bullet points.
 
         Commits:
-        {{step "changelog-raw"}}
+        ~(step changelog-raw)
         ```))
 
   (step "save-changelog"

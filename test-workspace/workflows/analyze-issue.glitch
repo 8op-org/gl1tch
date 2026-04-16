@@ -4,7 +4,7 @@
   :action "results:analyze"
 
   (step "fetch"
-    (run "gh issue view {{.param.issue}} --repo {{.param.repo}} --json title,body,labels,state"))
+    (run "gh issue view ~param.issue --repo ~param.repo --json title,body,labels,state"))
 
   (step "analyze"
     (llm :provider "claude" :model "haiku"
@@ -12,7 +12,7 @@
       Analyze this GitHub issue and produce a short implementation plan.
 
       ISSUE JSON:
-      {{step "fetch"}}
+      ~(step fetch)
 
       Respond with:
       1. One-line summary
@@ -23,4 +23,4 @@
       ```))
 
   (step "save"
-    (save "results/{{.param.repo}}/issue-{{.param.issue}}/analysis.md" :from "analyze")))
+    (save "results/~param.repo/issue-~param.issue/analysis.md" :from "analyze")))
