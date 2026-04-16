@@ -126,3 +126,58 @@ func TestLexQuasiFormWithStringLiteral(t *testing.T) {
 		t.Errorf("got form %q", parts[0].Form)
 	}
 }
+
+func TestEvalForm_Builtin(t *testing.T) {
+	scope := NewScope()
+	scope.SetSteps(map[string]string{"diff": "a=b\nc=d"})
+	got, err := evalForm("(step diff)", scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "a=b\nc=d" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEvalForm_Nested(t *testing.T) {
+	scope := NewScope()
+	scope.SetSteps(map[string]string{"items": "HELLO\nWORLD"})
+	got, err := evalForm(`(lower (first (step items)))`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEvalForm_BareRef(t *testing.T) {
+	scope := NewScope()
+	scope.SetLet("model", "qwen2.5:7b")
+	got, err := evalForm(`(upper model)`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "QWEN2.5:7B" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEvalForm_KeywordAsString(t *testing.T) {
+	scope := NewScope()
+	scope.SetSteps(map[string]string{"data": `{"title":"hi"}`})
+	got, err := evalForm(`(pick :title (step data))`, scope)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "hi" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEvalForm_UndefinedRef(t *testing.T) {
+	_, err := evalForm(`(upper missing)`, NewScope())
+	if err == nil {
+		t.Fatal("expected undefined ref error")
+	}
+}

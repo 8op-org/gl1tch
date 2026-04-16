@@ -4,6 +4,8 @@ package pipeline
 import (
 	"fmt"
 	"strings"
+
+	"github.com/8op-org/gl1tch/internal/sexpr"
 )
 
 type quasiPartKind int
@@ -139,4 +141,77 @@ func findFormEnd(src string, start int) (int, error) {
 		i++
 	}
 	return 0, fmt.Errorf("unterminated ~( form starting at byte %d", start)
+}
+
+// quoteFirstArg lists builtins whose first argument is a bare-symbol name
+// taken literally rather than evaluated. For `(step diff)`, `diff` is the
+// step ID, not a value to resolve.
+var quoteFirstArg = map[string]bool{
+	"step":     true,
+	"stepfile": true,
+	"branch":   true,
+}
+
+// evalForm parses and evaluates a single sexpr form against the scope.
+// Returns the stringified result.
+func evalForm(src string, scope *Scope) (string, error) {
+	nodes, err := sexpr.Parse([]byte(src))
+	if err != nil {
+		return "", fmt.Errorf("parse %q: %w", src, err)
+	}
+	if len(nodes) != 1 {
+		return "", fmt.Errorf("expected one form, got %d", len(nodes))
+	}
+	return evalNode(nodes[0], scope)
+}
+
+func evalNode(n *sexpr.Node, scope *Scope) (string, error) {
+	if n.IsAtom() {
+		return evalAtom(n, scope)
+	}
+	if !n.IsList() || len(n.Children) == 0 {
+		return "", nil
+	}
+	head := n.Children[0]
+	name := head.SymbolVal()
+	if name == "" {
+		name = head.StringVal()
+	}
+	if name == "" {
+		return "", fmt.Errorf("line %d: invalid form head", n.Line)
+	}
+	args := make([]string, 0, len(n.Children)-1)
+	for i, c := range n.Children[1:] {
+		if i == 0 && quoteFirstArg[name] {
+			sym := c.SymbolVal()
+			if sym == "" {
+				sym = c.StringVal()
+			}
+			args = append(args, sym)
+			continue
+		}
+		v, err := evalNode(c, scope)
+		if err != nil {
+			return "", err
+		}
+		args = append(args, v)
+	}
+	return callBuiltin(name, args, scope)
+}
+
+func evalAtom(n *sexpr.Node, scope *Scope) (string, error) {
+	switch n.Atom.Type {
+	case sexpr.TokenString:
+		return n.Atom.Val, nil
+	case sexpr.TokenKeyword:
+		return n.KeywordVal(), nil
+	case sexpr.TokenSymbol:
+		sym := n.Atom.Val
+		if strings.Contains(sym, ".") {
+			parts := strings.Split(sym, ".")
+			return scope.ResolvePath(parts[0], parts[1:])
+		}
+		return scope.Resolve(sym)
+	}
+	return "", fmt.Errorf("line %d: unsupported atom type", n.Line)
 }
