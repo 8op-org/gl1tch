@@ -8,12 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/8op-org/gl1tch/internal/pipeline"
 	"github.com/8op-org/gl1tch/internal/provider"
+	"github.com/8op-org/gl1tch/internal/sexpr"
 	"github.com/8op-org/gl1tch/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 var paramRe = regexp.MustCompile(`\{\{\.param\.(\w+)\}\}`)
@@ -204,10 +205,12 @@ type guiConfig struct {
 	EvalThreshold    int
 }
 
-// loadGUIConfig reads ~/.config/glitch/config.yaml for the GUI.
+// loadGUIConfig reads ~/.config/glitch/config.glitch for the GUI.
+// Inlined rather than reusing cmd.LoadConfigForGUI because cmd imports
+// internal/gui — creating an import cycle.
 func loadGUIConfig() guiConfig {
 	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, ".config", "glitch", "config.yaml")
+	path := filepath.Join(home, ".config", "glitch", "config.glitch")
 
 	cfg := guiConfig{
 		DefaultModel:    "qwen3:8b",
@@ -220,23 +223,81 @@ func loadGUIConfig() guiConfig {
 	if err != nil {
 		return cfg
 	}
-
-	var raw struct {
-		DefaultModel  string                `yaml:"default_model"`
-		EvalThreshold int                   `yaml:"eval_threshold"`
-		Tiers         []provider.TierConfig `yaml:"tiers"`
-	}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	nodes, err := sexpr.Parse(data)
+	if err != nil {
 		return cfg
 	}
-	if raw.DefaultModel != "" {
-		cfg.DefaultModel = raw.DefaultModel
-	}
-	if len(raw.Tiers) > 0 {
-		cfg.Tiers = raw.Tiers
-	}
-	if raw.EvalThreshold > 0 {
-		cfg.EvalThreshold = raw.EvalThreshold
+	for _, n := range nodes {
+		if !n.IsList() || len(n.Children) == 0 || n.Children[0].SymbolVal() != "config" {
+			continue
+		}
+		kids := n.Children[1:]
+		i := 0
+		for i < len(kids) {
+			c := kids[i]
+			if c.IsAtom() && c.Atom != nil && c.Atom.Type == sexpr.TokenKeyword {
+				if i+1 >= len(kids) {
+					break
+				}
+				val := kids[i+1]
+				switch c.KeywordVal() {
+				case "default-model":
+					if v := val.StringVal(); v != "" {
+						cfg.DefaultModel = v
+					}
+				case "default-provider":
+					if v := val.StringVal(); v != "" {
+						cfg.DefaultProvider = v
+					}
+				case "eval-threshold":
+					if val.IsAtom() && val.Atom != nil {
+						if nv, err := strconv.Atoi(val.Atom.Val); err == nil && nv > 0 {
+							cfg.EvalThreshold = nv
+						}
+					}
+				}
+				i += 2
+				continue
+			}
+			if c.IsList() && len(c.Children) > 0 && c.Children[0].SymbolVal() == "tiers" {
+				var tiers []provider.TierConfig
+				for _, entry := range c.Children[1:] {
+					if !entry.IsList() || len(entry.Children) == 0 || entry.Children[0].SymbolVal() != "tier" {
+						continue
+					}
+					t := provider.TierConfig{}
+					rest := entry.Children[1:]
+					for j := 0; j < len(rest); j++ {
+						k := rest[j]
+						if !k.IsAtom() || k.Atom == nil || k.Atom.Type != sexpr.TokenKeyword {
+							continue
+						}
+						if j+1 >= len(rest) {
+							break
+						}
+						v := rest[j+1]
+						switch k.KeywordVal() {
+						case "providers":
+							if v.IsList() {
+								names := make([]string, 0, len(v.Children))
+								for _, p := range v.Children {
+									names = append(names, p.StringVal())
+								}
+								t.Providers = names
+							}
+						case "model":
+							t.Model = v.StringVal()
+						}
+						j++
+					}
+					tiers = append(tiers, t)
+				}
+				if len(tiers) > 0 {
+					cfg.Tiers = tiers
+				}
+			}
+			i++
+		}
 	}
 	return cfg
 }

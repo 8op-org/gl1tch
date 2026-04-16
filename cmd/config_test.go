@@ -8,46 +8,91 @@ import (
 	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
-func TestLoadConfig_WithProviders(t *testing.T) {
+func TestLoadConfigSexprRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	err := os.WriteFile(cfgPath, []byte(`
-default_model: qwen3:8b
-default_provider: ollama
-providers:
-  openrouter:
-    type: openai-compatible
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    api_key: sk-or-fallback
-    default_model: meta-llama/llama-4-scout:free
-`), 0o644)
+	t.Setenv("HOME", dir)
+	cfgDir := filepath.Join(dir, ".config", "glitch")
+	_ = os.MkdirAll(cfgDir, 0o755)
+
+	src := `(config
+  :default-model "qwen2.5:7b"
+  :default-provider "ollama"
+  :eval-threshold 5
+  :workflows-dir "/tmp/flows"
+  (providers
+    (provider "openrouter"
+      :type "openai-compatible"
+      :base-url "https://openrouter.ai/api/v1"
+      :api-key-env "OPENROUTER_API_KEY"
+      :default-model "gemma3:free")
+    (provider "claude" :type "cli"))
+  (tiers
+    (tier :providers ("ollama") :model "qwen2.5:7b")
+    (tier :providers ("openrouter") :model "gemma3:free")))
+`
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.glitch"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadConfigFrom(filepath.Join(cfgDir, "config.glitch"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if cfg.DefaultModel != "qwen2.5:7b" || cfg.DefaultProvider != "ollama" || cfg.EvalThreshold != 5 || cfg.WorkflowsDir != "/tmp/flows" {
+		t.Fatalf("top-level mismatch: %+v", cfg)
+	}
+	if len(cfg.Providers) != 2 {
+		t.Fatalf("want 2 providers, got %d", len(cfg.Providers))
+	}
+	if cfg.Providers["openrouter"].Type != "openai-compatible" || cfg.Providers["openrouter"].BaseURL != "https://openrouter.ai/api/v1" || cfg.Providers["openrouter"].APIKeyEnv != "OPENROUTER_API_KEY" || cfg.Providers["openrouter"].DefaultModel != "gemma3:free" {
+		t.Errorf("openrouter mismatch: %+v", cfg.Providers["openrouter"])
+	}
+	if cfg.Providers["claude"].Type != "cli" {
+		t.Errorf("claude mismatch: %+v", cfg.Providers["claude"])
+	}
+	if len(cfg.Tiers) != 2 {
+		t.Fatalf("want 2 tiers, got %d", len(cfg.Tiers))
+	}
+	if len(cfg.Tiers[0].Providers) != 1 || cfg.Tiers[0].Providers[0] != "ollama" || cfg.Tiers[0].Model != "qwen2.5:7b" {
+		t.Errorf("tier 0 mismatch: %+v", cfg.Tiers[0])
+	}
+}
 
-	cfg, err := loadConfigFrom(cfgPath)
+func TestLoadConfigMissingFileReturnsDefaults(t *testing.T) {
+	cfg, err := loadConfigFrom("/nonexistent/path/config.glitch")
 	if err != nil {
-		t.Fatalf("loadConfigFrom: %v", err)
+		t.Fatal(err)
 	}
-	if len(cfg.Providers) != 1 {
-		t.Fatalf("providers count = %d, want 1", len(cfg.Providers))
+	if cfg.DefaultModel == "" || cfg.DefaultProvider == "" {
+		t.Fatalf("expected defaults populated, got %+v", cfg)
 	}
-	p := cfg.Providers["openrouter"]
-	if p.Type != "openai-compatible" {
-		t.Errorf("type = %q, want openai-compatible", p.Type)
+	if cfg.EvalThreshold == 0 {
+		t.Fatal("expected default eval threshold")
 	}
-	if p.BaseURL != "https://openrouter.ai/api/v1" {
-		t.Errorf("base_url = %q", p.BaseURL)
+	if len(cfg.Tiers) == 0 {
+		t.Fatal("expected default tiers")
 	}
-	if p.APIKeyEnv != "OPENROUTER_API_KEY" {
-		t.Errorf("api_key_env = %q", p.APIKeyEnv)
+}
+
+func TestSaveConfigWritesSexpr(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.glitch")
+	cfg := &Config{DefaultModel: "x", DefaultProvider: "y", EvalThreshold: 3, WorkflowsDir: "/tmp"}
+	if err := saveConfigAt(cfg, path); err != nil {
+		t.Fatal(err)
 	}
-	if p.APIKey != "sk-or-fallback" {
-		t.Errorf("api_key = %q", p.APIKey)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if p.DefaultModel != "meta-llama/llama-4-scout:free" {
-		t.Errorf("default_model = %q", p.DefaultModel)
+	if len(data) == 0 || data[0] != '(' {
+		t.Fatalf("expected s-expr, got: %s", data)
+	}
+	cfg2, err := loadConfigFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg2.DefaultModel != "x" || cfg2.DefaultProvider != "y" || cfg2.EvalThreshold != 3 {
+		t.Fatalf("round-trip mismatch: %+v", cfg2)
 	}
 }
 
@@ -143,19 +188,5 @@ func TestApplyWorkspace_PartialDefaults(t *testing.T) {
 	}
 	if cfg.DefaultProvider != "ollama" {
 		t.Fatalf("DefaultProvider should stay ollama, got %q", cfg.DefaultProvider)
-	}
-}
-
-func TestLoadConfig_WorkflowsDir(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("default_model: qwen3:8b\nworkflows_dir: /custom/workflows\n"), 0o644)
-
-	cfg, err := loadConfigFrom(cfgPath)
-	if err != nil {
-		t.Fatalf("loadConfigFrom: %v", err)
-	}
-	if cfg.WorkflowsDir != "/custom/workflows" {
-		t.Fatalf("WorkflowsDir: got %q, want /custom/workflows", cfg.WorkflowsDir)
 	}
 }

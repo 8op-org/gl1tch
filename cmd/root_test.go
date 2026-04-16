@@ -54,8 +54,8 @@ func TestLoadWorkflows_ConfigOverride(t *testing.T) {
 	defer func() { workspacePath = "" }()
 
 	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("default_model: qwen3:8b\nworkflows_dir: "+customDir+"\n"), 0o644)
+	cfgPath := filepath.Join(cfgDir, "config.glitch")
+	os.WriteFile(cfgPath, []byte(`(config :default-model "qwen3:8b" :workflows-dir "`+customDir+`")`+"\n"), 0o644)
 
 	cfg, _ := loadConfigFrom(cfgPath)
 	wfDir := resolveWorkflowsDir(cfg)
