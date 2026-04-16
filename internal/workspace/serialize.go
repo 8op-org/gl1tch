@@ -55,6 +55,26 @@ func Serialize(w *Workspace) []byte {
 		b.WriteString(")")
 	}
 
+	for _, r := range w.Resources {
+		b.WriteString(fmt.Sprintf("\n  (resource %q :type %q", r.Name, r.Type))
+		if r.URL != "" {
+			b.WriteString(fmt.Sprintf(" :url %q", r.URL))
+		}
+		if r.Ref != "" {
+			b.WriteString(fmt.Sprintf(" :ref %q", r.Ref))
+		}
+		if r.Pin != "" {
+			b.WriteString(fmt.Sprintf(" :pin %q", r.Pin))
+		}
+		if r.Path != "" {
+			b.WriteString(fmt.Sprintf(" :path %q", r.Path))
+		}
+		if r.Repo != "" {
+			b.WriteString(fmt.Sprintf(" :repo %q", r.Repo))
+		}
+		b.WriteString(")")
+	}
+
 	b.WriteString(")\n")
 	return []byte(b.String())
 }

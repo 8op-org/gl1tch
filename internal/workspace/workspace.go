@@ -13,6 +13,7 @@ type Workspace struct {
 	Owner       string
 	Repos       []string
 	Defaults    Defaults
+	Resources   []Resource
 }
 
 // Defaults holds default model/provider settings for a workspace.
@@ -100,6 +101,12 @@ func convertWorkspace(n *sexpr.Node) (*Workspace, error) {
 					return nil, err
 				}
 				w.Defaults = d
+			case "resource":
+				r, err := convertResource(child)
+				if err != nil {
+					return nil, err
+				}
+				w.Resources = append(w.Resources, r)
 			default:
 				return nil, fmt.Errorf("line %d: unknown workspace form %q", child.Line, head)
 			}
@@ -190,4 +197,50 @@ func convertParams(n *sexpr.Node) (map[string]string, error) {
 	}
 
 	return params, nil
+}
+
+func convertResource(n *sexpr.Node) (Resource, error) {
+	children := n.Children[1:] // skip "resource"
+	if len(children) == 0 {
+		return Resource{}, fmt.Errorf("line %d: resource missing name", n.Line)
+	}
+	r := Resource{Name: children[0].StringVal()}
+	if r.Name == "" {
+		return Resource{}, fmt.Errorf("line %d: resource name must be a string", children[0].Line)
+	}
+	children = children[1:]
+	i := 0
+	for i < len(children) {
+		kw := children[i]
+		if !(kw.IsAtom() && kw.Atom.Type == sexpr.TokenKeyword) {
+			return Resource{}, fmt.Errorf("line %d: expected keyword in resource", kw.Line)
+		}
+		key := kw.KeywordVal()
+		i++
+		if i >= len(children) {
+			return Resource{}, fmt.Errorf("line %d: keyword :%s missing value", kw.Line, key)
+		}
+		val := children[i].StringVal()
+		switch key {
+		case "type":
+			r.Type = val
+		case "url":
+			r.URL = val
+		case "ref":
+			r.Ref = val
+		case "pin":
+			r.Pin = val
+		case "path":
+			r.Path = val
+		case "repo":
+			r.Repo = val
+		default:
+			return Resource{}, fmt.Errorf("line %d: unknown resource keyword :%s", kw.Line, key)
+		}
+		i++
+	}
+	if r.Type == "" {
+		return Resource{}, fmt.Errorf("line %d: resource %q missing :type", n.Line, r.Name)
+	}
+	return r, nil
 }
