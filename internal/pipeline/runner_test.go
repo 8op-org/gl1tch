@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -912,6 +913,51 @@ func TestRender_PickNested(t *testing.T) {
 	}
 	if result != "nested" {
 		t.Fatalf("expected %q, got %q", "nested", result)
+	}
+}
+
+func TestRender_Assoc(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"subject":"help me","from":"alice@example.com"}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | assoc "status" "triaged"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(result), &obj); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if obj["status"] != "triaged" {
+		t.Fatalf("expected status %q, got %v", "triaged", obj["status"])
+	}
+	if obj["subject"] != "help me" {
+		t.Fatalf("expected subject preserved, got %v", obj["subject"])
+	}
+}
+
+func TestRender_AssocOverwrite(t *testing.T) {
+	steps := map[string]string{}
+	data := map[string]any{
+		"param": map[string]string{
+			"item": `{"status":"new"}`,
+		},
+	}
+
+	result, err := render(`{{.param.item | assoc "status" "closed"}}`, data, steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(result), &obj); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if obj["status"] != "closed" {
+		t.Fatalf("expected status %q, got %v", "closed", obj["status"])
 	}
 }
 

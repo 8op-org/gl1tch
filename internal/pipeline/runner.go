@@ -721,6 +721,20 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 				return string(b)
 			}
 		},
+		// assoc sets a key on a JSON object string and returns the updated JSON.
+		// Usage: {{.param.item | assoc "status" "triaged"}}
+		"assoc": func(key, val, jsonStr string) string {
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+				return jsonStr
+			}
+			obj[key] = val
+			b, err := json.Marshal(obj)
+			if err != nil {
+				return jsonStr
+			}
+			return string(b)
+		},
 	}
 	t, err := template.New("").Funcs(funcMap).Parse(tmpl)
 	if err != nil {
