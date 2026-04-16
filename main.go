@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,17 +16,15 @@ var (
 )
 
 func main() {
+	// Forward ldflags to cmd package
+	cmd.Version = version
+	cmd.Commit = commit
+	cmd.Date = date
+
 	if home, err := os.UserHomeDir(); err == nil {
 		loadDotenv(filepath.Join(home, ".config", "glitch", ".env"))
 	}
 	loadDotenv(".env")
-
-	if len(os.Args) > 1 {
-		if os.Args[1] == "--version" || os.Args[1] == "-v" {
-			fmt.Printf("glitch %s (commit %s, built %s)\n", version, commit, date)
-			return
-		}
-	}
 
 	cmd.Execute()
 }

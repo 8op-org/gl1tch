@@ -17,6 +17,9 @@ builds:
       - -X main.version={{.Version}}
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
+      - -X github.com/8op-org/gl1tch/cmd.Version={{.Version}}
+      - -X github.com/8op-org/gl1tch/cmd.Commit={{.ShortCommit}}
+      - -X github.com/8op-org/gl1tch/cmd.Date={{.Date}}
 
 archives:
   - id: default

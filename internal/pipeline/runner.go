@@ -54,6 +54,9 @@ type runCtx struct {
 	prevStepID       string
 	mu               sync.Mutex
 	esURL            string
+	tel              *esearch.Telemetry
+	runID            string
+	workflow         string
 }
 
 // stepsSnapshot returns a shallow copy of the steps map safe for concurrent reads.
@@ -190,6 +193,24 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		evalThreshold:    evalThreshold,
 		steps:            steps,
 		esURL:            esURL,
+		tel:              tel,
+		runID:            runID,
+		workflow:         w.Name,
+	}
+
+	// Emit run-start document
+	startTime := time.Now()
+	hasCompare := workflowHasCompare(w)
+	if tel != nil {
+		tel.IndexRun(context.Background(), esearch.RunDoc{
+			RunID:        runID,
+			WorkflowName: w.Name,
+			Workspace:    workspaceName,
+			Source:       "cli",
+			Status:       "running",
+			HasCompare:   hasCompare,
+			Timestamp:    startTime.UTC().Format(time.RFC3339),
+		})
 	}
 
 	// runBareStep executes a single step and accumulates telemetry.
@@ -377,11 +398,40 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 	} else if len(w.Steps) > 0 {
 		lastOutput = steps[w.Steps[len(w.Steps)-1].ID]
 	}
+	// Emit run-complete document
+	if tel != nil {
+		tel.IndexRun(context.Background(), esearch.RunDoc{
+			RunID:        runID,
+			WorkflowName: w.Name,
+			Workspace:    workspaceName,
+			Source:       "cli",
+			Status:       "completed",
+			HasCompare:   hasCompare,
+			DurationMs:   time.Since(startTime).Milliseconds(),
+			Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
 	return &Result{
 		Workflow: w.Name,
 		Output:   lastOutput,
 		Steps:    steps,
 	}, nil
+}
+
+// workflowHasCompare checks if any step in the workflow uses the compare form.
+func workflowHasCompare(w *Workflow) bool {
+	for _, item := range w.Items {
+		if item.Step != nil && item.Step.Form == "compare" {
+			return true
+		}
+	}
+	for _, s := range w.Steps {
+		if s.Form == "compare" {
+			return true
+		}
+	}
+	return false
 }
 
 // PreRunSharedSteps executes only the (run ...) shell steps from a workflow and
@@ -1138,6 +1188,9 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 				evalThreshold:    rctx.evalThreshold,
 				steps:            rctx.stepsSnapshot(), // copy outer steps
 				esURL:            rctx.esURL,
+				tel:              rctx.tel,
+				runID:            rctx.runID,
+				workflow:         rctx.workflow,
 			}
 
 			var lastOutput string
@@ -1263,6 +1316,30 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 	}
 
 	scores := ParseCrossReview(outcome.output)
+
+	// Index cross-review scores to ES
+	if rctx.tel != nil {
+		for _, s := range scores {
+			conf := 0.0
+			if s.Total > 0 {
+				conf = float64(s.Passed) / float64(s.Total)
+			}
+			rctx.tel.IndexCrossReview(context.Background(), esearch.CrossReviewDoc{
+				RunID:        rctx.runID,
+				Variant:      s.Variant,
+				Passed:       s.Passed,
+				Total:        s.Total,
+				Confidence:   conf,
+				Winner:       s.Winner,
+				WorkflowName: rctx.workflow,
+				CompareID:    step.ID,
+				Scope:        "step",
+				Workspace:    rctx.workspace,
+				Timestamp:    time.Now().UTC().Format(time.RFC3339),
+			})
+		}
+	}
+
 	for _, s := range scores {
 		if s.Winner {
 			if output, ok := branchOutputs[s.Variant]; ok {
