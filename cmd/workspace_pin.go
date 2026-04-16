@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -30,17 +31,27 @@ func runWorkspacePin(ws, name, ref string) error {
 	if err != nil {
 		return err
 	}
-	w, err := workspace.ParseFile(data)
+	// Parse-only: confirm the named resource exists in the workspace.
+	// Do not re-serialize — that would strip user comments.
+	wsp, err := workspace.ParseFile(data)
 	if err != nil {
 		return err
 	}
-	for i := range w.Resources {
-		if w.Resources[i].Name == name {
-			w.Resources[i].Ref = ref
+	found := false
+	for _, r := range wsp.Resources {
+		if r.Name == name {
+			found = true
 			break
 		}
 	}
-	if err := os.WriteFile(wsFile, workspace.Serialize(w), 0o644); err != nil {
+	if !found {
+		return fmt.Errorf("resource %q not found", name)
+	}
+	updated, err := workspace.UpdateRef(data, name, ref)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(wsFile, updated, 0o644); err != nil {
 		return err
 	}
 	return runWorkspaceSync(ws, []string{name}, false)

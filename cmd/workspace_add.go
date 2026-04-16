@@ -43,6 +43,9 @@ func init() {
 }
 
 func runWorkspaceAdd(ws, input, name, pin, typeOverride string) error {
+	if err := resource.ValidateName(name); err != nil {
+		return err
+	}
 	kind := typeOverride
 	if kind == "" {
 		kind = inferKind(input)

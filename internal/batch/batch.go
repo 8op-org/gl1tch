@@ -21,15 +21,16 @@ var DefaultVariants = []string{"local", "claude", "copilot", "gemma", "grok"}
 
 // RunOpts configures a batch run.
 type RunOpts struct {
-	Items      []string          // items to iterate (issues, prompts, test IDs, etc.)
-	Params     map[string]string // base params passed to every workflow run
-	ResultsDir string            // explicit results dir; empty = CWD/.glitch/results
-	Variants   []string
-	Iterations int
-	Workflows  map[string]*pipeline.Workflow
-	Config     BatchConfig
-	Name       string       // optional human-readable name for the parent batch run row
-	Store      *store.Store // when non-nil, records parent + child run rows with parent_run_id linkage
+	Items        []string          // items to iterate (issues, prompts, test IDs, etc.)
+	Params       map[string]string // base params passed to every workflow run
+	ResultsDir   string            // explicit results dir; empty = CWD/.glitch/results
+	Variants     []string
+	Iterations   int
+	Workflows    map[string]*pipeline.Workflow
+	WorkflowsDir string // directory for resolving call-workflow targets in nested invocations
+	Config       BatchConfig
+	Name         string       // optional human-readable name for the parent batch run row
+	Store        *store.Store // when non-nil, records parent + child run rows with parent_run_id linkage
 }
 
 // BatchConfig holds dependencies for running workflows.
@@ -190,6 +191,7 @@ func Run(ctx context.Context, opts RunOpts) error {
 						SeedSteps:        seedSteps,
 						Workspace:        opts.Config.Workspace,
 						Resources:        opts.Config.Resources,
+						WorkflowsDir:     opts.WorkflowsDir,
 						ParentRunID:      childID,
 						ChildRunCreator:  childCreator,
 					})
@@ -241,6 +243,7 @@ func Run(ctx context.Context, opts RunOpts) error {
 					EvalThreshold:    opts.Config.EvalThreshold,
 					Workspace:        opts.Config.Workspace,
 					Resources:        opts.Config.Resources,
+					WorkflowsDir:     opts.WorkflowsDir,
 					ParentRunID:      crChildID,
 					ChildRunCreator:  crCreator,
 				})

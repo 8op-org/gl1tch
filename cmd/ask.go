@@ -54,6 +54,10 @@ var askCmd = &cobra.Command{
 		}
 		wsName := workspace.ResolveWorkspace(wsDir)
 		resources := loadResourceBindings(wsDir)
+		workflowsDir := resolveWorkflowsDir(cfg)
+		if workflowsDir == "" && wsDir != "" {
+			workflowsDir = filepath.Join(wsDir, "workflows")
+		}
 
 		// Wire ES telemetry
 		var tel *esearch.Telemetry
@@ -92,12 +96,13 @@ var askCmd = &cobra.Command{
 				fmt.Printf("Repo: %s (%s)\n\n", resolved, repoPath)
 
 				err := batch.Run(context.Background(), batch.RunOpts{
-					Items:      issues,
-					Params:     map[string]string{"repo": resolved},
-					ResultsDir: resolveResultsDir(),
-					Variants:   variants,
-					Iterations: iterations,
-					Workflows:  workflows,
+					Items:        issues,
+					Params:       map[string]string{"repo": resolved},
+					ResultsDir:   resolveResultsDir(),
+					Variants:     variants,
+					Iterations:   iterations,
+					Workflows:    workflows,
+					WorkflowsDir: workflowsDir,
 					Config: batch.BatchConfig{
 						DefaultModel:     cfg.DefaultModel,
 						ProviderRegistry: providerReg,
@@ -125,7 +130,7 @@ var askCmd = &cobra.Command{
 
 			// Single issue — run the default workflow
 			issue := issues[0]
-			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel, wsName, resources)
+			return runSingleIssue(issue, resolved, repoPath, workflows, cfg, tel, wsName, resources, workflowsDir)
 		}
 
 		// Not an issue ref — try workflow routing
@@ -139,6 +144,7 @@ var askCmd = &cobra.Command{
 				EvalThreshold:    cfg.EvalThreshold,
 				Workspace:        wsName,
 				Resources:        resources,
+				WorkflowsDir:     workflowsDir,
 			})
 			if err != nil {
 				return err
@@ -161,7 +167,7 @@ var askCmd = &cobra.Command{
 }
 
 // runSingleIssue runs the issue-to-pr workflow for one issue.
-func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry, wsName string, resources map[string]map[string]string) error {
+func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline.Workflow, cfg *Config, tel *esearch.Telemetry, wsName string, resources map[string]map[string]string, workflowsDir string) error {
 	// Pick the workflow
 	wfName := "issue-to-pr"
 	if askVariant != "" {
@@ -186,6 +192,7 @@ func runSingleIssue(issue, repo, repoPath string, workflows map[string]*pipeline
 		EvalThreshold:    cfg.EvalThreshold,
 		Workspace:        wsName,
 		Resources:        resources,
+		WorkflowsDir:     workflowsDir,
 	})
 	if err != nil {
 		return err

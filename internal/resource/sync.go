@@ -13,6 +13,9 @@ type SyncOpts struct {
 // Sync materializes (or refreshes) a resource into ws/resources/<name>
 // and returns a Result with pin + timestamp populated.
 func Sync(ws string, r Resource, opts ...SyncOpts) (Result, error) {
+	if err := ValidateName(r.Name); err != nil {
+		return Result{}, err
+	}
 	var opt SyncOpts
 	if len(opts) > 0 {
 		opt = opts[0]

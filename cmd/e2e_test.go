@@ -89,6 +89,62 @@ func TestE2EWorkspaceResources(t *testing.T) {
 	}
 }
 
+// TestE2ECallWorkflowFromAsk verifies that the ask path threads WorkflowsDir
+// into pipeline.Run so (call-workflow ...) resolves inside a workspace. This
+// mirrors the code in cmd/ask.go's router-routed branch: workflowsDir is
+// derived the same way, and pipeline.Run is invoked with the same option set.
+// Without the WorkflowsDir thread-through, call-workflow errors with
+// "call-workflow requires WorkflowsDir in RunOpts".
+func TestE2ECallWorkflowFromAsk(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	ws := filepath.Join(home, "demo-ws")
+	if err := runWorkspaceInit(ws, "demo"); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	flowDir := filepath.Join(ws, "workflows")
+	parentPath := filepath.Join(flowDir, "parent.glitch")
+	childPath := filepath.Join(flowDir, "child.glitch")
+	if err := os.WriteFile(parentPath,
+		[]byte(`(workflow "parent" (step "o" (call-workflow "child" :input "hello")))`),
+		0o644); err != nil {
+		t.Fatalf("write parent: %v", err)
+	}
+	if err := os.WriteFile(childPath,
+		[]byte(`(workflow "child" (step "e" (run "echo got:{{.input}}")))`),
+		0o644); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+
+	// Simulate ask's path: resolve workspace, load workflows, pick the one
+	// the router would match, run via pipeline.Run with WorkflowsDir set the
+	// way ask sets it.
+	prevWsPath := workspacePath
+	workspacePath = ws
+	t.Cleanup(func() { workspacePath = prevWsPath })
+
+	workflowsDir := filepath.Join(ws, "workflows")
+	wf, err := pipeline.ParseSexprWorkflowFromFile(parentPath)
+	if err != nil {
+		t.Fatalf("parse parent: %v", err)
+	}
+	result, err := pipeline.Run(wf, "", "", map[string]string{}, nil, pipeline.RunOpts{
+		Workspace:    "demo",
+		WorkflowsDir: workflowsDir,
+	})
+	if err != nil {
+		t.Fatalf("pipeline.Run: %v", err)
+	}
+	// The child's step "e" runs `echo got:hello`; its output should appear in
+	// the combined result via the parent's "o" step output.
+	got := result.Steps["o"]
+	if !strings.Contains(got, "got:hello") {
+		t.Fatalf("expected child output 'got:hello' in parent step, got %q", got)
+	}
+}
+
 // TestE2ECallWorkflowParentLinkage drives parent + child workflow execution
 // via call-workflow, wiring ChildRunCreator to the real store so child rows
 // carry parent_run_id. Asserts the resulting run tree via store.GetRunTree.

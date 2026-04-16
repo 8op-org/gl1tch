@@ -173,6 +173,7 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Build resource bindings once before the goroutine to avoid races on
 	// concurrent workspace.glitch writes.
 	resources := s.resourceBindings()
+	workflowsDir := s.workflowsDir()
 
 	// Run in background goroutine
 	go func() {
@@ -183,6 +184,7 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 			Tiers:            cfg.Tiers,
 			EvalThreshold:    cfg.EvalThreshold,
 			Resources:        resources,
+			WorkflowsDir:     workflowsDir,
 		})
 		if s.store != nil {
 			exitStatus := 0

@@ -31,6 +31,30 @@ func UpdatePin(src []byte, name, pin string) ([]byte, error) {
 	return []byte(s[:block.start] + updated + s[block.end:]), nil
 }
 
+// UpdateRef rewrites a single :ref value for the named resource, preserving
+// comments and whitespace elsewhere. If :ref is missing, it is inserted
+// immediately before the closing `)` of the matching (resource ...) form.
+func UpdateRef(src []byte, name, ref string) ([]byte, error) {
+	s := string(src)
+	block, err := findResourceBlock(s, name)
+	if err != nil {
+		return nil, err
+	}
+
+	refRe := regexp.MustCompile(`:ref\s+"[^"]*"`)
+	updated := refRe.ReplaceAllStringFunc(block.content, func(match string) string {
+		return fmt.Sprintf(`:ref %q`, ref)
+	})
+	if updated == block.content {
+		idx := strings.LastIndex(updated, ")")
+		if idx < 0 {
+			return nil, fmt.Errorf("malformed resource block for %q", name)
+		}
+		updated = updated[:idx] + fmt.Sprintf(" :ref %q", ref) + updated[idx:]
+	}
+	return []byte(s[:block.start] + updated + s[block.end:]), nil
+}
+
 type resourceBlock struct {
 	start, end int
 	content    string

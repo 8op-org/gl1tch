@@ -31,6 +31,20 @@ func TestWorkspaceAddLocal(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAddRejectsPathTraversal(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "workspace.glitch"), []byte(`(workspace "demo")`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWorkspaceAdd(ws, "/tmp", "../evil", "", ""); err == nil {
+		t.Fatal("expected error for name with path traversal")
+	}
+	// Confirm nothing was written outside resources/.
+	if _, err := os.Lstat(filepath.Join(ws, "..", "evil")); err == nil {
+		t.Fatal("traversal escaped the workspace")
+	}
+}
+
 func TestWorkspaceRm(t *testing.T) {
 	ws := t.TempDir()
 	_ = os.WriteFile(filepath.Join(ws, "workspace.glitch"),

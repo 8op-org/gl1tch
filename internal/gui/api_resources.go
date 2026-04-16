@@ -2,6 +2,7 @@ package gui
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -89,6 +90,10 @@ func (s *Server) handleAddResource(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = inferResourceNameGUI(req.Input)
 	}
+	if err := resource.ValidateName(name); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	kind := req.Type
 	if kind == "" {
 		kind = inferKindGUI(req.Input)
@@ -168,8 +173,8 @@ func (s *Server) handleRemoveResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	if name == "" {
-		respondJSONError(w, http.StatusBadRequest, "name required")
+	if err := resource.ValidateName(name); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	wsFile := filepath.Join(ws, "workspace.glitch")
@@ -297,17 +302,27 @@ func pinWorkspaceResource(ws, name, ref string) error {
 	if err != nil {
 		return err
 	}
+	// Parse-only: confirm the named resource exists. Do not re-serialize —
+	// that would strip user comments.
 	wsp, err := workspace.ParseFile(data)
 	if err != nil {
 		return err
 	}
-	for i := range wsp.Resources {
-		if wsp.Resources[i].Name == name {
-			wsp.Resources[i].Ref = ref
+	found := false
+	for _, r := range wsp.Resources {
+		if r.Name == name {
+			found = true
 			break
 		}
 	}
-	if err := os.WriteFile(wsFile, workspace.Serialize(wsp), 0o644); err != nil {
+	if !found {
+		return fmt.Errorf("resource %q not found", name)
+	}
+	updated, err := workspace.UpdateRef(data, name, ref)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(wsFile, updated, 0o644); err != nil {
 		return err
 	}
 	return syncWorkspaceResources(ws, name)

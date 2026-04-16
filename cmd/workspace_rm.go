@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/8op-org/gl1tch/internal/resource"
 	"github.com/8op-org/gl1tch/internal/workspace"
 )
 
@@ -26,6 +27,9 @@ var workspaceRmCmd = &cobra.Command{
 func init() { workspaceCmd.AddCommand(workspaceRmCmd) }
 
 func runWorkspaceRm(ws, name string) error {
+	if err := resource.ValidateName(name); err != nil {
+		return err
+	}
 	wsFile := filepath.Join(ws, "workspace.glitch")
 	data, err := os.ReadFile(wsFile)
 	if err != nil {

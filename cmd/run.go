@@ -135,7 +135,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		if len(runVariants) > 0 {
 			variants = runVariants
 		}
-		return runCompareWorkflows(name, workflows, variants, params, cfg, tel, wsESURL, wsName, resources, s)
+		return runCompareWorkflows(name, workflows, variants, params, cfg, tel, wsESURL, wsName, resources, s, filepath.Dir(workflowPath))
 	}
 
 	// Handle --variant: inject implicit compare blocks around LLM steps
@@ -318,7 +318,7 @@ func injectImplicitCompare(w *pipeline.Workflow, variants []string, reviewCriter
 }
 
 // runCompareWorkflows discovers sibling variant workflows and runs them as a batch compare.
-func runCompareWorkflows(name string, workflows map[string]*pipeline.Workflow, variants []string, params map[string]string, cfg *Config, tel *esearch.Telemetry, esURL, wsName string, resources map[string]map[string]string, s *store.Store) error {
+func runCompareWorkflows(name string, workflows map[string]*pipeline.Workflow, variants []string, params map[string]string, cfg *Config, tel *esearch.Telemetry, esURL, wsName string, resources map[string]map[string]string, s *store.Store, workflowsDir string) error {
 	found := make(map[string]*pipeline.Workflow)
 	for _, v := range variants {
 		variantName := name + "-" + v
@@ -337,14 +337,15 @@ func runCompareWorkflows(name string, workflows map[string]*pipeline.Workflow, v
 	}
 
 	return batch.Run(context.Background(), batch.RunOpts{
-		Items:      []string{name},
-		Params:     params,
-		ResultsDir: resolveResultsDir(),
-		Variants:   variants,
-		Iterations: 1,
-		Workflows:  workflows,
-		Name:       name,
-		Store:      s,
+		Items:        []string{name},
+		Params:       params,
+		ResultsDir:   resolveResultsDir(),
+		Variants:     variants,
+		Iterations:   1,
+		Workflows:    workflows,
+		WorkflowsDir: workflowsDir,
+		Name:         name,
+		Store:        s,
 		Config: batch.BatchConfig{
 			DefaultModel:     cfg.DefaultModel,
 			ProviderRegistry: providerReg,
