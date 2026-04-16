@@ -20,6 +20,7 @@ type Defaults struct {
 	Model         string
 	Provider      string
 	Elasticsearch string
+	Params        map[string]string
 }
 
 // ParseFile parses workspace.glitch source bytes into a Workspace.
@@ -114,11 +115,13 @@ func convertWorkspace(n *sexpr.Node) (*Workspace, error) {
 
 func convertDefaults(n *sexpr.Node) (Defaults, error) {
 	children := n.Children[1:] // skip "defaults" symbol
-	d := Defaults{}
+	d := Defaults{Params: map[string]string{}}
 
 	i := 0
 	for i < len(children) {
 		child := children[i]
+
+		// Keyword args: :model, :provider, :elasticsearch
 		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
 			key := child.KeywordVal()
 			i++
@@ -139,8 +142,52 @@ func convertDefaults(n *sexpr.Node) (Defaults, error) {
 			i++
 			continue
 		}
+
+		// List form: (params :key "val" ...)
+		if child.IsList() && len(child.Children) > 0 {
+			head := child.Children[0].SymbolVal()
+			if head == "" {
+				head = child.Children[0].StringVal()
+			}
+			switch head {
+			case "params":
+				p, err := convertParams(child)
+				if err != nil {
+					return Defaults{}, err
+				}
+				d.Params = p
+			default:
+				return Defaults{}, fmt.Errorf("line %d: unknown defaults form %q", child.Line, head)
+			}
+			i++
+			continue
+		}
+
 		return Defaults{}, fmt.Errorf("line %d: unexpected form in defaults", child.Line)
 	}
 
 	return d, nil
+}
+
+func convertParams(n *sexpr.Node) (map[string]string, error) {
+	children := n.Children[1:] // skip "params" symbol
+	params := map[string]string{}
+
+	i := 0
+	for i < len(children) {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+			}
+			params[key] = children[i].StringVal()
+			i++
+			continue
+		}
+		return nil, fmt.Errorf("line %d: unexpected form in params", child.Line)
+	}
+
+	return params, nil
 }
