@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+
+	"github.com/8op-org/gl1tch/internal/store"
 )
 
 type runEntry struct {
@@ -28,6 +30,24 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	if s.store == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]runEntry{})
+		return
+	}
+	if p := r.URL.Query().Get("parent_id"); p != "" {
+		parentID, err := strconv.ParseInt(p, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid parent_id", http.StatusBadRequest)
+			return
+		}
+		kids, err := s.store.ListChildren(parentID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if kids == nil {
+			kids = []store.RunNode{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(kids)
 		return
 	}
 	rows, err := s.store.DB().Query(
