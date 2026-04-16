@@ -43,8 +43,16 @@ Interpolation is only active inside triple-backtick strings. Plain
   environment variables.
 - `~(form)` — evaluate any s-expression form. Result is stringified via the
   same stringifier used for step output and spliced in.
-- `\~` — literal tilde, for cases like `~/home` inside a shell command
-  embedded in a triple-backtick.
+- `\~` — literal tilde, for any shell command or path containing `~/`.
+
+### Scope of interpolation
+
+Interpolation applies uniformly to every string value in render-capable
+fields (shell commands, LLM prompts, save paths, HTTP URLs/bodies/headers,
+etc.). Both `"double-quoted"` and triple-backtick strings evaluate `~`
+interpolations — the only difference between the two is that triple-backtick
+strings auto-dedent at lex time. This uniformity simplifies implementation
+(no Step struct change) and means authors have one rule to learn.
 
 ### Functions replacing template builtins
 
@@ -188,8 +196,6 @@ no second grammar to learn.
 - **No backwards compatibility shim for `{{…}}`.** Per project policy (no
   migrations pre-1.0), we hard-break. Every `.glitch` file gets rewritten in
   the same PR as the DSL change.
-- **No interpolation inside `"double-quoted"` strings.** Only triple-backtick
-  is quasi-quoted. One rule, no surprise.
 - **No `{{if}}` / `{{range}}` equivalents in strings.** Workflow-level
   control already lives at the sexpr layer via `cond`, `when`, `map`. Adding
   string-level conditionals would duplicate that.
