@@ -2,6 +2,7 @@
 package pipeline
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -100,5 +101,36 @@ func TestScopeParamSuggestsClose(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "param.issue") {
 		t.Errorf("expected suggestion 'param.issue' in error, got: %v", err)
+	}
+}
+
+func TestUndefinedRefError_HasSourceLocation(t *testing.T) {
+	w := &Workflow{
+		Name:       "t",
+		SourceFile: "t.glitch",
+		Steps: []Step{
+			{ID: "s", Line: 3, Col: 2, Run: "echo ~param.missing"},
+		},
+	}
+	_, err := Run(w, "", "", nil, nil, RunOpts{})
+	if err == nil {
+		t.Fatal("expected error for undefined ~param.missing")
+	}
+	var ue *UndefinedRefError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error not UndefinedRefError: %v", err)
+	}
+	if ue.File != "t.glitch" {
+		t.Errorf("File = %q, want %q", ue.File, "t.glitch")
+	}
+	if ue.Line != 3 {
+		t.Errorf("Line = %d, want 3", ue.Line)
+	}
+	if ue.Col != 2 {
+		t.Errorf("Col = %d, want 2", ue.Col)
+	}
+	msg := ue.Error()
+	if !strings.Contains(msg, "t.glitch:3:2") {
+		t.Errorf("Error() = %q, should contain t.glitch:3:2", msg)
 	}
 }

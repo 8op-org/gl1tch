@@ -56,6 +56,7 @@ type runCtx struct {
 	tel              *esearch.Telemetry
 	runID            string
 	workflow         string
+	workflowObj      *Workflow
 
 	// call-workflow threading
 	workflowsDir    string
@@ -294,6 +295,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		tel:              tel,
 		runID:            runID,
 		workflow:         w.Name,
+		workflowObj:      w,
 	}
 	if len(opts) > 0 {
 		rctx.workflowsDir = opts[0].WorkflowsDir
@@ -948,7 +950,7 @@ func executeCond(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 		}
 		// Render predicate (sexpr unquote)
 		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
-		rendered, err := render(branch.Pred, scopeFromData(data), rctx.stepsSnapshot())
+		rendered, err := renderInStep(branch.Pred, scopeFromData(data), rctx.stepsSnapshot(), rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("cond %s: render: %w", step.ID, err)
 		}
@@ -977,7 +979,7 @@ func executeWhen(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, er
 	} else {
 		// Treat as shell command
 		data := map[string]any{"input": rctx.input, "param": rctx.params, "workspace": rctx.workspace, "resource": rctx.resources}
-		rendered, err := render(step.WhenPred, scopeFromData(data), snap)
+		rendered, err := renderInStep(step.WhenPred, scopeFromData(data), snap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("when %s: render: %w", step.ID, err)
 		}
@@ -1481,7 +1483,7 @@ func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOut
 		"workspace": rctx.workspace,
 		"resource":  rctx.resources,
 	}
-	rendered, err := render(step.CallInput, scopeFromData(data), stepsSnap)
+	rendered, err := renderInStep(step.CallInput, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 	if err != nil {
 		return nil, fmt.Errorf("step %s: call-workflow input render: %w", step.ID, err)
 	}
@@ -1536,7 +1538,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Save != "" {
-		rendered, err := render(step.Save, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.Save, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
@@ -1557,7 +1559,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Run != "" {
-		rendered, err := render(step.Run, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.Run, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
@@ -1576,7 +1578,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.LLM != nil {
-		rendered, err := render(step.LLM.Prompt, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.LLM.Prompt, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
@@ -1745,7 +1747,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 
 	if step.JsonPick != nil {
 		from := stepsSnap[step.JsonPick.From]
-		rendered, err := render(step.JsonPick.Expr, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.JsonPick.Expr, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
@@ -1809,13 +1811,13 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.HttpCall != nil {
-		urlRendered, err := render(step.HttpCall.URL, scopeFromData(data), stepsSnap)
+		urlRendered, err := renderInStep(step.HttpCall.URL, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: url render: %w", step.ID, err)
 		}
 		var bodyReader io.Reader
 		if step.HttpCall.Body != "" {
-			bodyRendered, err := render(step.HttpCall.Body, scopeFromData(data), stepsSnap)
+			bodyRendered, err := renderInStep(step.HttpCall.Body, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: body render: %w", step.ID, err)
 			}
@@ -1830,7 +1832,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: http request: %w", step.ID, err)
 		}
 		for k, v := range step.HttpCall.Headers {
-			hv, err := render(v, scopeFromData(data), stepsSnap)
+			hv, err := renderInStep(v, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: header %q render: %w", step.ID, k, err)
 			}
@@ -1853,7 +1855,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.ReadFile != "" {
-		rendered, err := render(step.ReadFile, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.ReadFile, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
@@ -1866,7 +1868,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.WriteFile != nil {
-		rendered, err := render(step.WriteFile.Path, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.WriteFile.Path, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: render: %w", step.ID, err)
 		}
@@ -1884,7 +1886,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	if step.GlobPat != nil {
 		pattern := step.GlobPat.Pattern
 		if step.GlobPat.Dir != "" {
-			dirRendered, err := render(step.GlobPat.Dir, scopeFromData(data), stepsSnap)
+			dirRendered, err := renderInStep(step.GlobPat.Dir, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: dir render: %w", step.ID, err)
 			}
@@ -1899,7 +1901,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Search != nil {
-		indexRendered, err := render(step.Search.IndexName, scopeFromData(data), stepsSnap)
+		indexRendered, err := renderInStep(step.Search.IndexName, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: index render: %w", step.ID, err)
 		}
@@ -1958,17 +1960,17 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Index != nil {
-		indexRendered, err := render(step.Index.IndexName, scopeFromData(data), stepsSnap)
+		indexRendered, err := renderInStep(step.Index.IndexName, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: index render: %w", step.ID, err)
 		}
-		docRendered, err := render(step.Index.Doc, scopeFromData(data), stepsSnap)
+		docRendered, err := renderInStep(step.Index.Doc, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: doc render: %w", step.ID, err)
 		}
 		idRendered := step.Index.DocID
 		if idRendered != "" {
-			idRendered, err = render(idRendered, scopeFromData(data), stepsSnap)
+			idRendered, err = renderInStep(idRendered, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: id render: %w", step.ID, err)
 			}
@@ -2021,7 +2023,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Delete != nil {
-		indexRendered, err := render(step.Delete.IndexName, scopeFromData(data), stepsSnap)
+		indexRendered, err := renderInStep(step.Delete.IndexName, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: index render: %w", step.ID, err)
 		}
@@ -2044,7 +2046,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 	}
 
 	if step.Embed != nil {
-		rendered, err := render(step.Embed.Input, scopeFromData(data), stepsSnap)
+		rendered, err := renderInStep(step.Embed.Input, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 		if err != nil {
 			return nil, fmt.Errorf("step %s: input render: %w", step.ID, err)
 		}
@@ -2064,7 +2066,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		// Render sexpr unquote in plugin args (e.g., ~param.repo)
 		renderedArgs := make(map[string]string, len(pc.Args))
 		for k, v := range pc.Args {
-			rendered, err := render(v, scopeFromData(data), stepsSnap)
+			rendered, err := renderInStep(v, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
 			if err != nil {
 				return nil, fmt.Errorf("step %s: plugin arg %q: %w", step.ID, k, err)
 			}
