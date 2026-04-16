@@ -2,6 +2,7 @@
 package pipeline
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -50,4 +51,42 @@ func TestScopeUndefinedSymbolReturnsError(t *testing.T) {
 // errorsAs is a tiny wrapper so the test file doesn't need to import "errors".
 func errorsAs(err error, target any) bool {
 	return errorsAsStd(err, target)
+}
+
+func TestScopeEnvSet(t *testing.T) {
+	os.Setenv("GL1TCH_TEST_VAR_X", "hello")
+	defer os.Unsetenv("GL1TCH_TEST_VAR_X")
+	s := NewScope()
+	v, err := s.ResolvePath("env", []string{"GL1TCH_TEST_VAR_X"})
+	if err != nil || v != "hello" {
+		t.Errorf("got %q err=%v", v, err)
+	}
+}
+
+func TestScopeEnvUnsetFailsLoud(t *testing.T) {
+	os.Unsetenv("GL1TCH_DEFINITELY_NOT_SET_42")
+	s := NewScope()
+	_, err := s.ResolvePath("env", []string{"GL1TCH_DEFINITELY_NOT_SET_42"})
+	if err == nil {
+		t.Fatal("expected UndefinedRefError on unset env var")
+	}
+}
+
+func TestScopeResourceHit(t *testing.T) {
+	s := NewScope()
+	s.SetResources(map[string]map[string]string{
+		"my-repo": {"url": "https://github.com/x/y"},
+	})
+	v, err := s.ResolvePath("resource", []string{"my-repo", "url"})
+	if err != nil || v != "https://github.com/x/y" {
+		t.Errorf("got %q err=%v", v, err)
+	}
+}
+
+func TestScopeResourceMissingFailsLoud(t *testing.T) {
+	s := NewScope()
+	_, err := s.ResolvePath("resource", []string{"nope", "url"})
+	if err == nil {
+		t.Fatal("expected UndefinedRefError on missing resource")
+	}
 }

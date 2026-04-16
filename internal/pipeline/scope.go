@@ -83,10 +83,16 @@ func (s *Scope) ResolvePath(base string, path []string) (string, error) {
 		if len(path) != 1 {
 			return "", &UndefinedRefError{Symbol: "env." + joinDots(path)}
 		}
-		return os.Getenv(path[0]), nil
+		v, ok := os.LookupEnv(path[0])
+		if !ok {
+			return "", &UndefinedRefError{Symbol: "env." + path[0]}
+		}
+		return v, nil
 	case "resource":
-		// Two-level path: resource.<name>.<field>. Missing names or fields
-		// resolve to "" to preserve legacy template behaviour.
+		// Two-level path: resource.<name>.<field>. Fails loud on missing
+		// per spec: undefined refs surface as UndefinedRefError, consistent
+		// with param/env/bare-symbol resolution. Use ~(or resource.x.y "")
+		// if an empty fallback is genuinely desired.
 		if len(path) != 2 {
 			return "", &UndefinedRefError{Symbol: "resource." + joinDots(path), Suggestion: "resource.<name>.<field>"}
 		}
@@ -95,7 +101,7 @@ func (s *Scope) ResolvePath(base string, path []string) (string, error) {
 				return v, nil
 			}
 		}
-		return "", nil
+		return "", &UndefinedRefError{Symbol: "resource." + joinDots(path)}
 	}
 	return "", &UndefinedRefError{Symbol: base + "." + joinDots(path)}
 }

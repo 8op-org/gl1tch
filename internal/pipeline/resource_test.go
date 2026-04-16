@@ -19,13 +19,14 @@ func TestRenderResourceBinding(t *testing.T) {
 	}
 }
 
-func TestRenderResourceMissingEmpty(t *testing.T) {
+func TestRenderResourceMissingFailsLoud(t *testing.T) {
 	data := map[string]any{"input": "", "param": map[string]string{}, "resource": map[string]map[string]string{}}
-	out, err := render("x:~resource.missing.path:y", scopeFromData(data), nil)
-	if err != nil {
-		t.Fatal(err)
+	_, err := render("x:~resource.missing.path:y", scopeFromData(data), nil)
+	if err == nil {
+		t.Fatal("expected UndefinedRefError on missing resource, got nil")
 	}
-	if out != "x::y" {
-		t.Fatalf("expected empty substitution, got %q", out)
+	var ure *UndefinedRefError
+	if !errorsAsStd(err, &ure) {
+		t.Fatalf("expected UndefinedRefError, got %T: %v", err, err)
 	}
 }
