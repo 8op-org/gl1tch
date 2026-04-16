@@ -55,14 +55,39 @@ func TestGetRunTree(t *testing.T) {
 	if len(tree.Children) != 2 {
 		t.Fatalf("expected 2 children, got %d", len(tree.Children))
 	}
-	var c1Node *RunNode
+	var c1Node, c2Node *RunNode
 	for i := range tree.Children {
-		if tree.Children[i].ID == c1 {
+		switch tree.Children[i].ID {
+		case c1:
 			c1Node = &tree.Children[i]
+		case c2:
+			c2Node = &tree.Children[i]
 		}
 	}
 	if c1Node == nil || len(c1Node.Children) != 1 {
 		t.Fatalf("c1 should have exactly one grandchild: %+v", c1Node)
 	}
-	_ = c2
+	if c2Node == nil || len(c2Node.Children) != 0 {
+		t.Fatalf("c2 should have zero grandchildren: %+v", c2Node)
+	}
+}
+
+func TestListChildrenNone(t *testing.T) {
+	s, err := OpenAt(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	id, err := s.RecordRun(RunRecord{Kind: "workflow", Name: "lonely"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kids, err := s.ListChildren(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kids) != 0 {
+		t.Fatalf("expected no children, got %+v", kids)
+	}
 }

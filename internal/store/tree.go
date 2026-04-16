@@ -1,5 +1,7 @@
 package store
 
+import "fmt"
+
 // RunNode is a minimal run record used by tree queries.
 type RunNode struct {
 	ID           int64
@@ -39,6 +41,8 @@ func (s *Store) ListChildren(parentID int64) ([]RunNode, error) {
 }
 
 // GetRunTree returns the run rooted at id with all descendants populated.
+// Depth is capped to guard against pathological cycles in corrupted data;
+// call-workflow cycle detection is the real guard upstream.
 func (s *Store) GetRunTree(id int64) (RunNode, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, COALESCE(workflow_name,''), kind, exit_status, started_at, finished_at, COALESCE(parent_run_id,0)
@@ -52,12 +56,21 @@ func (s *Store) GetRunTree(id int64) (RunNode, error) {
 	}
 	n.ExitStatus = exit
 	n.FinishedAt = fin
-	kids, err := s.ListChildren(id)
+	return s.populateChildren(n, 0)
+}
+
+const maxTreeDepth = 64
+
+func (s *Store) populateChildren(n RunNode, depth int) (RunNode, error) {
+	if depth > maxTreeDepth {
+		return RunNode{}, fmt.Errorf("run tree depth exceeded %d at id=%d", maxTreeDepth, n.ID)
+	}
+	kids, err := s.ListChildren(n.ID)
 	if err != nil {
 		return RunNode{}, err
 	}
 	for i := range kids {
-		sub, err := s.GetRunTree(kids[i].ID)
+		sub, err := s.populateChildren(kids[i], depth+1)
 		if err != nil {
 			return RunNode{}, err
 		}
