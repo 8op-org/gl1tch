@@ -6,7 +6,29 @@ import (
 	"strings"
 
 	"github.com/8op-org/gl1tch/internal/workspace"
+	"github.com/8op-org/gl1tch/internal/workspace/registry"
 )
+
+// resolvedWorkspacePath returns the active workspace path for HTTP handlers.
+// Precedence: Server.workspace (set from CLI --workspace at construction) →
+// GLITCH_WORKSPACE env → walk-up from CWD → registry active name.
+// Returns ok=false when no workspace can be resolved (global mode).
+func (s *Server) resolvedWorkspacePath() (string, bool) {
+	if s.workspace != "" {
+		return s.workspace, true
+	}
+	cwd, _ := os.Getwd()
+	active, _ := registry.GetActive()
+	r := workspace.Resolve(workspace.ResolveOpts{
+		EnvPath:    os.Getenv("GLITCH_WORKSPACE"),
+		StartDir:   cwd,
+		ActiveName: active,
+	})
+	if r.Path == "" {
+		return "", false
+	}
+	return r.Path, true
+}
 
 // resourceBindings reads workspace.glitch from the server's workspace dir
 // and returns a map suitable for pipeline.RunOpts.Resources. Returns an
