@@ -152,18 +152,21 @@ var workflowRunCmd = &cobra.Command{
 			}
 		}
 
-		// Handle --variant: inject implicit compare blocks around LLM steps
-		if len(workflowVariants) > 1 {
-			injectImplicitCompare(w, workflowVariants, workflowReviewCriteria)
-		}
-
-		// Handle --compare: discover sibling variant workflows
+		// Handle --compare: discover sibling variant workflows (before --variant injection)
 		if workflowCompare {
 			variants := batch.DefaultVariants
 			if len(workflowVariants) > 0 {
 				variants = workflowVariants
 			}
 			return runCompareWorkflows(name, workflows, variants, params, cfg, tel, wsESURL, wsName)
+		}
+
+		// Handle --variant: inject implicit compare blocks around LLM steps
+		if len(workflowVariants) == 1 {
+			fmt.Fprintf(os.Stderr, "WARN: --variant needs at least 2 variants to compare, ignoring\n")
+		}
+		if len(workflowVariants) > 1 {
+			injectImplicitCompare(w, workflowVariants, workflowReviewCriteria)
 		}
 
 		result, err := pipeline.Run(w, input, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -664,16 +665,14 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 				case ":variant":
 					if i+1 < len(args) {
 						i++
-						// Try namespaced lookup: id/variant/id
-						if v, ok := steps[id+"/"+args[i]+"/"+id]; ok {
+						variantName := args[i]
+						// Return the branch's final step output (stored as id/variant/__output)
+						if v, ok := steps[id+"/"+variantName+"/__output"]; ok {
 							return v
 						}
-						// Try any step in that branch
-						prefix := id + "/" + args[i] + "/"
-						for k, v := range steps {
-							if strings.HasPrefix(k, prefix) {
-								return v
-							}
+						// Fallback: try exact namespaced lookup
+						if v, ok := steps[id+"/"+variantName+"/"+id]; ok {
+							return v
 						}
 					}
 				case ":winner":
@@ -685,12 +684,13 @@ func render(tmpl string, data map[string]any, steps map[string]string) (string, 
 			return steps[id]
 		},
 		"branch": func(name string) string {
+			// Look for the branch's final output using the __output convention
 			for k, v := range steps {
-				if strings.HasSuffix(k, "/"+name) || k == name {
+				if strings.HasSuffix(k, "/"+name+"/__output") {
 					return v
 				}
 			}
-			return ""
+			return steps[name]
 		},
 		// stepfile writes step output to a temp file and returns the path.
 		// Use in shell steps where inline content would break escaping:
@@ -1172,6 +1172,8 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 					rctx.steps[nsID] = val
 				}
 			}
+			// Store the branch's final output for deterministic access
+			rctx.steps[fmt.Sprintf("%s/%s/__output", step.ID, br.Name)] = lastOutput
 			rctx.mu.Unlock()
 
 			results[i] = branchResult{name: br.Name, output: lastOutput, outcome: composite}
@@ -1197,17 +1199,19 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 
 	// Pick winner
 	var winnerName, winnerOutput string
+	var reviewScores string
 	if len(successResults) == 1 {
 		winnerName = successResults[0].name
 		winnerOutput = successResults[0].output
 	} else {
-		winnerName, winnerOutput = runCompareReview(ctx, rctx, step, branchOutputs)
+		winnerName, winnerOutput, reviewScores = runCompareReview(ctx, rctx, step, branchOutputs)
 	}
 
 	// Store results accessible via template
 	rctx.mu.Lock()
 	rctx.steps[step.ID] = winnerOutput
 	rctx.steps[step.ID+"/__winner"] = winnerName
+	rctx.steps[step.ID+"/__scores"] = reviewScores
 	rctx.mu.Unlock()
 
 	composite := &stepOutcome{output: winnerOutput}
@@ -1223,14 +1227,19 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 	return composite, nil
 }
 
-// runCompareReview executes the judge and returns the winner name and output.
-// For shell-only branches (no LLM available), picks the first branch as default.
-func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutputs map[string]string) (string, string) {
+// runCompareReview executes the judge and returns the winner name, output, and raw review scores.
+// For shell-only branches (no LLM available), picks the first branch alphabetically.
+func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutputs map[string]string) (string, string, string) {
+	// Deterministic branch order for fallbacks
+	branchNames := make([]string, 0, len(branchOutputs))
+	for name := range branchOutputs {
+		branchNames = append(branchNames, name)
+	}
+	sort.Strings(branchNames)
+
 	if rctx.reg == nil {
-		// No provider registry — can't run LLM judge, pick first branch
-		for name, output := range branchOutputs {
-			return name, output
-		}
+		// No provider registry — can't run LLM judge, pick first branch alphabetically
+		return branchNames[0], branchOutputs[branchNames[0]], ""
 	}
 
 	reviewModel := rctx.defaultModel
@@ -1250,26 +1259,20 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 
 	outcome, err := runSingleStep(ctx, rctx, reviewStep)
 	if err != nil {
-		// Review failed — pick first branch as fallback
-		for name, output := range branchOutputs {
-			return name, output
-		}
+		return branchNames[0], branchOutputs[branchNames[0]], ""
 	}
 
 	scores := ParseCrossReview(outcome.output)
 	for _, s := range scores {
 		if s.Winner {
 			if output, ok := branchOutputs[s.Variant]; ok {
-				return s.Variant, output
+				return s.Variant, output, outcome.output
 			}
 		}
 	}
 
-	// No winner parsed — pick first
-	for name, output := range branchOutputs {
-		return name, output
-	}
-	return "", ""
+	// No winner parsed — pick first alphabetically
+	return branchNames[0], branchOutputs[branchNames[0]], outcome.output
 }
 
 func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, error) {
