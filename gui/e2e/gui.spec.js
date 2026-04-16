@@ -122,7 +122,7 @@ test.describe('App shell', () => {
     await page.goto('/')
     const sidebar = page.locator('aside.sidebar')
     await expect(sidebar).toBeVisible()
-    await expect(page.locator('.nav-item')).toHaveCount(3)
+    await expect(page.locator('.nav-item')).toHaveCount(4)
   })
 
   test('sidebar expands on hover', async ({ page }) => {
