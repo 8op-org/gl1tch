@@ -1809,3 +1809,14 @@ func TestSexprWorkflow_CompareTooFewBranches(t *testing.T) {
 		t.Fatal("expected error for <2 branches")
 	}
 }
+
+func TestLoadBytes_PopulatesSourceFile(t *testing.T) {
+	src := []byte(`(workflow "x" (step "s" (run "echo ok")))`)
+	w, err := LoadBytes(src, "path/to/x.glitch")
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if w.SourceFile != "path/to/x.glitch" {
+		t.Errorf("SourceFile = %q, want %q", w.SourceFile, "path/to/x.glitch")
+	}
+}

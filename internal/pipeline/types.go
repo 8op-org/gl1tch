@@ -20,6 +20,7 @@ type Workflow struct {
 	Actions     []string       `yaml:"actions,omitempty"`
 	Steps       []Step         `yaml:"steps"`
 	Items       []WorkflowItem `yaml:"-"`
+	SourceFile  string         `yaml:"-"`
 }
 
 // WorkflowItem is a union type for the ordered sequence of workflow elements.
@@ -222,7 +223,7 @@ func LoadFile(path string) (*Workflow, error) {
 	if err != nil {
 		return nil, err
 	}
-	return LoadBytes(data, filepath.Base(path))
+	return LoadBytes(data, path)
 }
 
 // LoadBytes parses a workflow from raw bytes, dispatching on file extension.
@@ -230,7 +231,12 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".glitch":
-		return parseSexprWorkflow(data)
+		w, err := parseSexprWorkflow(data)
+		if err != nil {
+			return nil, err
+		}
+		w.SourceFile = filename
+		return w, nil
 	default:
 		var w Workflow
 		if err := yaml.Unmarshal(data, &w); err != nil {
@@ -239,6 +245,7 @@ func LoadBytes(data []byte, filename string) (*Workflow, error) {
 		if w.Name == "" {
 			w.Name = filename
 		}
+		w.SourceFile = filename
 		return &w, nil
 	}
 }
