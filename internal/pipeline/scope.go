@@ -177,24 +177,21 @@ func levenshtein(a, b string) int {
 	return prev[len(b)]
 }
 
+// UndefinedRefError signals a lookup miss during ~-interpolation.
+// Source location (file, line, column) threading is deferred to a follow-up
+// that pairs with the AST-walk infrastructure needed for `glitch run
+// <workflow> --help`.
 type UndefinedRefError struct {
 	Symbol     string
 	Suggestion string
-	File       string
-	Line       int
-	Col        int
 }
 
 func (e *UndefinedRefError) Error() string {
-	loc := ""
-	if e.File != "" {
-		loc = fmt.Sprintf(" at %s:%d:%d", e.File, e.Line, e.Col)
-	}
 	sug := ""
 	if e.Suggestion != "" {
 		sug = fmt.Sprintf(" (did you mean '%s'?)", e.Suggestion)
 	}
-	return fmt.Sprintf("undefined reference '%s'%s%s", e.Symbol, loc, sug)
+	return fmt.Sprintf("undefined reference '%s'%s", e.Symbol, sug)
 }
 
 // errorsAsStd wraps errors.As for test visibility.
