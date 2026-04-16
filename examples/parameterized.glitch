@@ -1,4 +1,4 @@
-;; parameterized.glitch — use {{.param.*}} for runtime inputs
+;; parameterized.glitch — pass runtime inputs via --set and reference as ~param.key
 ;;
 ;; Run with: glitch workflow run parameterized --set repo=gl1tch
 
