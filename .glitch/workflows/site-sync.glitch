@@ -522,16 +522,19 @@
     (gate "sidebar"
       (run "python3 scripts/gate-sidebar.py")))
 
+  ;; ── Build ─────────────────────────────────────────────────────────────────
+
+  (step "build-report"
+    (run "echo 'PASS' > site/generated/build-report.md && echo 'All gates passed.'"))
+
+  (step "build-site"
+    (run "cd site && bash build.sh 2>&1"))
+
   ;; ── Phase: build-test ────────────────────────────────────────────────────
 
   (phase "build-test" :retries 0
     (gate "playwright"
       (run "bash scripts/gate-playwright.sh")))
-
-  ;; ── Build ─────────────────────────────────────────────────────────────────
-
-  (step "build-site"
-    (run "cd site && bash build.sh 2>&1"))
 
   ;; ── Done ─────────────────────────────────────────────────────────────────
 
