@@ -6,6 +6,19 @@
   import FilterBar from '../lib/components/FilterBar.svelte';
   import StatusBadge from '../lib/components/StatusBadge.svelte';
 
+  function relativeTime(ms) {
+    if (!ms) return null;
+    const diff = Date.now() - ms;
+    const secs = Math.floor(diff / 1000);
+    if (secs < 60) return 'just now';
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
   let workflows = $state([]);
   let error = $state(null);
   let loading = $state(true);
@@ -96,6 +109,7 @@
                     </div>
                     <div class="group-item-status">
                       {#if wf.last_run_status}<StatusBadge status={wf.last_run_status} />{/if}
+                      {#if relativeTime(wf.last_run_at)}<span class="group-item-time">{relativeTime(wf.last_run_at)}</span>{/if}
                     </div>
                   </button>
                 {/each}
@@ -107,7 +121,7 @@
 
     {:else if viewMode === 'list'}
       <table class="wf-table">
-        <thead><tr><th>Name</th><th>Description</th><th>Group</th><th>Status</th></tr></thead>
+        <thead><tr><th>Name</th><th>Description</th><th>Group</th><th>Status</th><th>Last Run</th><th>Runs</th></tr></thead>
         <tbody>
           {#each filtered as wf}
             <tr class="clickable" onclick={() => push(`/workflow/${wf.file}`)}>
@@ -115,6 +129,8 @@
               <td class="text-muted">{wf.description || ''}</td>
               <td><span class="pill">{getGroup(wf)}</span></td>
               <td>{#if wf.last_run_status}<StatusBadge status={wf.last_run_status} />{:else}<span class="text-muted">--</span>{/if}</td>
+              <td class="text-muted">{relativeTime(wf.last_run_at) || '--'}</td>
+              <td class="mono text-muted">{wf.run_count != null ? wf.run_count : '--'}</td>
             </tr>
           {/each}
         </tbody>
@@ -133,7 +149,8 @@
             {/if}
             <div class="card-footer text-muted">
               {#if wf.last_run_status}<StatusBadge status={wf.last_run_status} />{:else}<span>Never run</span>{/if}
-              {#if wf.author}<span>@{wf.author}</span>{/if}
+              {#if relativeTime(wf.last_run_at)}<span>{relativeTime(wf.last_run_at)}</span>{/if}
+              {#if wf.run_count != null}<span class="card-sep">|</span><span><span class="mono">{wf.run_count}</span> runs</span>{/if}
             </div>
           </button>
         {/each}
@@ -215,7 +232,8 @@
   .group-item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
   .group-item-name { font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); }
   .group-item-desc { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .group-item-status { flex-shrink: 0; }
+  .group-item-status { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+  .group-item-time { font-size: 11px; color: var(--text-muted); }
 
   /* Card grid */
   .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
@@ -224,7 +242,8 @@
   .card-name { font-family: var(--font-mono); font-size: 14px; color: var(--neon-cyan); display: flex; align-items: center; gap: 6px; }
   .card-desc { font-size: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-  .card-footer { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+  .card-footer { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+  .card-sep { color: var(--text-muted); opacity: 0.4; }
 
   /* List view */
   .wf-table { margin-top: 16px; }
