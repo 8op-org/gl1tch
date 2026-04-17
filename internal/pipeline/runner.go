@@ -1043,18 +1043,27 @@ func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 			rctx.params = origParams
 			return nil, fmt.Errorf("map %s item %d: %w", step.ID, idx, err)
 		}
+		// Alias the unsuffixed body ID so later steps can reference it
+		rctx.mu.Lock()
+		rctx.steps[step.MapBody.ID] = outcome.output
+		rctx.mu.Unlock()
 
 		// Execute additional body steps in sequence
 		var lastOutcome *stepOutcome
 		lastOutcome = outcome
 		for si, extra := range step.MapSteps {
 			es := extra
-			es.ID = fmt.Sprintf("%s-%d", extra.ID, idx)
+			baseID := extra.ID
+			es.ID = fmt.Sprintf("%s-%d", baseID, idx)
 			o, err := executeStep(ctx, rctx, es)
 			if err != nil {
 				rctx.params = origParams
 				return nil, fmt.Errorf("map %s item %d step %d: %w", step.ID, idx, si+1, err)
 			}
+			// Alias unsuffixed ID for downstream steps in this iteration
+			rctx.mu.Lock()
+			rctx.steps[baseID] = o.output
+			rctx.mu.Unlock()
 			lastOutcome = o
 		}
 
