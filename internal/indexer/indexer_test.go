@@ -94,6 +94,44 @@ func TestChunkContent(t *testing.T) {
 	})
 }
 
+func TestClassifyFiles(t *testing.T) {
+	existing := map[string]string{
+		"main.go":    "hash1",
+		"old.go":     "hash2",
+		"changed.go": "hash3",
+	}
+	current := map[string]string{
+		"main.go":    "hash1",   // unchanged
+		"changed.go": "hash999", // changed
+		"new.go":     "hash4",   // new
+	}
+	toIndex, toDelete := classifyFiles(existing, current)
+	if len(toIndex) != 2 {
+		t.Errorf("toIndex: got %d, want 2", len(toIndex))
+	}
+	if len(toDelete) != 1 {
+		t.Errorf("toDelete: got %d, want 1", len(toDelete))
+	}
+	if toDelete[0] != "old.go" {
+		t.Errorf("toDelete[0] = %q, want old.go", toDelete[0])
+	}
+}
+
+func TestFileHashCompute(t *testing.T) {
+	h1 := fileHash([]byte("hello world"))
+	h2 := fileHash([]byte("hello world"))
+	h3 := fileHash([]byte("different"))
+	if h1 != h2 {
+		t.Error("same content should produce same hash")
+	}
+	if h1 == h3 {
+		t.Error("different content should produce different hash")
+	}
+	if h1 == "" {
+		t.Error("hash should not be empty")
+	}
+}
+
 func TestExtractSymbols(t *testing.T) {
 	t.Run("go code", func(t *testing.T) {
 		content := `package main
