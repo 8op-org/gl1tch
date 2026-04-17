@@ -4,7 +4,7 @@ order: 8
 description: "Declared resources, scoped workflows, nested runs, and shared defaults — glitch workspace init once, every command knows where it is."
 ---
 
-A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defaults. You run `glitch workspace init` once, then every subsequent command — `glitch run`, `glitch ask`, `glitch workspace gui` — knows where it is and what it's working on.
+A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defaults. You run `glitch workspace init` once, then every subsequent command — `glitch run`, `glitch observe`, `glitch workspace gui` — knows where it is and what it's working on.
 
 ## Quick start
 

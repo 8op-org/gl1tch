@@ -935,8 +935,8 @@ footer {
     display: flex;
   }
 
-  .sidebar-toggle-input:checked ~ main .doc-sidebar-col,
-  .sidebar-toggle-input:checked + label ~ main .doc-sidebar-col {
+  .sidebar-toggle-input:checked ~ .doc-layout .doc-sidebar-col,
+  .sidebar-toggle-input:checked + label ~ .doc-layout .doc-sidebar-col {
     display: block;
     position: fixed;
     top: 0;
@@ -950,7 +950,7 @@ footer {
     overflow-y: auto;
   }
 
-  .sidebar-toggle-input:checked ~ main .doc-sidebar-col .doc-sidebar-inner {
+  .sidebar-toggle-input:checked ~ .doc-layout .doc-sidebar-col .doc-sidebar-inner {
     position: static;
     max-height: none;
     padding: 0 20px;

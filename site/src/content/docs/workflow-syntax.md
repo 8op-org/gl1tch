@@ -135,7 +135,7 @@ Strings in workflows support `~` (unquote) interpolation. A bare `~name` resolve
 |-----------|-------------|
 | `~(step id)` | Insert a named step's output |
 | `~(stepfile id)` | Write step output to a temp file, return the path |
-| `~input` | The value passed to `glitch ask` or as trailing arg |
+| `~input` | The value passed as a trailing arg to `glitch run` |
 | `~param.key` | A runtime parameter from `--set key=value` |
 | `~env.VAR` | An environment variable |
 | `~item` | Current item in a `map` / `filter` / `reduce` |
