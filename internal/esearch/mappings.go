@@ -8,6 +8,7 @@ const (
 	IndexWorkflowRuns    = "glitch-workflow-runs"
 	IndexCrossReviews    = "glitch-cross-reviews"
 	IndexRuns            = "glitch-runs"
+	IndexLearnings       = "glitch-learnings"
 	IndexKnowledgePrefix = "glitch-knowledge-"
 	IndexSymbolsPrefix   = "glitch-symbols-"
 	IndexEdgesPrefix     = "glitch-edges-"
@@ -85,6 +86,8 @@ const LLMCallsMapping = `{
       "workflow_name":      { "type": "keyword" },
       "issue":              { "type": "keyword" },
       "comparison_group":   { "type": "keyword" },
+      "phase":              { "type": "keyword" },
+      "objective":          { "type": "text" },
       "timestamp":          { "type": "date" }
     }
   }
@@ -131,7 +134,9 @@ const CrossReviewsMapping = `{
       "scope":           { "type": "keyword" },
       "criteria_name":   { "type": "keyword" },
       "criteria_score":  { "type": "integer" },
-      "workspace":       { "type": "keyword" }
+      "workspace":       { "type": "keyword" },
+      "phase":           { "type": "keyword" },
+      "objective":       { "type": "text" }
     }
   }
 }`
@@ -148,6 +153,29 @@ const RunsMapping = `{
       "has_compare":   { "type": "boolean" },
       "duration_ms":   { "type": "long" },
       "timestamp":     { "type": "date" }
+    }
+  }
+}`
+
+const LearningsMapping = `{
+  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": {
+    "properties": {
+      "run_id":         { "type": "keyword" },
+      "compare_id":     { "type": "keyword" },
+      "objective":      { "type": "text" },
+      "scope":          { "type": "keyword" },
+      "finding":        { "type": "text" },
+      "model_insight":  { "type": "object", "enabled": false },
+      "confidence":     { "type": "keyword" },
+      "recommendation": { "type": "text" },
+      "criteria":       { "type": "keyword" },
+      "winner":         { "type": "keyword" },
+      "margin":         { "type": "integer" },
+      "models_tested":  { "type": "keyword" },
+      "workflow_name":  { "type": "keyword" },
+      "workspace":      { "type": "keyword" },
+      "timestamp":      { "type": "date" }
     }
   }
 }`
@@ -199,5 +227,6 @@ func AllIndices() map[string]string {
 		IndexWorkflowRuns: WorkflowRunsMapping,
 		IndexCrossReviews: CrossReviewsMapping,
 		IndexRuns:         RunsMapping,
+		IndexLearnings:    LearningsMapping,
 	}
 }

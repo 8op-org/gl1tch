@@ -58,6 +58,8 @@ type LLMCallDoc struct {
 	WorkflowName     string  `json:"workflow_name"`
 	Issue            string  `json:"issue"`
 	ComparisonGroup  string  `json:"comparison_group"`
+	Phase            string  `json:"phase,omitempty"`
+	Objective        string  `json:"objective,omitempty"`
 	Timestamp        string  `json:"timestamp"`
 }
 
@@ -97,6 +99,8 @@ type CrossReviewDoc struct {
 	CriteriaName  string  `json:"criteria_name,omitempty"`
 	CriteriaScore int     `json:"criteria_score,omitempty"`
 	Workspace     string  `json:"workspace,omitempty"`
+	Phase         string  `json:"phase,omitempty"`
+	Objective     string  `json:"objective,omitempty"`
 }
 
 // RunDoc represents a single workflow run for the runs index.
@@ -109,6 +113,25 @@ type RunDoc struct {
 	HasCompare   bool   `json:"has_compare"`
 	DurationMs   int64  `json:"duration_ms"`
 	Timestamp    string `json:"timestamp"`
+}
+
+// LearningDoc represents a structured learning from a compare reflection.
+type LearningDoc struct {
+	RunID          string            `json:"run_id"`
+	CompareID      string            `json:"compare_id"`
+	Objective      string            `json:"objective"`
+	Scope          string            `json:"scope"`
+	Finding        string            `json:"finding"`
+	ModelInsight   map[string]string `json:"model_insight"`
+	Confidence     string            `json:"confidence"`
+	Recommendation string            `json:"recommendation"`
+	Criteria       []string          `json:"criteria"`
+	Winner         string            `json:"winner"`
+	Margin         int               `json:"margin"`
+	ModelsTested   []string          `json:"models_tested"`
+	WorkflowName   string            `json:"workflow_name"`
+	Workspace      string            `json:"workspace"`
+	Timestamp      string            `json:"timestamp"`
 }
 
 // Telemetry provides nil-safe methods for indexing research telemetry into ES.
@@ -190,6 +213,14 @@ func (t *Telemetry) IndexCrossReview(ctx context.Context, doc CrossReviewDoc) er
 		return nil
 	}
 	return t.indexDoc(ctx, IndexCrossReviews, "", doc)
+}
+
+// IndexLearning indexes a learning document from a compare reflection.
+func (t *Telemetry) IndexLearning(ctx context.Context, doc LearningDoc) error {
+	if t == nil {
+		return nil
+	}
+	return t.indexDoc(ctx, IndexLearnings, "", doc)
 }
 
 func (t *Telemetry) indexDoc(ctx context.Context, index, id string, doc any) error {
