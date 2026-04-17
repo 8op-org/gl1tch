@@ -1,6 +1,6 @@
 ---
 title: "Workflow Syntax"
-order: 5
+order: 7
 description: "gl1tch workflows are `.glitch` files written in s-expression syntax — parenthesized lists with keyword arguments:"
 ---
 
@@ -13,6 +13,19 @@ gl1tch workflows are `.glitch` files written in s-expression syntax — parenthe
 ```
 
 Drop your files in `.glitch/workflows/` for automatic discovery. This page is the complete reference for every form available.
+
+## Form Aliases
+
+These aliases provide shorter, more readable names. Both the old and new names work — use whichever you prefer.
+
+| Original | Alias | Notes |
+|----------|-------|-------|
+| `json-pick` | `pick` | Shorter |
+| `http-get` | `fetch` | Matches common usage |
+| `http-post` | `send` | Natural pair with fetch |
+| `read-file` | `read` | No ambiguity inside a step |
+| `write-file` | `write` | No ambiguity inside a step |
+| `map` | `each` | Reads naturally for iteration |
 
 ## Workflow structure
 
@@ -41,10 +54,10 @@ A workflow wraps named steps. Here is a complete real-world example:
         You are a code reviewer. Review this diff carefully.
 
         Files changed:
-        ~(step files)
+        {{step "files"}}
 
         Diff:
-        ~(step diff)
+        {{step "diff"}}
 
         For each file, note:
         - Bugs or logic errors
@@ -77,7 +90,7 @@ The string passed to `(workflow ...)` is the name you use with `glitch workflow 
       :model model
       :prompt ```
         You received this message from a shell command:
-        ~(step gather)
+        {{step "gather"}}
 
         Respond with a short, enthusiastic acknowledgment.
         ```)))
@@ -109,7 +122,7 @@ Sends a prompt to a language model:
     :prompt ```
       Here are the last 20 git commits:
 
-      ~(step commits)
+      {{step "commits"}}
 
       Write a concise changelog grouped by theme (features, fixes, chores).
       Use markdown. No preamble.
@@ -125,29 +138,26 @@ Writes a prior step's output to a file:
   (save "results/changelog.md" :from "changelog"))
 ```
 
-Paths can use interpolation: `"results/~param.repo/summary.md"`.
+Paths can use template variables: `"results/{{.param.repo}}/summary.md"`.
 
-## Interpolation
+## Step references and templates
 
-Strings in workflows support `~` (unquote) interpolation. A bare `~name` resolves a symbol; `~(form)` evaluates an s-expression inline. Undefined references fail loud with a suggestion ("did you mean ...?").
+gl1tch uses `{{ }}` templates for variable substitution.
 
 | Expression | What it does |
 |-----------|-------------|
-| `~(step id)` | Insert a named step's output |
-| `~(stepfile id)` | Write step output to a temp file, return the path |
-| `~input` | The value passed as a trailing arg to `glitch run` |
-| `~param.key` | A runtime parameter from `--set key=value` |
-| `~env.VAR` | An environment variable |
-| `~item` | Current item in a `map` / `filter` / `reduce` |
-| `~item_index` | Zero-based index in a `map` / `filter` / `reduce` |
-| `~param.accumulator` | Running accumulator in a `reduce` |
-| `\~` | Literal tilde (escaped) |
+| `{{step "id"}}` | Insert a named step's output |
+| `{{stepfile "id"}}` | Write step output to a temp file, return the path |
+| `{{.input}}` | The value passed to `glitch ask` or as trailing arg |
+| `{{.param.key}}` | A runtime parameter from `--set key=value` |
 
-Use `~(stepfile id)` when step output contains characters that break shell escaping:
+**Important:** Parameters must have a dot — `{{.param.repo}}` not `{{param.repo}}`. Without the dot it silently stays literal.
+
+Use `{{stepfile "id"}}` when step output contains characters that break shell escaping:
 
 ```glitch
 (step "process"
-  (run "cat '~(stepfile big-json)' | jq '.items[]'"))
+  (run "cat '{{stepfile \"big-json\"}}' | jq '.items[]'"))
 ```
 
 Full example with `--set` parameters:
@@ -163,25 +173,25 @@ Full example with `--set` parameters:
   :description "Show how to pass runtime parameters into a workflow"
 
   (step "info"
-    (run "echo 'Analyzing repo: ~param.repo'"))
+    (run "echo 'Analyzing repo: {{.param.repo}}'"))
 
   (step "structure"
-    (run "find ~param.repo -maxdepth 2 -type f | head -30"))
+    (run "find {{.param.repo}} -maxdepth 2 -type f | head -30"))
 
   (step "summary"
     (llm
       :model model
       :prompt ```
-        Here is the file tree for ~param.repo:
+        Here is the file tree for {{.param.repo}}:
 
-        ~(step structure)
+        {{step "structure"}}
 
         Describe the project structure in 3-4 sentences.
         What kind of project is this?
         ```))
 
   (step "save-it"
-    (save "results/~param.repo/summary.md" :from "summary")))
+    (save "results/{{.param.repo}}/summary.md" :from "summary")))
 ````
 
 ## LLM options
@@ -210,7 +220,7 @@ Using `:skill` to inject context — the skill content is prepended to your prom
     (llm
       :provider "claude"
       :skill "reviewer-verify"
-      :prompt "Review these staged changes for correctness, security, and style:\n\n~(step diff)"))
+      :prompt "Review these staged changes for correctness, security, and style:\n\n{{step \"diff\"}}"))
 
   (step "save-review"
     (save "review-output.md" :from "review")))
@@ -256,7 +266,7 @@ Retry a step up to N times on failure. Useful for flaky API calls:
 
 ### timeout
 
-Kill a step if it hangs beyond a duration (Go duration strings: `"30s"`, `"2m"`, `"1h"`):
+Kill a step if it hangs beyond a duration (`"30s"`, `"2m"`, `"1h"`):
 
 ```glitch
 (timeout "90s"
@@ -284,7 +294,7 @@ Run a primary step; if it fails, run a fallback instead:
   (step "fetch-graphql"
     (run "gh api graphql -f query='...'"))
   (step "fallback"
-    (run "gh issue view ~param.issue --json body")))
+    (run "gh issue view {{.param.issue}} --json body")))
 ```
 
 This is used in production to gracefully degrade when GraphQL endpoints are unavailable:
@@ -294,8 +304,8 @@ This is used in production to gracefully degrade when GraphQL endpoints are unav
 (catch
   (step "related"
     (run ```
-      REPO="~param.repo"
-      ISSUE="~param.issue"
+      REPO="{{.param.repo}}"
+      ISSUE="{{.param.issue}}"
       echo "=== LINKED PRS ==="
       gh api graphql -f query="..." 2>/dev/null \
         | jq -r '.data.repository.issue.timelineItems.nodes[]?.source
@@ -327,20 +337,20 @@ Multi-branch conditional. Predicates are shell commands — exit 0 means true:
       (run "echo 'All clear'"))))
 ```
 
-### map
+### each
 
-Iterate over a prior step's output, one item per line. `~item` is the current item, `~item_index` is the zero-based index:
+Iterate over a prior step's output, one item per line. `{{.param.item}}` is the current item, `{{.param.item_index}}` is the zero-based index:
 
 ````glitch
 (step "find-docs"
   (run "find . -name '*.md' -maxdepth 2"))
 
-(map "find-docs"
+(each "find-docs"
   (step "process-doc"
-    (run "wc -l ~item")))
+    (run "wc -l {{.param.item}}")))
 ````
 
-In production, `map` powers document ingestion — iterating over discovered files and processing each one:
+In production, `each` powers document ingestion — iterating over discovered files and processing each one:
 
 ````glitch
 (step "find-docs"
@@ -350,10 +360,10 @@ In production, `map` powers document ingestion — iterating over discovered fil
       -size -100k 2>/dev/null | sort
     ```))
 
-(map "find-docs"
+(each "find-docs"
   (step "process-doc"
     (run ```
-      FILE="~item"
+      FILE="{{.param.item}}"
       CONTENT=$(cat "$FILE" 2>/dev/null | head -500)
       # ... hash, check for changes, index to ES
       echo "INDEXED: $REL_PATH"
@@ -368,9 +378,9 @@ Scoped bindings — like `def` but limited to the body. Shadows outer defs withi
 (let ((endpoint "https://api.example.com")
       (token "abc123"))
   (step "call"
-    (run "curl -H 'Auth: ~param.token' endpoint"))
+    (run "curl -H 'Auth: {{.param.token}}' endpoint"))
   (step "parse"
-    (run "echo '~(step call)' | jq '.data'")))
+    (run "echo '{{step \"call\"}}' | jq '.data'")))
 ```
 
 ### phase and gate
@@ -392,18 +402,18 @@ If a gate fails, the whole phase retries up to `:retries` times.
 
 Built-in forms that reduce boilerplate. Available in workflows and plugins.
 
-### json-pick
+### pick
 
 Run a jq expression against a step's output:
 
 ```glitch
 (step "shape"
-  (json-pick ".[].title" :from "fetch"))
+  (pick ".[].title" :from "fetch"))
 ```
 
 ```glitch
 (step "extract"
-  (json-pick ".data.search.nodes" :from "graphql-result"))
+  (pick ".data.search.nodes" :from "graphql-result"))
 ```
 
 ### lines
@@ -424,33 +434,31 @@ Combine JSON output from multiple steps into one object:
   (merge "my-prs" "reviews" "mentions"))
 ```
 
-### http-get / http-post
+### fetch / send
 
 HTTP requests without shelling out:
 
 ```glitch
 (step "fetch-data"
-  (http-get "https://api.example.com/data"
-    :headers {"Authorization" "Bearer ~param.token"}))
+    :headers {"Authorization" "Bearer {{.param.token}}"}))
 
 (step "submit"
-  (http-post "https://api.example.com/submit"
-    :body "~(step payload)"
+    :body "{{step \"payload\"}}"
     :headers {"Content-Type" "application/json"}))
 ```
 
 Non-2xx responses fail the step (respects `retry` and `catch` wrappers).
 
-### read-file / write-file
+### read / write
 
 File I/O without shell commands:
 
 ```glitch
 (step "config"
-  (read-file "config/settings.json"))
+  (read "config/settings.json"))
 
 (step "save-output"
-  (write-file "output/report.json" :from "analysis"))
+  (save "output/report.json" :from "analysis"))
 ```
 
 ### glob
@@ -460,10 +468,127 @@ Match files against a pattern:
 ```glitch
 (step "find-reviews"
   (glob "*/review.md"
-    :dir "results/~param.repo/issue-~param.issue/iteration-1"))
+    :dir "results/{{.param.repo}}/issue-{{.param.issue}}/iteration-1"))
 ```
 
-Output is newline-separated file paths — composes with `map` for batch processing.
+Output is newline-separated file paths — composes with `each` for batch processing.
+
+## Elasticsearch forms
+
+Built-in forms for querying and indexing data in Elasticsearch.
+
+### search
+
+Query Elasticsearch. Returns a JSON array of `_source` objects:
+
+```glitch
+(step "query-docs"
+  (search :index "my-index"
+          :query {"term" {"type" "doc"}}
+          :size 50
+          :fields ("title" "content")))
+```
+
+| Keyword | Required | Description |
+|---------|----------|-------------|
+| `:index` | yes | Index name to query |
+| `:query` | yes | ES query DSL as `{...}` |
+| `:size` | no | Number of results (default 10) |
+| `:fields` | no | List of `_source` fields to return |
+| `:es` | no | ES URL override |
+
+### index
+
+Index a single document, with optional auto-embedding:
+
+```glitch
+(step "store"
+  (index :index "my-index"
+         :doc "{{step \"generate\"}}"
+         :id "doc-1"
+         :embed :field "content" :provider "ollama" :model "nomic-embed-text"))
+```
+
+| Keyword | Required | Description |
+|---------|----------|-------------|
+| `:index` | yes | Target index |
+| `:doc` | yes | JSON document (template-rendered) |
+| `:id` | no | Document ID |
+| `:embed` | no | Auto-embed a field (followed by `:field`, `:provider`, `:model`) |
+| `:es` | no | ES URL override |
+
+### delete
+
+Delete documents matching a query:
+
+```glitch
+(step "cleanup"
+  (delete :index "my-index"
+          :query {"term" {"type" "old"}}))
+```
+
+| Keyword | Required | Description |
+|---------|----------|-------------|
+| `:index` | yes | Target index |
+| `:query` | yes | ES query DSL as `{...}` |
+| `:es` | no | ES URL override |
+
+### embed
+
+Generate an embedding vector from text:
+
+```glitch
+(step "vec"
+  (embed :input "{{step \"content\"}}"
+         :provider "ollama"
+         :model "nomic-embed-text"))
+```
+
+| Keyword | Required | Description |
+|---------|----------|-------------|
+| `:input` | yes | Text to embed |
+| `:provider` | yes | Embedding provider (e.g. `"ollama"`) |
+| `:model` | yes | Embedding model (e.g. `"nomic-embed-text"`) |
+
+Returns a JSON array of floats.
+
+## ES connection
+
+The Elasticsearch URL is resolved in this order:
+
+1. Per-step `:es` keyword override
+2. Workspace configuration
+3. Default: `http://localhost:9200`
+
+Use the `:es` keyword when a step needs to talk to a different cluster than the workspace default.
+
+## Template functions
+
+String functions available inside `{{ }}` templates:
+
+| Function | Example | Result |
+|----------|---------|--------|
+| `split` | `{{split "/" "elastic/ensemble"}}` | `["elastic", "ensemble"]` |
+| `join` | `{{split "/" "a/b/c" \| join "-"}}` | `"a-b-c"` |
+| `last` | `{{split "/" "elastic/ensemble" \| last}}` | `"ensemble"` |
+| `first` | `{{split "/" "elastic/ensemble" \| first}}` | `"elastic"` |
+| `upper` | `{{upper "hello"}}` | `"HELLO"` |
+| `lower` | `{{lower "HELLO"}}` | `"hello"` |
+| `trim` | `{{trim "  hello  "}}` | `"hello"` |
+| `trimPrefix` | `{{trimPrefix "refs/" "refs/heads/main"}}` | `"heads/main"` |
+| `trimSuffix` | `{{trimSuffix ".git" "foo.git"}}` | `"foo"` |
+| `replace` | `{{replace "/" "-" "elastic/ensemble"}}` | `"elastic-ensemble"` |
+| `truncate` | `{{truncate 5 "hello world"}}` | `"hello"` |
+| `contains` | `{{if contains "fix" "bugfix"}}yes{{end}}` | `"yes"` |
+| `hasPrefix` | `{{if hasPrefix "feat" "feat/x"}}yes{{end}}` | `"yes"` |
+| `hasSuffix` | `{{if hasSuffix ".go" "main.go"}}yes{{end}}` | `"yes"` |
+
+These compose with pipes. Extract a repo name from a full path:
+
+```glitch
+(step "repo-name"
+  (run "echo '{{split \"/\" .param.repo | last}}'"))
+```
 
 ## Comments and discard
 
@@ -491,7 +616,7 @@ Line comments start with `;`:
       :model model
       :prompt ```
         Do a very thorough analysis of:
-        ~(step data)
+        {{step "data"}}
         ```))
 
   ;; This step runs instead
@@ -500,7 +625,7 @@ Line comments start with `;`:
       :model model
       :prompt ```
         Briefly summarize:
-        ~(step data)
+        {{step "data"}}
         ```)))
 ````
 
@@ -515,7 +640,7 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
     You are a code reviewer. Review this diff carefully.
 
     Files changed:
-    ~(step files)
+    {{step "files"}}
 
     If everything looks good, say so. Be concise.
     ```)
@@ -539,15 +664,9 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
 | `(save "path" :from "step-id")` | Write step output to file |
 | `(name/sub :arg "val")` | Call a plugin subcommand (namespaced shorthand) |
 | `(plugin "name" "sub" :arg "val")` | Call a plugin subcommand (verbose form) |
-| `(json-pick "expr" :from "step-id")` | Run jq expression on step output |
+| `(pick "expr" :from "step-id")` | Run jq expression on step output |
 | `(lines "step-id")` | Split output by newline into JSON array |
 | `(merge "a" "b" ...)` | Combine JSON from multiple steps |
-| `(http-get "url" :headers {...})` | HTTP GET request |
-| `(http-post "url" :body "..." :headers {...})` | HTTP POST request |
-| `(read-file "path")` | Read file into step output |
-| `(write-file "path" :from "step-id")` | Write step output to file |
-| `(glob "pattern" :dir "path")` | Match files, newline-separated output |
-
 ### Wrapper forms (around steps)
 
 | Form | Description |
@@ -556,13 +675,10 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
 | `(timeout "30s" (step ...))` | Kill step after duration |
 | `(catch (step ...) (step ...))` | Primary + fallback on failure |
 | `(cond (pred (step ...)) ...)` | Multi-branch conditional |
-| `(map "step-id" (step ...))` | Iterate over step output (one item per line) |
+| `(each "step-id" (step ...))` | Iterate over step output (one item per line) |
 | `(let ((name val) ...) body...)` | Scoped variable bindings |
 | `(phase "id" [:retries N] steps... [gates...])` | Grouped steps with verification gates |
 
 ## Next steps
 
 - [Plugins](/docs/plugins) — package reusable subcommands and compose them into workflows
-- [Compare Runs](/docs/compare) — built-in A/B testing with branch and review forms
-- [DSL Reference](/docs/dsl-reference) — threading macro, collection forms, and Elasticsearch integration
-- [Phases & Gates](/docs/phases-and-gates) — structured verification checkpoints

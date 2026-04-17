@@ -1,6 +1,6 @@
 ---
 title: "Local Models"
-order: 3
+order: 4
 description: "gl1tch runs your LLM locally by default. Nothing leaves your machine unless you tell it to. This page covers how to set "
 ---
 
