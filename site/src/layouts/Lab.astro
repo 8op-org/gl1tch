@@ -130,4 +130,67 @@ const { title, description, date } = Astro.props;
   .lab-content :global(strong) {
     color: var(--yellow);
   }
+
+  /* Model output containers — rendered markdown inside styled panels */
+  .lab-content :global(.model-output) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--dim);
+    border-radius: 6px;
+    padding: 1.2rem 1.5rem;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.9rem;
+    line-height: 1.7;
+  }
+
+  .lab-content :global(.model-output h3),
+  .lab-content :global(.model-output h4) {
+    color: var(--fg);
+    font-size: 0.95rem;
+    margin-top: 1.2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .lab-content :global(.model-output h3:first-child),
+  .lab-content :global(.model-output h4:first-child) {
+    margin-top: 0;
+  }
+
+  .lab-content :global(.model-output ul),
+  .lab-content :global(.model-output ol) {
+    padding-left: 1.2rem;
+    margin: 0.5rem 0;
+  }
+
+  .lab-content :global(.model-output li) {
+    margin-bottom: 0.3rem;
+  }
+
+  .lab-content :global(.model-output code) {
+    background: rgba(125, 207, 255, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+
+  .lab-content :global(.model-output pre) {
+    margin: 0.8rem 0;
+    padding: 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+
+  .lab-content :global(.model-output hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1rem 0;
+  }
+
+  .lab-content :global(.model-output a) {
+    color: var(--teal);
+  }
+
+  .lab-content :global(.model-output strong) {
+    color: var(--fg);
+  }
 </style>
