@@ -257,6 +257,134 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
+func TestTermsAggParseResponse(t *testing.T) {
+	raw := `{
+		"aggregations": {
+			"keys": {
+				"buckets": [
+					{
+						"key": "main.go",
+						"doc_count": 3,
+						"latest": {
+							"hits": {
+								"hits": [
+									{ "_source": { "file_hash": "abc123" } }
+								]
+							}
+						}
+					},
+					{
+						"key": "util.go",
+						"doc_count": 1,
+						"latest": {
+							"hits": {
+								"hits": [
+									{ "_source": { "file_hash": "def456" } }
+								]
+							}
+						}
+					}
+				]
+			}
+		}
+	}`
+
+	got := parseTermsAggResponse([]byte(raw), "file_hash")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(got))
+	}
+	if got["main.go"] != "abc123" {
+		t.Errorf("main.go = %q, want %q", got["main.go"], "abc123")
+	}
+	if got["util.go"] != "def456" {
+		t.Errorf("util.go = %q, want %q", got["util.go"], "def456")
+	}
+}
+
+func TestTermsAggRequest(t *testing.T) {
+	var gotBody map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/glitch-symbols/_search" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"aggregations":{"keys":{"buckets":[]}}}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	got, err := c.TermsAgg(context.Background(), "glitch-symbols", "file_path.keyword", "file_hash", 5000)
+	if err != nil {
+		t.Fatalf("TermsAgg() error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(got))
+	}
+
+	// Verify request body structure.
+	sizeVal, ok := gotBody["size"].(float64)
+	if !ok || sizeVal != 0 {
+		t.Errorf("expected size=0, got %v", gotBody["size"])
+	}
+
+	aggs, ok := gotBody["aggs"].(map[string]any)
+	if !ok {
+		t.Fatal("missing aggs in request body")
+	}
+	keys, ok := aggs["keys"].(map[string]any)
+	if !ok {
+		t.Fatal("missing aggs.keys in request body")
+	}
+	terms, ok := keys["terms"].(map[string]any)
+	if !ok {
+		t.Fatal("missing aggs.keys.terms in request body")
+	}
+	if terms["field"] != "file_path.keyword" {
+		t.Errorf("terms.field = %v, want %q", terms["field"], "file_path.keyword")
+	}
+	if terms["size"].(float64) != 5000 {
+		t.Errorf("terms.size = %v, want 5000", terms["size"])
+	}
+}
+
+func TestTermsAgg404ReturnsEmptyMap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"error":{"type":"index_not_found_exception"}}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	got, err := c.TermsAgg(context.Background(), "nonexistent", "key", "val", 100)
+	if err != nil {
+		t.Fatalf("TermsAgg() should not error on 404, got: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty map on 404, got %d entries", len(got))
+	}
+}
+
+func TestTermsAgg500ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"error":"boom"}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	_, err := c.TermsAgg(context.Background(), "test", "key", "val", 100)
+	if err == nil {
+		t.Fatal("TermsAgg() expected error on 500, got nil")
+	}
+}
+
 func TestIndexDocCreate_Conflict(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.RawQuery, "op_type=create") {
