@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS steps (
   tokens_in   INTEGER,
   tokens_out  INTEGER,
   gate_passed INTEGER,
+  artifacts   TEXT,
   UNIQUE(run_id, step_id)
 );
 

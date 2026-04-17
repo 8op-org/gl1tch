@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -227,6 +228,50 @@ func TestRecordRun_Workspace(t *testing.T) {
 	}
 	if ws != "stokagent" {
 		t.Fatalf("workspace: got %q, want stokagent", ws)
+	}
+}
+
+func TestRecordStepArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenAt(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+
+	runID, err := s.RecordRun(RunRecord{Kind: "pipeline", Name: "artifact-test", Input: ""})
+	if err != nil {
+		t.Fatalf("RecordRun: %v", err)
+	}
+
+	artifacts := []string{"/tmp/results/output.md", "/tmp/results/summary.json"}
+	err = s.RecordStep(StepRecord{
+		RunID:      runID,
+		StepID:     "save-step",
+		Output:     "saved",
+		Kind:       "save",
+		ExitStatus: intPtr(0),
+		Artifacts:  artifacts,
+	})
+	if err != nil {
+		t.Fatalf("RecordStep with artifacts: %v", err)
+	}
+
+	var raw string
+	err = s.db.QueryRow("SELECT artifacts FROM steps WHERE run_id = ? AND step_id = ?", runID, "save-step").Scan(&raw)
+	if err != nil {
+		t.Fatalf("query artifacts: %v", err)
+	}
+
+	var got []string
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("unmarshal artifacts: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(got))
+	}
+	if got[0] != artifacts[0] || got[1] != artifacts[1] {
+		t.Fatalf("artifacts mismatch: got %v, want %v", got, artifacts)
 	}
 }
 
