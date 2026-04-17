@@ -131,12 +131,15 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		TokensIn   int64  `json:"tokens_in"`
 		TokensOut  int64  `json:"tokens_out"`
 		GatePassed *bool  `json:"gate_passed,omitempty"`
+		Output     string `json:"output,omitempty"`
+		Prompt     string `json:"prompt,omitempty"`
 	}
 
 	stepRows, err := s.store.DB().Query(
 		`SELECT step_id, COALESCE(model,''), COALESCE(duration_ms,0),
 		        COALESCE(kind,''), exit_status, COALESCE(tokens_in,0),
-		        COALESCE(tokens_out,0), gate_passed
+		        COALESCE(tokens_out,0), gate_passed,
+		        COALESCE(output,''), COALESCE(prompt,'')
 		 FROM steps WHERE run_id = ?`, id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -149,7 +152,8 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		var se stepEntry
 		var exitStatus, gatePassed sql.NullInt64
 		if err := stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs,
-			&se.Kind, &exitStatus, &se.TokensIn, &se.TokensOut, &gatePassed); err != nil {
+			&se.Kind, &exitStatus, &se.TokensIn, &se.TokensOut, &gatePassed,
+			&se.Output, &se.Prompt); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}

@@ -10,7 +10,9 @@
   import { EditorView, basicSetup } from 'codemirror';
   import { EditorState } from '@codemirror/state';
   import { keymap } from '@codemirror/view';
-  import { yaml } from '@codemirror/lang-yaml';
+  import { StreamLanguage } from '@codemirror/language';
+  import { scheme } from '@codemirror/legacy-modes/mode/scheme';
+  import { oneDark } from '@codemirror/theme-one-dark';
 
   let { params } = $props();
   let name = $derived(params?.name || '');
@@ -57,7 +59,8 @@
         doc: content,
         extensions: [
           basicSetup,
-          yaml(),
+          StreamLanguage.define(scheme),
+          oneDark,
           cyberpunkTheme,
           EditorView.updateListener.of(update => {
             if (update.docChanged) dirty = true;
@@ -136,10 +139,8 @@
   }
 
   function formatTokens(input, output) {
-    if (input == null && output == null) return '--';
-    const i = input || 0;
-    const o = output || 0;
-    return `${i.toLocaleString()} / ${o.toLocaleString()}`;
+    if ((input == null || input === 0) && (output == null || output === 0)) return '--';
+    return `${(input || 0).toLocaleString()} / ${(output || 0).toLocaleString()}`;
   }
 
   function formatCost(cost) {
@@ -159,6 +160,21 @@
     if (!editorView && source != null) initEditor(source);
     return { destroy() { destroyEditor(); } };
   }
+
+  // Reload when name changes (via navigation between workflows)
+  let prevName = '';
+  $effect(() => {
+    if (name && name !== prevName) {
+      const isInitial = prevName === '';
+      prevName = name;
+      if (!isInitial) {
+        destroyEditor();
+        dirty = false;
+        activeTab = 'runs';
+        load();
+      }
+    }
+  });
 
   onMount(() => {
     load();

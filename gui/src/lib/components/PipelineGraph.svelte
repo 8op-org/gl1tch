@@ -184,9 +184,9 @@
         };
       });
 
-      // Set SVG dimensions with padding
-      svgWidth = (laid.width || 800) + padding * 2;
-      svgHeight = (laid.height || 400) + padding * 2;
+      // Set SVG dimensions with padding — add extra space for node widths at edges
+      svgWidth = (laid.width || 800) + padding * 2 + 40;
+      svgHeight = (laid.height || 400) + padding * 2 + 40;
     } catch (e) {
       console.error('ELK layout failed:', e);
     }
@@ -275,6 +275,8 @@
   .graph-viewport {
     min-width: 100%;
     min-height: 100%;
+    padding: 20px;
+    box-sizing: content-box;
   }
 
   .graph-loading {
