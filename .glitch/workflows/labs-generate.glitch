@@ -478,7 +478,11 @@
 
   ;; ── Save lab JSON ───────────────────────────────────
 
-  (save "site/generated/labs/issue-triage-kubernetes.json" :from "write-lab-1")
-  (save "site/generated/labs/pr-review-prometheus.json" :from "write-lab-2")
-  (save "site/generated/labs/model-showdown-containerd.json" :from "write-lab-3")
-  (save "site/generated/labs/bug-triage-kibana.json" :from "write-lab-4"))
+  (step "save-lab-1"
+    (save "site/generated/labs/issue-triage-kubernetes.json" :from "write-lab-1"))
+  (step "save-lab-2"
+    (save "site/generated/labs/pr-review-prometheus.json" :from "write-lab-2"))
+  (step "save-lab-3"
+    (save "site/generated/labs/model-showdown-containerd.json" :from "write-lab-3"))
+  (step "save-lab-4"
+    (save "site/generated/labs/bug-triage-kibana.json" :from "write-lab-4")))
