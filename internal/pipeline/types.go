@@ -84,7 +84,8 @@ type Step struct {
 	// Compare execution
 	CompareBranches []CompareBranch `yaml:"-"` // compare: named alternative branches
 	CompareReview   *ReviewConfig   `yaml:"-"` // compare: review config (nil = default judge)
-	CompareID       string          `yaml:"-"` // compare: id for top-level compare blocks
+	CompareID        string          `yaml:"-"` // compare: id for top-level compare blocks
+	CompareObjective string          `yaml:"-"` // compare: required objective statement
 
 	// Plugin invocation
 	PluginCall *PluginCallStep `yaml:"-"`
