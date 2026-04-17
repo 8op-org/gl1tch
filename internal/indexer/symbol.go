@@ -62,3 +62,11 @@ func SymbolID(file, kind, name string, startLine int) string {
 	h := sha256.Sum256([]byte(input))
 	return fmt.Sprintf("%x", h[:12])
 }
+
+// EdgeID returns a deterministic ID for an edge: the first 12 bytes of
+// SHA-256("sourceID:targetID:kind:file"), hex-encoded (24 characters).
+func EdgeID(sourceID, targetID, kind, file string) string {
+	input := fmt.Sprintf("%s:%s:%s:%s", sourceID, targetID, kind, file)
+	h := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", h[:12])
+}

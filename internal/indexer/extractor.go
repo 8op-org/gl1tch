@@ -66,61 +66,72 @@ func (le *LanguageExtractor) Extract(source []byte, file, repo, fileHash string)
 	var symbols []SymbolDoc
 
 	for _, sq := range le.SymbolQueries {
-		q, err := sitter.NewQuery([]byte(sq.Query), le.Grammar)
+		syms, err := le.runSymbolQuery(sq, root, source, file, repo, fileHash, now)
 		if err != nil {
 			return nil, err
 		}
-		defer q.Close()
-
-		cursor := sitter.NewQueryCursor()
-		defer cursor.Close()
-		cursor.Exec(q, root)
-
-		for {
-			match, ok := cursor.NextMatch()
-			if !ok {
-				break
-			}
-
-			var name string
-			var declNode *sitter.Node
-
-			for _, cap := range match.Captures {
-				capName := q.CaptureNameForId(cap.Index)
-				switch capName {
-				case "name":
-					name = cap.Node.Content(source)
-				case "decl":
-					declNode = cap.Node
-				}
-			}
-
-			if name == "" || declNode == nil {
-				continue
-			}
-
-			startLine := int(declNode.StartPoint().Row) + 1
-			endLine := int(declNode.EndPoint().Row) + 1
-
-			// Signature is the first line of the declaration text.
-			sig := firstLine(declNode.Content(source))
-
-			symbols = append(symbols, SymbolDoc{
-				ID:        SymbolID(file, sq.Kind, name, startLine),
-				File:      file,
-				Kind:      sq.Kind,
-				Name:      name,
-				Signature: sig,
-				Language:  le.Language,
-				StartLine: startLine,
-				EndLine:   endLine,
-				FileHash:  fileHash,
-				Repo:      repo,
-				IndexedAt: now,
-			})
-		}
+		symbols = append(symbols, syms...)
 	}
 
+	return symbols, nil
+}
+
+// runSymbolQuery runs a single SymbolQuery and returns matched symbols.
+// Resources (query, cursor) are closed before returning.
+func (le *LanguageExtractor) runSymbolQuery(sq SymbolQuery, root *sitter.Node, source []byte, file, repo, fileHash, now string) ([]SymbolDoc, error) {
+	q, err := sitter.NewQuery([]byte(sq.Query), le.Grammar)
+	if err != nil {
+		return nil, err
+	}
+	defer q.Close()
+
+	cursor := sitter.NewQueryCursor()
+	defer cursor.Close()
+	cursor.Exec(q, root)
+
+	var symbols []SymbolDoc
+	for {
+		match, ok := cursor.NextMatch()
+		if !ok {
+			break
+		}
+
+		var name string
+		var declNode *sitter.Node
+
+		for _, cap := range match.Captures {
+			capName := q.CaptureNameForId(cap.Index)
+			switch capName {
+			case "name":
+				name = cap.Node.Content(source)
+			case "decl":
+				declNode = cap.Node
+			}
+		}
+
+		if name == "" || declNode == nil {
+			continue
+		}
+
+		startLine := int(declNode.StartPoint().Row) + 1
+		endLine := int(declNode.EndPoint().Row) + 1
+
+		sig := firstLine(declNode.Content(source))
+
+		symbols = append(symbols, SymbolDoc{
+			ID:        SymbolID(file, sq.Kind, name, startLine),
+			File:      file,
+			Kind:      sq.Kind,
+			Name:      name,
+			Signature: sig,
+			Language:  le.Language,
+			StartLine: startLine,
+			EndLine:   endLine,
+			FileHash:  fileHash,
+			Repo:      repo,
+			IndexedAt: now,
+		})
+	}
 	return symbols, nil
 }
 

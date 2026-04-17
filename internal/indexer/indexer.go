@@ -64,25 +64,38 @@ var skipNames = map[string]bool{
 
 // langMap maps file extensions to language names.
 var langMap = map[string]string{
-	".go":   "go",
-	".py":   "python",
-	".js":   "javascript",
-	".ts":   "typescript",
-	".tsx":  "tsx",
-	".jsx":  "jsx",
-	".rb":   "ruby",
-	".rs":   "rust",
-	".java": "java",
-	".vue":  "vue",
-	".yaml": "yaml",
-	".yml":  "yaml",
-	".json": "json",
-	".md":   "markdown",
-	".sh":   "shell",
-	".bash": "shell",
-	".sql":  "sql",
-	".html": "html",
-	".css":  "css",
+	".go":    "go",
+	".py":    "python",
+	".js":    "javascript",
+	".ts":    "typescript",
+	".tsx":   "tsx",
+	".jsx":   "jsx",
+	".rb":    "ruby",
+	".rs":    "rust",
+	".java":  "java",
+	".vue":   "vue",
+	".yaml":  "yaml",
+	".yml":   "yaml",
+	".json":  "json",
+	".md":    "markdown",
+	".sh":    "shell",
+	".bash":  "shell",
+	".sql":   "sql",
+	".html":  "html",
+	".css":   "css",
+	".c":     "c",
+	".h":     "c",
+	".cpp":   "cpp",
+	".cc":    "cpp",
+	".cxx":   "cpp",
+	".hpp":   "cpp",
+	".hh":    "cpp",
+	".cs":    "csharp",
+	".php":   "php",
+	".scala": "scala",
+	".swift": "swift",
+	".kt":    "kotlin",
+	".kts":   "kotlin",
 }
 
 // symbolPattern matches common declarations across languages.
@@ -422,7 +435,7 @@ func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 	}
 
 	// Phase 2+3 — Resolve edges.
-	resolver := NewResolver(allSymbols, repoName, absRoot)
+	resolver := NewResolver(allSymbols, repoName, absRoot, registry)
 	modPath := readFirstModuleLine(filepath.Join(absRoot, "go.mod"))
 	if modPath != "" {
 		resolver.ModulePath = modPath
@@ -432,15 +445,17 @@ func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 	allEdges = append(allEdges, resolver.ResolveContains()...)
 	allEdges = append(allEdges, resolver.ResolveImports(allImports)...)
 	allEdges = append(allEdges, resolver.ResolveCalls(allCalls)...)
+	allEdges = append(allEdges, resolver.ResolveExports()...)
+	allEdges = append(allEdges, resolver.ResolveExtendsImplements()...)
 
 	// Bulk index edges.
 	var edgeBatch []esearch.BulkDoc
-	for i, e := range allEdges {
+	for _, e := range allEdges {
 		body, err := json.Marshal(e)
 		if err != nil {
 			return fmt.Errorf("marshal edge: %w", err)
 		}
-		docID := fmt.Sprintf("%s-%s-%s-%d", e.SourceID, e.TargetID, e.Kind, i)
+		docID := EdgeID(e.SourceID, e.TargetID, e.Kind, e.File)
 		edgeBatch = append(edgeBatch, esearch.BulkDoc{ID: docID, Body: body})
 		if len(edgeBatch) >= bulkBatch {
 			if err := es.BulkIndex(ctx, edgesIndex, edgeBatch); err != nil {

@@ -82,13 +82,21 @@ func TestIndexPrefixConstants(t *testing.T) {
 	}
 }
 
-func TestAllIndicesContainsNewMappings(t *testing.T) {
+func TestAllIndicesExcludesPrefixes(t *testing.T) {
 	all := AllIndices()
-	if _, ok := all[IndexSymbolsPrefix]; !ok {
-		t.Fatal("AllIndices missing IndexSymbolsPrefix")
+	// Per-repo graph indices are created dynamically; prefix keys should
+	// not appear in AllIndices (they aren't valid index names).
+	if _, ok := all[IndexSymbolsPrefix]; ok {
+		t.Fatal("AllIndices should not contain IndexSymbolsPrefix")
 	}
-	if _, ok := all[IndexEdgesPrefix]; !ok {
-		t.Fatal("AllIndices missing IndexEdgesPrefix")
+	if _, ok := all[IndexEdgesPrefix]; ok {
+		t.Fatal("AllIndices should not contain IndexEdgesPrefix")
+	}
+	// Verify global indices are present.
+	for _, idx := range []string{IndexEvents, IndexResearchRuns, IndexToolCalls, IndexLLMCalls, IndexWorkflowRuns, IndexCrossReviews, IndexRuns} {
+		if _, ok := all[idx]; !ok {
+			t.Errorf("AllIndices missing %s", idx)
+		}
 	}
 }
 

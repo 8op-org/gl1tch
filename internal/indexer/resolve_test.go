@@ -29,7 +29,7 @@ func TestResolveImportsGoLocal(t *testing.T) {
 		},
 	}
 
-	r := NewResolver(symbols, repo, repoRoot)
+	r := NewResolver(symbols, repo, repoRoot, nil)
 	r.ModulePath = modPath
 
 	imports := []UnresolvedImport{
@@ -89,7 +89,7 @@ func TestResolveContainsEdges(t *testing.T) {
 		},
 	}
 
-	r := NewResolver(symbols, repo, repoRoot)
+	r := NewResolver(symbols, repo, repoRoot, nil)
 	edges := r.ResolveContains()
 
 	if len(edges) != 1 {
@@ -136,7 +136,7 @@ func TestResolveCallsLocalScope(t *testing.T) {
 		},
 	}
 
-	r := NewResolver(symbols, repo, repoRoot)
+	r := NewResolver(symbols, repo, repoRoot, nil)
 
 	calls := []CallSite{
 		{
@@ -182,7 +182,7 @@ func TestResolveCallsUnresolvedDropped(t *testing.T) {
 		},
 	}
 
-	r := NewResolver(symbols, repo, repoRoot)
+	r := NewResolver(symbols, repo, repoRoot, nil)
 
 	calls := []CallSite{
 		{
@@ -196,5 +196,108 @@ func TestResolveCallsUnresolvedDropped(t *testing.T) {
 
 	if len(edges) != 0 {
 		t.Fatalf("expected 0 edges for unresolved call, got %d", len(edges))
+	}
+}
+
+func TestResolveExportsJSOnly(t *testing.T) {
+	repo := "example/repo"
+	repoRoot := "/src/repo"
+
+	symbols := []SymbolDoc{
+		{
+			ID:       SymbolID("lib/util.js", KindFunction, "doStuff", 1),
+			File:     "lib/util.js",
+			Kind:     KindFunction,
+			Name:     "doStuff",
+			Language: "javascript",
+			Repo:     repo,
+		},
+		{
+			ID:       SymbolID("lib/util.js", KindClass, "Widget", 10),
+			File:     "lib/util.js",
+			Kind:     KindClass,
+			Name:     "Widget",
+			Language: "javascript",
+			Repo:     repo,
+		},
+		{
+			ID:       SymbolID("pkg/main.go", KindFunction, "main", 1),
+			File:     "pkg/main.go",
+			Kind:     KindFunction,
+			Name:     "main",
+			Language: "go",
+			Repo:     repo,
+		},
+	}
+
+	r := NewResolver(symbols, repo, repoRoot, nil)
+	edges := r.ResolveExports()
+
+	// Only the 2 JS symbols should get export edges; the Go function should not.
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 export edges, got %d", len(edges))
+	}
+
+	for _, e := range edges {
+		if e.Kind != EdgeExports {
+			t.Errorf("expected edge kind %q, got %q", EdgeExports, e.Kind)
+		}
+		if e.File != "lib/util.js" {
+			t.Errorf("expected file lib/util.js, got %q", e.File)
+		}
+	}
+}
+
+func TestResolveExtendsImplementsStub(t *testing.T) {
+	r := NewResolver(nil, "repo", "/root", nil)
+	edges := r.ResolveExtendsImplements()
+	if edges != nil {
+		t.Fatalf("expected nil, got %v", edges)
+	}
+}
+
+func TestResolveImportsWithPathResolver(t *testing.T) {
+	repo := "example/repo"
+	repoRoot := "/src/repo"
+
+	symbols := []SymbolDoc{
+		{
+			ID:       SymbolID("lib/utils/index.js", KindFunction, "helper", 1),
+			File:     "lib/utils/index.js",
+			Kind:     KindFunction,
+			Name:     "helper",
+			Language: "javascript",
+			Repo:     repo,
+		},
+	}
+
+	// Provide a JS path resolver via extractors.
+	extractors := map[string]*LanguageExtractor{
+		"javascript": {
+			PathResolver: func(importPath, fromFile, root string) string {
+				if importPath == "./utils" {
+					return "lib/utils"
+				}
+				return ""
+			},
+		},
+	}
+
+	r := NewResolver(symbols, repo, repoRoot, extractors)
+
+	imports := []UnresolvedImport{
+		{
+			Path: "./utils",
+			File: "lib/app.js",
+			Line: 1,
+		},
+	}
+
+	edges := r.ResolveImports(imports)
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 import edge, got %d", len(edges))
+	}
+	if edges[0].Kind != EdgeImports {
+		t.Errorf("expected kind %q, got %q", EdgeImports, edges[0].Kind)
 	}
 }

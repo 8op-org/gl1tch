@@ -186,17 +186,18 @@ const EdgesMapping = `{
   }
 }`
 
-// AllIndices returns a map of index name → mapping JSON for all managed indices.
+// AllIndices returns a map of index name → mapping JSON for all managed
+// global indices. Per-repo graph indices (symbols, edges) are created
+// dynamically during IndexRepoGraph using EnsureIndex — they don't belong
+// here because the prefix constants are not valid index names.
 func AllIndices() map[string]string {
 	return map[string]string{
 		IndexEvents:       EventsMapping,
 		IndexResearchRuns: ResearchRunsMapping,
 		IndexToolCalls:    ToolCallsMapping,
 		IndexLLMCalls:     LLMCallsMapping,
-		IndexWorkflowRuns:  WorkflowRunsMapping,
-		IndexCrossReviews:  CrossReviewsMapping,
-		IndexRuns:           RunsMapping,
-		IndexSymbolsPrefix:  SymbolsMapping,
-		IndexEdgesPrefix:    EdgesMapping,
+		IndexWorkflowRuns: WorkflowRunsMapping,
+		IndexCrossReviews: CrossReviewsMapping,
+		IndexRuns:         RunsMapping,
 	}
 }

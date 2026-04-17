@@ -200,6 +200,51 @@ func TestGraphBFSZeroDepth(t *testing.T) {
 	}
 }
 
+func TestWithDepthReturnsCopy(t *testing.T) {
+	es := esearch.NewClient("http://localhost:9200")
+	llm := func(prompt string) (string, error) { return "", nil }
+	qe := NewQueryEngine(es, llm)
+	qe2 := qe.WithDepth(5)
+	if qe2 == qe {
+		t.Error("WithDepth should return a new copy, not mutate in place")
+	}
+	if qe2.depth != 5 {
+		t.Errorf("expected depth 5, got %d", qe2.depth)
+	}
+	if qe.depth != 0 {
+		t.Errorf("original depth should be 0, got %d", qe.depth)
+	}
+}
+
+func TestExpandWithGraphNoRepo(t *testing.T) {
+	es := esearch.NewClient("http://localhost:9200")
+	llm := func(prompt string) (string, error) { return "", nil }
+	qe := NewQueryEngine(es, llm)
+	// No repo set — expandWithGraph should return nil.
+	result := qe.expandWithGraph(nil, nil, 2)
+	if result != nil {
+		t.Error("expected nil for nil results")
+	}
+}
+
+func TestExpandWithGraphNoSymbolHits(t *testing.T) {
+	es := esearch.NewClient("http://localhost:9200")
+	llm := func(prompt string) (string, error) { return "", nil }
+	qe := NewQueryEngine(es, llm).WithRepo("myrepo")
+
+	// Results from a non-symbols index — no seeds to expand.
+	resp := &esearch.SearchResponse{
+		Total: 1,
+		Results: []esearch.SearchResult{
+			{Index: "glitch-events", Source: []byte(`{"message":"test"}`)},
+		},
+	}
+	result := qe.expandWithGraph(nil, resp, 2)
+	if result != nil {
+		t.Error("expected nil when no symbol hits present")
+	}
+}
+
 func TestAllIndices(t *testing.T) {
 	indices := allIndices()
 	want := []string{

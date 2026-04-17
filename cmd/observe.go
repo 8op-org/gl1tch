@@ -49,7 +49,7 @@ var observeCmd = &cobra.Command{
 			engine = engine.WithRepo(observeRepo)
 		}
 		if observeDepth > 0 {
-			engine.WithDepth(observeDepth)
+			engine = engine.WithDepth(observeDepth)
 		}
 		answer, err := engine.Answer(cmd.Context(), question)
 		if err != nil {

@@ -101,6 +101,40 @@ func TestSymbolDocJSON(t *testing.T) {
 	}
 }
 
+func TestEdgeID(t *testing.T) {
+	t.Run("deterministic", func(t *testing.T) {
+		a := EdgeID("src1", "tgt1", "calls", "main.go")
+		b := EdgeID("src1", "tgt1", "calls", "main.go")
+		if a != b {
+			t.Fatalf("same inputs produced different IDs: %q vs %q", a, b)
+		}
+	})
+
+	t.Run("length is 24 hex chars", func(t *testing.T) {
+		id := EdgeID("src1", "tgt1", "calls", "main.go")
+		if len(id) != 24 {
+			t.Fatalf("expected 24 chars, got %d: %q", len(id), id)
+		}
+	})
+
+	t.Run("different inputs differ", func(t *testing.T) {
+		a := EdgeID("src1", "tgt1", "calls", "main.go")
+		b := EdgeID("src2", "tgt1", "calls", "main.go")
+		c := EdgeID("src1", "tgt2", "calls", "main.go")
+		d := EdgeID("src1", "tgt1", "imports", "main.go")
+		e := EdgeID("src1", "tgt1", "calls", "other.go")
+
+		ids := []string{a, b, c, d, e}
+		seen := make(map[string]bool)
+		for _, id := range ids {
+			if seen[id] {
+				t.Fatalf("collision found: %q", id)
+			}
+			seen[id] = true
+		}
+	})
+}
+
 func TestEdgeDocFields(t *testing.T) {
 	edge := EdgeDoc{
 		SourceID: "src123",

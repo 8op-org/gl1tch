@@ -5,26 +5,29 @@ import (
 )
 
 // Resolver takes the full symbol set and resolves cross-file references into
-// EdgeDoc edges (contains, imports, calls).
+// EdgeDoc edges (contains, imports, calls, exports).
 type Resolver struct {
 	symbols    []SymbolDoc
 	byFile     map[string][]SymbolDoc
 	byName     map[string][]SymbolDoc
 	byID       map[string]SymbolDoc
+	extractors map[string]*LanguageExtractor
 	repo       string
 	repoRoot   string
 	ModulePath string // Go module path (set externally)
 }
 
 // NewResolver builds a Resolver with lookup maps from the symbol list.
-func NewResolver(symbols []SymbolDoc, repo, repoRoot string) *Resolver {
+// extractors maps language name to its LanguageExtractor (may be nil).
+func NewResolver(symbols []SymbolDoc, repo, repoRoot string, extractors map[string]*LanguageExtractor) *Resolver {
 	r := &Resolver{
-		symbols:  symbols,
-		byFile:   make(map[string][]SymbolDoc),
-		byName:   make(map[string][]SymbolDoc),
-		byID:     make(map[string]SymbolDoc),
-		repo:     repo,
-		repoRoot: repoRoot,
+		symbols:    symbols,
+		byFile:     make(map[string][]SymbolDoc),
+		byName:     make(map[string][]SymbolDoc),
+		byID:       make(map[string]SymbolDoc),
+		extractors: extractors,
+		repo:       repo,
+		repoRoot:   repoRoot,
 	}
 	for _, s := range symbols {
 		r.byFile[s.File] = append(r.byFile[s.File], s)
@@ -127,9 +130,22 @@ func (r *Resolver) ResolveCalls(calls []CallSite) []EdgeDoc {
 }
 
 // resolveImportPath converts an import path to a repo-relative directory.
-// For Go imports, it strips the module path prefix. For others, returns the
-// path directly.
+// It looks up the language-specific PathResolver for the importing file; if
+// none is found or the resolver returns empty, falls back to Go module path
+// stripping and then the raw path.
 func (r *Resolver) resolveImportPath(imp UnresolvedImport) string {
+	// Try language-specific resolver first.
+	if r.extractors != nil {
+		lang := DetectLanguage(imp.File)
+		if ext, ok := r.extractors[lang]; ok && ext.PathResolver != nil {
+			resolved := ext.PathResolver(imp.Path, imp.File, r.repoRoot)
+			if resolved != "" {
+				return resolved
+			}
+		}
+	}
+
+	// Fallback: Go module path stripping.
 	if r.ModulePath != "" && strings.HasPrefix(imp.Path, r.ModulePath) {
 		rel := strings.TrimPrefix(imp.Path, r.ModulePath)
 		rel = strings.TrimPrefix(rel, "/")
@@ -189,6 +205,55 @@ func (r *Resolver) findEnclosing(file string, line int) string {
 		return ""
 	}
 	return best.ID
+}
+
+// ResolveExports creates "exports" edges from a file pseudo-symbol to each
+// top-level symbol in that file for languages that have explicit exports
+// (JavaScript, TypeScript, TSX, JSX). For other languages exports are
+// implicit and this returns nil.
+func (r *Resolver) ResolveExports() []EdgeDoc {
+	exportLangs := map[string]bool{
+		"javascript": true,
+		"typescript": true,
+		"tsx":        true,
+		"jsx":        true,
+	}
+
+	var edges []EdgeDoc
+	for file, syms := range r.byFile {
+		// Only emit export edges for JS/TS family files.
+		lang := DetectLanguage(file)
+		if !exportLangs[lang] {
+			continue
+		}
+
+		sourceID := fileSymbolID(file, r.repo)
+		for _, s := range syms {
+			if !importableKind(s.Kind) {
+				continue
+			}
+			edges = append(edges, EdgeDoc{
+				SourceID: sourceID,
+				TargetID: s.ID,
+				Kind:     EdgeExports,
+				File:     file,
+				Repo:     r.repo,
+			})
+		}
+	}
+	return edges
+}
+
+// ResolveExtendsImplements is a placeholder for extends/implements edge
+// resolution. Go uses implicit interfaces (requires type-checker, not just
+// AST), and other languages would need additional tree-sitter queries for
+// superclass/interface capture. Returns nil for now.
+//
+// TODO: Add tree-sitter queries for explicit inheritance in Python
+// (class Foo(Base)), Java/C#/Kotlin (extends/implements clauses), and
+// Scala (extends). Go implicit interfaces require go/types analysis.
+func (r *Resolver) ResolveExtendsImplements() []EdgeDoc {
+	return nil
 }
 
 // fileSymbolID returns a deterministic ID for a file-level pseudo-symbol.

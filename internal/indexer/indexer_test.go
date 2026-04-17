@@ -44,6 +44,36 @@ func TestDetectLanguage(t *testing.T) {
 	}
 }
 
+func TestDetectLanguageNewExtensions(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     string
+	}{
+		{"main.c", "c"},
+		{"header.h", "c"},
+		{"app.cpp", "cpp"},
+		{"lib.cc", "cpp"},
+		{"util.cxx", "cpp"},
+		{"types.hpp", "cpp"},
+		{"impl.hh", "cpp"},
+		{"Program.cs", "csharp"},
+		{"index.php", "php"},
+		{"Main.scala", "scala"},
+		{"App.swift", "swift"},
+		{"Main.kt", "kotlin"},
+		{"build.kts", "kotlin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			got := DetectLanguage(tt.filename)
+			if got != tt.want {
+				t.Errorf("DetectLanguage(%q) = %q, want %q", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestChunkContent(t *testing.T) {
 	t.Run("small file single chunk", func(t *testing.T) {
 		content := "hello world"
