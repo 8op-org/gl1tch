@@ -1,0 +1,102 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const labs = (await getCollection('labs')).sort(
+  (a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
+);
+---
+
+<Base title="Labs — gl1tch">
+  <main>
+    <section class="labs-index">
+      <h1>Labs</h1>
+      <p class="labs-intro">Real workflows, real issues, real output. Each lab runs gl1tch against a public GitHub issue or PR and shows you exactly what comes back — from free models to paid.</p>
+
+      {labs.length === 0 && (
+        <p class="labs-empty">No labs yet. Run <code>glitch workflow run labs-generate</code> to create them.</p>
+      )}
+
+      <div class="labs-grid">
+        {labs.map((lab) => (
+          <a href={`/labs/${lab.data.slug}`} class="lab-card">
+            <h2>{lab.data.title}</h2>
+            <p>{lab.data.description}</p>
+            <time>{lab.data.date}</time>
+          </a>
+        ))}
+      </div>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .labs-index {
+    padding-top: 140px;
+    max-width: 900px;
+    margin: 0 auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-bottom: 6rem;
+  }
+
+  .labs-index h1 {
+    font-size: 2rem;
+    color: var(--teal);
+    margin-bottom: 0.75rem;
+  }
+
+  .labs-intro {
+    color: var(--dim);
+    font-size: 0.95rem;
+    margin-bottom: 2.5rem;
+    max-width: 600px;
+  }
+
+  .labs-empty {
+    color: var(--dim);
+    font-style: italic;
+  }
+
+  .labs-empty code {
+    color: var(--teal);
+    font-size: 0.85rem;
+  }
+
+  .labs-grid {
+    display: grid;
+    gap: 1.2rem;
+  }
+
+  .lab-card {
+    display: block;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-decoration: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .lab-card:hover {
+    border-color: var(--teal);
+    box-shadow: 0 0 20px var(--glow);
+  }
+
+  .lab-card h2 {
+    font-size: 1.1rem;
+    color: var(--fg);
+    margin-bottom: 0.5rem;
+  }
+
+  .lab-card p {
+    color: var(--dim);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .lab-card time {
+    color: var(--dim);
+    font-size: 0.75rem;
+  }
+</style>

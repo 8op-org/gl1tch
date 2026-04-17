@@ -1,0 +1,19 @@
+---
+import { getCollection, render } from 'astro:content';
+import Lab from '../../layouts/Lab.astro';
+
+export async function getStaticPaths() {
+  const labs = await getCollection('labs');
+  return labs.map((entry) => ({
+    params: { slug: entry.data.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<Lab title={entry.data.title} description={entry.data.description} date={entry.data.date}>
+  <Content />
+</Lab>
