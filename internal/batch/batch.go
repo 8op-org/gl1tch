@@ -261,26 +261,9 @@ func Run(ctx context.Context, opts RunOpts) error {
 		}
 	}
 
-	// Generate manifests
-	fmt.Printf("\n=========================================\n")
-	fmt.Printf("GENERATING MANIFESTS\n")
-	fmt.Printf("=========================================\n")
-
-	for _, item := range opts.Items {
-		itemDir := filepath.Join(resultsBase, item)
-		m, err := GenerateManifest(itemDir, item, opts.Variants, opts.Iterations)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: manifest for %s: %v\n", item, err)
-			continue
-		}
-		if err := WriteManifest(itemDir, m, opts.Variants, opts.Iterations); err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: write manifest %s: %v\n", item, err)
-			continue
-		}
-		fmt.Printf("  %s: %s/manifest.md (winner: %s iter %d)\n", item, itemDir, m.BestVariant, m.BestIteration)
-	}
-
-	// CLEAR Review: batch-level reflection
+	// CLEAR Review: batch-level reflection (runs before manifests so
+	// learnings can be included in manifest output).
+	var batchLearnings string
 	if opts.Config.ProviderRegistry != nil && opts.Config.DefaultModel != "" {
 		fmt.Printf("\n=========================================\n")
 		fmt.Printf("BATCH REFLECTION\n")
@@ -333,27 +316,18 @@ RECOMMENDATION: <one sentence — what should future batch runs do differently?>
 				fmt.Fprintf(os.Stderr, "WARN: batch reflection failed: %v\n", err)
 			} else {
 				fmt.Printf("\n%s\n", result.Output)
+				batchLearnings = result.Output
 
 				if opts.Config.Telemetry != nil {
-					finding, confidence, recommendation := "", "", ""
-					for _, line := range strings.Split(result.Output, "\n") {
-						line = strings.TrimSpace(line)
-						if strings.HasPrefix(line, "FINDING:") {
-							finding = strings.TrimSpace(strings.TrimPrefix(line, "FINDING:"))
-						} else if strings.HasPrefix(line, "CONFIDENCE:") {
-							confidence = strings.TrimSpace(strings.TrimPrefix(line, "CONFIDENCE:"))
-						} else if strings.HasPrefix(line, "RECOMMENDATION:") {
-							recommendation = strings.TrimSpace(strings.TrimPrefix(line, "RECOMMENDATION:"))
-						}
-					}
-
+					reflection := pipeline.ParseReflection(result.Output)
 					opts.Config.Telemetry.IndexLearning(context.Background(), esearch.LearningDoc{
 						RunID:          fmt.Sprintf("batch-%d", parentID),
 						Objective:      "batch aggregate",
 						Scope:          "batch",
-						Finding:        finding,
-						Confidence:     confidence,
-						Recommendation: recommendation,
+						Finding:        reflection.Finding,
+						ModelInsight:   reflection.ModelInsight,
+						Confidence:     reflection.Confidence,
+						Recommendation: reflection.Recommendation,
 						ModelsTested:   opts.Variants,
 						WorkflowName:   "batch",
 						Workspace:      opts.Config.Workspace,
@@ -362,6 +336,26 @@ RECOMMENDATION: <one sentence — what should future batch runs do differently?>
 				}
 			}
 		}
+	}
+
+	// Generate manifests (after reflection so learnings can be included)
+	fmt.Printf("\n=========================================\n")
+	fmt.Printf("GENERATING MANIFESTS\n")
+	fmt.Printf("=========================================\n")
+
+	for _, item := range opts.Items {
+		itemDir := filepath.Join(resultsBase, item)
+		m, err := GenerateManifest(itemDir, item, opts.Variants, opts.Iterations)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: manifest for %s: %v\n", item, err)
+			continue
+		}
+		m.Learnings = batchLearnings
+		if err := WriteManifest(itemDir, m, opts.Variants, opts.Iterations); err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: write manifest %s: %v\n", item, err)
+			continue
+		}
+		fmt.Printf("  %s: %s/manifest.md (winner: %s iter %d)\n", item, itemDir, m.BestVariant, m.BestIteration)
 	}
 
 	return nil
