@@ -6,12 +6,9 @@ builds:
   - id: glitch
     binary: glitch
     env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-    ignore:
-      - goos: windows
-        goarch: arm64
+      - CGO_ENABLED=1
+    goos: [darwin]
+    goarch: [arm64]
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -23,29 +20,11 @@ builds:
 
 archives:
   - id: default
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
-
-brews:
-  - name: glitch
-    directory: Formula
-    repository:
-      owner: 8op-org
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://8op.org"
-    description: "gl1tch — your GitHub co-pilot"
-    license: "MIT"
-    install: |
-      bin.install "glitch"
-    test: |
-      assert_match version.to_s, shell_output("#{bin}/glitch --version")
 
 changelog:
   use: git

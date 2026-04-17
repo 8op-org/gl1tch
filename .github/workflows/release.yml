@@ -9,8 +9,25 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-13
+            goos: darwin
+            goarch: amd64
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: 1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +44,120 @@ jobs:
           npm ci
           npm run build
           cp -r dist ../internal/gui/dist
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Build binary
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go build -ldflags "-s -w \
+            -X main.version=${VERSION} \
+            -X main.commit=${COMMIT} \
+            -X main.date=${DATE} \
+            -X github.com/8op-org/gl1tch/cmd.Version=${VERSION} \
+            -X github.com/8op-org/gl1tch/cmd.Commit=${COMMIT} \
+            -X github.com/8op-org/gl1tch/cmd.Date=${DATE}" \
+            -o glitch .
+      - name: Package archive
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="glitch_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
+          tar czf "${ARCHIVE}" glitch
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
         with:
-          args: release --clean
+          name: glitch-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.ARCHIVE }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum glitch_*.tar.gz > checksums.txt
+      - name: Generate changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" \
+              | grep -vE "^- (chore|docs|ci|test)" > changelog.md || true
+          else
+            echo "Initial release" > changelog.md
+          fi
+      - name: Create release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "glitch $GITHUB_REF_NAME" \
+            --notes-file changelog.md \
+            artifacts/*
+      - name: Update Homebrew tap
+        env:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DARWIN_ARM64_SHA=$(grep "darwin_arm64" artifacts/checksums.txt | awk '{print $1}')
+          DARWIN_AMD64_SHA=$(grep "darwin_amd64" artifacts/checksums.txt | awk '{print $1}')
+          LINUX_ARM64_SHA=$(grep "linux_arm64" artifacts/checksums.txt | awk '{print $1}')
+          LINUX_AMD64_SHA=$(grep "linux_amd64" artifacts/checksums.txt | awk '{print $1}')
+          BASE_URL="https://github.com/8op-org/gl1tch/releases/download/v${VERSION}"
+
+          cat > formula.rb <<FORMULA
+          class Glitch < Formula
+            desc "gl1tch — your GitHub co-pilot"
+            homepage "https://8op.org"
+            license "MIT"
+            version "${VERSION}"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${BASE_URL}/glitch_${VERSION}_darwin_arm64.tar.gz"
+                sha256 "${DARWIN_ARM64_SHA}"
+              else
+                url "${BASE_URL}/glitch_${VERSION}_darwin_amd64.tar.gz"
+                sha256 "${DARWIN_AMD64_SHA}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "${BASE_URL}/glitch_${VERSION}_linux_arm64.tar.gz"
+                sha256 "${LINUX_ARM64_SHA}"
+              else
+                url "${BASE_URL}/glitch_${VERSION}_linux_amd64.tar.gz"
+                sha256 "${LINUX_AMD64_SHA}"
+              end
+            end
+
+            def install
+              bin.install "glitch"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/glitch --version")
+            end
+          end
+          FORMULA
+
+          # Push formula to tap repo
+          cd "$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" tap
+          cd tap
+          mkdir -p Formula
+          cp "${OLDPWD}/formula.rb" Formula/glitch.rb
+          # Strip leading whitespace from heredoc indentation
+          sed -i 's/^          //' Formula/glitch.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/glitch.rb
+          git commit -m "glitch ${VERSION}"
+          git push
