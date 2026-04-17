@@ -1,0 +1,133 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  date?: string;
+}
+
+const { title, description, date } = Astro.props;
+---
+
+<Base title={`${title} — gl1tch labs`} description={description}>
+  <main>
+    <section class="lab-page">
+      <div class="lab-header">
+        <a href="/labs" class="lab-back">&larr; labs</a>
+        <h1>{title}</h1>
+        {description && <p class="lab-desc">{description}</p>}
+        {date && <time class="lab-date">{date}</time>}
+      </div>
+      <div class="lab-content">
+        <slot />
+      </div>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .lab-page {
+    padding-top: 140px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-bottom: 6rem;
+  }
+
+  .lab-back {
+    color: var(--dim);
+    text-decoration: none;
+    font-size: 0.85rem;
+    display: inline-block;
+    margin-bottom: 1rem;
+  }
+  .lab-back:hover { color: var(--teal); }
+
+  .lab-header {
+    margin-bottom: 3rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2rem;
+  }
+
+  .lab-header h1 {
+    font-size: 1.8rem;
+    color: var(--teal);
+    margin-bottom: 0.5rem;
+  }
+
+  .lab-desc {
+    color: var(--dim);
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .lab-date {
+    color: var(--dim);
+    font-size: 0.8rem;
+  }
+
+  .lab-content {
+    line-height: 1.8;
+  }
+
+  .lab-content :global(pre) {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+    font-size: 0.85rem;
+  }
+
+  .lab-content :global(blockquote) {
+    border-left: 3px solid var(--teal);
+    padding-left: 1rem;
+    margin: 1.5rem 0;
+    color: var(--dim);
+  }
+
+  .lab-content :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.85rem;
+  }
+
+  .lab-content :global(th) {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 2px solid var(--border);
+    color: var(--teal);
+    font-weight: 500;
+  }
+
+  .lab-content :global(td) {
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .lab-content :global(tr:hover td) {
+    background: var(--glow);
+  }
+
+  .lab-content :global(h2) {
+    color: var(--teal);
+    font-size: 1.3rem;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .lab-content :global(h3) {
+    color: var(--fg);
+    font-size: 1.1rem;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .lab-content :global(strong) {
+    color: var(--yellow);
+  }
+</style>
