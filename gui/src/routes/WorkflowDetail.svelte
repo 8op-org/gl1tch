@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { push } from 'svelte-spa-router';
   import { getWorkflow, saveWorkflow, listWorkflowRuns } from '../lib/api.js';
   import { icon } from '../lib/icons.js';
@@ -7,12 +7,16 @@
   import StatusBadge from '../lib/components/StatusBadge.svelte';
   import RunDialog from './RunDialog.svelte';
   import PipelineGraph from '../lib/components/PipelineGraph.svelte';
+  import { EditorView, basicSetup } from 'codemirror';
+  import { EditorState } from '@codemirror/state';
+  import { keymap } from '@codemirror/view';
+  import { yaml } from '@codemirror/lang-yaml';
 
   let { params } = $props();
   let name = $derived(params?.name || '');
 
   // Tab state
-  let activeTab = $state('runs'); // 'runs' | 'source' | 'metadata'
+  let activeTab = $state('runs');
 
   // Workflow data
   let source = $state('');
@@ -27,49 +31,45 @@
 
   // Editor
   let editorEl = $state(null);
-  let editorInstance = $state(null);
-  let monacoModule = $state(null);
+  let editorView = $state(null);
 
-  // Expanded run (for pipeline graph - will be wired in Task 5)
+  // Expanded run (for pipeline graph)
   let expandedRunId = $state(null);
 
-  // Monaco worker setup + editor init
-  async function initMonaco() {
-    if (editorInstance || !editorEl) return;
-    try {
-      const editorWorker = await import('monaco-editor/esm/vs/editor/editor.worker?worker');
-      self.MonacoEnvironment = {
-        getWorker() { return new editorWorker.default(); }
-      };
-      const monaco = await import('monaco-editor');
-      monacoModule = monaco;
-      editorInstance = monaco.editor.create(editorEl, {
-        value: source,
-        language: 'yaml',
-        theme: 'vs-dark',
-        minimap: { enabled: false },
-        fontSize: 13,
-        fontFamily: "'JetBrains Mono', monospace",
-        scrollBeyondLastLine: false,
-        automaticLayout: true,
-        padding: { top: 16 },
-        renderLineHighlight: 'gutter',
-        lineNumbers: 'on',
-        folding: true,
-        wordWrap: 'on',
-      });
-      editorInstance.onDidChangeModelContent(() => { dirty = true; });
-    } catch (e) {
-      console.warn('Monaco failed to load, falling back to textarea', e);
-    }
+  // CodeMirror cyberpunk theme
+  const cyberpunkTheme = EditorView.theme({
+    '&': { backgroundColor: '#0a0e14', color: '#e0e6ed', fontSize: '13px' },
+    '.cm-content': { fontFamily: "'JetBrains Mono', monospace", lineHeight: '1.7', padding: '16px 0' },
+    '.cm-gutters': { backgroundColor: '#111820', color: '#5a6a7a', borderRight: '1px solid #1e2a3a', paddingLeft: '8px' },
+    '.cm-activeLineGutter': { backgroundColor: '#1a2230' },
+    '.cm-activeLine': { backgroundColor: 'rgba(0, 229, 255, 0.03)' },
+    '.cm-cursor': { borderLeftColor: '#00e5ff' },
+    '.cm-selectionBackground, ::selection': { backgroundColor: 'rgba(0, 229, 255, 0.15) !important' },
+    '.cm-matchingBracket': { backgroundColor: 'rgba(0, 229, 255, 0.12)', outline: '1px solid rgba(0, 229, 255, 0.3)' },
+    '.cm-foldGutter .cm-gutterElement': { color: '#5a6a7a', cursor: 'pointer' },
+    '.cm-scroller': { overflow: 'auto' },
+  }, { dark: true });
+
+  function initEditor(content) {
+    if (editorView) editorView.destroy();
+    editorView = new EditorView({
+      state: EditorState.create({
+        doc: content,
+        extensions: [
+          basicSetup,
+          yaml(),
+          cyberpunkTheme,
+          EditorView.updateListener.of(update => {
+            if (update.docChanged) dirty = true;
+          }),
+        ],
+      }),
+      parent: editorEl,
+    });
   }
 
-  function destroyMonaco() {
-    if (editorInstance) {
-      editorInstance.dispose();
-      editorInstance = null;
-      monacoModule = null;
-    }
+  function destroyEditor() {
+    if (editorView) { editorView.destroy(); editorView = null; }
   }
 
   // Data loading
@@ -88,14 +88,6 @@
         version: data.version,
         created: data.created,
       };
-      // Update editor if mounted
-      if (editorInstance) {
-        const current = editorInstance.getValue();
-        if (current !== source) {
-          editorInstance.setValue(source);
-          dirty = false;
-        }
-      }
       // Load runs
       try { runs = await listWorkflowRuns(name); } catch (_) { runs = []; }
     } catch (e) {
@@ -108,7 +100,7 @@
   // Save handler
   async function handleSave() {
     if (!dirty) return;
-    const content = editorInstance ? editorInstance.getValue() : source;
+    const content = editorView ? editorView.state.doc.toString() : source;
     saveStatus = 'saving';
     try {
       await saveWorkflow(name, content);
@@ -161,27 +153,16 @@
     { label: decodeURIComponent(name) },
   ]);
 
-  // Init Monaco when source tab is selected
-  $effect(() => {
-    if (activeTab === 'source' && editorEl) {
-      initMonaco();
-    }
-  });
+  // Use action to init CodeMirror when editor container mounts
+  function mountEditor(node) {
+    editorEl = node;
+    if (!editorView && source != null) initEditor(source);
+    return { destroy() { destroyEditor(); } };
+  }
 
-  // Cleanup on unmount
   onMount(() => {
     load();
-    return () => destroyMonaco();
-  });
-
-  // Reload when name changes
-  $effect(() => {
-    if (name) {
-      destroyMonaco();
-      dirty = false;
-      activeTab = 'runs';
-      load();
-    }
+    return () => destroyEditor();
   });
 </script>
 
@@ -283,7 +264,7 @@
 
   {:else if activeTab === 'source'}
     <div class="editor-wrap">
-      <div class="editor-container" bind:this={editorEl}></div>
+      <div class="editor-container" use:mountEditor></div>
     </div>
 
   {:else if activeTab === 'metadata'}
@@ -495,6 +476,9 @@
   .editor-container {
     flex: 1;
     overflow: hidden;
+  }
+  .editor-container :global(.cm-editor) {
+    height: 100%;
   }
 
   /* Metadata */

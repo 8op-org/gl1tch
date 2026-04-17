@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Pipeline graph', () => {
   test('expanding a run row shows graph container', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
+    await page.goto('#/workflow/clean.glitch')
     await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.waitForTimeout(2000)
     const runRow = page.locator('.run-row').first()
@@ -16,7 +16,7 @@ test.describe('Pipeline graph', () => {
   })
 
   test('graph nodes have status coloring', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
+    await page.goto('#/workflow/clean.glitch')
     await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.waitForTimeout(2000)
     const runRow = page.locator('.run-row').first()
@@ -32,7 +32,7 @@ test.describe('Pipeline graph', () => {
   })
 
   test('clicking a graph node opens detail panel', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
+    await page.goto('#/workflow/clean.glitch')
     await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.waitForTimeout(2000)
     const runRow = page.locator('.run-row').first()
@@ -48,7 +48,7 @@ test.describe('Pipeline graph', () => {
   })
 
   test('node panel has metrics section', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
+    await page.goto('#/workflow/clean.glitch')
     await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.waitForTimeout(2000)
     const runRow = page.locator('.run-row').first()
@@ -69,7 +69,7 @@ test.describe('Pipeline graph', () => {
   })
 
   test('closing node panel hides it', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
+    await page.goto('#/workflow/clean.glitch')
     await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.waitForTimeout(2000)
     const runRow = page.locator('.run-row').first()
@@ -92,7 +92,7 @@ test.describe('Pipeline graph', () => {
   test('no JS errors when interacting with graph', async ({ page }) => {
     const errors = []
     page.on('pageerror', (err) => errors.push(err.message))
-    await page.goto('#/workflow/git-status.glitch')
+    await page.goto('#/workflow/clean.glitch')
     await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.waitForTimeout(2000)
     const runRow = page.locator('.run-row').first()

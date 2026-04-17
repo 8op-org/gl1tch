@@ -4,6 +4,7 @@
   let workspaces = $state([]);
   let active = $state('');
   let error = $state(null);
+  let open = $state(false);
 
   async function load() {
     try {
@@ -16,74 +17,168 @@
     }
   }
 
-  async function onChange(ev) {
-    const next = ev.target.value;
-    if (!next || next === active) return;
+  async function switchTo(name) {
+    if (!name || name === active) { open = false; return; }
     try {
-      await useWorkspace(next);
+      await useWorkspace(name);
       location.reload();
     } catch (e) {
       error = e.message;
-      ev.target.value = active;
     }
+    open = false;
   }
 
-  $effect(() => {
-    load();
-  });
+  function initial(name) {
+    return name ? name.charAt(0).toUpperCase() : '?';
+  }
+
+  $effect(() => { load(); });
 </script>
 
-<div class="workspace-switcher">
-  <span class="ws-label">workspace</span>
-  {#if error}
-    <span class="ws-error" title={error}>error</span>
-  {:else if !workspaces || workspaces.length === 0}
-    <span class="ws-empty">none registered</span>
-  {:else}
-    <select value={active} onchange={onChange}>
+<div class="ws-switcher">
+  <button
+    class="ws-avatar"
+    title={active || 'No workspace'}
+    onclick={() => open = !open}
+  >
+    {initial(active)}
+  </button>
+  {#if open}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="ws-backdrop" onclick={() => open = false}></div>
+    <div class="ws-dropdown">
+      <div class="ws-dropdown-header">Workspaces</div>
       {#each workspaces as w}
-        <option value={w.name}>{w.name}</option>
+        <button
+          class="ws-option"
+          class:active={w.name === active}
+          onclick={() => switchTo(w.name)}
+        >
+          <span class="ws-option-avatar">{initial(w.name)}</span>
+          <span class="ws-option-name">{w.name}</span>
+          {#if w.name === active}
+            <span class="ws-check">&#10003;</span>
+          {/if}
+        </button>
       {/each}
-    </select>
+      {#if !workspaces || workspaces.length === 0}
+        <div class="ws-empty">No workspaces registered</div>
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
-  .workspace-switcher {
+  .ws-switcher {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    padding: 10px 0;
+  }
+
+  .ws-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.15), rgba(255, 45, 111, 0.1));
+    border: 1px solid var(--border);
+    color: var(--neon-cyan);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    height: 44px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-surface);
+    justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
   }
-  .ws-label {
+  .ws-avatar:hover {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.25), rgba(255, 45, 111, 0.15));
+  }
+
+  .ws-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
+
+  .ws-dropdown {
+    position: absolute;
+    left: 52px;
+    top: 4px;
+    min-width: 200px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    overflow: hidden;
+  }
+
+  .ws-dropdown-header {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 10px 14px 6px;
+  }
+
+  .ws-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 14px;
+    background: none;
+    border: none;
+    border-radius: 0;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+    transition: background 0.1s;
+  }
+  .ws-option:hover {
+    background: rgba(0, 229, 255, 0.06);
+  }
+  .ws-option.active {
+    color: var(--neon-cyan);
+  }
+
+  .ws-option-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(0, 229, 255, 0.1);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-family: var(--font-mono);
     font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted);
+    font-weight: 600;
+    color: var(--neon-cyan);
+    flex-shrink: 0;
   }
-  .workspace-switcher select {
-    background: var(--bg-deep);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 4px 8px;
+
+  .ws-option-name {
     font-family: var(--font-mono);
+    font-size: 13px;
+    flex: 1;
+  }
+
+  .ws-check {
+    color: var(--neon-green);
     font-size: 12px;
-    min-width: 160px;
   }
-  .workspace-switcher select:focus {
-    outline: none;
-    border-color: var(--neon-cyan);
-    box-shadow: var(--glow-cyan);
-  }
-  .ws-empty, .ws-error {
-    font-family: var(--font-mono);
+
+  .ws-empty {
+    padding: 12px 14px;
     font-size: 12px;
     color: var(--text-muted);
   }
-  .ws-error { color: var(--neon-magenta); }
 </style>

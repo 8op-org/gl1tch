@@ -1,5 +1,6 @@
 <script>
   import { listResources, addResource, removeResource, syncWorkspace, pinResource } from '../api.js';
+  import { icon } from '../icons.js';
   import Modal from './Modal.svelte';
 
   let resources = $state([]);
@@ -120,11 +121,9 @@
 </script>
 
 <section class="resources-panel">
-  <div class="resources-header">
-    <h2>Resources</h2>
-    <button class="primary" onclick={() => showAdd = true}>
-      + Add resource
-    </button>
+  <div class="card-header">
+    <h2>{@html icon('folder', 16)} Resources</h2>
+    <button class="primary" onclick={() => showAdd = true}>+ Add</button>
   </div>
 
   {#if error}
@@ -234,18 +233,33 @@
 
 <style>
   .resources-panel {
-    margin-bottom: 32px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
-  .resources-header {
+  .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
+    padding: 14px 20px;
     border-bottom: 1px solid var(--border);
+    background: rgba(0, 229, 255, 0.02);
   }
-  .resources-header h2 {
+  .card-header h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+  }
+  .card-header h2 :global(svg) {
     color: var(--neon-cyan);
+  }
+  .card-header .primary {
+    font-size: 12px;
+    padding: 4px 12px;
   }
 
   .resources-table {
