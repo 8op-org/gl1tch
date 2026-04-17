@@ -40,11 +40,15 @@
     return path.split('/').pop();
   }
 
+  function apiPath(p) {
+    return p.replace(/^results\//, '');
+  }
+
   async function viewFile(path) {
     viewingFile = path;
     fileLoading = true;
     try {
-      fileContent = await getResultText(path);
+      fileContent = await getResultText(apiPath(path));
     } catch (e) {
       fileContent = `Error loading file: ${e.message}`;
     } finally {

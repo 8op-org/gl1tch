@@ -29,7 +29,7 @@
     viewingFile = path;
     fileLoading = true;
     try {
-      fileContent = await getResultText(path);
+      fileContent = await getResultText(path.replace(/^results\//, ''));
     } catch (e) {
       fileContent = `Error: ${e.message}`;
     } finally {
