@@ -16,8 +16,8 @@
 
   (step "triage-free"
     (llm
-      :provider "openrouter"
-      :model "qwen/qwen3-coder:free"
+      :provider "lm-studio"
+      :model "qwen3-8b"
       :prompt ```
         You are a senior SRE triaging a Kubernetes bug report.
 
@@ -108,8 +108,8 @@
 
   (step "analysis-free"
     (llm
-      :provider "openrouter"
-      :model "qwen/qwen3-coder:free"
+      :provider "lm-studio"
+      :model "qwen3-8b"
       :prompt ```
         You are a container runtime architect analyzing a feature proposal.
 
@@ -192,7 +192,7 @@
         Show the actual glitch workflow that ran this (simplified version of the
         triage steps — show the sexpr, not the JSON).
 
-        ## Free Tier: google/gemma-4-31b-it
+        ## Free Tier: qwen3-8b (LM Studio)
         Show the FULL raw output from the free model below in a code block.
         Then a **Verdict** paragraph analyzing what it got right and wrong.
 
@@ -306,7 +306,7 @@
         ## The Workflow
         Show the actual glitch workflow (the fetch + 3 analysis steps in sexpr).
 
-        ## Free Tier: google/gemma-4-31b-it
+        ## Free Tier: qwen3-8b (LM Studio)
         Show the FULL raw output in a code block.
         Then a **Verdict** paragraph.
 
@@ -354,8 +354,8 @@
 
   (step "kibana-triage-free"
     (llm
-      :provider "openrouter"
-      :model "qwen/qwen3-coder:free"
+      :provider "lm-studio"
+      :model "qwen3-8b"
       :prompt ```
         You are a senior frontend engineer triaging a Kibana bug report.
 
@@ -442,7 +442,7 @@
         Show the actual glitch workflow that ran this (the fetch + 3 triage
         steps in sexpr).
 
-        ## Free Tier: google/gemma-4-31b-it
+        ## Free Tier: qwen3-8b (LM Studio)
         Show the FULL raw output from the free model in a code block.
         Then a **Verdict** paragraph analyzing what it got right and wrong.
 
