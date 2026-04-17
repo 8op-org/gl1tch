@@ -196,6 +196,7 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 					ExitStatus: rec.ExitStatus,
 					TokensIn:   rec.TokensIn,
 					TokensOut:  rec.TokensOut,
+					Artifacts:  rec.Artifacts,
 				})
 			}
 		}

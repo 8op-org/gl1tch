@@ -245,6 +245,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 				ExitStatus: rec.ExitStatus,
 				TokensIn:   rec.TokensIn,
 				TokensOut:  rec.TokensOut,
+				Artifacts:  rec.Artifacts,
 			}); err != nil {
 				fmt.Fprintf(os.Stderr, "WARN: record step %s: %v\n", rec.StepID, err)
 			}

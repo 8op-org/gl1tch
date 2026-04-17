@@ -420,6 +420,7 @@ func newStepRecorder(s *store.Store, runID int64) func(pipeline.StepRecord) {
 			ExitStatus: rec.ExitStatus,
 			TokensIn:   rec.TokensIn,
 			TokensOut:  rec.TokensOut,
+			Artifacts:  rec.Artifacts,
 		})
 	}
 }

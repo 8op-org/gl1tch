@@ -57,6 +57,25 @@
     return formatDuration(elapsed);
   });
 
+  // Aggregate model/tokens/cost from steps when run-level is empty
+  const aggModel = $derived.by(() => {
+    if (run?.model) return run.model;
+    const models = [...new Set(steps.filter(s => s.model).map(s => s.model))];
+    return models.length === 1 ? models[0] : models.length > 1 ? models.join(', ') : '--';
+  });
+
+  const aggTokensIn = $derived(
+    (run?.tokens_in || 0) || steps.reduce((sum, s) => sum + (s.tokens_in || 0), 0)
+  );
+
+  const aggTokensOut = $derived(
+    (run?.tokens_out || 0) || steps.reduce((sum, s) => sum + (s.tokens_out || 0), 0)
+  );
+
+  const aggCost = $derived(
+    steps.reduce((sum, s) => sum + (s.cost_usd || 0), 0)
+  );
+
   const breadcrumbSegments = $derived.by(() => {
     const segs = [{ label: 'Workflows', href: '/' }];
     if (run?.workflow_file) {
@@ -173,15 +192,15 @@
     </span>
     <span class="meta-pill">
       <span class="meta-label">Model</span>
-      <span class="meta-val mono">{run?.model || '--'}</span>
+      <span class="meta-val mono">{aggModel}</span>
     </span>
     <span class="meta-pill">
       <span class="meta-label">Tokens</span>
-      <span class="meta-val mono">{formatTokens(run?.tokens_in, run?.tokens_out)}</span>
+      <span class="meta-val mono">{formatTokens(aggTokensIn, aggTokensOut)}</span>
     </span>
     <span class="meta-pill">
       <span class="meta-label">Cost</span>
-      <span class="meta-val mono cost">{formatCost(run?.cost_usd)}</span>
+      <span class="meta-val mono cost">{formatCost(run?.cost_usd || aggCost)}</span>
     </span>
     <span class="meta-pill">
       <span class="meta-label">Started</span>
