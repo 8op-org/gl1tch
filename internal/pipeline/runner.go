@@ -1049,6 +1049,11 @@ func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 	combined := strings.Join(outputs, "\n")
 	rctx.mu.Lock()
 	rctx.steps[step.ID] = combined
+	// Also store under the body step's base ID so downstream steps
+	// can reference the combined output via ~(stepfile <body-id>)
+	if step.MapBody != nil {
+		rctx.steps[step.MapBody.ID] = combined
+	}
 	rctx.mu.Unlock()
 	return &stepOutcome{output: combined}, nil
 }
