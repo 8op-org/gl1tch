@@ -47,6 +47,8 @@ VALID_KEYWORDS = {
     ":free",
     # phase / gate / site manifest
     ":template", ":sections",
+    # config.glitch keywords
+    ":workflows-dir",
     # resource-state
     ":active",
     # plugin arg keyword (issue number)

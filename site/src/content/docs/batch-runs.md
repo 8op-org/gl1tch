@@ -46,7 +46,7 @@ Variant workflows follow the pattern `<base-name>-<variant>.glitch`:
 
 ```
 workflows/
-├── pr-review.glitch           # base workflow (unused by --compare directly)
+├── pr-review.glitch           # base workflow, not invoked by --compare directly
 ├── pr-review-local.glitch     # local Ollama variant
 ├── pr-review-claude.glitch    # Claude variant
 ├── pr-review-copilot.glitch   # Copilot variant
