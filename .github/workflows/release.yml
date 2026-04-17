@@ -18,6 +18,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build GUI
+        run: |
+          cd gui
+          npm ci
+          npm run build
+          cp -r dist ../internal/gui/dist
       - uses: goreleaser/goreleaser-action@v6
         with:
           args: release --clean
