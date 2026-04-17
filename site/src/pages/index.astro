@@ -25,16 +25,16 @@ import Base from '../layouts/Base.astro';
 (<span class="k">workflow</span> <span class="s">"pr-review"</span>
 
   (<span class="k">step</span> <span class="s">"fetch"</span>
-    (<span class="k">run</span> <span class="s">"gh pr view {'{{.input}}'} --json title,body"</span>))
+    (<span class="k">run</span> <span class="s">"gh pr view ~input --json title,body"</span>))
 
   (<span class="k">step</span> <span class="s">"diff"</span>
-    (<span class="k">run</span> <span class="s">"gh pr diff {'{{.input}}'}"</span>))
+    (<span class="k">run</span> <span class="s">"gh pr diff ~input"</span>))
 
   (<span class="k">step</span> <span class="s">"review"</span>
     (<span class="k">llm</span>
       <span class="r">:prompt</span> <span class="s">```
-        PR: {'{{step "fetch"}}'}
-        Diff: {'{{step "diff"}}'}
+        PR: ~(step fetch)
+        Diff: ~(step diff)
         Review as a senior engineer.
         ```</span>)))</pre>
   </div>
@@ -138,7 +138,7 @@ import Base from '../layouts/Base.astro';
       <pre class="code">(<span class="k">step</span> <span class="s">"generate"</span>
   (<span class="k">llm</span> <span class="r">:tier</span> <span class="s">0</span>
     <span class="r">:prompt</span> <span class="s">"Write docs using:
-    {'{{step \"examples\"}}'}..."</span>))</pre>
+    ~(step examples)..."</span>))</pre>
       <p>Tiered routing tries local LLM first. Escalates to cloud only if quality demands it.</p>
     </div>
     <div class="how-step">
