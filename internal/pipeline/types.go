@@ -59,7 +59,8 @@ type Step struct {
 	Fallback *Step        `yaml:"-"` // catch: step to run on failure
 	Branches []CondBranch `yaml:"-"` // cond: ordered predicate→step pairs
 	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
-	MapBody  *Step        `yaml:"-"` // map: template step executed per item
+	MapBody  *Step        `yaml:"-"` // map: template step executed per item (single step or first of chain)
+	MapSteps []Step       `yaml:"-"` // map: extra body steps executed after MapBody per iteration
 
 	// Conditional execution
 	WhenPred string `yaml:"-"` // when: step ID or shell command predicate

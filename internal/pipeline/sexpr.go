@@ -416,19 +416,28 @@ func convertWhen(n *sexpr.Node, defs map[string]string, negate bool) (Step, erro
 func convertMap(n *sexpr.Node, defs map[string]string) (Step, error) {
 	children := n.Children[1:]
 	if len(children) < 2 {
-		return Step{}, fmt.Errorf("line %d: (map) needs source step ID and body step", n.Line)
+		return Step{}, fmt.Errorf("line %d: (map) needs source step ID and body step(s)", n.Line)
 	}
 	source := resolveVal(children[0], defs)
 	body, err := convertStep(children[1], defs)
 	if err != nil {
 		return Step{}, fmt.Errorf("line %d: map body: %w", n.Line, err)
 	}
+	var extra []Step
+	for i := 2; i < len(children); i++ {
+		s, err := convertStep(children[i], defs)
+		if err != nil {
+			return Step{}, fmt.Errorf("line %d: map body step %d: %w", n.Line, i, err)
+		}
+		extra = append(extra, s)
+	}
 	return Step{
-		ID:      fmt.Sprintf("map-%d", n.Line),
-		Form:    "map",
-		MapOver: source,
-		MapBody: &body,
-		Line:    n.Line,
+		ID:       fmt.Sprintf("map-%d", n.Line),
+		Form:     "map",
+		MapOver:  source,
+		MapBody:  &body,
+		MapSteps: extra,
+		Line:     n.Line,
 	}, nil
 }
 

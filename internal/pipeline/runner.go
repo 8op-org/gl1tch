@@ -1039,20 +1039,40 @@ func executeMap(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, err
 		rctx.params = mapParams
 
 		outcome, err := executeStep(ctx, rctx, body)
-		rctx.params = origParams
 		if err != nil {
+			rctx.params = origParams
 			return nil, fmt.Errorf("map %s item %d: %w", step.ID, idx, err)
 		}
-		outputs = append(outputs, outcome.output)
+
+		// Execute additional body steps in sequence
+		var lastOutcome *stepOutcome
+		lastOutcome = outcome
+		for si, extra := range step.MapSteps {
+			es := extra
+			es.ID = fmt.Sprintf("%s-%d", extra.ID, idx)
+			o, err := executeStep(ctx, rctx, es)
+			if err != nil {
+				rctx.params = origParams
+				return nil, fmt.Errorf("map %s item %d step %d: %w", step.ID, idx, si+1, err)
+			}
+			lastOutcome = o
+		}
+
+		rctx.params = origParams
+		outputs = append(outputs, lastOutcome.output)
 	}
 
 	combined := strings.Join(outputs, "\n")
 	rctx.mu.Lock()
 	rctx.steps[step.ID] = combined
-	// Also store under the body step's base ID so downstream steps
-	// can reference the combined output via ~(stepfile <body-id>)
+	// Also store under body step IDs so downstream steps can reference
+	// the combined output via ~(stepfile <body-id>)
 	if step.MapBody != nil {
 		rctx.steps[step.MapBody.ID] = combined
+	}
+	if len(step.MapSteps) > 0 {
+		last := step.MapSteps[len(step.MapSteps)-1]
+		rctx.steps[last.ID] = combined
 	}
 	rctx.mu.Unlock()
 	return &stepOutcome{output: combined}, nil
