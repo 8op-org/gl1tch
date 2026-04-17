@@ -19,8 +19,13 @@ func (s *Server) handleGetResult(w http.ResponseWriter, r *http.Request) {
 	fullPath := filepath.Join(s.resultsDir(), path)
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		http.Error(w, "not found", 404)
-		return
+		// Fallback: try path as-is (cwd-relative, e.g. "results/demo/file.md")
+		fullPath = path
+		info, err = os.Stat(fullPath)
+		if err != nil {
+			http.Error(w, "not found", 404)
+			return
+		}
 	}
 
 	if info.IsDir() {

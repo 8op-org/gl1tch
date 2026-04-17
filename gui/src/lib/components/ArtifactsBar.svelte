@@ -29,7 +29,12 @@
     viewingFile = path;
     fileLoading = true;
     try {
-      fileContent = await getResultText(path.replace(/^results\//, ''));
+      const stripped = path.replace(/^results\//, '');
+      try {
+        fileContent = await getResultText(stripped);
+      } catch {
+        fileContent = await getResultText(path);
+      }
     } catch (e) {
       fileContent = `Error: ${e.message}`;
     } finally {
