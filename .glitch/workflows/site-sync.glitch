@@ -451,6 +451,65 @@
   (step "build-sidebar"
     (run "python3 scripts/site-build-sidebar.py"))
 
+  ;; ── Changelog ─────────────────────────────────────────────────────────────
+
+  (step "changelog-raw"
+    (run "git log --oneline --since='2025-01-01' -- cmd/ internal/ examples/ .glitch/ docs/site/"))
+
+  (step "enrich-changelog"
+    (llm
+      :provider "copilot"
+      :prompt ```
+        Summarize these git commits into user-facing changelog entries.
+        Group by feature area (workflow engine, providers, CLI, plugins, GUI, docs).
+        Skip purely internal refactors unless they change user-visible behavior.
+        Output as markdown. Each entry: ### heading, then bullet points.
+
+        Commits:
+        ~(step changelog-raw)
+        ```))
+
+  (step "save-changelog"
+    (save "site/generated/changelog.md" :from "enrich-changelog"))
+
+  ;; ── Labs injection (conditional) ──────────────────────────────────────────
+
+  (step "inject-labs"
+    (run ```
+      python3 - <<'EOF'
+      import json, os, sys
+      from pathlib import Path
+
+      labs_dir = Path('site/generated/labs')
+      out_dir  = Path('site/src/content/labs')
+
+      if not labs_dir.exists() or not list(labs_dir.glob('*.json')):
+          print('SKIP: no labs to inject')
+          sys.exit(0)
+
+      out_dir.mkdir(parents=True, exist_ok=True)
+
+      # Clear old injected labs
+      for old in out_dir.glob('*.md'):
+          if old.name != '.gitkeep':
+              old.unlink()
+
+      for f in labs_dir.glob('*.json'):
+          lab = json.loads(f.read_text())
+          slug  = lab['slug']
+          title = lab['title'].replace('"', '\\"')
+          desc  = lab.get('description', '').replace('"', '\\"')
+          date  = lab.get('date', '')
+
+          frontmatter = f'---\ntitle: "{title}"\nslug: "{slug}"\ndescription: "{desc}"\ndate: "{date}"\n---\n\n'
+          content = frontmatter + lab['content']
+          (out_dir / f'{slug}.md').write_text(content)
+          print(f'  injected: {slug}.md')
+
+      print(f'Injected {len(list(labs_dir.glob("*.json")))} lab(s)')
+      EOF
+      ```))
+
   ;; ── Phase: verify ────────────────────────────────────────────────────────
 
   (phase "verify" :retries 1
@@ -469,6 +528,11 @@
     (gate "playwright"
       (run "bash scripts/gate-playwright.sh")))
 
+  ;; ── Build ─────────────────────────────────────────────────────────────────
+
+  (step "build-site"
+    (run "cd site && bash build.sh 2>&1"))
+
   ;; ── Done ─────────────────────────────────────────────────────────────────
 
   (step "done"
@@ -482,14 +546,18 @@
       updated = [p['slug'] for p in diff.get('update', [])]
       ok      = diff.get('ok', [])
       orphan  = diff.get('orphan', [])
+      labs    = list(Path('site/src/content/labs').glob('*.md'))
+      labs    = [l.stem for l in labs if l.name != '.gitkeep']
 
       print('site-sync complete')
       print(f'  created : {len(created)} page(s)  {created}')
       print(f'  updated : {len(updated)} page(s)  {updated}')
       print(f'  ok      : {len(ok)} page(s) already in sync')
+      print(f'  labs    : {len(labs)} lab(s)  {labs}')
       if orphan:
           print(f'  orphan  : {orphan} — on disk but not in manifest')
       print()
-      print('Run: glitch workflow run site-dev  to preview')
+      print('Site built to site/dist/')
+      print('Preview: cd site && npx astro preview')
       EOF
       ```)))
