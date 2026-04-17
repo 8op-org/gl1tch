@@ -59,7 +59,7 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 		 FROM runs`
 	var args []any
 	if wf := r.URL.Query().Get("workflow"); wf != "" {
-		query += ` WHERE workflow_name = ?`
+		query += ` WHERE workflow_file = ?`
 		args = append(args, wf)
 	}
 	query += ` ORDER BY id DESC LIMIT 100`

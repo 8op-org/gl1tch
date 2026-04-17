@@ -95,6 +95,10 @@ func (s *Server) handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Parse workflow to extract metadata
 	wf, err := pipeline.LoadFile(path)
 	if err == nil {
+		if wf.Name != "" {
+			resp["name"] = wf.Name
+		}
+		resp["description"] = wf.Description
 		resp["tags"] = wf.Tags
 		resp["author"] = wf.Author
 		resp["version"] = wf.Version
