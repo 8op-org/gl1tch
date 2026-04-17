@@ -6,7 +6,7 @@
   import Breadcrumb from '../lib/components/Breadcrumb.svelte';
   import StatusBadge from '../lib/components/StatusBadge.svelte';
   import RunDialog from './RunDialog.svelte';
-  import PipelineGraph from '../lib/components/PipelineGraph.svelte';
+
   import { EditorView, basicSetup } from 'codemirror';
   import { EditorState } from '@codemirror/state';
   import { keymap } from '@codemirror/view';
@@ -34,9 +34,6 @@
   // Editor
   let editorEl = $state(null);
   let editorView = $state(null);
-
-  // Expanded run (for pipeline graph)
-  let expandedRunId = $state(null);
 
   // CodeMirror cyberpunk theme
   const cyberpunkTheme = EditorView.theme({
@@ -241,8 +238,7 @@
           {#each runs.toSorted((a, b) => (b.started_at || 0) - (a.started_at || 0)) as run}
             <button
               class="run-row"
-              class:expanded={expandedRunId === run.id}
-              onclick={() => { expandedRunId = expandedRunId === run.id ? null : run.id; }}
+              onclick={() => push('/run/' + run.id)}
             >
               <StatusBadge status={runStatus(run)} />
               <span class="run-id mono">#{run.id ?? '--'}</span>
@@ -261,18 +257,9 @@
                 {formatCost(run.cost_usd)}
               </span>
               <span class="run-chevron">
-                {#if expandedRunId === run.id}
-                  {@html icon('chevronDown')}
-                {:else}
-                  {@html icon('chevronRight')}
-                {/if}
+                {@html icon('chevronRight')}
               </span>
             </button>
-            {#if expandedRunId === run.id}
-              <div class="run-detail">
-                <PipelineGraph runId={run.id} />
-              </div>
-            {/if}
           {/each}
         </div>
       {/if}
@@ -413,11 +400,7 @@
     border-color: rgba(0, 229, 255, 0.3);
     background: var(--bg-elevated);
   }
-  .run-row.expanded {
-    border-radius: 6px 6px 0 0;
-    margin-bottom: 0;
-    border-color: rgba(0, 229, 255, 0.3);
-  }
+
   .run-id {
     font-size: 11px;
     color: var(--text-muted);
@@ -462,18 +445,6 @@
     display: flex;
     align-items: center;
     color: var(--text-muted);
-  }
-
-  .run-detail {
-    padding: 0;
-    border: 1px solid rgba(0, 229, 255, 0.3);
-    border-top: none;
-    border-radius: 0 0 6px 6px;
-    background: var(--bg-elevated);
-    margin-bottom: 8px;
-    min-height: 200px;
-    overflow-x: auto;
-    overflow: hidden;
   }
 
   .empty-state {

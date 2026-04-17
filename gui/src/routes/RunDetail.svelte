@@ -1,0 +1,295 @@
+<script>
+  import { onDestroy } from 'svelte';
+  import { push } from 'svelte-spa-router';
+  import { getRun, runWorkflow } from '../lib/api.js';
+  import { icon } from '../lib/icons.js';
+  import Breadcrumb from '../lib/components/Breadcrumb.svelte';
+  import StatusBadge from '../lib/components/StatusBadge.svelte';
+  import PipelineGraph from '../lib/components/PipelineGraph.svelte';
+
+  let { params } = $props();
+  let runId = $derived(Number(params?.id));
+
+  let run = $state(null);
+  let steps = $state([]);
+  let loading = $state(true);
+  let error = $state(null);
+  let pollTimer = $state(null);
+  let pollFailures = $state(0);
+  let pollPaused = $state(false);
+  let elapsed = $state(0);
+  let elapsedTimer = $state(null);
+
+  function runStatus(r) {
+    if (!r?.finished_at) return 'running';
+    return r.exit_status === 0 ? 'pass' : 'fail';
+  }
+
+  function formatDuration(ms) {
+    if (ms == null || ms <= 0) return '0s';
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return `${sec}s`;
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+  }
+
+  function formatTokens(input, output) {
+    if ((input == null || input === 0) && (output == null || output === 0)) return '--';
+    return `${(input || 0).toLocaleString()} / ${(output || 0).toLocaleString()}`;
+  }
+
+  function formatCost(cost) {
+    if (cost == null || cost === 0) return '--';
+    return `$${cost.toFixed(4)}`;
+  }
+
+  function formatTime(ms) {
+    if (!ms) return '--';
+    return new Date(ms).toLocaleString();
+  }
+
+  const status = $derived(run ? runStatus(run) : 'running');
+  const isRunning = $derived(status === 'running');
+
+  const duration = $derived.by(() => {
+    if (!run?.started_at) return '--';
+    if (run.finished_at) return formatDuration(run.finished_at - run.started_at);
+    return formatDuration(elapsed);
+  });
+
+  const breadcrumbSegments = $derived.by(() => {
+    const segs = [{ label: 'Workflows', href: '/' }];
+    if (run?.workflow_file) {
+      segs.push({ label: run.workflow_file.replace('.glitch', ''), href: `/workflow/${encodeURIComponent(run.workflow_file)}` });
+    }
+    segs.push({ label: `Run #${runId}` });
+    return segs;
+  });
+
+  async function fetchRun() {
+    try {
+      const data = await getRun(runId);
+      run = data.run || data;
+      steps = data.steps || [];
+      pollFailures = 0;
+      return true;
+    } catch (e) {
+      pollFailures++;
+      if (!run) { error = e.message; }
+      return false;
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      if (pollPaused) return;
+      const ok = await fetchRun();
+      if (!ok && pollFailures >= 5) {
+        pollPaused = true;
+      }
+      if (run?.finished_at) {
+        stopPolling();
+        stopElapsed();
+      }
+    }, 2000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  function reconnect() {
+    pollPaused = false;
+    pollFailures = 0;
+    startPolling();
+  }
+
+  function startElapsed() {
+    if (elapsedTimer || !run?.started_at) return;
+    elapsedTimer = setInterval(() => {
+      elapsed = Date.now() - run.started_at;
+    }, 1000);
+  }
+
+  function stopElapsed() {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  }
+
+  async function handleRerun() {
+    if (!run?.workflow_file) return;
+    try {
+      const result = await runWorkflow(run.workflow_file, {});
+      if (result.run_id) push(`/run/${result.run_id}`);
+    } catch (e) {
+      console.error('Re-run failed:', e);
+    }
+  }
+
+  $effect(() => {
+    if (runId) {
+      loading = true;
+      error = null;
+      stopPolling();
+      stopElapsed();
+      fetchRun().then(() => {
+        loading = false;
+        if (isRunning) {
+          startPolling();
+          startElapsed();
+        }
+      });
+    }
+  });
+
+  onDestroy(() => {
+    stopPolling();
+    stopElapsed();
+  });
+</script>
+
+<div class="run-detail-page">
+  <div class="run-header">
+    <Breadcrumb segments={breadcrumbSegments} onnavigate={(href) => push(href)} />
+    <div class="header-actions">
+      <StatusBadge {status} size="md" />
+      <button class="primary" onclick={handleRerun}>
+        {@html icon('play', 14)} Re-run
+      </button>
+    </div>
+  </div>
+
+  {#if pollPaused}
+    <div class="poll-banner">
+      <span>Connection lost.</span>
+      <button onclick={reconnect}>Reconnect</button>
+    </div>
+  {/if}
+
+  <div class="metadata-strip">
+    <span class="meta-pill">
+      <span class="meta-label">Duration</span>
+      <span class="meta-val mono">{duration}</span>
+    </span>
+    <span class="meta-pill">
+      <span class="meta-label">Model</span>
+      <span class="meta-val mono">{run?.model || '--'}</span>
+    </span>
+    <span class="meta-pill">
+      <span class="meta-label">Tokens</span>
+      <span class="meta-val mono">{formatTokens(run?.tokens_in, run?.tokens_out)}</span>
+    </span>
+    <span class="meta-pill">
+      <span class="meta-label">Cost</span>
+      <span class="meta-val mono cost">{formatCost(run?.cost_usd)}</span>
+    </span>
+    <span class="meta-pill">
+      <span class="meta-label">Started</span>
+      <span class="meta-val">{formatTime(run?.started_at)}</span>
+    </span>
+  </div>
+
+  <div class="graph-area">
+    {#if loading}
+      <div class="center-msg"><p class="text-muted">Loading run...</p></div>
+    {:else if error}
+      <div class="center-msg"><p class="status-fail">{error}</p></div>
+    {:else}
+      <PipelineGraph {runId} externalSteps={steps} />
+    {/if}
+  </div>
+</div>
+
+<style>
+  .run-detail-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .run-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .poll-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px;
+    background: rgba(255, 45, 111, 0.1);
+    border-bottom: 1px solid rgba(255, 45, 111, 0.3);
+    font-size: 12px;
+    color: var(--neon-magenta);
+    flex-shrink: 0;
+  }
+  .poll-banner button {
+    font-size: 12px;
+    padding: 4px 12px;
+  }
+
+  .metadata-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+
+  .meta-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .meta-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .meta-val {
+    font-size: 13px;
+  }
+
+  .meta-val.cost {
+    color: var(--neon-amber);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .graph-area {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .center-msg {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .text-muted { color: var(--text-muted); }
+</style>
