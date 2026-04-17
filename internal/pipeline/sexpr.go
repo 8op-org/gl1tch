@@ -815,8 +815,10 @@ func convertReview(n *sexpr.Node, defs map[string]string) (*ReviewConfig, error)
 			r.Prompt = resolveVal(valNode, defs)
 		case "model":
 			r.Model = resolveVal(valNode, defs)
+		case "provider":
+			r.Provider = resolveVal(valNode, defs)
 		default:
-			return nil, fmt.Errorf("line %d: unknown review keyword :%s", child.Line, kw)
+			return nil, fmt.Errorf("line %d: unknown review keyword :%s (valid: :criteria, :prompt, :model, :provider)", child.Line, kw)
 		}
 	}
 	return r, nil

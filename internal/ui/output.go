@@ -209,6 +209,11 @@ func TierLog(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "    %s\n", dim.Render(msg))
 }
 
+// CompareWarn prints a warning about compare branch failures or skipped reviews.
+func CompareWarn(msg string) {
+	fmt.Fprintf(os.Stderr, "  %s %s\n", yellow.Render("WARN"), dim.Render(msg))
+}
+
 // SavedTo prints a file-saved confirmation (used by save steps that write to stdout).
 func SavedTo(path string) {
 	fmt.Fprintf(os.Stderr, "%s\n", dim.Render("saved "+path))

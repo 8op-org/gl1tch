@@ -1340,7 +1340,11 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 	branchOutputs := make(map[string]string)
 	var successResults []branchResult
 	for _, r := range results {
-		if r.err == nil && r.output != "" {
+		if r.err != nil {
+			ui.CompareWarn(fmt.Sprintf("compare %s: branch %q failed: %v", step.ID, r.name, r.err))
+		} else if r.output == "" {
+			ui.CompareWarn(fmt.Sprintf("compare %s: branch %q produced empty output", step.ID, r.name))
+		} else {
 			branchOutputs[r.name] = r.output
 			successResults = append(successResults, r)
 		}
@@ -1354,6 +1358,8 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 	var winnerName, winnerOutput string
 	var reviewScores string
 	if len(successResults) == 1 {
+		ui.CompareWarn(fmt.Sprintf("compare %s: review skipped — only branch %q completed (%d of %d branches failed)",
+			step.ID, successResults[0].name, len(results)-1, len(results)))
 		winnerName = successResults[0].name
 		winnerOutput = successResults[0].output
 	} else {
@@ -1396,8 +1402,12 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 	}
 
 	reviewModel := rctx.defaultModel
-	if step.CompareReview != nil && step.CompareReview.Model != "" {
-		reviewModel = step.CompareReview.Model
+	var reviewProvider string
+	if step.CompareReview != nil {
+		if step.CompareReview.Model != "" {
+			reviewModel = step.CompareReview.Model
+		}
+		reviewProvider = step.CompareReview.Provider
 	}
 
 	prompt := buildReviewPrompt(step.CompareReview, branchOutputs)
@@ -1405,8 +1415,9 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 	reviewStep := Step{
 		ID: step.ID + "-review",
 		LLM: &LLMStep{
-			Prompt: prompt,
-			Model:  reviewModel,
+			Prompt:   prompt,
+			Model:    reviewModel,
+			Provider: reviewProvider,
 		},
 	}
 
@@ -1614,14 +1625,17 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 
 		if useSmart || usePinned {
 			activeTiers := rctx.tiers
+			tierOffset := 0
 			if usePinned {
 				tierIdx := *step.LLM.Tier
 				if tierIdx >= 0 && tierIdx < len(rctx.tiers) {
 					activeTiers = rctx.tiers[tierIdx : tierIdx+1]
+					tierOffset = tierIdx
 				}
 			}
 
 			runner := provider.NewTieredRunner(activeTiers, rctx.reg)
+			runner.TierOffset = tierOffset
 			runner.Resolver = rctx.providerResolver
 			runner.Log = ui.TierLog
 

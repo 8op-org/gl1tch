@@ -24,12 +24,13 @@ var (
 	runVariants       []string
 	runCompare        bool
 	runReviewCriteria string
+	runWorkflowsDir   string
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <workflow> [input]",
+	Use:   "run [workflow] [input]",
 	Short: "run a workflow (resolves in active workspace, falls back to global)",
-	Args:  cobra.MinimumNArgs(1),
+	Args:  cobra.ArbitraryArgs,
 	RunE:  runRun,
 }
 
@@ -40,6 +41,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runCompare, "compare", false, "discover variant workflows and cross-review")
 	runCmd.Flags().StringVar(&runReviewCriteria, "review-criteria", "", "comma-separated review criteria for comparison")
 	runCmd.Flags().StringVar(&runResultsDir, "results-dir", "", "output directory for results (defaults to <workspace>/results)")
+	runCmd.Flags().StringVar(&runWorkflowsDir, "workflows-dir", "", "directory for resolving call-workflow targets (defaults to workflow file's directory)")
 	runCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		// Cobra hands the full raw arg slice to HelpFunc, including the
 		// subcommand name and any flag tokens. Pick the first non-flag
@@ -72,10 +74,15 @@ func init() {
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
-	name := args[0]
-	input := ""
-	if len(args) > 1 {
-		input = strings.Join(args[1:], " ")
+	var name, input string
+
+	if len(args) > 0 {
+		name = args[0]
+		if len(args) > 1 {
+			input = strings.Join(args[1:], " ")
+		}
+	} else if runPathFlag == "" {
+		return fmt.Errorf("workflow name is required (or use --path)")
 	}
 
 	// Resolve the workflow file path using:
@@ -95,6 +102,11 @@ func runRun(cmd *cobra.Command, args []string) error {
 	w, err := pipeline.LoadFile(workflowPath)
 	if err != nil {
 		return fmt.Errorf("load workflow %s: %w", workflowPath, err)
+	}
+
+	// If no name was given, infer from the loaded workflow.
+	if name == "" {
+		name = w.Name
 	}
 
 	// Also load the full map for --compare variant discovery.
@@ -234,6 +246,11 @@ func runRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	wfDir := filepath.Dir(workflowPath)
+	if runWorkflowsDir != "" {
+		wfDir = runWorkflowsDir
+	}
+
 	result, err := pipeline.Run(w, input, cfg.DefaultModel, params, providerReg, pipeline.RunOpts{
 		Telemetry:        tel,
 		ProviderResolver: cfg.BuildProviderResolver(),
@@ -242,7 +259,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		ESURL:            wsESURL,
 		Workspace:        wsName,
 		Resources:        resources,
-		WorkflowsDir:     filepath.Dir(workflowPath),
+		WorkflowsDir:     wfDir,
 		ParentRunID:      parentID,
 		ChildRunCreator:  childCreator,
 		StepRecorder:     stepRecorder,

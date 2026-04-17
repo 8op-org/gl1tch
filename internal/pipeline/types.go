@@ -140,6 +140,7 @@ type ReviewConfig struct {
 	Criteria []string // scoring criteria names (criteria mode)
 	Prompt   string   // custom review prompt (prompt mode)
 	Model    string   // model override for the judge
+	Provider string   // provider override for the judge (e.g. "claude", "copilot")
 }
 
 // LLMStep configures an LLM invocation.

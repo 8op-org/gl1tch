@@ -24,10 +24,11 @@ type TierLogFunc func(format string, args ...any)
 
 // TieredRunner tries providers in tier order, escalating on failure or validation rejection.
 type TieredRunner struct {
-	tiers    []TierConfig
-	reg      *ProviderRegistry
-	Resolver ResolverFunc
-	Log      TierLogFunc
+	tiers      []TierConfig
+	reg        *ProviderRegistry
+	Resolver   ResolverFunc
+	Log        TierLogFunc
+	TierOffset int // added to tier index in log output (for pinned tier slices)
 }
 
 func (tr *TieredRunner) log(format string, args ...any) {
@@ -75,6 +76,7 @@ func NewTieredRunner(tiers []TierConfig, reg *ProviderRegistry) *TieredRunner {
 func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(string) EscalationReason) (RunResult, error) {
 	var lastReason EscalationReason
 	for tierIdx, tier := range tr.tiers {
+		displayTier := tierIdx + tr.TierOffset
 		for _, name := range tier.Providers {
 			select {
 			case <-ctx.Done():
@@ -83,10 +85,10 @@ func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(st
 			}
 
 			model := tier.Model
-			tr.log("tier %d: trying %s", tierIdx, name)
+			tr.log("tier %d: trying %s", displayTier, name)
 			result, err := tr.callProvider(name, model, prompt)
 			if err != nil {
-				tr.log("tier %d: %s error: %v", tierIdx, name, err)
+				tr.log("tier %d: %s error: %v", displayTier, name, err)
 				lastReason = ReasonProviderError
 				continue // next provider in same tier
 			}
@@ -96,14 +98,14 @@ func (tr *TieredRunner) Run(ctx context.Context, prompt string, validate func(st
 				if len(preview) > 500 {
 					preview = preview[:500]
 				}
-				tr.log("tier %d: %s rejected (%s), escalating", tierIdx, name, reason)
+				tr.log("tier %d: %s rejected (%s), escalating", displayTier, name, reason)
 				lastReason = reason
 				break // escalate to next tier
 			}
 
 			return RunResult{
 				LLMResult: result,
-				Tier:      tierIdx,
+				Tier:      tierIdx + tr.TierOffset,
 				Escalated: tierIdx > 0,
 				EscalationReason: lastReason,
 			}, nil
@@ -131,6 +133,11 @@ func (tr *TieredRunner) callProvider(name, model, prompt string) (LLMResult, err
 			model = p.DefaultModel
 		}
 		return p.Chat(model, prompt)
+	}
+
+	// Check agent providers (claude, copilot, gemini)
+	if agent, ok := KnownAgents[name]; ok {
+		return agent.Run(model, prompt)
 	}
 
 	// Check resolver (openai-compatible providers from config)
@@ -170,6 +177,7 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 	lastTier := len(tr.tiers) - 1
 
 	for tierIdx, tier := range tr.tiers {
+		displayTier := tierIdx + tr.TierOffset
 		for _, name := range tier.Providers {
 			select {
 			case <-ctx.Done():
@@ -178,19 +186,19 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 			}
 
 			model := tier.Model
-			tr.log("tier %d: trying %s", tierIdx, name)
+			tr.log("tier %d: trying %s", displayTier, name)
 			result, err := tr.callProvider(name, model, prompt)
 			if err != nil {
-				tr.log("tier %d: %s error: %v", tierIdx, name, err)
+				tr.log("tier %d: %s error: %v", displayTier, name, err)
 				lastReason = ReasonProviderError
 				continue // next provider in same tier
 			}
 
-			chain = append(chain, tierIdx)
+			chain = append(chain, displayTier)
 
 			// Structural check
 			if !CheckStructure(format, result.Response) {
-				tr.log("tier %d: %s structural fail, escalating", tierIdx, name)
+				tr.log("tier %d: %s structural fail, escalating", displayTier, name)
 				scores = append(scores, 0)
 				lastReason = ReasonStructural
 				break // escalate to next tier
@@ -198,11 +206,11 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 
 			// Final tier: accept without eval
 			if tierIdx == lastTier {
-				tr.log("tier %d: %s accepted (final tier)", tierIdx, name)
+				tr.log("tier %d: %s accepted (final tier)", displayTier, name)
 				return RunResult{
 					LLMResult:       result,
-					Tier:            tierIdx,
-					Escalated:       tierIdx > 0,
+					Tier:            displayTier,
+					Escalated:       displayTier > 0,
 					EscalationChain: chain,
 					EvalScores:      scores,
 				}, nil
@@ -218,17 +226,17 @@ func (tr *TieredRunner) RunSmart(ctx context.Context, prompt, format string, thr
 			scores = append(scores, score)
 
 			if score >= threshold {
-				tr.log("tier %d: %s accepted (score %d/%d)", tierIdx, name, score, threshold)
+				tr.log("tier %d: %s accepted (score %d/%d)", displayTier, name, score, threshold)
 				return RunResult{
 					LLMResult:       result,
-					Tier:            tierIdx,
-					Escalated:       tierIdx > 0,
+					Tier:            displayTier,
+					Escalated:       displayTier > 0,
 					EscalationChain: chain,
 					EvalScores:      scores,
 				}, nil
 			}
 
-			tr.log("tier %d: %s rejected (score %d/%d), escalating", tierIdx, name, score, threshold)
+			tr.log("tier %d: %s rejected (score %d/%d), escalating", displayTier, name, score, threshold)
 			lastReason = ReasonEval
 			break // escalate to next tier
 		}
