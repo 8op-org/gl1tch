@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: '../internal/gui/dist',
     emptyOutDir: true,
   },
 })
