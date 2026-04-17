@@ -43,7 +43,6 @@ jobs:
           cd gui
           npm ci
           npm run build
-          cp -r dist ../internal/gui/dist
       - name: Build binary
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
