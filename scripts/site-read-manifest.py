@@ -63,6 +63,7 @@ def parse_list(text: str) -> list[str]:
 RE_SITE        = re.compile(r'^\(site\s+"([^"]+)"')
 RE_URL         = re.compile(r':url\s+"([^"]+)"')
 RE_SECTION     = re.compile(r'^\s*\(section\s+"([^"]+)"')
+RE_SIDEBAR     = re.compile(r':sidebar\s+(true|false)')
 RE_PAGE        = re.compile(r'^\s*\(page\s+"([^"]+)"')
 RE_TITLE       = re.compile(r':title\s+"([^"]+)"')
 RE_TEMPLATE    = re.compile(r':template\s+"([^"]+)"')
@@ -139,7 +140,11 @@ def parse_manifest(path: Path) -> dict:
             flush_section()
             in_section      = True
             section_depth   = line.count("(") - line.count(")")
-            current_section = {"label": m.group(1), "pages": []}
+            sidebar = True
+            sm = RE_SIDEBAR.search(line)
+            if sm:
+                sidebar = sm.group(1) == "true"
+            current_section = {"label": m.group(1), "pages": [], "sidebar": sidebar}
             continue
 
         # ── page open ────────────────────────────────────────────────────────

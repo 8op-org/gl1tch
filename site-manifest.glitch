@@ -104,6 +104,18 @@
       :context-query "plugin discovery, plugin manifest, subcommand definitions, argument types, call-workflow from plugins"
       :context-paths ("cmd/plugin.go" "internal/plugin/")))
 
-  ;; Labs live at /labs with their own pipeline (labs-generate.glitch).
-  ;; Not listed here — they have separate content collection, layout, and routes.
-  )
+  ;; Labs live at /labs with their own layout and generation pipeline.
+  ;; :sidebar false tells the doc generator to skip these pages.
+  (section "Labs" :sidebar false
+    (page "issue-triage-kubernetes"
+      :title "Triaging a Kubernetes Issue with Tier Routing"
+      :template "lab")
+    (page "pr-review-prometheus"
+      :title "Reviewing a Prometheus PR with Copilot"
+      :template "lab")
+    (page "model-showdown-containerd"
+      :title "Model Showdown: Free vs Paid vs Copilot"
+      :template "lab")
+    (page "bug-triage-kibana"
+      :title "Triaging a Kibana Regex Bug Across Three Tiers"
+      :template "lab")))

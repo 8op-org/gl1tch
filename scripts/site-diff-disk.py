@@ -89,6 +89,9 @@ def main():
     # Homepage (index) is handled separately via sync-homepage step.
     manifest_pages: dict[str, dict] = {}
     for section in manifest.get("sections", []):
+        # Skip non-sidebar sections (e.g. labs) — they have their own pipeline
+        if not section.get("sidebar", True):
+            continue
         for page in section.get("pages", []):
             manifest_pages[page["slug"]] = page
 
