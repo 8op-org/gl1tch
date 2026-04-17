@@ -1,0 +1,41 @@
+---
+const { currentSlug } = Astro.props;
+const sections = [
+  { label: "Getting Started", pages: [
+    { slug: "getting-started", title: "Getting Started" },
+    { slug: "local-models", title: "Local Models" },
+  ]},
+  { label: "Workflow Language", pages: [
+    { slug: "workflow-syntax", title: "Workflow Syntax" },
+    { slug: "dsl-reference", title: "DSL Reference" },
+    { slug: "phases-and-gates", title: "Phases & Gates" },
+  ]},
+  { label: "Workspaces & Resources", pages: [
+    { slug: "workspaces", title: "Workspaces" },
+    { slug: "providers", title: "Providers & Config" },
+  ]},
+  { label: "Running Workflows", pages: [
+    { slug: "compare", title: "Compare Runs" },
+    { slug: "batch-runs", title: "Batch Runs" },
+  ]},
+  { label: "Code Intelligence", pages: [
+    { slug: "code-intelligence", title: "Code Intelligence" },
+  ]},
+  { label: "Extending", pages: [
+    { slug: "plugins", title: "Plugins" },
+  ]},
+];
+---
+<nav class="doc-sidebar">
+  {sections.map(s => (
+    <div class="sidebar-section">
+      <div class="sidebar-label">{s.label}</div>
+      {s.pages.map(p => (
+        <a href={`/docs/${p.slug}`}
+           class:list={["sidebar-link", { active: currentSlug === p.slug }]}>
+          {p.title}
+        </a>
+      ))}
+    </div>
+  ))}
+</nav>

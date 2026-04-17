@@ -1,20 +1,36 @@
 ---
 import Base from './Base.astro';
+import DocSidebar from '../components/DocSidebar.astro';
 
 interface Props {
   title: string;
   description?: string;
   headings?: { depth: number; slug: string; text: string }[];
+  slug?: string;
 }
 
-const { title, description, headings = [] } = Astro.props;
+const { title, description, headings = [], slug = '' } = Astro.props;
 const tocHeadings = headings.filter((h) => h.depth === 2);
+
+// Derive current slug from slug prop or URL pathname as fallback
+const currentSlug = slug || Astro.url.pathname.replace(/^\/docs\//, '').replace(/\/$/, '');
 ---
 
 <Base title={`${title} — gl1tch`} description={description}>
   <main>
     <section style="padding-top: 160px;">
+      <!-- Mobile sidebar toggle (checkbox hack, no JS) -->
+      <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-input" />
+      <label for="sidebar-toggle" class="sidebar-toggle-btn" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </label>
+
       <div class="doc-layout">
+        <div class="doc-sidebar-col">
+          <div class="doc-sidebar-inner">
+            <DocSidebar currentSlug={currentSlug} />
+          </div>
+        </div>
         <div class="doc-main">
           <h2>{title}</h2>
           <div class="doc-content">
