@@ -1,6 +1,6 @@
 ---
 name: glitch
-description: Complete reference for the gl1tch CLI (8op-org/gl1tch) — workflow authoring, CLI commands, providers, batch runs, workspace model, observer, research loop, and installation. Use when the user mentions glitch, wants to create/edit/run workflows, automate tasks with glitch, review PRs via glitch, run batch comparisons, query indexed data, install/update glitch, or describes a task that could be a glitch workflow.
+description: Complete reference for the gl1tch CLI (8op-org/gl1tch) — workflow authoring, CLI commands, providers, batch runs, workspace model, observer, and installation. Use when the user mentions glitch, wants to create/edit/run workflows, automate tasks with glitch, review PRs via glitch, run batch comparisons, query indexed data, install/update glitch, or describes a task that could be a glitch workflow.
 ---
 
 # glitch
@@ -38,20 +38,12 @@ The tap auto-updates via goreleaser's `brews:` section. `HOMEBREW_TAP_GITHUB_TOK
 ## CLI Command Reference
 
 ```bash
-# Smart routing — matches input to best workflow, falls back to research loop
-glitch ask "work on issue 3442"
-glitch ask "https://github.com/elastic/ensemble/issues/1281"
-glitch ask "3442"                              # bare issue number
-
 # Workflow management
 glitch workflow list                           # list available workflows
 glitch wf list                                 # alias
 glitch workflow run <name> [input]             # run a named workflow
 glitch workflow run <name> --set key=value     # parameterized run
 glitch workflow run <name> --path /some/repo   # run against different directory
-
-# Workspace mode (cross-repo work)
-glitch --workspace ~/Projects/stokagent ask elastic/observability-robots#3920
 
 # Observer — query indexed activity via Elasticsearch
 glitch observe "How many issues were resolved this week?"
@@ -67,26 +59,12 @@ glitch config show
 glitch config set default_model qwen3:8b
 ```
 
-## Ask Routing
-
-`glitch ask` auto-routes input through a fallback chain:
-
-1. **Fast-path regex** — pattern-matched before any LLM call:
-   - `"work on issue NNN"` → `work-on-issue` workflow
-   - GitHub PR URL → `github-pr-review` workflow
-   - `"review NNN"` or `"review <url>"` → `pr-review` workflow
-   - GitHub issue URL → `issue-to-pr` workflow
-   - Bare issue ref (`3339`, `org/repo#3339`) → `issue-to-pr` workflow
-2. **LLM workflow selection** — builds numbered menu of workflows, asks local LLM to pick best match
-3. **Research loop** — evidence-gathering tool-use loop (see Research Loop section)
-4. **One-shot LLM** — direct Ollama fallback
-
 ## Workspace Model
 
 The `--workspace` flag scopes workflows and results to a directory. Designed for cross-repo work where one command center (e.g., stokagent) manages workflows and results for multiple target repos.
 
 ```bash
-glitch --workspace ~/Projects/stokagent ask elastic/observability-robots#3920
+glitch --workspace ~/Projects/stokagent run issue-to-pr --set repo=elastic/observability-robots --set issue=3920
 ```
 
 Typical usage with a shell alias:
@@ -206,13 +184,13 @@ Loading order: global dir first, then `.glitch/workflows/` (local overrides glob
       :model model
       :prompt ```
         Multiline prompt with triple-backtick delimiters.
-        Use {{step "step-id"}} for prior step output.
-        Use {{.input}} for user input.
-        Use {{.param.key}} for --set key=value params.
+        Use ~(step step-id) for prior step output.
+        Use ~input for user input.
+        Use ~param.key for --set key=value params.
         ```))
 
   (step "write-file"
-    (save "results/{{.param.repo}}/output.md" :from "another-step"))
+    (save "results/~param.repo/output.md" :from "another-step"))
 
   ;; Disable a step without deleting it:
   #_(step "skipped"
@@ -257,7 +235,7 @@ Forms compose — `retry` can wrap `timeout`, `let` can contain `retry`, etc.
 ;; Kill an LLM step if it hangs beyond 2 minutes
 (timeout "2m"
   (step "analyze"
-    (llm :prompt "Analyze: {{step \"fetch\"}}")))
+    (llm :prompt "Analyze: ~(step fetch)")))
 
 ;; Compose: retry + timeout
 (retry 2
@@ -269,16 +247,16 @@ Forms compose — `retry` can wrap `timeout`, `let` can contain `retry`, etc.
 (let ((endpoint "https://api.example.com")
       (token "abc123"))
   (step "call"
-    (run "curl -H 'Auth: {{.param.token}}' endpoint"))
+    (run "curl -H 'Auth: ~param.token' endpoint"))
   (step "parse"
-    (run "echo '{{step \"call\"}}' | jq '.data'")))
+    (run "echo '~(step call)' | jq '.data'")))
 
 ;; Error recovery — if primary fails, run fallback
 (catch
   (step "try"
     (run "gh api graphql -f query='...'"))
   (step "fallback"
-    (run "gh issue view {{.param.issue}} --json body")))
+    (run "gh issue view ~param.issue --json body")))
 
 ;; Multi-branch conditional — predicates are shell commands
 (cond
@@ -293,27 +271,25 @@ Forms compose — `retry` can wrap `timeout`, `let` can contain `retry`, etc.
       (run "echo 'All clear'"))))
 
 ;; Iterate over prior step output (one item per line)
-;; {{.param.item}} and {{.param.item_index}} available in body
+;; ~param.item and ~param.item_index available in body
 (step "list-files"
   (run "find . -name '*.go' -maxdepth 2"))
 
 (map "list-files"
   (step "check"
-    (run "wc -l {{.param.item}}")))
+    (run "wc -l ~param.item")))
 ```
 
-### Template Expressions (Go text/template)
+### Template Expressions (Tilde Interpolation)
 
 | Expression | Description |
 |-----------|-------------|
-| `{{.input}}` | User input passed to the workflow |
-| `{{.param.key}}` | Runtime parameter from `--set key=value` |
-| `{{.param.item}}` | Current item in a `(map ...)` iteration |
-| `{{.param.item_index}}` | Current index (0-based) in a `(map ...)` iteration |
-| `{{step "id"}}` | Output of a previous step |
-| `{{stepfile "id"}}` | Write step output to temp file, return path |
-
-**Important:** Templates use Go `text/template`. Parameters must have a dot: `{{.param.input}}` not `{{param.input}}` — without the dot it silently stays literal.
+| `~input` | User input passed to the workflow |
+| `~param.key` | Runtime parameter from `--set key=value` |
+| `~param.item` | Current item in a `(map ...)` iteration |
+| `~param.item_index` | Current index (0-based) in a `(map ...)` iteration |
+| `~(step id)` | Output of a previous step |
+| `~(stepfile id)` | Write step output to temp file, return path |
 
 ### YAML Format (Legacy)
 
@@ -331,7 +307,7 @@ steps:
       provider: claude
       model: claude-haiku-4-5-20251001
       prompt: |
-        Prompt with {{step "step-id"}} and {{.input}}
+        Prompt with ~(step step-id) and ~input
 
   - id: write-file
     save: "results/output.md"
@@ -384,7 +360,7 @@ steps:
     (llm :model model
       :prompt ```
         Summarize this git status for a developer:
-        {{step "status"}}
+        ~(step status)
         ```)))
 ```
 
@@ -411,13 +387,13 @@ steps:
         Create a morning briefing from these sources:
 
         My PRs:
-        {{step "prs"}}
+        ~(step prs)
 
         Pending reviews:
-        {{step "reviews"}}
+        ~(step reviews)
 
         My issues:
-        {{step "issues"}}
+        ~(step issues)
 
         Format: bullet list, no emoji, terse.
         ```)))
@@ -430,16 +406,16 @@ steps:
   :description "Pass runtime params with --set"
 
   (step "fetch"
-    (run "gh issue view {{.param.issue}} --repo {{.param.repo}} --json number,title,body"))
+    (run "gh issue view ~param.issue --repo ~param.repo --json number,title,body"))
 
   (step "analyze"
     (llm :prompt ```
       Analyze this issue:
-      {{step "fetch"}}
+      ~(step fetch)
       ```))
 
   (step "save-it"
-    (save "results/{{.param.repo}}/{{.param.issue}}.md" :from "analyze")))
+    (save "results/~param.repo/~param.issue.md" :from "analyze")))
 ```
 
 Run with: `glitch workflow run parameterized --set issue=3442 --set repo=elastic/ensemble`
@@ -464,10 +440,10 @@ When step output contains characters that break shell escaping:
 
 ```clojure
 (step "use-prior-output"
-  (run "cat '{{stepfile \"big-json-step\"}}' | jq '.items[]'"))
+  (run "cat '~(stepfile big-json-step)' | jq '.items[]'"))
 ```
 
-`{{stepfile "id"}}` writes the step output to a temp file and returns the path.
+`~(stepfile id)` writes the step output to a temp file and returns the path.
 
 ## Provider & Model Configuration
 
@@ -605,22 +581,6 @@ glitch down
 
 Kibana dashboard at `http://localhost:5601/app/dashboards#/view/glitch-llm-dashboard`.
 
-## Research Loop
-
-When `glitch ask` can't match a workflow, it falls into the research loop — an iterative tool-use engine.
-
-**How it works:**
-1. LLM emits JSON tool calls: `{"tool": "name", "params": {...}}`
-2. Available tools: `git`, `grep`, `ls`, `cat`, `curl`, `jq`, etc.
-3. Max 15 tool calls per loop iteration
-4. Escalates through tiered providers on failure
-
-**Goals:**
-- `GoalSummarize` — gather and summarize information
-- `GoalImplement` — gather info and generate implementation plan
-
-**Adapters:** Bridges to agent providers (Claude, Copilot, Gemini) for headless execution via stdin/stdout.
-
 ## Plugin System
 
 ### Naming Convention
@@ -634,7 +594,7 @@ YAML-defined in `~/.config/glitch/providers/`:
 
 ```yaml
 name: "my-provider"
-command: "command template with {{.prompt}} and {{.model}}"
+command: "command template with ~prompt and ~model"
 ```
 
 ### Release Pipeline
