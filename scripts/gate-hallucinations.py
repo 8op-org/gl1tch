@@ -121,6 +121,7 @@ def check_doc(slug: str, content: str) -> list[str]:
     errors = []
     in_code_block = False
     fence_char = ""   # the backtick sequence that opened the fence
+    code_lang = ""
 
     for line in content.splitlines():
         stripped = line.strip()

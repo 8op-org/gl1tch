@@ -172,7 +172,7 @@ def main():
 
     # Check for manifest sections beyond what sidebar covers
     for j in range(count, len(manifest_sections)):
-        label, slugs = manifest_sections[j]
+        label, _ = manifest_sections[j]
         errors.append(f"manifest section '{label}' missing from sidebar entirely")
 
     if errors:
