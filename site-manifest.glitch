@@ -1,0 +1,105 @@
+;;; site-manifest.glitch
+;;;
+;;; Single source of truth for the 8op.org site structure.
+;;;
+;;; This file declares every page on the site along with its metadata,
+;;; section grouping, context queries for the code index, and fallback
+;;; context paths.
+;;;
+;;; Consumers:
+;;;   - Sidebar generation  — derives nav order and grouping from (section ...) forms
+;;;   - Content generation  — uses :context-query and :context-paths to ground LLM prompts
+;;;   - Link validation     — validates internal hrefs against declared page slugs
+;;;
+;;; Adding a page: add a (page ...) form inside the appropriate (section ...) and
+;;; increment :order values if needed. The slug (first arg) becomes the URL path.
+;;;
+;;; Do NOT include glitch ask — it has been decommissioned.
+
+(site "gl1tch"
+  :url "https://8op.org"
+
+  (page "index"
+    :title "gl1tch — your AI, your terminal, your rules"
+    :template "homepage"
+    :sections ("hero" "features" "how-it-works" "meta" "agents")
+    :context-query "top-level project description, feature highlights, install instructions"
+    :context-paths ("README.md"))
+
+  (section "Getting Started"
+    (page "getting-started"
+      :title "Getting Started"
+      :order 1
+      :description "Install, configure, run your first workflow"
+      :context-query "brew install, initial setup, hello-world workflow, glitch run basics"
+      :context-paths ("cmd/run.go" "cmd/root.go"))
+    (page "local-models"
+      :title "Local Models"
+      :order 2
+      :description "LM Studio, Ollama, GPU allocation, context tuning"
+      :context-query "Ollama and LM Studio provider configuration, model selection, tier routing"
+      :context-paths ("internal/provider/")))
+
+  (section "Workflow Language"
+    (page "workflow-syntax"
+      :title "Workflow Syntax"
+      :order 3
+      :description "S-expression forms, steps, interpolation, LLM options"
+      :context-query "sexpr parser, step types, run/llm/save forms, interpolation syntax, tier routing"
+      :context-paths ("internal/sexpr/" "internal/pipeline/sexpr.go"))
+    (page "dsl-reference"
+      :title "DSL Reference"
+      :order 4
+      :description "Threading, filter, reduce, ES forms, embed, flatten"
+      :context-query "threading form, filter, reduce, search/index/delete ES forms, embed, flatten, assoc, pick"
+      :context-paths ("internal/pipeline/sexpr.go"))
+    (page "phases-and-gates"
+      :title "Phases & Gates"
+      :order 5
+      :description "Phase grouping, gate assertions, retries"
+      :context-query "phase form, gate form, retry semantics, phase execution order"
+      :context-paths ("internal/pipeline/sexpr.go" "internal/pipeline/runner.go")))
+
+  (section "Workspaces & Resources"
+    (page "workspaces"
+      :title "Workspaces"
+      :order 6
+      :description "Workspace config, resources, defaults, discovery, nested runs"
+      :context-query "workspace init/add/sync/pin/rm commands, workspace.glitch format, resource types, call-workflow"
+      :context-paths ("cmd/workspace*.go" "internal/workspace/"))
+    (page "providers"
+      :title "Providers & Config"
+      :order 7
+      :description "Provider config, Ollama, LM Studio, OpenAI-compat, tiered routing, config.glitch"
+      :context-query "provider protocol, config.glitch format, glitch config show/set, provider tiers, OpenAI-compatible endpoint config, api-key-env"
+      :context-paths ("cmd/config.go" "internal/provider/" "internal/pipeline/tier.go")))
+
+  (section "Running Workflows"
+    (page "compare"
+      :title "Compare Runs"
+      :order 8
+      :description "A/B testing models, strategies, review scoring"
+      :context-query "compare form, branch form, review criteria, --variant flag, --compare flag"
+      :context-paths ("cmd/run.go" "internal/pipeline/compare.go"))
+    (page "batch-runs"
+      :title "Batch Runs"
+      :order 9
+      :description "Run variants side by side, multi-provider comparison, fan-out"
+      :context-query "--variant flag, --compare discovery pattern, variant workflow naming, batch execution, nested runs"
+      :context-paths ("cmd/run.go" "internal/pipeline/runner.go")))
+
+  (section "Code Intelligence"
+    (page "code-intelligence"
+      :title "Code Intelligence"
+      :order 10
+      :description "Index repos, query with natural language, glitch up/down"
+      :context-query "glitch index command, glitch observe command, language extractors, symbol indexing, ES queries, BFS depth traversal, glitch up/down docker compose"
+      :context-paths ("cmd/index.go" "cmd/observe.go" "cmd/up.go" "internal/esearch/" "internal/capability/")))
+
+  (section "Extending"
+    (page "plugins"
+      :title "Plugins"
+      :order 11
+      :description "Plugin directories, manifests, subcommands, argument types"
+      :context-query "plugin discovery, plugin manifest, subcommand definitions, argument types, call-workflow from plugins"
+      :context-paths ("cmd/plugin.go" "internal/plugin/"))))
