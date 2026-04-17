@@ -17,7 +17,7 @@
   (step "triage-free"
     (llm
       :provider "openrouter"
-      :model "google/gemma-4-31b-it:free"
+      :model "qwen/qwen3-coder:free"
       :prompt ```
         You are a senior SRE triaging a Kubernetes bug report.
 
@@ -109,7 +109,7 @@
   (step "analysis-free"
     (llm
       :provider "openrouter"
-      :model "google/gemma-4-31b-it:free"
+      :model "qwen/qwen3-coder:free"
       :prompt ```
         You are a container runtime architect analyzing a feature proposal.
 
@@ -355,7 +355,7 @@
   (step "kibana-triage-free"
     (llm
       :provider "openrouter"
-      :model "google/gemma-4-31b-it:free"
+      :model "qwen/qwen3-coder:free"
       :prompt ```
         You are a senior frontend engineer triaging a Kibana bug report.
 
