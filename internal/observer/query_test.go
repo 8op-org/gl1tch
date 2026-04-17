@@ -136,6 +136,115 @@ func contains(haystack, needle string) bool {
 	return len(haystack) > 0 && len(needle) > 0 && strings.Contains(haystack, needle)
 }
 
+func TestAllIndicesForRepo(t *testing.T) {
+	indices := allIndicesForRepo("gl1tch")
+	hasSymbols := false
+	hasEdges := false
+	for _, idx := range indices {
+		if idx == esearch.IndexSymbolsPrefix+"gl1tch" {
+			hasSymbols = true
+		}
+		if idx == esearch.IndexEdgesPrefix+"gl1tch" {
+			hasEdges = true
+		}
+	}
+	if !hasSymbols {
+		t.Error("missing symbols index")
+	}
+	if !hasEdges {
+		t.Error("missing edges index")
+	}
+}
+
+func TestAllIndicesForRepoEmpty(t *testing.T) {
+	indices := allIndicesForRepo("")
+	// Should equal allIndices() — no graph indices added
+	base := allIndices()
+	if len(indices) != len(base) {
+		t.Errorf("empty repo: got %d indices, want %d", len(indices), len(base))
+	}
+}
+
+func TestGraphBFSEmpty(t *testing.T) {
+	results := graphBFS(nil, "sym1", "calls", 2)
+	if len(results) != 0 {
+		t.Errorf("nil fetcher: got %d, want 0", len(results))
+	}
+}
+
+func TestGraphBFSTraversal(t *testing.T) {
+	edges := map[string][]EdgeHit{
+		"a": {{SourceID: "a", TargetID: "b", Kind: "calls"}, {SourceID: "a", TargetID: "c", Kind: "calls"}},
+		"b": {{SourceID: "b", TargetID: "d", Kind: "calls"}},
+	}
+	fetcher := func(id, kind string) []EdgeHit { return edges[id] }
+
+	result := graphBFS(fetcher, "a", "calls", 1)
+	if len(result) != 2 {
+		t.Errorf("depth 1: got %d, want 2", len(result))
+	}
+
+	result2 := graphBFS(fetcher, "a", "calls", 2)
+	if len(result2) != 3 {
+		t.Errorf("depth 2: got %d, want 3", len(result2))
+	}
+}
+
+func TestGraphBFSZeroDepth(t *testing.T) {
+	fetcher := func(id, kind string) []EdgeHit {
+		return []EdgeHit{{SourceID: "a", TargetID: "b", Kind: "calls"}}
+	}
+	results := graphBFS(fetcher, "a", "calls", 0)
+	if len(results) != 0 {
+		t.Errorf("zero depth: got %d, want 0", len(results))
+	}
+}
+
+func TestWithDepthReturnsCopy(t *testing.T) {
+	es := esearch.NewClient("http://localhost:9200")
+	llm := func(prompt string) (string, error) { return "", nil }
+	qe := NewQueryEngine(es, llm)
+	qe2 := qe.WithDepth(5)
+	if qe2 == qe {
+		t.Error("WithDepth should return a new copy, not mutate in place")
+	}
+	if qe2.depth != 5 {
+		t.Errorf("expected depth 5, got %d", qe2.depth)
+	}
+	if qe.depth != 0 {
+		t.Errorf("original depth should be 0, got %d", qe.depth)
+	}
+}
+
+func TestExpandWithGraphNoRepo(t *testing.T) {
+	es := esearch.NewClient("http://localhost:9200")
+	llm := func(prompt string) (string, error) { return "", nil }
+	qe := NewQueryEngine(es, llm)
+	// No repo set — expandWithGraph should return nil.
+	result := qe.expandWithGraph(nil, nil, 2)
+	if result != nil {
+		t.Error("expected nil for nil results")
+	}
+}
+
+func TestExpandWithGraphNoSymbolHits(t *testing.T) {
+	es := esearch.NewClient("http://localhost:9200")
+	llm := func(prompt string) (string, error) { return "", nil }
+	qe := NewQueryEngine(es, llm).WithRepo("myrepo")
+
+	// Results from a non-symbols index — no seeds to expand.
+	resp := &esearch.SearchResponse{
+		Total: 1,
+		Results: []esearch.SearchResult{
+			{Index: "glitch-events", Source: []byte(`{"message":"test"}`)},
+		},
+	}
+	result := qe.expandWithGraph(nil, resp, 2)
+	if result != nil {
+		t.Error("expected nil when no symbol hits present")
+	}
+}
+
 func TestAllIndices(t *testing.T) {
 	indices := allIndices()
 	want := []string{

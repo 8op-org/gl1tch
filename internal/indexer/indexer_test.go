@@ -44,6 +44,36 @@ func TestDetectLanguage(t *testing.T) {
 	}
 }
 
+func TestDetectLanguageNewExtensions(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     string
+	}{
+		{"main.c", "c"},
+		{"header.h", "c"},
+		{"app.cpp", "cpp"},
+		{"lib.cc", "cpp"},
+		{"util.cxx", "cpp"},
+		{"types.hpp", "cpp"},
+		{"impl.hh", "cpp"},
+		{"Program.cs", "csharp"},
+		{"index.php", "php"},
+		{"Main.scala", "scala"},
+		{"App.swift", "swift"},
+		{"Main.kt", "kotlin"},
+		{"build.kts", "kotlin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			got := DetectLanguage(tt.filename)
+			if got != tt.want {
+				t.Errorf("DetectLanguage(%q) = %q, want %q", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestChunkContent(t *testing.T) {
 	t.Run("small file single chunk", func(t *testing.T) {
 		content := "hello world"
@@ -92,6 +122,44 @@ func TestChunkContent(t *testing.T) {
 			t.Errorf("chunks don't cover all content: total covered %d, content %d", total, len(content))
 		}
 	})
+}
+
+func TestClassifyFiles(t *testing.T) {
+	existing := map[string]string{
+		"main.go":    "hash1",
+		"old.go":     "hash2",
+		"changed.go": "hash3",
+	}
+	current := map[string]string{
+		"main.go":    "hash1",   // unchanged
+		"changed.go": "hash999", // changed
+		"new.go":     "hash4",   // new
+	}
+	toIndex, toDelete := classifyFiles(existing, current)
+	if len(toIndex) != 2 {
+		t.Errorf("toIndex: got %d, want 2", len(toIndex))
+	}
+	if len(toDelete) != 1 {
+		t.Errorf("toDelete: got %d, want 1", len(toDelete))
+	}
+	if toDelete[0] != "old.go" {
+		t.Errorf("toDelete[0] = %q, want old.go", toDelete[0])
+	}
+}
+
+func TestFileHashCompute(t *testing.T) {
+	h1 := fileHash([]byte("hello world"))
+	h2 := fileHash([]byte("hello world"))
+	h3 := fileHash([]byte("different"))
+	if h1 != h2 {
+		t.Error("same content should produce same hash")
+	}
+	if h1 == h3 {
+		t.Error("different content should produce different hash")
+	}
+	if h1 == "" {
+		t.Error("hash should not be empty")
+	}
 }
 
 func TestExtractSymbols(t *testing.T) {

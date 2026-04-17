@@ -14,17 +14,59 @@ import (
 // could be Ollama, Copilot, Claude, or any other provider.
 type LLMFunc func(prompt string) (string, error)
 
+// EdgeHit represents a single edge in the code graph.
+type EdgeHit struct {
+	SourceID string `json:"source_id"`
+	TargetID string `json:"target_id"`
+	Kind     string `json:"kind"`
+}
+
+// graphBFS performs breadth-first traversal on edges from a starting symbol.
+func graphBFS(edgeFetcher func(symbolID, edgeKind string) []EdgeHit, startID, edgeKind string, depth int) []string {
+	if edgeFetcher == nil || depth < 1 {
+		return nil
+	}
+	visited := map[string]bool{startID: true}
+	frontier := []string{startID}
+	var collected []string
+	for d := 0; d < depth && len(frontier) > 0; d++ {
+		var next []string
+		for _, id := range frontier {
+			edges := edgeFetcher(id, edgeKind)
+			for _, e := range edges {
+				targetID := e.TargetID
+				if e.TargetID == id {
+					targetID = e.SourceID
+				}
+				if !visited[targetID] {
+					visited[targetID] = true
+					next = append(next, targetID)
+					collected = append(collected, targetID)
+				}
+			}
+		}
+		frontier = next
+	}
+	return collected
+}
+
 // QueryEngine bridges natural language questions to Elasticsearch and
 // synthesizes answers via an LLM.
 type QueryEngine struct {
-	es   *esearch.Client
-	llm  LLMFunc
-	repo string
+	es    *esearch.Client
+	llm   LLMFunc
+	repo  string
+	depth int
 }
 
 // WithRepo returns a copy of the engine scoped to a specific repository.
 func (q *QueryEngine) WithRepo(repo string) *QueryEngine {
-	return &QueryEngine{es: q.es, llm: q.llm, repo: repo}
+	return &QueryEngine{es: q.es, llm: q.llm, repo: repo, depth: q.depth}
+}
+
+// WithDepth returns a copy of the engine with the given BFS traversal depth.
+func (q *QueryEngine) WithDepth(d int) *QueryEngine {
+	return &QueryEngine{es: q.es, llm: q.llm, repo: q.repo, depth: d}
 }
 
 // NewQueryEngine returns a new QueryEngine using the given LLM function.
@@ -39,6 +81,17 @@ func allIndices() []string {
 		esearch.IndexToolCalls,
 		esearch.IndexLLMCalls,
 	}
+}
+
+func allIndicesForRepo(repo string) []string {
+	base := allIndices()
+	if repo != "" {
+		base = append(base,
+			esearch.IndexSymbolsPrefix+repo,
+			esearch.IndexEdgesPrefix+repo,
+		)
+	}
+	return base
 }
 
 // knowledgeIndex returns the knowledge index name for a repo (e.g. "elastic/oblt-cli" → "glitch-knowledge-oblt-cli").
@@ -61,7 +114,143 @@ func (q *QueryEngine) Answer(ctx context.Context, question string) (string, erro
 	if results.Total == 0 && len(results.Results) == 0 {
 		return "I don't have any indexed data matching that question yet. Try running a pipeline or indexing some data first.", nil
 	}
+
+	// Expand results via BFS graph traversal when depth > 1 and a repo is set.
+	if q.depth > 1 && q.repo != "" {
+		expanded := q.expandWithGraph(ctx, results, q.depth)
+		if expanded != nil {
+			results = mergeResponses(results, expanded)
+		}
+	}
+
 	return q.synthesize(ctx, question, results)
+}
+
+// expandWithGraph extracts symbol IDs from search results that came from a
+// symbols index, runs graphBFS to discover related symbols via edge traversal,
+// fetches those expanded symbol docs, and returns them as a SearchResponse.
+func (q *QueryEngine) expandWithGraph(ctx context.Context, results *esearch.SearchResponse, depth int) *esearch.SearchResponse {
+	if results == nil {
+		return nil
+	}
+
+	symbolsIdx := esearch.IndexSymbolsPrefix + q.repo
+	edgesIdx := esearch.IndexEdgesPrefix + q.repo
+
+	// Collect symbol IDs from hits that came from the symbols index.
+	var seedIDs []string
+	for _, hit := range results.Results {
+		if hit.Index != symbolsIdx {
+			continue
+		}
+		var doc struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(hit.Source, &doc); err == nil && doc.ID != "" {
+			seedIDs = append(seedIDs, doc.ID)
+		}
+	}
+	if len(seedIDs) == 0 {
+		return nil
+	}
+
+	// Build an edge fetcher that queries ES for edges by symbol ID.
+	edgeFetcher := func(symbolID, edgeKind string) []EdgeHit {
+		query := map[string]any{
+			"size": 100,
+			"query": map[string]any{
+				"bool": map[string]any{
+					"must": []any{
+						map[string]any{
+							"bool": map[string]any{
+								"should": []any{
+									map[string]any{"term": map[string]any{"source_id": symbolID}},
+									map[string]any{"term": map[string]any{"target_id": symbolID}},
+								},
+								"minimum_should_match": 1,
+							},
+						},
+					},
+				},
+			},
+		}
+		if edgeKind != "" {
+			must := query["query"].(map[string]any)["bool"].(map[string]any)["must"].([]any)
+			must = append(must, map[string]any{"term": map[string]any{"kind": edgeKind}})
+			query["query"].(map[string]any)["bool"].(map[string]any)["must"] = must
+		}
+		raw, err := json.Marshal(query)
+		if err != nil {
+			return nil
+		}
+		resp, err := q.es.Search(ctx, []string{edgesIdx}, json.RawMessage(raw))
+		if err != nil || resp == nil {
+			return nil
+		}
+		var edges []EdgeHit
+		for _, hit := range resp.Results {
+			var e EdgeHit
+			if err := json.Unmarshal(hit.Source, &e); err == nil {
+				edges = append(edges, e)
+			}
+		}
+		return edges
+	}
+
+	// Run BFS from each seed and collect expanded symbol IDs.
+	seen := make(map[string]bool)
+	for _, hit := range results.Results {
+		if hit.Index == symbolsIdx {
+			var doc struct {
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal(hit.Source, &doc); err == nil {
+				seen[doc.ID] = true
+			}
+		}
+	}
+
+	var expandedIDs []string
+	for _, seedID := range seedIDs {
+		neighbors := graphBFS(edgeFetcher, seedID, "", depth-1)
+		for _, nid := range neighbors {
+			if !seen[nid] {
+				seen[nid] = true
+				expandedIDs = append(expandedIDs, nid)
+			}
+		}
+	}
+	if len(expandedIDs) == 0 {
+		return nil
+	}
+
+	// Cap to avoid overly large fetches.
+	if len(expandedIDs) > 50 {
+		expandedIDs = expandedIDs[:50]
+	}
+
+	// Fetch expanded symbols by ID.
+	terms := make([]any, len(expandedIDs))
+	for i, id := range expandedIDs {
+		terms[i] = id
+	}
+	fetchQuery := map[string]any{
+		"size": len(expandedIDs),
+		"query": map[string]any{
+			"terms": map[string]any{
+				"id": terms,
+			},
+		},
+	}
+	raw, err := json.Marshal(fetchQuery)
+	if err != nil {
+		return nil
+	}
+	resp, err := q.es.Search(ctx, []string{symbolsIdx}, json.RawMessage(raw))
+	if err != nil {
+		return nil
+	}
+	return resp
 }
 
 // searchWithFallback tries to generate an ES query via LLM; falls back to
@@ -77,11 +266,12 @@ func (q *QueryEngine) searchWithFallback(ctx context.Context, question string) (
 		raw, _ = json.Marshal(defaultQueryWithRepo(question, q.repo))
 	}
 
-	resp, err := q.es.Search(ctx, allIndices(), json.RawMessage(raw))
+	indices := allIndicesForRepo(q.repo)
+	resp, err := q.es.Search(ctx, indices, json.RawMessage(raw))
 	if err != nil {
 		// Retry with the plain default query
 		fallbackRaw, _ := json.Marshal(defaultQueryWithRepo(question, q.repo))
-		resp, err = q.es.Search(ctx, allIndices(), json.RawMessage(fallbackRaw))
+		resp, err = q.es.Search(ctx, indices, json.RawMessage(fallbackRaw))
 		if err != nil {
 			// Index-not-found or similar — return empty results
 			resp = &esearch.SearchResponse{}

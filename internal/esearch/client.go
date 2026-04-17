@@ -316,6 +316,87 @@ func (c *Client) DeleteByQuery(ctx context.Context, index string, query json.Raw
 	return &result, nil
 }
 
+// TermsAgg runs a terms aggregation on keyField with a nested top_hits to
+// extract one valueField per bucket. Returns map[key]→value.
+// A 404 (index not found) returns an empty map, not an error.
+func (c *Client) TermsAgg(ctx context.Context, index, keyField, valueField string, size int) (map[string]string, error) {
+	body := fmt.Sprintf(`{
+		"size": 0,
+		"aggs": {
+			"keys": {
+				"terms": { "field": %q, "size": %d },
+				"aggs": {
+					"latest": {
+						"top_hits": { "size": 1, "_source": [%q] }
+					}
+				}
+			}
+		}
+	}`, keyField, size, valueField)
+
+	path := "/" + index + "/_search"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, strings.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("terms agg: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("terms agg: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return map[string]string{}, nil
+	}
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("terms agg: status %s — %s", resp.Status, truncate(string(b), 256))
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("terms agg: read body: %w", err)
+	}
+	return parseTermsAggResponse(data, valueField), nil
+}
+
+// parseTermsAggResponse extracts key→value pairs from an ES terms aggregation
+// response with nested top_hits.
+func parseTermsAggResponse(data []byte, valueField string) map[string]string {
+	var raw struct {
+		Aggregations struct {
+			Keys struct {
+				Buckets []struct {
+					Key    string `json:"key"`
+					Latest struct {
+						Hits struct {
+							Hits []struct {
+								Source map[string]any `json:"_source"`
+							} `json:"hits"`
+						} `json:"hits"`
+					} `json:"latest"`
+				} `json:"buckets"`
+			} `json:"keys"`
+		} `json:"aggregations"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return map[string]string{}
+	}
+
+	result := make(map[string]string, len(raw.Aggregations.Keys.Buckets))
+	for _, b := range raw.Aggregations.Keys.Buckets {
+		if len(b.Latest.Hits.Hits) == 0 {
+			continue
+		}
+		if v, ok := b.Latest.Hits.Hits[0].Source[valueField]; ok {
+			result[b.Key] = fmt.Sprint(v)
+		}
+	}
+	return result
+}
+
 // truncate returns at most n bytes of s, appending "…" if truncated.
 func truncate(s string, n int) string {
 	if len(s) <= n {

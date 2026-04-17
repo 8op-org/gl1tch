@@ -23,18 +23,101 @@ func TestToolSetDefinitions(t *testing.T) {
 	ts := NewToolSet("/tmp", nil)
 	defs := ts.Definitions()
 
-	if len(defs) != 8 {
-		t.Fatalf("expected 8 definitions, got %d", len(defs))
+	if len(defs) != 11 {
+		t.Fatalf("expected 11 definitions, got %d", len(defs))
 	}
 
 	expected := []string{
 		"grep_code", "read_file", "git_log", "git_diff",
 		"search_es", "list_files", "fetch_issue", "fetch_pr",
+		"search_symbols", "search_edges", "symbol_context",
 	}
 	for i, name := range expected {
 		if defs[i].Name != name {
 			t.Errorf("definition[%d]: expected %q, got %q", i, name, defs[i].Name)
 		}
+	}
+}
+
+func TestDefinitionsIncludeGraphTools(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	defs := ts.Definitions()
+	want := map[string]bool{"search_symbols": false, "search_edges": false, "symbol_context": false}
+	for _, d := range defs {
+		if _, ok := want[d.Name]; ok {
+			want[d.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("missing tool: %s", name)
+		}
+	}
+}
+
+func TestValidToolGraphTools(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	for _, name := range []string{"search_symbols", "search_edges", "symbol_context"} {
+		if !ts.ValidTool(name) {
+			t.Errorf("ValidTool(%q) = false", name)
+		}
+	}
+}
+
+func TestSearchSymbolsWithoutES(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	res := ts.Execute(context.Background(), "search_symbols", map[string]string{"name": "foo", "repo": "test"})
+	if res.Err != "" {
+		t.Errorf("should not be an error, got: %s", res.Err)
+	}
+	if res.Output != "elasticsearch not available" {
+		t.Errorf("expected 'elasticsearch not available', got: %s", res.Output)
+	}
+}
+
+func TestSearchEdgesWithoutES(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	res := ts.Execute(context.Background(), "search_edges", map[string]string{"symbol_id": "foo", "direction": "from", "repo": "test"})
+	if res.Err != "" {
+		t.Errorf("should not be an error, got: %s", res.Err)
+	}
+	if res.Output != "elasticsearch not available" {
+		t.Errorf("expected 'elasticsearch not available', got: %s", res.Output)
+	}
+}
+
+func TestSymbolContextWithoutES(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	res := ts.Execute(context.Background(), "symbol_context", map[string]string{"symbol_id": "foo", "repo": "test"})
+	if res.Err != "" {
+		t.Errorf("should not be an error, got: %s", res.Err)
+	}
+	if res.Output != "elasticsearch not available" {
+		t.Errorf("expected 'elasticsearch not available', got: %s", res.Output)
+	}
+}
+
+func TestSearchSymbolsMissingRepo(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	res := ts.Execute(context.Background(), "search_symbols", map[string]string{"name": "foo"})
+	if res.Err == "" {
+		t.Error("expected error for missing repo")
+	}
+}
+
+func TestSearchEdgesMissingDirection(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	res := ts.Execute(context.Background(), "search_edges", map[string]string{"symbol_id": "foo", "repo": "test"})
+	if res.Err == "" {
+		t.Error("expected error for missing direction")
+	}
+}
+
+func TestSymbolContextMissingSymbolID(t *testing.T) {
+	ts := NewToolSet("/tmp", nil)
+	res := ts.Execute(context.Background(), "symbol_context", map[string]string{"repo": "test"})
+	if res.Err == "" {
+		t.Error("expected error for missing symbol_id")
 	}
 }
 

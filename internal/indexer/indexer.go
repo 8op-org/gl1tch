@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -63,25 +64,38 @@ var skipNames = map[string]bool{
 
 // langMap maps file extensions to language names.
 var langMap = map[string]string{
-	".go":   "go",
-	".py":   "python",
-	".js":   "javascript",
-	".ts":   "typescript",
-	".tsx":  "tsx",
-	".jsx":  "jsx",
-	".rb":   "ruby",
-	".rs":   "rust",
-	".java": "java",
-	".vue":  "vue",
-	".yaml": "yaml",
-	".yml":  "yaml",
-	".json": "json",
-	".md":   "markdown",
-	".sh":   "shell",
-	".bash": "shell",
-	".sql":  "sql",
-	".html": "html",
-	".css":  "css",
+	".go":    "go",
+	".py":    "python",
+	".js":    "javascript",
+	".ts":    "typescript",
+	".tsx":   "tsx",
+	".jsx":   "jsx",
+	".rb":    "ruby",
+	".rs":    "rust",
+	".java":  "java",
+	".vue":   "vue",
+	".yaml":  "yaml",
+	".yml":   "yaml",
+	".json":  "json",
+	".md":    "markdown",
+	".sh":    "shell",
+	".bash":  "shell",
+	".sql":   "sql",
+	".html":  "html",
+	".css":   "css",
+	".c":     "c",
+	".h":     "c",
+	".cpp":   "cpp",
+	".cc":    "cpp",
+	".cxx":   "cpp",
+	".hpp":   "cpp",
+	".hh":    "cpp",
+	".cs":    "csharp",
+	".php":   "php",
+	".scala": "scala",
+	".swift": "swift",
+	".kt":    "kotlin",
+	".kts":   "kotlin",
 }
 
 // symbolPattern matches common declarations across languages.
@@ -177,34 +191,108 @@ var esMapping = `{
   }
 }`
 
+// IndexOpts controls indexing behavior.
+type IndexOpts struct {
+	Repo        string
+	ESURL       string
+	Languages   []string // empty = all
+	Full        bool     // force full re-index
+	SymbolsOnly bool     // skip content chunks
+	Stats       bool
+}
+
+// fileHash returns the SHA-256 hex digest of content.
+func fileHash(content []byte) string {
+	h := sha256.Sum256(content)
+	return fmt.Sprintf("%x", h)
+}
+
+// classifyFiles compares existing file hashes (from ES) with current file hashes
+// (from the filesystem) and returns which files need indexing and which need deletion.
+func classifyFiles(existing, current map[string]string) (toIndex []string, toDelete []string) {
+	for file, hash := range current {
+		oldHash, ok := existing[file]
+		if !ok || oldHash != hash {
+			toIndex = append(toIndex, file)
+		}
+	}
+	for file := range existing {
+		if _, ok := current[file]; !ok {
+			toDelete = append(toDelete, file)
+		}
+	}
+	sort.Strings(toIndex)
+	sort.Strings(toDelete)
+	return toIndex, toDelete
+}
+
 // IndexRepo walks a repo, chunks files, and indexes them into ES.
+// It delegates to IndexRepoGraph with default options.
 func IndexRepo(root string, es *esearch.Client) error {
+	return IndexRepoGraph(root, es, IndexOpts{Stats: true})
+}
+
+// fileEntry holds the content and metadata for a single file during indexing.
+type fileEntry struct {
+	relPath  string
+	lang     string
+	content  []byte
+	hash     string
+}
+
+// IndexRepoGraph runs the three-phase tree-sitter pipeline:
+// Phase 1: Extract symbols, imports, and calls from each file.
+// Phase 2+3: Resolve cross-file references into edges.
+// Optionally also indexes content chunks for BM25 search.
+func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return err
 	}
 
-	repoName := filepath.Base(absRoot)
-	index := "glitch-code-" + repoName
-
-	fmt.Fprintf(os.Stderr, "Indexing %s → %s...\n", absRoot, index)
-
-	if err := es.EnsureIndex(context.Background(), index, esMapping); err != nil {
-		return err
+	// Resolve repo name.
+	repoName := opts.Repo
+	if repoName == "" {
+		repoName = filepath.Base(absRoot)
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	var batch []esearch.BulkDoc
-	filesProcessed := 0
-	chunksTotal := 0
+	symbolsIndex := esearch.IndexSymbolsPrefix + repoName
+	edgesIndex := esearch.IndexEdgesPrefix + repoName
+	codeIndex := "glitch-code-" + repoName
+
+	ctx := context.Background()
+
+	fmt.Fprintf(os.Stderr, "Indexing %s → symbols:%s edges:%s\n", absRoot, symbolsIndex, edgesIndex)
+
+	// Ensure indices exist.
+	if err := es.EnsureIndex(ctx, symbolsIndex, esearch.SymbolsMapping); err != nil {
+		return fmt.Errorf("ensure symbols index: %w", err)
+	}
+	if err := es.EnsureIndex(ctx, edgesIndex, esearch.EdgesMapping); err != nil {
+		return fmt.Errorf("ensure edges index: %w", err)
+	}
+	if !opts.SymbolsOnly {
+		if err := es.EnsureIndex(ctx, codeIndex, esMapping); err != nil {
+			return fmt.Errorf("ensure code index: %w", err)
+		}
+	}
+
+	// Build language filter set if specified.
+	langFilter := make(map[string]bool, len(opts.Languages))
+	for _, l := range opts.Languages {
+		langFilter[l] = true
+	}
+
+	// Walk filesystem, collect file metadata.
+	currentFiles := make(map[string]string)       // relPath → hash
+	fileEntries := make(map[string]*fileEntry)     // relPath → entry
 
 	err = filepath.WalkDir(absRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // skip errors
+			return nil
 		}
 
 		name := d.Name()
-
 		if d.IsDir() {
 			if skipDirs[name] {
 				return filepath.SkipDir
@@ -230,50 +318,21 @@ func IndexRepo(root string, es *esearch.Client) error {
 			return nil
 		}
 
-		content := string(data)
 		relPath, _ := filepath.Rel(absRoot, path)
 		lang := DetectLanguage(name)
-		symbols := ExtractSymbols(content)
 
-		chunks := ChunkContent(content)
-		for i, chunk := range chunks {
-			h := sha256.Sum256([]byte(chunk))
-			hash := fmt.Sprintf("%x", h)
-
-			docID := relPath
-			if len(chunks) > 1 {
-				docID = fmt.Sprintf("%s:chunk%d", relPath, i)
-			}
-
-			bodyJSON, err := json.Marshal(CodeDoc{
-				Path:      relPath,
-				Content:   chunk,
-				Repo:      repoName,
-				Language:  lang,
-				Hash:      hash,
-				Symbols:   symbols,
-				IndexedAt: now,
-			})
-			if err != nil {
-				return err
-			}
-			batch = append(batch, esearch.BulkDoc{
-				ID:   docID,
-				Body: bodyJSON,
-			})
-			chunksTotal++
+		// Apply language filter.
+		if len(langFilter) > 0 && !langFilter[lang] {
+			return nil
 		}
 
-		filesProcessed++
-		if filesProcessed%100 == 0 {
-			fmt.Fprintf(os.Stderr, "  ... %d files processed\n", filesProcessed)
-		}
-
-		if len(batch) >= bulkBatch {
-			if err := es.BulkIndex(context.Background(), index, batch); err != nil {
-				return err
-			}
-			batch = batch[:0]
+		h := fileHash(data)
+		currentFiles[relPath] = h
+		fileEntries[relPath] = &fileEntry{
+			relPath: relPath,
+			lang:    lang,
+			content: data,
+			hash:    h,
 		}
 
 		return nil
@@ -282,13 +341,199 @@ func IndexRepo(root string, es *esearch.Client) error {
 		return err
 	}
 
-	// flush remaining
-	if len(batch) > 0 {
-		if err := es.BulkIndex(context.Background(), index, batch); err != nil {
-			return err
+	// Determine which files to index.
+	var toIndex, toDelete []string
+	if opts.Full {
+		toIndex = make([]string, 0, len(currentFiles))
+		for f := range currentFiles {
+			toIndex = append(toIndex, f)
+		}
+		sort.Strings(toIndex)
+	} else {
+		existing, err := es.TermsAgg(ctx, symbolsIndex, "file", "file_hash", 100000)
+		if err != nil {
+			return fmt.Errorf("fetch existing hashes: %w", err)
+		}
+		toIndex, toDelete = classifyFiles(existing, currentFiles)
+	}
+
+	if opts.Stats {
+		fmt.Fprintf(os.Stderr, "  files: %d total, %d to index, %d to delete\n",
+			len(currentFiles), len(toIndex), len(toDelete))
+	}
+
+	// Delete stale symbols and edges for files in toDelete and toIndex.
+	filesToClean := append(toDelete, toIndex...)
+	for _, file := range filesToClean {
+		q, _ := json.Marshal(map[string]any{
+			"query": map[string]any{
+				"term": map[string]any{"file": file},
+			},
+		})
+		_, _ = es.DeleteByQuery(ctx, symbolsIndex, q)
+		_, _ = es.DeleteByQuery(ctx, edgesIndex, q)
+	}
+
+	// Phase 1 — Extract symbols, imports, and calls.
+	var allSymbols []SymbolDoc
+	var allImports []UnresolvedImport
+	var allCalls []CallSite
+
+	for _, file := range toIndex {
+		fe := fileEntries[file]
+		if fe == nil {
+			continue
+		}
+
+		ext := ExtractorForLanguage(fe.lang)
+		if ext == nil {
+			// No tree-sitter extractor for this language — still content-chunk later.
+			continue
+		}
+
+		symbols, err := ext.Extract(fe.content, fe.relPath, repoName, fe.hash)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  warn: extract symbols %s: %v\n", fe.relPath, err)
+			continue
+		}
+		allSymbols = append(allSymbols, symbols...)
+
+		imports, err := ext.ExtractImports(fe.content, fe.relPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  warn: extract imports %s: %v\n", fe.relPath, err)
+		} else {
+			allImports = append(allImports, imports...)
+		}
+
+		calls, err := ext.ExtractCalls(fe.content, fe.relPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  warn: extract calls %s: %v\n", fe.relPath, err)
+		} else {
+			allCalls = append(allCalls, calls...)
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Done: %d files processed, %d chunks indexed in %s\n", filesProcessed, chunksTotal, index)
+	// Bulk index symbols.
+	var symBatch []esearch.BulkDoc
+	for _, s := range allSymbols {
+		body, err := json.Marshal(s)
+		if err != nil {
+			return fmt.Errorf("marshal symbol: %w", err)
+		}
+		symBatch = append(symBatch, esearch.BulkDoc{ID: s.ID, Body: body})
+		if len(symBatch) >= bulkBatch {
+			if err := es.BulkIndex(ctx, symbolsIndex, symBatch); err != nil {
+				return fmt.Errorf("bulk index symbols: %w", err)
+			}
+			symBatch = symBatch[:0]
+		}
+	}
+	if len(symBatch) > 0 {
+		if err := es.BulkIndex(ctx, symbolsIndex, symBatch); err != nil {
+			return fmt.Errorf("bulk index symbols (flush): %w", err)
+		}
+	}
+
+	// Phase 2+3 — Resolve edges.
+	resolver := NewResolver(allSymbols, repoName, absRoot, registry)
+	modPath := readFirstModuleLine(filepath.Join(absRoot, "go.mod"))
+	if modPath != "" {
+		resolver.ModulePath = modPath
+	}
+
+	var allEdges []EdgeDoc
+	allEdges = append(allEdges, resolver.ResolveContains()...)
+	allEdges = append(allEdges, resolver.ResolveImports(allImports)...)
+	allEdges = append(allEdges, resolver.ResolveCalls(allCalls)...)
+	allEdges = append(allEdges, resolver.ResolveExports()...)
+	allEdges = append(allEdges, resolver.ResolveExtendsImplements()...)
+
+	// Bulk index edges.
+	var edgeBatch []esearch.BulkDoc
+	for _, e := range allEdges {
+		body, err := json.Marshal(e)
+		if err != nil {
+			return fmt.Errorf("marshal edge: %w", err)
+		}
+		docID := EdgeID(e.SourceID, e.TargetID, e.Kind, e.File)
+		edgeBatch = append(edgeBatch, esearch.BulkDoc{ID: docID, Body: body})
+		if len(edgeBatch) >= bulkBatch {
+			if err := es.BulkIndex(ctx, edgesIndex, edgeBatch); err != nil {
+				return fmt.Errorf("bulk index edges: %w", err)
+			}
+			edgeBatch = edgeBatch[:0]
+		}
+	}
+	if len(edgeBatch) > 0 {
+		if err := es.BulkIndex(ctx, edgesIndex, edgeBatch); err != nil {
+			return fmt.Errorf("bulk index edges (flush): %w", err)
+		}
+	}
+
+	// Content chunks for BM25 search.
+	if !opts.SymbolsOnly {
+		now := time.Now().UTC().Format(time.RFC3339)
+		var codeBatch []esearch.BulkDoc
+		chunksTotal := 0
+
+		for _, file := range toIndex {
+			fe := fileEntries[file]
+			if fe == nil {
+				continue
+			}
+
+			content := string(fe.content)
+			symbols := ExtractSymbols(content)
+			chunks := ChunkContent(content)
+
+			for i, chunk := range chunks {
+				h := sha256.Sum256([]byte(chunk))
+				hash := fmt.Sprintf("%x", h)
+
+				docID := fe.relPath
+				if len(chunks) > 1 {
+					docID = fmt.Sprintf("%s:chunk%d", fe.relPath, i)
+				}
+
+				bodyJSON, err := json.Marshal(CodeDoc{
+					Path:      fe.relPath,
+					Content:   chunk,
+					Repo:      repoName,
+					Language:  fe.lang,
+					Hash:      hash,
+					Symbols:   symbols,
+					IndexedAt: now,
+				})
+				if err != nil {
+					return fmt.Errorf("marshal code doc: %w", err)
+				}
+				codeBatch = append(codeBatch, esearch.BulkDoc{ID: docID, Body: bodyJSON})
+				chunksTotal++
+
+				if len(codeBatch) >= bulkBatch {
+					if err := es.BulkIndex(ctx, codeIndex, codeBatch); err != nil {
+						return fmt.Errorf("bulk index code: %w", err)
+					}
+					codeBatch = codeBatch[:0]
+				}
+			}
+		}
+
+		if len(codeBatch) > 0 {
+			if err := es.BulkIndex(ctx, codeIndex, codeBatch); err != nil {
+				return fmt.Errorf("bulk index code (flush): %w", err)
+			}
+		}
+
+		if opts.Stats {
+			fmt.Fprintf(os.Stderr, "  chunks: %d indexed in %s\n", chunksTotal, codeIndex)
+		}
+	}
+
+	if opts.Stats {
+		fmt.Fprintf(os.Stderr, "Done: %d files indexed, %d symbols, %d edges\n",
+			len(toIndex), len(allSymbols), len(allEdges))
+	}
+
 	return nil
 }

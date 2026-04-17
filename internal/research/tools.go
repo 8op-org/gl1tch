@@ -36,7 +36,7 @@ func NewToolSet(repoPath string, es *esearch.Client) *ToolSet {
 	return &ToolSet{repoPath: repoPath, es: es}
 }
 
-// Definitions returns the 8 tool definitions available for tool-use.
+// Definitions returns the 11 tool definitions available for tool-use.
 func (ts *ToolSet) Definitions() []Tool {
 	return []Tool{
 		{
@@ -79,6 +79,21 @@ func (ts *ToolSet) Definitions() []Tool {
 			Description: "Fetch a GitHub pull request via gh CLI",
 			Params:      "repo (required), number (required)",
 		},
+		{
+			Name:        "search_symbols",
+			Description: "Search code symbols (functions, types, classes, interfaces) in the repo graph. Returns structured results with file, kind, signature, and line range.",
+			Params:      "name (string, symbol name or pattern), kind (string, optional: function/method/type/interface/class/const/var), file (string, optional: filter by file path), repo (string, required: repo name)",
+		},
+		{
+			Name:        "search_edges",
+			Description: "Query relationships between code symbols. Find callers, callees, importers, implementations. Edge kinds: contains, imports, exports, extends, implements, calls.",
+			Params:      "symbol_id (string, source or target symbol ID), direction (string: 'from' or 'to'), kind (string, optional: edge kind filter), repo (string, required: repo name)",
+		},
+		{
+			Name:        "symbol_context",
+			Description: "Get full context for a symbol: its definition, edges (callers, callees, imports), and source code snippet. One call for the complete picture.",
+			Params:      "symbol_id (string, required), repo (string, required: repo name)",
+		},
 	}
 }
 
@@ -111,6 +126,12 @@ func (ts *ToolSet) Execute(ctx context.Context, name string, params map[string]s
 		return ts.fetchIssue(ctx, params)
 	case "fetch_pr":
 		return ts.fetchPR(ctx, params)
+	case "search_symbols":
+		return ts.searchSymbols(ctx, params)
+	case "search_edges":
+		return ts.searchEdges(ctx, params)
+	case "symbol_context":
+		return ts.symbolContext(ctx, params)
 	default:
 		return ToolResult{Tool: name, Err: fmt.Sprintf("unknown tool: %s", name)}
 	}
@@ -314,6 +335,215 @@ func (ts *ToolSet) fetchPR(ctx context.Context, params map[string]string) ToolRe
 		return ToolResult{Tool: "fetch_pr", Err: fmt.Sprintf("fetch_pr: %s", string(out))}
 	}
 	return ToolResult{Tool: "fetch_pr", Output: truncateOutput(string(out), 8000)}
+}
+
+func (ts *ToolSet) searchSymbols(ctx context.Context, params map[string]string) ToolResult {
+	repo := params["repo"]
+	if repo == "" {
+		return ToolResult{Tool: "search_symbols", Err: "missing required param: repo"}
+	}
+	if ts.es == nil {
+		return ToolResult{Tool: "search_symbols", Output: "elasticsearch not available"}
+	}
+
+	var musts []map[string]interface{}
+	if name := params["name"]; name != "" {
+		musts = append(musts, map[string]interface{}{
+			"match": map[string]interface{}{"name": name},
+		})
+	}
+	if kind := params["kind"]; kind != "" {
+		musts = append(musts, map[string]interface{}{
+			"term": map[string]interface{}{"kind": kind},
+		})
+	}
+	if file := params["file"]; file != "" {
+		musts = append(musts, map[string]interface{}{
+			"wildcard": map[string]interface{}{"file": file},
+		})
+	}
+
+	query := map[string]interface{}{
+		"size":    20,
+		"_source": []string{"id", "file", "kind", "name", "signature", "start_line", "end_line"},
+	}
+	if len(musts) > 0 {
+		query["query"] = map[string]interface{}{
+			"bool": map[string]interface{}{"must": musts},
+		}
+	} else {
+		query["query"] = map[string]interface{}{"match_all": map[string]interface{}{}}
+	}
+
+	raw, err := json.Marshal(query)
+	if err != nil {
+		return ToolResult{Tool: "search_symbols", Err: fmt.Sprintf("marshal: %s", err)}
+	}
+
+	index := fmt.Sprintf("glitch-symbols-%s", repo)
+	resp, err := ts.es.Search(ctx, []string{index}, raw)
+	if err != nil {
+		return ToolResult{Tool: "search_symbols", Err: fmt.Sprintf("search_symbols: %s", err)}
+	}
+
+	var b strings.Builder
+	for _, hit := range resp.Results {
+		b.Write(hit.Source)
+		b.WriteByte('\n')
+	}
+	return ToolResult{Tool: "search_symbols", Output: truncateOutput(strings.TrimSpace(b.String()), 8000)}
+}
+
+func (ts *ToolSet) searchEdges(ctx context.Context, params map[string]string) ToolResult {
+	repo := params["repo"]
+	if repo == "" {
+		return ToolResult{Tool: "search_edges", Err: "missing required param: repo"}
+	}
+	dir := params["direction"]
+	if dir != "from" && dir != "to" {
+		return ToolResult{Tool: "search_edges", Err: "missing or invalid param: direction (must be 'from' or 'to')"}
+	}
+	symbolID := params["symbol_id"]
+	if symbolID == "" {
+		return ToolResult{Tool: "search_edges", Err: "missing required param: symbol_id"}
+	}
+	if ts.es == nil {
+		return ToolResult{Tool: "search_edges", Output: "elasticsearch not available"}
+	}
+
+	field := "source_id"
+	if dir == "to" {
+		field = "target_id"
+	}
+
+	var musts []map[string]interface{}
+	musts = append(musts, map[string]interface{}{
+		"term": map[string]interface{}{field: symbolID},
+	})
+	if kind := params["kind"]; kind != "" {
+		musts = append(musts, map[string]interface{}{
+			"term": map[string]interface{}{"kind": kind},
+		})
+	}
+
+	query := map[string]interface{}{
+		"size": 50,
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{"must": musts},
+		},
+	}
+
+	raw, err := json.Marshal(query)
+	if err != nil {
+		return ToolResult{Tool: "search_edges", Err: fmt.Sprintf("marshal: %s", err)}
+	}
+
+	index := fmt.Sprintf("glitch-edges-%s", repo)
+	resp, err := ts.es.Search(ctx, []string{index}, raw)
+	if err != nil {
+		return ToolResult{Tool: "search_edges", Err: fmt.Sprintf("search_edges: %s", err)}
+	}
+
+	var b strings.Builder
+	for _, hit := range resp.Results {
+		b.Write(hit.Source)
+		b.WriteByte('\n')
+	}
+	return ToolResult{Tool: "search_edges", Output: truncateOutput(strings.TrimSpace(b.String()), 8000)}
+}
+
+func (ts *ToolSet) symbolContext(ctx context.Context, params map[string]string) ToolResult {
+	repo := params["repo"]
+	if repo == "" {
+		return ToolResult{Tool: "symbol_context", Err: "missing required param: repo"}
+	}
+	symbolID := params["symbol_id"]
+	if symbolID == "" {
+		return ToolResult{Tool: "symbol_context", Err: "missing required param: symbol_id"}
+	}
+	if ts.es == nil {
+		return ToolResult{Tool: "symbol_context", Output: "elasticsearch not available"}
+	}
+
+	// Fetch symbol
+	symQuery, _ := json.Marshal(map[string]interface{}{
+		"size": 1,
+		"query": map[string]interface{}{
+			"term": map[string]interface{}{"id": symbolID},
+		},
+	})
+	symIndex := fmt.Sprintf("glitch-symbols-%s", repo)
+	symResp, err := ts.es.Search(ctx, []string{symIndex}, symQuery)
+	if err != nil {
+		return ToolResult{Tool: "symbol_context", Err: fmt.Sprintf("symbol lookup: %s", err)}
+	}
+	if len(symResp.Results) == 0 {
+		return ToolResult{Tool: "symbol_context", Err: fmt.Sprintf("symbol not found: %s", symbolID)}
+	}
+
+	// Parse the symbol to get the file path
+	var symDoc struct {
+		File string `json:"file"`
+	}
+	_ = json.Unmarshal(symResp.Results[0].Source, &symDoc)
+
+	// Fetch edges (both directions)
+	edgeQuery, _ := json.Marshal(map[string]interface{}{
+		"size": 50,
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"should": []map[string]interface{}{
+					{"term": map[string]interface{}{"source_id": symbolID}},
+					{"term": map[string]interface{}{"target_id": symbolID}},
+				},
+			},
+		},
+	})
+	edgeIndex := fmt.Sprintf("glitch-edges-%s", repo)
+	edgeResp, err := ts.es.Search(ctx, []string{edgeIndex}, edgeQuery)
+	if err != nil {
+		return ToolResult{Tool: "symbol_context", Err: fmt.Sprintf("edge lookup: %s", err)}
+	}
+
+	// Fetch source code
+	var sourceOutput string
+	if symDoc.File != "" {
+		codeQuery, _ := json.Marshal(map[string]interface{}{
+			"size": 1,
+			"query": map[string]interface{}{
+				"term": map[string]interface{}{"path": symDoc.File},
+			},
+		})
+		codeIndex := fmt.Sprintf("glitch-code-%s", repo)
+		codeResp, err := ts.es.Search(ctx, []string{codeIndex}, codeQuery)
+		if err == nil && len(codeResp.Results) > 0 {
+			var codeDoc struct {
+				Content string `json:"content"`
+			}
+			_ = json.Unmarshal(codeResp.Results[0].Source, &codeDoc)
+			sourceOutput = codeDoc.Content
+		}
+	}
+
+	// Format output
+	var b strings.Builder
+	b.WriteString("=== Symbol ===\n")
+	b.Write(symResp.Results[0].Source)
+	b.WriteByte('\n')
+
+	b.WriteString("\n=== Edges ===\n")
+	for _, hit := range edgeResp.Results {
+		b.Write(hit.Source)
+		b.WriteByte('\n')
+	}
+
+	if sourceOutput != "" {
+		b.WriteString("\n=== Source ===\n")
+		b.WriteString(sourceOutput)
+		b.WriteByte('\n')
+	}
+
+	return ToolResult{Tool: "symbol_context", Output: truncateOutput(strings.TrimSpace(b.String()), 8000)}
 }
 
 // truncateOutput truncates s at max bytes, appending a suffix if truncated.
