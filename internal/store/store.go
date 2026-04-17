@@ -52,18 +52,28 @@ func OpenAt(path string) (*Store, error) {
 		return nil, err
 	}
 
-	// Detect schema drift: if runs table exists but is missing expected columns, drop all and recreate.
-	var count int
-	err = db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name = 'parent_run_id'`).Scan(&count)
-	if err == nil && count == 0 {
-		// Check if the table actually exists (count == 0 also when table doesn't exist)
+	// Detect schema drift: if tables exist but are missing expected columns, drop all and recreate.
+	needsRecreate := false
+	for _, check := range [][2]string{
+		{"runs", "parent_run_id"},
+		{"steps", "artifacts"},
+	} {
 		var tableCount int
-		db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='runs'`).Scan(&tableCount)
-		if tableCount > 0 {
-			db.Exec("DROP TABLE IF EXISTS steps")
-			db.Exec("DROP TABLE IF EXISTS runs")
-			db.Exec("DROP TABLE IF EXISTS research_events")
+		db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, check[0]).Scan(&tableCount)
+		if tableCount == 0 {
+			continue
 		}
+		var colCount int
+		db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('`+check[0]+`') WHERE name = ?`, check[1]).Scan(&colCount)
+		if colCount == 0 {
+			needsRecreate = true
+			break
+		}
+	}
+	if needsRecreate {
+		db.Exec("DROP TABLE IF EXISTS steps")
+		db.Exec("DROP TABLE IF EXISTS runs")
+		db.Exec("DROP TABLE IF EXISTS research_events")
 	}
 
 	if _, err := db.Exec(createSchema); err != nil {
