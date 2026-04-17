@@ -106,6 +106,13 @@ test.describe('API', () => {
       expect(Array.isArray(data)).toBeTruthy()
     }
   })
+
+  test('GET /api/workflows/{name}/runs returns array', async ({ request }) => {
+    const resp = await request.get('/api/workflows/git-status.glitch/runs')
+    expect(resp.ok()).toBeTruthy()
+    const data = await resp.json()
+    expect(Array.isArray(data)).toBeTruthy()
+  })
 })
 
 // ── App shell ───────────────────────────────────────────────────────
@@ -118,54 +125,40 @@ test.describe('App shell', () => {
     expect(errors).toEqual([])
   })
 
-  test('sidebar is visible with 4 nav items', async ({ page }) => {
+  test('activity bar is visible with nav icons', async ({ page }) => {
     await page.goto('/')
-    const sidebar = page.locator('aside.sidebar')
-    await expect(sidebar).toBeVisible()
-    await expect(page.locator('.nav-item')).toHaveCount(4)
+    const bar = page.locator('.activity-bar')
+    await expect(bar).toBeVisible()
+    // Should have workflow and settings nav items (ab-icon links)
+    const navItems = page.locator('.activity-bar .ab-icon')
+    const count = await navItems.count()
+    expect(count).toBeGreaterThanOrEqual(2)
   })
 
-  test('sidebar expands on hover', async ({ page }) => {
+  test('activity bar does NOT expand on hover', async ({ page }) => {
     await page.goto('/')
-    const sidebar = page.locator('aside.sidebar')
-    await sidebar.hover()
-    await expect(sidebar).toHaveClass(/expanded/)
+    const bar = page.locator('.activity-bar')
+    await bar.hover()
+    // Should NOT have expanded class
+    await expect(bar).not.toHaveClass(/expanded/)
   })
 
   test('active nav item is highlighted', async ({ page }) => {
     await page.goto('/')
-    const active = page.locator('.nav-item.active')
+    const active = page.locator('.activity-bar .ab-icon.active')
     await expect(active).toBeVisible()
   })
 
-  test('sidebar shows logo', async ({ page }) => {
+  test('clicking settings icon navigates to settings', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('.logo')).toBeVisible()
+    await page.locator('.activity-bar .ab-icon[title="Settings"]').click()
+    await expect(page).toHaveURL(/\/#\/settings/)
   })
 
-  test('sidebar nav labels visible when expanded', async ({ page }) => {
-    await page.goto('/')
-    const sidebar = page.locator('aside.sidebar')
-    await sidebar.hover()
-    await expect(page.locator('.nav-label').first()).toBeVisible()
-  })
-
-  test('navigating via sidebar to Runs updates active state', async ({ page }) => {
-    await page.goto('/')
-    const sidebar = page.locator('aside.sidebar')
-    await sidebar.hover()
-    await page.locator('.nav-item', { hasText: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/#\/runs/)
-    const active = page.locator('.nav-item.active')
-    await expect(active).toContainText('Runs')
-  })
-
-  test('navigating via sidebar to Results', async ({ page }) => {
-    await page.goto('/')
-    const sidebar = page.locator('aside.sidebar')
-    await sidebar.hover()
-    await page.locator('.nav-item', { hasText: 'Results' }).click()
-    await expect(page).toHaveURL(/\/#\/results/)
+  test('clicking workflows icon navigates home', async ({ page }) => {
+    await page.goto('#/settings')
+    await page.locator('.activity-bar .ab-icon[title="Workflows"]').click()
+    await expect(page).toHaveURL(/\/#\/$/)
   })
 })
 
@@ -196,11 +189,14 @@ test.describe('Workflow list — card view', () => {
     expect(count).toBeGreaterThan(0)
   })
 
-  test('clicking card navigates to editor', async ({ page }) => {
+  test('clicking card navigates to workflow detail', async ({ page }) => {
     await page.goto('/')
     await page.waitForSelector('.card')
     await page.locator('.card').first().click()
     await expect(page).toHaveURL(/\/#\/workflow\//)
+    // Should show the workflow detail tabs instead of old editor
+    await page.waitForSelector('.tabs', { timeout: 5000 })
+    await expect(page.locator('.tab')).toHaveCount(3)
   })
 })
 
@@ -284,7 +280,7 @@ test.describe('Workflow list — view modes', () => {
     await expect(firstGroup.locator('.group-items')).toBeVisible()
   })
 
-  test('grouped view items navigate to editor', async ({ page }) => {
+  test('grouped view items navigate to workflow detail', async ({ page }) => {
     await page.goto('/')
     await page.waitForSelector('.card')
     await page.locator('.view-btn[title="Grouped"]').click()
@@ -304,7 +300,7 @@ test.describe('Workflow list — view modes', () => {
     await expect(page.locator('th', { hasText: 'Status' })).toBeVisible()
   })
 
-  test('list view rows navigate to editor', async ({ page }) => {
+  test('list view rows navigate to workflow detail', async ({ page }) => {
     await page.goto('/')
     await page.waitForSelector('.card')
     await page.locator('.view-btn[title="List"]').click()
@@ -323,78 +319,11 @@ test.describe('Workflow list — view modes', () => {
   })
 })
 
-// ── Editor ──────────────────────────────────────────────────────────
-test.describe('Editor', () => {
-  test('loads CodeMirror with sexpr source', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('.cm-content')).toContainText('workflow')
-  })
-
-  test('CodeMirror has custom background (not oneDark grey)', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    const bg = await page.locator('.cm-editor').evaluate(el => getComputedStyle(el).backgroundColor)
-    // Should not be oneDark default grey (#282c34 = rgb(40, 44, 52))
-    expect(bg).not.toBe('rgb(40, 44, 52)')
-  })
-
-  test('has Save and Run buttons', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('button', { hasText: 'Save' })).toBeVisible()
-    await expect(page.locator('button', { hasText: 'Run' })).toBeVisible()
-  })
-
-  test('Save button is disabled when clean', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('button', { hasText: 'Save' })).toBeDisabled()
-  })
-
-  test('shows metadata panel with heading', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.meta-panel')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('.meta-panel h3')).toContainText('Metadata')
-  })
-
-  test('metadata panel collapse and restore', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.meta-panel')).toBeVisible({ timeout: 5000 })
-    await page.locator('.meta-panel .close-btn').click()
-    await expect(page.locator('.meta-panel')).not.toBeVisible()
-    await expect(page.locator('.meta-toggle')).toBeVisible()
-    await page.locator('.meta-toggle').click()
-    await expect(page.locator('.meta-panel')).toBeVisible()
-  })
-
-  test('breadcrumbs show Workflows link and workflow name', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('main a', { hasText: 'Workflows' })).toBeVisible()
-    await expect(page.locator('.breadcrumb')).toContainText('git-status.glitch')
-  })
-
-  test('breadcrumb Workflows link navigates home', async ({ page }) => {
-    await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    await page.locator('main a', { hasText: 'Workflows' }).click()
-    await expect(page).toHaveURL(/\/#\/$/)
-  })
-
-  test('clicking a card from list opens editor', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForSelector('.card')
-    await page.locator('.card').first().click()
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-  })
-})
-
 // ── Run dialog ──────────────────────────────────────────────────────
 test.describe('Run dialog', () => {
   test('no-param workflow shows "No parameters required"', async ({ page }) => {
     await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('.modal')).toBeVisible()
     await expect(page.locator('.modal')).toContainText('No parameters required')
@@ -402,7 +331,7 @@ test.describe('Run dialog', () => {
 
   test('parameterized workflow shows input fields', async ({ page }) => {
     await page.goto('#/workflow/issue-to-pr-claude.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('.modal')).toBeVisible()
     await expect(page.locator('.modal')).toContainText('repo')
@@ -411,21 +340,21 @@ test.describe('Run dialog', () => {
 
   test('dialog has title with workflow name', async ({ page }) => {
     await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('.modal-header')).toContainText('git-status.glitch')
   })
 
   test('dialog has Start Run button', async ({ page }) => {
     await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('button', { hasText: 'Start Run' })).toBeVisible()
   })
 
   test('Cancel closes the dialog', async ({ page }) => {
     await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('.modal')).toBeVisible()
     await page.locator('button', { hasText: 'Cancel' }).click()
@@ -434,7 +363,7 @@ test.describe('Run dialog', () => {
 
   test('Escape closes the dialog', async ({ page }) => {
     await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('.modal')).toBeVisible()
     await page.keyboard.press('Escape')
@@ -443,213 +372,11 @@ test.describe('Run dialog', () => {
 
   test('clicking overlay backdrop closes dialog', async ({ page }) => {
     await page.goto('#/workflow/git-status.glitch')
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
+    await page.waitForSelector('.tabs', { timeout: 5000 })
     await page.locator('button', { hasText: 'Run' }).click()
     await expect(page.locator('.modal')).toBeVisible()
     await page.locator('.overlay').click({ position: { x: 10, y: 10 } })
     await expect(page.locator('.modal')).not.toBeVisible()
-  })
-})
-
-// ── Results browser ─────────────────────────────────────────────────
-test.describe('Results browser', () => {
-  test('file tree renders with directories', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    const items = page.locator('.tree-item')
-    await expect(items.first()).toBeVisible()
-  })
-
-  test('shows empty state when no file selected', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await expect(page.locator('text=Select a file to preview')).toBeVisible()
-  })
-
-  test('navigates into elastic/observability-robots directory', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item', { hasText: 'elastic' }).click()
-    await expect(page.locator('.tree-item', { hasText: 'observability-robots' })).toBeVisible({ timeout: 3000 })
-  })
-
-  test('preview/edit toggle exists when file selected', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item', { hasText: 'elastic' }).click()
-    await page.locator('.tree-item', { hasText: 'observability-robots' }).click({ timeout: 3000 })
-    // Click into an issue subfolder to reach files
-    await page.waitForSelector('.tree-item.dir >> text=/issue-/')
-    await page.locator('.tree-item.dir', { hasText: /issue-/ }).first().click()
-    await page.waitForSelector('.tree-item.file', { timeout: 5000 })
-    await page.locator('.tree-item.file').first().click()
-    await expect(page.locator('button', { hasText: 'Preview' })).toBeVisible()
-    await expect(page.locator('button', { hasText: 'Edit' })).toBeVisible()
-  })
-
-  test('switching to edit mode shows CodeMirror', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item', { hasText: 'elastic' }).click()
-    await page.locator('.tree-item', { hasText: 'observability-robots' }).click({ timeout: 3000 })
-    await page.waitForSelector('.tree-item.dir >> text=/issue-/')
-    await page.locator('.tree-item.dir', { hasText: /issue-/ }).first().click()
-    await page.waitForSelector('.tree-item.file', { timeout: 5000 })
-    await page.locator('.tree-item.file').first().click()
-    await page.locator('button', { hasText: 'Edit' }).click()
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 3000 })
-  })
-
-  test('switching back to preview hides CodeMirror', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item', { hasText: 'elastic' }).click()
-    await page.locator('.tree-item', { hasText: 'observability-robots' }).click({ timeout: 3000 })
-    await page.waitForSelector('.tree-item.dir >> text=/issue-/')
-    await page.locator('.tree-item.dir', { hasText: /issue-/ }).first().click()
-    await page.waitForSelector('.tree-item.file', { timeout: 5000 })
-    await page.locator('.tree-item.file').first().click()
-    await page.locator('button', { hasText: 'Edit' }).click()
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 3000 })
-    await page.locator('button', { hasText: 'Preview' }).click()
-    await expect(page.locator('.cm-editor')).not.toBeVisible()
-  })
-
-  test('breadcrumb shows Results label', async ({ page }) => {
-    await page.goto('#/results')
-    await expect(page.locator('main').locator('text=Results')).toBeVisible({ timeout: 3000 })
-  })
-
-  test('no action bar before folder is selected', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await expect(page.locator('.action-bar')).not.toBeVisible()
-  })
-
-  test('action bar appears when folder is clicked', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (err) => errors.push(err.message))
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item.dir').first().click()
-    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
-    expect(errors).toEqual([])
-  })
-
-  test('action bar shows folder name and action buttons', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    await page.locator('.tree-item.dir').first().click()
-    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
-    // Shows the folder name
-    await expect(page.locator('.action-context')).toBeVisible()
-    // Has action buttons
-    const buttons = page.locator('.action-bar .action-btn')
-    await expect(buttons.first()).toBeVisible()
-    const count = await buttons.count()
-    expect(count).toBeGreaterThan(0)
-  })
-
-  test('clicking action button opens RunDialog with path param pre-filled', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    // Get the folder name before clicking
-    const dirItem = page.locator('.tree-item.dir').first()
-    const folderName = await dirItem.locator('.tree-name').textContent()
-    await dirItem.click()
-    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
-    await page.locator('.action-bar .action-btn').first().click()
-    await expect(page.locator('.modal')).toBeVisible({ timeout: 3000 })
-    // path param field must exist and be pre-filled with the folder path
-    const pathInput = page.locator('.modal input[placeholder="path"]')
-    await expect(pathInput).toBeVisible()
-    const val = await pathInput.inputValue()
-    expect(val).toContain(folderName.trim())
-  })
-
-  test('action bar updates when different folder clicked', async ({ page }) => {
-    await page.goto('#/results')
-    await page.waitForSelector('.tree-item', { timeout: 5000 })
-    // Click first folder
-    const firstDir = page.locator('.tree-item.dir').first()
-    const firstName = await firstDir.locator('.tree-name').textContent()
-    await firstDir.click()
-    await expect(page.locator('.action-bar')).toBeVisible({ timeout: 3000 })
-    await expect(page.locator('.action-context')).toContainText(firstName.trim())
-    // Click a different folder if available
-    const dirs = page.locator('.tree-item.dir')
-    const dirCount = await dirs.count()
-    if (dirCount > 1) {
-      const secondDir = dirs.nth(1)
-      const secondName = await secondDir.locator('.tree-name').textContent()
-      await secondDir.click()
-      await expect(page.locator('.action-context')).toContainText(secondName.trim())
-    }
-  })
-})
-
-// ── Runs page ───────────────────────────────────────────────────────
-test.describe('Runs page', () => {
-  test('loads with header and title', async ({ page }) => {
-    await page.goto('#/runs')
-    await expect(page.locator('h1')).toContainText('Runs', { timeout: 5000 })
-  })
-
-  test('has status filter with 4 options', async ({ page }) => {
-    await page.goto('#/runs')
-    await expect(page.locator('select.status-filter')).toBeVisible({ timeout: 5000 })
-    const options = page.locator('select.status-filter option')
-    await expect(options).toHaveCount(4)
-  })
-
-  test('shows empty state, runs table, or error', async ({ page }) => {
-    await page.goto('#/runs')
-    await page.waitForTimeout(2000)
-    const hasTable = await page.locator('.runs-table').isVisible().catch(() => false)
-    const hasEmpty = await page.locator('.empty-state').isVisible().catch(() => false)
-    const hasError = await page.locator('.status-fail').isVisible().catch(() => false)
-    expect(hasTable || hasEmpty || hasError).toBeTruthy()
-  })
-
-  test('no JS errors on runs page', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (err) => errors.push(err.message))
-    await page.goto('#/runs')
-    await page.waitForTimeout(2000)
-    expect(errors).toEqual([])
-  })
-
-  test('page header has icon', async ({ page }) => {
-    await page.goto('#/runs')
-    await expect(page.locator('h1 svg')).toBeVisible({ timeout: 5000 })
-  })
-})
-
-// ── Run detail view ─────────────────────────────────────────────────
-test.describe('Run detail view', () => {
-  test('shows error for invalid run ID', async ({ page }) => {
-    await page.goto('#/run/999999')
-    await expect(page.locator('.status-fail')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('breadcrumbs show Runs link', async ({ page }) => {
-    await page.goto('#/run/1')
-    await expect(page.locator('main').locator('text=Runs')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('breadcrumb Runs link navigates back', async ({ page }) => {
-    await page.goto('#/run/1')
-    await page.waitForTimeout(1000)
-    await page.locator('main a', { hasText: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/#\/runs/)
-  })
-
-  test('no JS errors on run view', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (err) => errors.push(err.message))
-    await page.goto('#/run/1')
-    await page.waitForTimeout(2000)
-    expect(errors).toEqual([])
   })
 })
 
@@ -659,11 +386,12 @@ test.describe('Cross-cutting', () => {
     await page.goto('/')
     await expect(page.locator('h1')).toContainText('Workflows')
 
-    await page.goto('#/runs')
-    await expect(page.locator('h1')).toContainText('Runs')
+    await page.goto('#/workflow/git-status.glitch')
+    await page.waitForSelector('.tabs', { timeout: 5000 })
+    await expect(page.locator('.tab')).toHaveCount(3)
 
-    await page.goto('#/results')
-    await expect(page.locator('main').locator('text=Results')).toBeVisible()
+    await page.goto('#/settings')
+    await expect(page.locator('h1')).toContainText('Settings')
   })
 
   test('navigating between all pages does not leak errors', async ({ page }) => {
@@ -671,21 +399,14 @@ test.describe('Cross-cutting', () => {
     page.on('pageerror', (err) => errors.push(err.message))
     await page.goto('/')
     await page.waitForSelector('.card')
-    const sidebar = page.locator('aside.sidebar')
-    // Workflows -> Editor
+    // Workflows -> Workflow Detail
     await page.locator('.card').first().click()
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 })
-    // Editor -> Runs
-    await sidebar.hover()
-    await page.locator('.nav-item', { hasText: 'Runs' }).click()
+    await page.waitForSelector('.tabs', { timeout: 5000 })
+    // Workflow Detail -> Settings
+    await page.locator('.activity-bar .ab-icon[title="Settings"]').click()
     await page.waitForTimeout(500)
-    // Runs -> Results
-    await sidebar.hover()
-    await page.locator('.nav-item', { hasText: 'Results' }).click()
-    await page.waitForTimeout(500)
-    // Results -> Workflows
-    await sidebar.hover()
-    await page.locator('.nav-item', { hasText: 'Workflows' }).click()
+    // Settings -> Workflows
+    await page.locator('.activity-bar .ab-icon[title="Workflows"]').click()
     await page.waitForTimeout(500)
     expect(errors).toEqual([])
   })
@@ -699,9 +420,7 @@ test.describe('Cross-cutting', () => {
     })
     await page.goto('/')
     await page.waitForSelector('.card')
-    await page.goto('#/runs')
-    await page.waitForTimeout(500)
-    await page.goto('#/results')
+    await page.goto('#/settings')
     await page.waitForTimeout(500)
     await page.goto('#/workflow/git-status.glitch')
     await page.waitForTimeout(500)
