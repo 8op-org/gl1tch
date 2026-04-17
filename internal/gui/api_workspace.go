@@ -70,6 +70,15 @@ func (s *Server) handlePutWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read existing workspace to preserve resources and other fields
+	wsPath := filepath.Join(s.workspace, "workspace.glitch")
+	existing := &workspace.Workspace{}
+	if data, err := os.ReadFile(wsPath); err == nil {
+		if parsed, err := workspace.ParseFile(data); err == nil {
+			existing = parsed
+		}
+	}
+
 	repos := req.Repos
 	if repos == nil {
 		repos = []string{}
@@ -79,22 +88,20 @@ func (s *Server) handlePutWorkspace(w http.ResponseWriter, r *http.Request) {
 		params = map[string]string{}
 	}
 
-	ws := &workspace.Workspace{
-		Name:        req.Name,
-		Description: req.Description,
-		Owner:       req.Owner,
-		Repos:       repos,
-		Defaults: workspace.Defaults{
-			Model:         req.Defaults.Model,
-			Provider:      req.Defaults.Provider,
-			Elasticsearch: req.Defaults.Elasticsearch,
-			Params:        params,
-		},
+	// Update only the fields that settings manages, preserve everything else
+	existing.Name = req.Name
+	existing.Description = req.Description
+	existing.Owner = req.Owner
+	existing.Repos = repos
+	existing.Defaults = workspace.Defaults{
+		Model:         req.Defaults.Model,
+		Provider:      req.Defaults.Provider,
+		Elasticsearch: req.Defaults.Elasticsearch,
+		Params:        params,
 	}
 
-	data := workspace.Serialize(ws)
-	path := filepath.Join(s.workspace, "workspace.glitch")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	data := workspace.Serialize(existing)
+	if err := os.WriteFile(wsPath, data, 0o644); err != nil {
 		http.Error(w, "write workspace: "+err.Error(), 500)
 		return
 	}
