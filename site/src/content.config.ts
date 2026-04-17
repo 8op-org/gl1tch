@@ -18,4 +18,14 @@ const changelog = defineCollection({
   }),
 });
 
-export const collections = { docs, changelog };
+const labs = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/labs' }),
+  schema: z.object({
+    title: z.string(),
+    slug: z.string(),
+    description: z.string(),
+    date: z.string(),
+  }),
+});
+
+export const collections = { docs, changelog, labs };
