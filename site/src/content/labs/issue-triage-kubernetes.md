@@ -17,60 +17,58 @@ Why it matters: production clusters with any external cgroup management on `kube
 
 ## The Workflow
 
-A two-branch triage workflow. One branch runs the issue body through a local free model; the other sends it to a paid remote model. The `compare` step picks a winner; results are saved per model.
+Save this as `triage.glitch` and run it against any GitHub issue. Each provider gets the same prompt; you compare the output yourself.
 
-````lisp
-(workflow "triage-k8s-issue"
-  :description "Triage a GitHub issue with tier-routed LLMs"
+````glitch
+(workflow "triage"
+  :description "Triage a GitHub issue across three model tiers"
 
   (step "fetch"
-    (run "gh issue view ~param.issue --repo ~param.repo --json title,body,labels,comments"))
+    (run "gh issue view ~input -R kubernetes/kubernetes --json title,body,comments,labels"))
 
-  (step "triage"
-    (compare
-      :objective "identify severity, root cause, affected components, and next steps"
-      (branch "free"
-        (llm :model "lmstudio:qwen3-8b"
-          :prompt ```
-          You are a senior Kubernetes maintainer. Triage this issue.
+  (step "triage-local"
+    (llm
+      :provider "lm-studio"
+      :model "qwen3-8b"
+      :prompt ```
+        You are a senior SRE triaging a Kubernetes bug report.
+        Analyze this issue: severity, root cause, affected components, next steps.
+        Be specific — reference exact PRs, code paths, or config if mentioned.
 
-          ISSUE:
-          ~(step fetch)
+        Issue data:
+        ~(step fetch)
+        ```))
 
-          Provide:
-          1. Severity assessment with reasoning
-          2. Root cause hypothesis
-          3. Affected components and versions
-          4. Recommended next steps for the maintainer team
-          ```))
-      (branch "paid"
-        (llm :provider "openrouter" :model "qwen/qwen3.5-flash-02-23"
-          :prompt ```
-          You are a senior Kubernetes maintainer. Triage this issue.
+  (step "triage-paid"
+    (llm
+      :provider "openrouter"
+      :model "qwen/qwen3.5-flash-02-23"
+      :prompt ```
+        You are a senior SRE triaging a Kubernetes bug report.
+        Analyze this issue: severity, root cause, affected components, next steps.
+        Be specific — reference exact PRs, code paths, or config if mentioned.
 
-          ISSUE:
-          ~(step fetch)
+        Issue data:
+        ~(step fetch)
+        ```))
 
-          Provide:
-          1. Severity assessment with reasoning
-          2. Root cause hypothesis
-          3. Affected components and versions
-          4. Recommended next steps for the maintainer team
-          ```))
-      (review :criteria ("accuracy" "root-cause-depth" "actionability" "precision"))))
+  (step "triage-copilot"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :prompt ```
+        You are a senior SRE triaging a Kubernetes bug report.
+        Analyze this issue: severity, root cause, affected components, next steps.
+        Be specific — reference exact PRs, code paths, or config if mentioned.
 
-  (step "save"
-    (save "results/triage-~param.issue.md" :from "triage")))
+        Issue data:
+        ~(step fetch)
+        ```)))
 ````
 
-Run with:
-<div class="model-output">
-
-glitch workflow run triage-k8s-issue \
-  --set issue=138431 \
-  --set repo=kubernetes/kubernetes
-
-</div>
+```bash
+glitch run triage 138431
+```
 
 ---
 

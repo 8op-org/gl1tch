@@ -11,52 +11,58 @@ date: "2026-04-17"
 
 ## The Workflow
 
-The following workflow ran inside `labs-generate.glitch`. Each triage step receives the full issue JSON — title, body, comments, and labels — and is prompted as a senior frontend engineer:
+This is the workflow that produced the output below. Save it as `triage-kibana.glitch` — swap the issue number to triage any Kibana bug.
 
-````lisp
-(step "fetch-kibana-issue"
-  (run "gh issue view 263137 -R elastic/kibana --json title,body,comments,labels"))
+````glitch
+(workflow "triage-kibana"
+  :description "Triage a Kibana bug across three model tiers"
 
-(step "kibana-triage-free"
-  (llm
-    :provider "lm-studio"
-    :model "qwen3-8b"
-    :prompt ```
-      You are a senior frontend engineer triaging a Kibana bug report.
+  (step "fetch"
+    (run "gh issue view 263137 -R elastic/kibana --json title,body,comments,labels"))
 
-      Analyze this issue and provide:
-      1. Severity assessment (critical/high/medium/low) with reasoning
-      2. Root cause hypothesis based on the discussion
-      3. Affected components and code paths
-      4. Recommended fix approach
+  (step "triage-local"
+    (llm
+      :provider "lm-studio"
+      :model "qwen3-8b"
+      :prompt ```
+        You are a senior frontend engineer triaging a Kibana bug report.
+        Analyze this issue: severity, root cause, affected components, fix approach.
+        Be specific — reference exact files, regex patterns, or code if mentioned.
 
-      Be specific — reference exact files, regex patterns, or code if mentioned.
+        Issue data:
+        ~(step fetch)
+        ```))
 
-      Issue data:
-      ~(step fetch-kibana-issue)
-      ```))
+  (step "triage-paid"
+    (llm
+      :provider "openrouter"
+      :model "qwen/qwen3.5-flash-02-23"
+      :prompt ```
+        You are a senior frontend engineer triaging a Kibana bug report.
+        Analyze this issue: severity, root cause, affected components, fix approach.
+        Be specific — reference exact files, regex patterns, or code if mentioned.
 
-(step "kibana-triage-paid"
-  (llm
-    :provider "openrouter"
-    :model "qwen/qwen3.5-flash-02-23"
-    :prompt ```
-      ;; same prompt, openrouter provider
-      ~(step fetch-kibana-issue)
-      ```))
+        Issue data:
+        ~(step fetch)
+        ```))
 
-(step "kibana-triage-copilot"
-  (llm
-    :provider "copilot"
-    :model "sonnet"
-    :prompt ```
-      ;; same prompt, copilot provider
-      ~(step fetch-kibana-issue)
-      ```))
+  (step "triage-copilot"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :prompt ```
+        You are a senior frontend engineer triaging a Kibana bug report.
+        Analyze this issue: severity, root cause, affected components, fix approach.
+        Be specific — reference exact files, regex patterns, or code if mentioned.
 
-(step "save-lab-4"
-  (save "site/generated/labs/bug-triage-kibana.json" :from "write-lab-4"))
+        Issue data:
+        ~(step fetch)
+        ```)))
 ````
+
+```bash
+glitch run triage-kibana
+```
 
 All three steps run sequentially against the same fetched issue JSON. No model sees another model's output.
 

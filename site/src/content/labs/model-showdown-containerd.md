@@ -13,51 +13,67 @@ The design is narrow by intent: an informational-only CRI call. No cgroup mutati
 
 ## The Workflow
 
-One shell fetch step pulls the full issue JSON including comment thread. Three chained LLM steps each isolate a concern. Swapping `(def provider ...)` and `(def model ...)` is the only change across tier variants.
+Same issue, three providers, same prompt. Save as `analyze-issue.glitch` — swap the issue number to analyze any containerd proposal.
 
-````clojure
-(def model "qwen3:8b")
-(def provider "ollama")
+````glitch
+(workflow "analyze-issue"
+  :description "Analyze a feature proposal across three model tiers"
 
-(workflow "analyze-cri-issue"
-  :description "Fetch and analyze a CRI issue: problem, deps, complexity, risks, approach"
+  (step "fetch"
+    (run "gh issue view 11339 -R containerd/containerd --json title,body,comments,labels"))
 
-  (step "fetch-issue"
-    (run "gh issue view 11339 --repo containerd/containerd --json title,body,comments,labels | jq '.'"))
-
-  (step "analyze-problem"
-    (llm :provider provider :model model
+  (step "analysis-local"
+    (llm
+      :provider "lm-studio"
+      :model "qwen3-8b"
       :prompt ```
-        You are a senior infrastructure engineer reviewing a container runtime proposal.
+        You are a container runtime architect analyzing a feature proposal.
+        1. Summarize the problem and proposed solution
+        2. Identify cross-project dependencies (CRI, NRI, Kubernetes)
+        3. Assess implementation complexity (small/medium/large)
+        4. Flag risks or concerns
+        5. Suggest an implementation approach
 
         Issue data:
-        {{step "fetch-issue"}}
-
-        Answer: (1) core problem and proposed solution, (2) cross-project dependencies.
+        ~(step fetch)
         ```))
 
-  (step "assess-complexity"
-    (llm :provider provider :model model
+  (step "analysis-paid"
+    (llm
+      :provider "openrouter"
+      :model "qwen/qwen3.5-flash-02-23"
       :prompt ```
-        Prior analysis:
-        {{step "analyze-problem"}}
+        You are a container runtime architect analyzing a feature proposal.
+        1. Summarize the problem and proposed solution
+        2. Identify cross-project dependencies (CRI, NRI, Kubernetes)
+        3. Assess implementation complexity (small/medium/large)
+        4. Flag risks or concerns
+        5. Suggest an implementation approach
 
-        Full thread:
-        {{step "fetch-issue"}}
-
-        Answer: (3) implementation complexity with justification, (4) key risks from the thread.
+        Issue data:
+        ~(step fetch)
         ```))
 
-  (step "suggest-approach"
-    (llm :provider provider :model model
+  (step "analysis-copilot"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
       :prompt ```
-        Analysis so far:
-        {{step "analyze-problem"}}
-        {{step "assess-complexity"}}
+        You are a container runtime architect analyzing a feature proposal.
+        1. Summarize the problem and proposed solution
+        2. Identify cross-project dependencies (CRI, NRI, Kubernetes)
+        3. Assess implementation complexity (small/medium/large)
+        4. Flag risks or concerns
+        5. Suggest an implementation approach
 
-        Answer: (5) concrete sequenced implementation approach for containerd maintainers.
+        Issue data:
+        ~(step fetch)
         ```)))
 ````
+
+```bash
+glitch run analyze-issue
+```
 
 ## Free Tier: qwen3-8b (LM Studio)
 

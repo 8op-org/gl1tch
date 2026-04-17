@@ -15,52 +15,38 @@ This is a useful PR to evaluate automated review on because it touches three con
 
 ## The Workflow
 
-````lisp
-;; pr-review.glitch — fetch a GitHub PR and run a structured code review
+This is the workflow that produced the review below. Save it as `pr-review.glitch` — swap the PR number for any Prometheus PR.
 
-(def model "copilot:claude-sonnet-4.6")
-(def pr-url "https://github.com/prometheus/prometheus/pull/18499")
-
+````glitch
 (workflow "pr-review"
-  :description "Fetch a PR diff and metadata, then produce a structured review"
+  :description "Fetch a PR and run a structured code review via Copilot"
 
   (step "metadata"
-    (run (str "gh pr view --json title,body,comments,files "
-              "--repo prometheus/prometheus 18499")))
+    (run "gh pr view 18499 -R prometheus/prometheus --json title,body,files,comments"))
 
   (step "diff"
-    (run "gh pr diff --repo prometheus/prometheus 18499"))
+    (run "gh pr diff 18499 -R prometheus/prometheus"))
 
   (step "review"
     (llm
-      :model model
+      :provider "copilot"
+      :model "sonnet"
       :prompt ```
-        You are a senior Go engineer performing a production code review.
-        Be direct. Flag real issues — correctness, edge cases, test coverage gaps,
-        doc bugs. Skip style nits.
+        You are a senior Go engineer reviewing a Prometheus pull request.
+        Review for correctness, edge cases, test coverage, and API design.
+        Provide specific, actionable feedback referencing file names and line ranges.
 
         PR metadata:
         ~(step metadata)
 
         Diff:
         ~(step diff)
-
-        Structure your review:
-        1. Correctness — does the fix do what it claims?
-        2. Edge cases — what configs does this not handle or handle silently?
-        3. Test coverage — do the tests verify routing, not just output?
-        4. API design — naming, docs, backward compat.
-        5. Summary table with blockers.
         ```)))
 ````
 
-Run it:
-
-<div class="model-output">
-
-glitch workflow run pr-review
-
-</div>
+```bash
+glitch run pr-review
+```
 
 ## The Review
 
