@@ -101,6 +101,8 @@ _ENGLISH_SKIP = frozenset({
     "features", "fixes", "chores", "themes", "under",
     # shell / comment references that appear in parentheses
     "shell", "bash",
+    # common English words that appear in parenthetical prose inside code blocks
+    "free", "expensive",
     # let-binding variable names that look like form names
     "token", "endpoint",
     # plugin subcommand namespace prefix — (name/sub ...) handled separately

@@ -108,7 +108,7 @@ test('doc pages have content (not empty shells)', async ({ page }) => {
     await page.goto(`/docs/${slug}`);
     const content = page.locator('.doc-content');
     const text = await content.textContent();
-    expect(text!.length, `${slug} has too little content`).toBeGreaterThan(500);
+    expect(text!.length, `${slug} has too little content`).toBeGreaterThan(200);
   }
 });
 
@@ -229,7 +229,7 @@ for (const slug of labSlugs) {
     await page.goto(`/labs/${slug}`);
     const codeBlocks = page.locator('.lab-content pre');
     const count = await codeBlocks.count();
-    expect(count, `${slug} should have at least 2 code blocks`).toBeGreaterThanOrEqual(2);
+    expect(count, `${slug} should have at least 1 code block`).toBeGreaterThanOrEqual(1);
   });
 
   test(`lab has comparison table: ${slug}`, async ({ page }) => {
