@@ -31,7 +31,7 @@ One shell fetch step pulls the full issue JSON including comment thread. Three c
         You are a senior infrastructure engineer reviewing a container runtime proposal.
 
         Issue data:
-        {{step "fetch-issue"}}
+        ~(step fetch-issue)
 
         Answer: (1) core problem and proposed solution, (2) cross-project dependencies.
         ```))
@@ -40,10 +40,10 @@ One shell fetch step pulls the full issue JSON including comment thread. Three c
     (llm :provider provider :model model
       :prompt ```
         Prior analysis:
-        {{step "analyze-problem"}}
+        ~(step analyze-problem)
 
         Full thread:
-        {{step "fetch-issue"}}
+        ~(step fetch-issue)
 
         Answer: (3) implementation complexity with justification, (4) key risks from the thread.
         ```))
@@ -52,8 +52,8 @@ One shell fetch step pulls the full issue JSON including comment thread. Three c
     (llm :provider provider :model model
       :prompt ```
         Analysis so far:
-        {{step "analyze-problem"}}
-        {{step "assess-complexity"}}
+        ~(step analyze-problem)
+        ~(step assess-complexity)
 
         Answer: (5) concrete sequenced implementation approach for containerd maintainers.
         ```)))

@@ -54,10 +54,10 @@ A workflow wraps named steps. Here is a complete real-world example:
         You are a code reviewer. Review this diff carefully.
 
         Files changed:
-        {{step "files"}}
+        ~(step files)
 
         Diff:
-        {{step "diff"}}
+        ~(step diff)
 
         For each file, note:
         - Bugs or logic errors
@@ -90,7 +90,7 @@ The string passed to `(workflow ...)` is the name you use with `glitch workflow 
       :model model
       :prompt ```
         You received this message from a shell command:
-        {{step "gather"}}
+        ~(step gather)
 
         Respond with a short, enthusiastic acknowledgment.
         ```)))
@@ -122,7 +122,7 @@ Sends a prompt to a language model:
     :prompt ```
       Here are the last 20 git commits:
 
-      {{step "commits"}}
+      ~(step commits)
 
       Write a concise changelog grouped by theme (features, fixes, chores).
       Use markdown. No preamble.
@@ -138,26 +138,24 @@ Writes a prior step's output to a file:
   (save "results/changelog.md" :from "changelog"))
 ```
 
-Paths can use template variables: `"results/{{.param.repo}}/summary.md"`.
+Paths can use template variables: `"results/~param.repo/summary.md"`.
 
 ## Step references and templates
 
-gl1tch uses `{{ }}` templates for variable substitution.
+gl1tch uses `~` templates for variable substitution.
 
 | Expression | What it does |
 |-----------|-------------|
-| `{{step "id"}}` | Insert a named step's output |
-| `{{stepfile "id"}}` | Write step output to a temp file, return the path |
-| `{{.input}}` | The value passed to `glitch ask` or as trailing arg |
-| `{{.param.key}}` | A runtime parameter from `--set key=value` |
+| `~(step id)` | Insert a named step's output |
+| `~(stepfile id)` | Write step output to a temp file, return the path |
+| `~input` | The value passed as trailing arg |
+| `~param.key` | A runtime parameter from `--set key=value` |
 
-**Important:** Parameters must have a dot — `{{.param.repo}}` not `{{param.repo}}`. Without the dot it silently stays literal.
-
-Use `{{stepfile "id"}}` when step output contains characters that break shell escaping:
+Use `~(stepfile id)` when step output contains characters that break shell escaping:
 
 ```glitch
 (step "process"
-  (run "cat '{{stepfile \"big-json\"}}' | jq '.items[]'"))
+  (run "cat '~(stepfile big-json)' | jq '.items[]'"))
 ```
 
 Full example with `--set` parameters:
@@ -173,25 +171,25 @@ Full example with `--set` parameters:
   :description "Show how to pass runtime parameters into a workflow"
 
   (step "info"
-    (run "echo 'Analyzing repo: {{.param.repo}}'"))
+    (run "echo 'Analyzing repo: ~param.repo'"))
 
   (step "structure"
-    (run "find {{.param.repo}} -maxdepth 2 -type f | head -30"))
+    (run "find ~param.repo -maxdepth 2 -type f | head -30"))
 
   (step "summary"
     (llm
       :model model
       :prompt ```
-        Here is the file tree for {{.param.repo}}:
+        Here is the file tree for ~param.repo:
 
-        {{step "structure"}}
+        ~(step structure)
 
         Describe the project structure in 3-4 sentences.
         What kind of project is this?
         ```))
 
   (step "save-it"
-    (save "results/{{.param.repo}}/summary.md" :from "summary")))
+    (save "results/~param.repo/summary.md" :from "summary")))
 ````
 
 ## LLM options
@@ -220,7 +218,7 @@ Using `:skill` to inject context — the skill content is prepended to your prom
     (llm
       :provider "claude"
       :skill "reviewer-verify"
-      :prompt "Review these staged changes for correctness, security, and style:\n\n{{step \"diff\"}}"))
+      :prompt "Review these staged changes for correctness, security, and style:\n\n~(step diff)"))
 
   (step "save-review"
     (save "review-output.md" :from "review")))
@@ -294,7 +292,7 @@ Run a primary step; if it fails, run a fallback instead:
   (step "fetch-graphql"
     (run "gh api graphql -f query='...'"))
   (step "fallback"
-    (run "gh issue view {{.param.issue}} --json body")))
+    (run "gh issue view ~param.issue --json body")))
 ```
 
 This is used in production to gracefully degrade when GraphQL endpoints are unavailable:
@@ -304,8 +302,8 @@ This is used in production to gracefully degrade when GraphQL endpoints are unav
 (catch
   (step "related"
     (run ```
-      REPO="{{.param.repo}}"
-      ISSUE="{{.param.issue}}"
+      REPO="~param.repo"
+      ISSUE="~param.issue"
       echo "=== LINKED PRS ==="
       gh api graphql -f query="..." 2>/dev/null \
         | jq -r '.data.repository.issue.timelineItems.nodes[]?.source
@@ -339,7 +337,7 @@ Multi-branch conditional. Predicates are shell commands — exit 0 means true:
 
 ### each
 
-Iterate over a prior step's output, one item per line. `{{.param.item}}` is the current item, `{{.param.item_index}}` is the zero-based index:
+Iterate over a prior step's output, one item per line. `~param.item` is the current item, `~param.item_index` is the zero-based index:
 
 ````glitch
 (step "find-docs"
@@ -347,7 +345,7 @@ Iterate over a prior step's output, one item per line. `{{.param.item}}` is the 
 
 (each "find-docs"
   (step "process-doc"
-    (run "wc -l {{.param.item}}")))
+    (run "wc -l ~param.item")))
 ````
 
 In production, `each` powers document ingestion — iterating over discovered files and processing each one:
@@ -363,7 +361,7 @@ In production, `each` powers document ingestion — iterating over discovered fi
 (each "find-docs"
   (step "process-doc"
     (run ```
-      FILE="{{.param.item}}"
+      FILE="~param.item"
       CONTENT=$(cat "$FILE" 2>/dev/null | head -500)
       # ... hash, check for changes, index to ES
       echo "INDEXED: $REL_PATH"
@@ -378,9 +376,9 @@ Scoped bindings — like `def` but limited to the body. Shadows outer defs withi
 (let ((endpoint "https://api.example.com")
       (token "abc123"))
   (step "call"
-    (run "curl -H 'Auth: {{.param.token}}' endpoint"))
+    (run "curl -H 'Auth: ~param.token' endpoint"))
   (step "parse"
-    (run "echo '{{step \"call\"}}' | jq '.data'")))
+    (run "echo '~(step call)' | jq '.data'")))
 ```
 
 ### phase and gate
@@ -440,10 +438,10 @@ HTTP requests without shelling out:
 
 ```glitch
 (step "fetch-data"
-    :headers {"Authorization" "Bearer {{.param.token}}"}))
+    :headers {"Authorization" "Bearer ~param.token"}))
 
 (step "submit"
-    :body "{{step \"payload\"}}"
+    :body "~(step payload)"
     :headers {"Content-Type" "application/json"}))
 ```
 
@@ -468,7 +466,7 @@ Match files against a pattern:
 ```glitch
 (step "find-reviews"
   (glob "*/review.md"
-    :dir "results/{{.param.repo}}/issue-{{.param.issue}}/iteration-1"))
+    :dir "results/~param.repo/issue-~param.issue/iteration-1"))
 ```
 
 Output is newline-separated file paths — composes with `each` for batch processing.
@@ -504,7 +502,7 @@ Index a single document, with optional auto-embedding:
 ```glitch
 (step "store"
   (index :index "my-index"
-         :doc "{{step \"generate\"}}"
+         :doc "~(step generate)"
          :id "doc-1"
          :embed :field "content" :provider "ollama" :model "nomic-embed-text"))
 ```
@@ -539,7 +537,7 @@ Generate an embedding vector from text:
 
 ```glitch
 (step "vec"
-  (embed :input "{{step \"content\"}}"
+  (embed :input "~(step content)"
          :provider "ollama"
          :model "nomic-embed-text"))
 ```
@@ -564,30 +562,30 @@ Use the `:es` keyword when a step needs to talk to a different cluster than the 
 
 ## Template functions
 
-String functions available inside `{{ }}` templates:
+String functions available inside `~(...)` templates:
 
 | Function | Example | Result |
 |----------|---------|--------|
-| `split` | `{{split "/" "elastic/ensemble"}}` | `["elastic", "ensemble"]` |
-| `join` | `{{split "/" "a/b/c" \| join "-"}}` | `"a-b-c"` |
-| `last` | `{{split "/" "elastic/ensemble" \| last}}` | `"ensemble"` |
-| `first` | `{{split "/" "elastic/ensemble" \| first}}` | `"elastic"` |
-| `upper` | `{{upper "hello"}}` | `"HELLO"` |
-| `lower` | `{{lower "HELLO"}}` | `"hello"` |
-| `trim` | `{{trim "  hello  "}}` | `"hello"` |
-| `trimPrefix` | `{{trimPrefix "refs/" "refs/heads/main"}}` | `"heads/main"` |
-| `trimSuffix` | `{{trimSuffix ".git" "foo.git"}}` | `"foo"` |
-| `replace` | `{{replace "/" "-" "elastic/ensemble"}}` | `"elastic-ensemble"` |
-| `truncate` | `{{truncate 5 "hello world"}}` | `"hello"` |
-| `contains` | `{{if contains "fix" "bugfix"}}yes{{end}}` | `"yes"` |
-| `hasPrefix` | `{{if hasPrefix "feat" "feat/x"}}yes{{end}}` | `"yes"` |
-| `hasSuffix` | `{{if hasSuffix ".go" "main.go"}}yes{{end}}` | `"yes"` |
+| `split` | `~(split "/" "elastic/ensemble")` | `["elastic", "ensemble"]` |
+| `join` | `~(split "/" "a/b/c" \| join "-")` | `"a-b-c"` |
+| `last` | `~(split "/" "elastic/ensemble" \| last)` | `"ensemble"` |
+| `first` | `~(split "/" "elastic/ensemble" \| first)` | `"elastic"` |
+| `upper` | `~(upper "hello")` | `"HELLO"` |
+| `lower` | `~(lower "HELLO")` | `"hello"` |
+| `trim` | `~(trim "  hello  ")` | `"hello"` |
+| `trimPrefix` | `~(trimPrefix "refs/" "refs/heads/main")` | `"heads/main"` |
+| `trimSuffix` | `~(trimSuffix ".git" "foo.git")` | `"foo"` |
+| `replace` | `~(replace "/" "-" "elastic/ensemble")` | `"elastic-ensemble"` |
+| `truncate` | `~(truncate 5 "hello world")` | `"hello"` |
+| `contains` | `~(if (contains "fix" "bugfix") "yes")` | `"yes"` |
+| `hasPrefix` | `~(if (hasPrefix "feat" "feat/x") "yes")` | `"yes"` |
+| `hasSuffix` | `~(if (hasSuffix ".go" "main.go") "yes")` | `"yes"` |
 
 These compose with pipes. Extract a repo name from a full path:
 
 ```glitch
 (step "repo-name"
-  (run "echo '{{split \"/\" .param.repo | last}}'"))
+  (run "echo '~(split "/" param.repo | last)'"))
 ```
 
 ## Comments and discard
@@ -616,7 +614,7 @@ Line comments start with `;`:
       :model model
       :prompt ```
         Do a very thorough analysis of:
-        {{step "data"}}
+        ~(step data)
         ```))
 
   ;; This step runs instead
@@ -625,7 +623,7 @@ Line comments start with `;`:
       :model model
       :prompt ```
         Briefly summarize:
-        {{step "data"}}
+        ~(step data)
         ```)))
 ````
 
@@ -640,7 +638,7 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
     You are a code reviewer. Review this diff carefully.
 
     Files changed:
-    {{step "files"}}
+    ~(step files)
 
     If everything looks good, say so. Be concise.
     ```)

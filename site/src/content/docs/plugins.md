@@ -68,7 +68,7 @@ Each `.glitch` file declares arguments with `(arg ...)` at the top, then defines
   :description "Fetch GitHub issue JSON"
 
   (step "issue"
-    (run "gh issue view {{.param.issue}} --repo {{.param.repo}} --json number,title,body,labels,comments,assignees,milestone")))
+    (run "gh issue view ~param.issue --repo ~param.repo --json number,title,body,labels,comments,assignees,milestone")))
 ```
 
 One arg with a default (`repo`), one required arg (`issue`). That's it — gl1tch generates `--help` from your `(arg ...)` declarations:
@@ -116,8 +116,8 @@ Plugins use the same forms as workflows. Here is a subcommand that uses `catch` 
   (catch
     (step "related"
       (run ```
-        REPO="{{.param.repo}}"
-        ISSUE="{{.param.issue}}"
+        REPO="~param.repo"
+        ISSUE="~param.issue"
         echo "=== LINKED PRS ==="
         gh api graphql -f query="
         {
@@ -166,7 +166,7 @@ Gather local repo structure, recent commits, and config files — all in one she
 
   (step "context"
     (run ```
-      REPO_NAME=$(echo "{{.param.repo}}" | cut -d/ -f2)
+      REPO_NAME=$(echo "~param.repo" | cut -d/ -f2)
       REPO_PATH="$HOME/Projects/$REPO_NAME"
 
       if [ ! -d "$REPO_PATH" ]; then
@@ -199,7 +199,7 @@ Gather local repo structure, recent commits, and config files — all in one she
 
 ## Composing plugins into workflows
 
-This is where it gets interesting. Plugins handle data gathering. Workflows compose them and add LLM reasoning. The `(plugin ...)` form works like any step — output is captured and available downstream via `{{step "id"}}`.
+This is where it gets interesting. Plugins handle data gathering. Workflows compose them and add LLM reasoning. The `(plugin ...)` form works like any step — output is captured and available downstream via `~(step id)`.
 
 ### Issue-to-PR pipeline
 
@@ -217,22 +217,22 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
 
   (step "fetch-issue"
     (github/fetch-issue
-      :repo "{{.param.repo}}"
-      :issue "{{.param.issue}}"))
+      :repo "~param.repo"
+      :issue "~param.issue"))
 
   (step "fetch-related"
     (github/fetch-related
-      :repo "{{.param.repo}}"
-      :issue "{{.param.issue}}"))
+      :repo "~param.repo"
+      :issue "~param.issue"))
 
   (step "repo-context"
     (github/repo-context
-      :repo "{{.param.repo}}"))
+      :repo "~param.repo"))
 
   (step "es-context"
     (github/es-context
-      :repo "{{.param.repo}}"
-      :issue "{{.param.issue}}"))
+      :repo "~param.repo"
+      :issue "~param.issue"))
 
   ;; --- LLM reasoning ---
 
@@ -243,10 +243,10 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
       Classify this GitHub issue and extract structured information.
 
       ISSUE:
-      {{step "fetch-issue"}}
+      ~(step fetch-issue)
 
       RELATED:
-      {{step "fetch-related"}}
+      ~(step fetch-related)
 
       Respond with ONLY valid JSON:
       {
@@ -264,11 +264,11 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
       :prompt ```
       You are a senior engineer producing an implementation plan.
 
-      ISSUE: {{step "fetch-issue"}}
-      CLASSIFICATION: {{step "classify"}}
-      REPOSITORY STRUCTURE: {{step "repo-context"}}
-      CODE INDEX: {{step "es-context"}}
-      LINKED CONTEXT: {{step "fetch-related"}}
+      ISSUE: ~(step fetch-issue)
+      CLASSIFICATION: ~(step classify)
+      REPOSITORY STRUCTURE: ~(step repo-context)
+      CODE INDEX: ~(step es-context)
+      LINKED CONTEXT: ~(step fetch-related)
 
       Produce a detailed plan:
       1. Exact file paths to modify or create
@@ -284,9 +284,9 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
       :prompt ```
       Generate PR artifacts.
 
-      ISSUE: {{step "fetch-issue"}}
-      CLASSIFICATION: {{step "classify"}}
-      IMPLEMENTATION PLAN: {{step "research"}}
+      ISSUE: ~(step fetch-issue)
+      CLASSIFICATION: ~(step classify)
+      IMPLEMENTATION PLAN: ~(step research)
 
       Output with delimiters:
       ---PR_TITLE---
@@ -302,9 +302,9 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
     (llm :tier 0
       :prompt ```
       Review this PR plan against acceptance criteria.
-      CLASSIFICATION: {{step "classify"}}
-      PR ARTIFACTS: {{step "build-pr"}}
-      IMPLEMENTATION PLAN: {{step "research"}}
+      CLASSIFICATION: ~(step classify)
+      PR ARTIFACTS: ~(step build-pr)
+      IMPLEMENTATION PLAN: ~(step research)
       For each criterion: PASS or FAIL with one-line reason.
       Then: OVERALL: PASS or OVERALL: FAIL
       ```))
@@ -312,16 +312,16 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
   ;; --- Save results ---
 
   (step "save-plan"
-    (save "results/{{.param.repo}}/issue-{{.param.issue}}/plan.md" :from "research"))
+    (save "results/~param.repo/issue-~param.issue/plan.md" :from "research"))
 
   (step "save-review"
-    (save "results/{{.param.repo}}/issue-{{.param.issue}}/review.md" :from "review"))
+    (save "results/~param.repo/issue-~param.issue/review.md" :from "review"))
 
   (step "save-classify"
-    (save "results/{{.param.repo}}/issue-{{.param.issue}}/classification.json" :from "classify"))
+    (save "results/~param.repo/issue-~param.issue/classification.json" :from "classify"))
 
   (step "save-pr"
-    (save "results/{{.param.repo}}/issue-{{.param.issue}}/pr-body.md" :from "build-pr")))
+    (save "results/~param.repo/issue-~param.issue/pr-body.md" :from "build-pr")))
 ````
 
 Notice the pattern: plugin calls are deterministic and cacheable — they run `gh`, `git`, `curl`. LLM steps get pre-shaped data and do the reasoning. Swap a plugin subcommand and every workflow that calls it picks up the change.
@@ -341,11 +341,11 @@ Compare variant outputs across multiple LLM providers. Uses `glob` to find revie
 
   (step "find-reviews"
     (glob "*/review.md"
-      :dir "results/{{.param.repo}}/issue-{{.param.issue}}/iteration-1"))
+      :dir "results/~param.repo/issue-~param.issue/iteration-1"))
 
   (step "collect-variants"
     (run ```
-      BASE="results/{{.param.repo}}/issue-{{.param.issue}}/iteration-1"
+      BASE="results/~param.repo/issue-~param.issue/iteration-1"
       echo "=== VARIANT RESULTS ==="
       for variant in local claude copilot; do
         DIR="$BASE/$variant"
@@ -365,9 +365,9 @@ Compare variant outputs across multiple LLM providers. Uses `glob` to find revie
     (step "grade"
       (llm :provider provider :model model
         :prompt ```
-        Compare these variant outputs for issue #{{.param.issue}}.
+        Compare these variant outputs for issue #~param.issue.
 
-        {{step "collect-variants"}}
+        ~(step collect-variants)
 
         Score each variant 1-10 on:
         1. Plan completeness
@@ -380,7 +380,7 @@ Compare variant outputs across multiple LLM providers. Uses `glob` to find revie
         ```)))
 
   (step "save-cross-review"
-    (save "results/{{.param.repo}}/issue-{{.param.issue}}/cross-review.md" :from "grade")))
+    (save "results/~param.repo/issue-~param.issue/cross-review.md" :from "grade")))
 ````
 
 ### Knowledge synthesis with retry and map
@@ -395,7 +395,7 @@ Index a repo's documentation into Elasticsearch, then synthesize summaries. Uses
 
   (step "ensure-repo"
     (run ```
-      REPO="{{.param.repo}}"
+      REPO="~param.repo"
       REPO_NAME=$(echo "$REPO" | cut -d/ -f2)
       REPO_PATH="$HOME/Projects/$REPO_NAME"
       if [ ! -d "$REPO_PATH" ]; then
@@ -407,7 +407,7 @@ Index a repo's documentation into Elasticsearch, then synthesize summaries. Uses
 
   (step "find-docs"
     (run ```
-      REPO_NAME=$(echo "{{.param.repo}}" | cut -d/ -f2)
+      REPO_NAME=$(echo "~param.repo" | cut -d/ -f2)
       REPO_PATH="$HOME/Projects/$REPO_NAME"
       find "$REPO_PATH" -type f \( -name "README*" -o -name "*.md" \
         -o -name "Makefile" -o -name "go.mod" -o -name "pyproject.toml" \) \
@@ -418,12 +418,12 @@ Index a repo's documentation into Elasticsearch, then synthesize summaries. Uses
   (map "find-docs"
     (step "process-doc"
       (run ```
-        FILE="{{.param.item}}"
+        FILE="~param.item"
         CONTENT=$(cat "$FILE" 2>/dev/null | head -500)
         if [ -z "$CONTENT" ]; then exit 0; fi
         HASH=$(echo "$CONTENT" | shasum -a 256 | cut -d' ' -f1)
         # ... check for changes, index to ES ...
-        echo "INDEXED: {{.param.item}}"
+        echo "INDEXED: ~param.item"
         ```))))
 ````
 
@@ -447,10 +447,10 @@ Then a separate workflow synthesizes the indexed knowledge:
     (step "synthesize"
       (llm :provider provider
         :prompt ```
-        Create a comprehensive knowledge synthesis for {{.param.repo}}.
+        Create a comprehensive knowledge synthesis for ~param.repo.
 
-        DOCUMENTATION: {{step "query-docs"}}
-        ARCHITECTURE: {{step "query-architecture"}}
+        DOCUMENTATION: ~(step query-docs)
+        ARCHITECTURE: ~(step query-architecture)
 
         Produce JSON summaries covering:
         architecture overview, key patterns, common pitfalls,
@@ -487,7 +487,7 @@ No config registries. No binary auto-discovery. Your plugins are `.glitch` direc
 Your plugin's final step stdout IS the output.
 
 - **From the CLI:** prints to terminal, composes with pipes (`| jq`, `| less`)
-- **From a workflow:** becomes `{{step "id"}}` like any other step
+- **From a workflow:** becomes `~(step id)` like any other step
 - **Stderr** from inner shell steps passes through to terminal
 
 ## Design principles

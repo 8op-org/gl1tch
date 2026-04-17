@@ -55,7 +55,7 @@ That runs `examples/hello.glitch`:
       :model model
       :prompt ```
         You received this message from a shell command:
-        {{step "gather"}}
+        ~(step gather)
 
         Respond with a short, enthusiastic acknowledgment.
         ```)))
@@ -67,18 +67,12 @@ What each part does:
 - `(workflow "hello-sexpr" ...)` — declares the workflow. The string is the name you pass to `glitch workflow run`
 - `(step "gather" (run "..."))` — runs a shell command and captures stdout
 - `(step "respond" (llm ...))` — sends a prompt to your local model
-- `{{step "gather"}}` — injects the previous step's output into the prompt
+- `~(step gather)` — injects the previous step's output into the prompt
 - Triple backticks delimit multiline strings, auto-dedented
 
-## Your first ask
+## Code review workflow
 
-```bash
-glitch ask "review this code"
-```
-
-`glitch ask` reads your question, picks the best matching workflow using your local LLM, and runs it. Routing happens entirely on your machine — nothing leaves it unless a workflow's provider says otherwise.
-
-The query above matches the `code-review` workflow, which reviews your staged git changes:
+Here's a more practical example — reviewing staged git changes:
 
 ````glitch
 ;; code-review.glitch
@@ -101,10 +95,10 @@ The query above matches the `code-review` workflow, which reviews your staged gi
         You are a code reviewer. Review this diff carefully.
 
         Files changed:
-        {{step "files"}}
+        ~(step files)
 
         Diff:
-        {{step "diff"}}
+        ~(step diff)
 
         For each file, note:
         - Bugs or logic errors
@@ -135,7 +129,7 @@ Create `.glitch/workflows/my-workflow.glitch`:
       :model model
       :prompt ```
         Here is what the shell returned:
-        {{step "gather"}}
+        ~(step gather)
 
         Do something useful with it.
         ```)))
@@ -153,11 +147,11 @@ Pass runtime values with `--set`:
 glitch workflow run parameterized --set repo=my-project
 ```
 
-Inside the workflow, `{{.param.repo}}` expands to `my-project`.
+Inside the workflow, `~param.repo` expands to `my-project`.
 
 ## Chaining steps
 
-Every step's output is available to later steps via `{{step "id"}}`. Chain as many as you need:
+Every step's output is available to later steps via `~(step id)`. Chain as many as you need:
 
 ````glitch
 ;; multi-step-chain.glitch
@@ -183,13 +177,13 @@ Every step's output is available to later steps via `{{step "id"}}`. Chain as ma
         Analyze this system snapshot:
 
         Disk usage:
-        {{step "disk"}}
+        ~(step disk)
 
         Memory:
-        {{step "memory"}}
+        ~(step memory)
 
         Top processes by memory:
-        {{step "processes"}}
+        ~(step processes)
 
         Give a brief health assessment and flag anything concerning.
         ```)))
@@ -217,7 +211,7 @@ Write any step's output to a file with `(save ...)`:
       :model model
       :prompt ```
         Here are the last 20 git commits:
-        {{step "commits"}}
+        ~(step commits)
 
         Write a concise changelog grouped by theme (features, fixes, chores).
         Use markdown. No preamble.
