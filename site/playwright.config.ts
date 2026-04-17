@@ -7,8 +7,9 @@ export default defineConfig({
     baseURL: 'http://localhost:4322',
   },
   webServer: {
-    command: 'npx astro dev --port 4322',
+    command: 'npx astro build && npx astro preview --port 4322',
     port: 4322,
     reuseExistingServer: true,
+    timeout: 60000,
   },
 });
