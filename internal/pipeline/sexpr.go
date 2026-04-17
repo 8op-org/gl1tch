@@ -698,6 +698,8 @@ func convertCompare(n *sexpr.Node, defs map[string]string) (Step, error) {
 			case "id":
 				s.CompareID = val
 				s.ID = val
+			case "objective":
+				s.CompareObjective = val
 			}
 			continue
 		}
@@ -730,6 +732,9 @@ func convertCompare(n *sexpr.Node, defs map[string]string) (Step, error) {
 	}
 	if len(s.CompareBranches) < 2 {
 		return s, fmt.Errorf("line %d: (compare) needs at least 2 branches, got %d", n.Line, len(s.CompareBranches))
+	}
+	if s.CompareObjective == "" {
+		return s, fmt.Errorf("line %d: (compare) requires :objective — what is this comparison measuring?", n.Line)
 	}
 	s.Line = n.Line
 	return s, nil
