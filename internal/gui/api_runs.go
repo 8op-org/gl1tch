@@ -123,23 +123,25 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type stepEntry struct {
-		StepID     string `json:"step_id"`
-		Model      string `json:"model"`
-		DurationMs int64  `json:"duration_ms"`
-		Kind       string `json:"kind,omitempty"`
-		ExitStatus *int   `json:"exit_status,omitempty"`
-		TokensIn   int64  `json:"tokens_in"`
-		TokensOut  int64  `json:"tokens_out"`
-		GatePassed *bool  `json:"gate_passed,omitempty"`
-		Output     string `json:"output,omitempty"`
-		Prompt     string `json:"prompt,omitempty"`
+		StepID     string   `json:"step_id"`
+		Model      string   `json:"model"`
+		DurationMs int64    `json:"duration_ms"`
+		Kind       string   `json:"kind,omitempty"`
+		ExitStatus *int     `json:"exit_status,omitempty"`
+		TokensIn   int64    `json:"tokens_in"`
+		TokensOut  int64    `json:"tokens_out"`
+		GatePassed *bool    `json:"gate_passed,omitempty"`
+		Output     string   `json:"output,omitempty"`
+		Prompt     string   `json:"prompt,omitempty"`
+		Artifacts  []string `json:"artifacts,omitempty"`
 	}
 
 	stepRows, err := s.store.DB().Query(
 		`SELECT step_id, COALESCE(model,''), COALESCE(duration_ms,0),
 		        COALESCE(kind,''), exit_status, COALESCE(tokens_in,0),
 		        COALESCE(tokens_out,0), gate_passed,
-		        COALESCE(output,''), COALESCE(prompt,'')
+		        COALESCE(output,''), COALESCE(prompt,''),
+		        COALESCE(artifacts,'')
 		 FROM steps WHERE run_id = ?`, id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -151,9 +153,10 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	for stepRows.Next() {
 		var se stepEntry
 		var exitStatus, gatePassed sql.NullInt64
+		var artifactsJSON string
 		if err := stepRows.Scan(&se.StepID, &se.Model, &se.DurationMs,
 			&se.Kind, &exitStatus, &se.TokensIn, &se.TokensOut, &gatePassed,
-			&se.Output, &se.Prompt); err != nil {
+			&se.Output, &se.Prompt, &artifactsJSON); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
@@ -164,6 +167,9 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		if gatePassed.Valid {
 			v := gatePassed.Int64 == 1
 			se.GatePassed = &v
+		}
+		if artifactsJSON != "" {
+			_ = json.Unmarshal([]byte(artifactsJSON), &se.Artifacts)
 		}
 		steps = append(steps, se)
 	}

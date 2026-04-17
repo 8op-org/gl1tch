@@ -2,6 +2,8 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -115,6 +117,7 @@ type StepRecord struct {
 	TokensIn   int64
 	TokensOut  int64
 	GatePassed *bool
+	Artifacts  []string
 }
 
 // RecordRun inserts a new run record and returns the new row ID.
@@ -165,12 +168,21 @@ func (s *Store) RecordStep(rec StepRecord) error {
 		}
 		gatePassed = &v
 	}
+	var artifactsJSON *string
+	if len(rec.Artifacts) > 0 {
+		b, err := json.Marshal(rec.Artifacts)
+		if err != nil {
+			return fmt.Errorf("marshal artifacts: %w", err)
+		}
+		s := string(b)
+		artifactsJSON = &s
+	}
 	_, err := s.db.Exec(
 		`INSERT OR REPLACE INTO steps (run_id, step_id, prompt, output, model, duration_ms,
-         kind, exit_status, tokens_in, tokens_out, gate_passed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         kind, exit_status, tokens_in, tokens_out, gate_passed, artifacts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		rec.RunID, rec.StepID, rec.Prompt, rec.Output, rec.Model, rec.DurationMs,
-		rec.Kind, rec.ExitStatus, rec.TokensIn, rec.TokensOut, gatePassed,
+		rec.Kind, rec.ExitStatus, rec.TokensIn, rec.TokensOut, gatePassed, artifactsJSON,
 	)
 	return err
 }

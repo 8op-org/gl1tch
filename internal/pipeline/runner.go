@@ -35,6 +35,7 @@ type stepOutcome struct {
 	escChain   []int
 	evalScores []int
 	isLLM      bool
+	artifacts  []string
 }
 
 // runCtx bundles per-run state needed by executeStep and compound forms.
@@ -149,6 +150,7 @@ type StepRecord struct {
 	ExitStatus *int
 	TokensIn   int64
 	TokensOut  int64
+	Artifacts  []string
 }
 
 func buildStepRecord(step Step, outcome *stepOutcome, runErr error, dur time.Duration, defaultModel string) StepRecord {
@@ -166,6 +168,7 @@ func buildStepRecord(step Step, outcome *stepOutcome, runErr error, dur time.Dur
 		rec.Output = outcome.output
 		rec.TokensIn = int64(outcome.tokensIn)
 		rec.TokensOut = int64(outcome.tokensOut)
+		rec.Artifacts = outcome.artifacts
 	}
 	if step.LLM != nil {
 		rec.Prompt = step.LLM.Prompt
@@ -1676,6 +1679,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		"param":     rctx.params,
 		"workspace": rctx.workspace,
 		"resource":  rctx.resources,
+		"run_id":    rctx.runID,
 	}
 
 	if step.Save != "" {
@@ -1696,7 +1700,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: write: %w", step.ID, err)
 		}
 		out := fmt.Sprintf("saved %s to %s", sourceStep, rendered)
-		return &stepOutcome{output: out}, nil
+		return &stepOutcome{output: out, artifacts: []string{rendered}}, nil
 	}
 
 	if step.Run != "" {
@@ -2024,7 +2028,7 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 			return nil, fmt.Errorf("step %s: write-file: %w", step.ID, err)
 		}
 		ui.StepSDK(step.ID, "write-file")
-		return &stepOutcome{output: rendered}, nil
+		return &stepOutcome{output: rendered, artifacts: []string{rendered}}, nil
 	}
 
 	if step.GlobPat != nil {
