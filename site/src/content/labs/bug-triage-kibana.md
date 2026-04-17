@@ -7,13 +7,26 @@ date: "2026-04-17"
 
 ## The Scenario
 
-[elastic/kibana#263137](https://github.com/elastic/kibana/issues/263137) — a correctly-configured time-series data stream (TSDS) fails to show the metrics grid in Kibana Discover when its name contains the word "logs". Querying `TS metrics-logstash.otel-default` silently renders the logs Discover profile instead of the metrics profile. The issue was confirmed by renaming the stream from `logstash` to `lstash`, which immediately fixed it. Reproducible across all users with OTel or Logstash-named TSDS — a common pattern in production observability pipelines.
+A time-series data stream with "logstash" in the name silently renders the wrong Discover profile. You query `TS metrics-logstash.otel-default` expecting a metrics grid. Kibana gives you the logs view instead. Rename the stream to `lstash` and it works fine.
+
+That's [elastic/kibana#263137](https://github.com/elastic/kibana/issues/263137). A regex somewhere is matching "logstash" and deciding it's a logs data stream. It isn't. Every OTel or Logstash-named TSDS in production is affected.
+
+We pointed three models at the issue thread and asked them to find the root cause.
+
+---
 
 ## The Workflow
 
-This is the workflow that produced the output below. Save it as `triage-kibana.glitch` — swap the issue number to triage any Kibana bug.
-
 ````glitch
+(def triage-prompt ```
+  You are a senior frontend engineer triaging a Kibana bug report.
+  Analyze this issue: severity, root cause, affected components, fix approach.
+  Be specific — reference exact files, regex patterns, or code if mentioned.
+
+  Issue data:
+  ~(step fetch)
+  ```)
+
 (workflow "triage-kibana"
   :description "Triage a Kibana bug across three model tiers"
 
@@ -21,314 +34,121 @@ This is the workflow that produced the output below. Save it as `triage-kibana.g
     (run "gh issue view 263137 -R elastic/kibana --json title,body,comments,labels"))
 
   (step "triage-local"
-    (llm
-      :provider "lm-studio"
-      :model "qwen3-8b"
-      :prompt ```
-        You are a senior frontend engineer triaging a Kibana bug report.
-        Analyze this issue: severity, root cause, affected components, fix approach.
-        Be specific — reference exact files, regex patterns, or code if mentioned.
-
-        Issue data:
-        ~(step fetch)
-        ```))
+    (llm :provider "lm-studio" :model "qwen3-8b"
+      :prompt ~triage-prompt))
 
   (step "triage-paid"
-    (llm
-      :provider "openrouter"
-      :model "qwen/qwen3.5-flash-02-23"
-      :prompt ```
-        You are a senior frontend engineer triaging a Kibana bug report.
-        Analyze this issue: severity, root cause, affected components, fix approach.
-        Be specific — reference exact files, regex patterns, or code if mentioned.
-
-        Issue data:
-        ~(step fetch)
-        ```))
+    (llm :provider "openrouter" :model "qwen/qwen3.5-flash-02-23"
+      :prompt ~triage-prompt))
 
   (step "triage-copilot"
-    (llm
-      :provider "copilot"
-      :model "sonnet"
-      :prompt ```
-        You are a senior frontend engineer triaging a Kibana bug report.
-        Analyze this issue: severity, root cause, affected components, fix approach.
-        Be specific — reference exact files, regex patterns, or code if mentioned.
-
-        Issue data:
-        ~(step fetch)
-        ```)))
+    (llm :provider "copilot" :model "sonnet"
+      :prompt ~triage-prompt)))
 ````
 
 ```bash
 glitch run triage-kibana
 ```
 
-All three steps run sequentially against the same fetched issue JSON. No model sees another model's output.
-
-## Free Tier: qwen3-8b (LM Studio)
-
-````text
-### 1. **Severity Assessment**
-**High**
-- The issue prevents users from viewing time series metrics grids in Discover, which is a core
-  usability feature for observability workflows.
-- It affects data streams that contain "logs" in their name (e.g., `logstash`), which are valid
-  time-series configurations. Users cannot see metrics without the grid, breaking critical
-  analysis workflows.
-- The bug is reproducible and impacts all users with such data stream names, even though they
-  are correctly configured.
+Same prompt, same issue data. Three providers. No model sees another model's output.
 
 ---
 
-### 2. **Root Cause Hypothesis**
-The root cause is a regex pattern in `logs_context_service.ts` that triggers the "logs" profile
-based on the presence of the word "logs" in the query string (e.g., `TS logstash`). This
-incorrectly assumes that any data stream name containing "logs" is a logs profile, overriding
-the intended metrics context.
+## Local: qwen3-8b (LM Studio) — $0.00
 
-Key evidence:
-- The regex in [this code block](https://github.com/elastic/kibana/blob/main/src/platform/packages/shared/kbn-discover-utils/src/data_types/logs/logs_context_service.ts#L22-L29)
-  checks for `logs` in the query to activate logs profile logic.
-- The data stream name `logstash` triggers this regex, forcing Discover to treat it as a logs
-  profile rather than metrics.
-- The fix is confirmed by renaming the stream to `lstash`, which avoids the "logs" substring
-  and resolves the issue.
+<div class="model-output">
 
----
+**Severity: High.** Users can't see the metrics grid for any TSDS with "logs" in the name. Core observability feature, broken silently.
 
-### 3. **Affected Components & Code Paths**
-#### **Components**
-- **Discover UI**: Responsible for rendering time series metrics grids.
-- **Logs Context Service**: Handles logic to determine whether a query should use logs or
-  metrics profiles.
+**Root cause:** A regex in `logs_context_service.ts` (lines 22–29) matches "logs" in the query string and forces the logs profile. The data stream name `logstash` triggers it.
 
-#### **Code Paths**
-- **Regex Pattern**: The regex in `logs_context_service.ts` (lines 22–29) matches queries
-  containing "logs" and activates the logs profile:
-  `````typescript
-  if (/^logs/i.test(query)) {
-    // Activate logs profile logic
-  }
-````
-- **Metrics Profile Logic**: When a data stream is marked as "Time series" with metrics
-  `time_series_metric`, it should default to metrics context, but this is overridden by
-  the regex.
+**Fix direction:** Make the `TS` command take priority over the name heuristic. If the query starts with `TS`, skip the logs pattern check.
+
+</div>
+
+**The verdict.** Found the right file. Got the right severity. Proposed the right fix direction. But the actual regex it showed? Fabricated. The real pattern tests the *index name*, not the query string. The model conflated the ES|QL command with the index pattern — a meaningful conceptual error. It also missed the second file (`create_regexp_pattern_from.ts`) that explains *why* the prefix `metrics-` doesn't save you.
+
+Directionally correct. Mechanically wrong. Good enough to route the bug to the right team. Not good enough to write the fix.
 
 ---
 
-### 4. **Recommended Fix Approach**
-#### **Fix Strategy**
-Update the regex in `logs_context_service.ts` to prioritize `TS` (the command for time-series
-queries) over the presence of "logs" in data stream names.
+## Paid: qwen/qwen3.5-flash-02-23 (OpenRouter) — ~$0.001
 
-#### **Code Changes**
-```typescript
-// Original (incorrect)
-if (/^logs/i.test(query)) {
-  // Activate logs profile logic
-}
+<div class="model-output">
 
-// Proposed Fix
-if (/^TS/i.test(query)) {
-  // Prioritize metrics profile for TS queries
-} else if (/^logs/i.test(query)) {
-  // Fallback to logs profile if no TS command is present
-}
-  `````
+**Severity: High.** Feature breakage — the "Metrics in Discover" view is blocked for any stream name containing "log". No data loss, no security risk, but the UI renders the wrong profile silently. Workaround (renaming streams) is impractical for existing OTel pipelines.
 
-#### **Validation Steps**
-1. Test with data stream names containing "logs" (e.g., `logstash`) and confirm metrics grid
-   renders when querying `TS logstash`.
-2. Ensure existing behavior for queries without "logs" remains unchanged.
-3. Validate edge cases where data streams have "logs" in their names but are explicitly marked
-   as time series with metrics.
+**Root cause:** The Discover profile resolver (`logsContextService`) checks the index name against a regex *before* checking the query command. When a user runs `TS <stream-with-log>`, the name match fires first and overrides the explicit `TS` intent.
 
-### Summary
-This is a **high-severity bug** caused by incorrect logic in the logs profile regex that
-overrides valid time-series queries. Fixing it requires updating the regex to prioritize `TS`
-commands over "logs" substrings.
-`````
+**File:** `src/platform/packages/shared/kbn-discover-utils/src/data_types/logs/logs_context_service.ts` (lines 22–29). Cited by commenter `lucaslopezf` in the thread.
 
-**Verdict:** The free model found the right file (`logs_context_service.ts`, lines 22–29) and correctly assessed severity. It also grasped the right direction for the fix: `TS` command should take priority over name heuristics. However, it hallucinated the actual regex — the real pattern doesn't test `query` at all; it tests the index name. The shown fix code (`/^logs/i.test(query)`) is fabricated. The model conflated the ES|QL query string with the index pattern string, which is a meaningful conceptual error. It also missed the `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS` list and the permissive prefix/suffix matching in `create_regexp_pattern_from.ts` that explain *why* `metrics-logstash.otel-default` matches a logs pattern. Directionally correct, mechanically wrong.
+**Fix:** Reorder the resolver chain so `metricsResolve` runs before `logsContextService`. Or add a guard: if `TS` is detected, lock to Metrics immediately.
 
-## Paid Tier: qwen/qwen3.5-flash-02-23
+</div>
 
-````text
-### 1. Severity Assessment
-**Severity: High**
+**The verdict.** Correctly framed the bug as a conflict between *name heuristic* and *query intent* — that's the right mental model. Named the right file, cited the right commenter, and the architecture fix (reorder resolvers) matches what the Kibana team proposed in the thread.
 
-**Reasoning:**
-- **Feature Breakage:** This issue directly blocks the "Metrics in Discover" feature (labeled
-  as `Feature:Metrics in Discover`). Users cannot view the metrics grid for valid time-series
-  data streams simply because the naming convention includes "log" (common in OpenTelemetry,
-  e.g., `logstash`, `opentelemetry-logs`).
-- **Usability Impact:** The current workaround requires users to rename data streams or indices,
-  which is often not possible for existing OTel pipelines or managed services without significant
-  operational overhead.
-- **Misleading Intent:** The system ignores the explicit `TS` query command in favor of a
-  heuristic string match on the index pattern name. This creates a confusing inconsistency where
-  `TS my-logs` behaves differently than `TS my-metrics` despite the explicit command.
-- **Not Critical:** No data is lost, security is not at risk, and the system remains stable; it
-  simply renders the wrong view profile.
-
-### 2. Root Cause Hypothesis
-The Discover app employs a heuristic profile resolution service (`logsContextService`) that
-determines the view mode (Logs vs. Metrics) based primarily on the **data stream/index name**
-before checking the explicit **query command**.
-
-- **The Trigger:** A regex pattern inside `logs_context_service.ts` matches substrings like
-  "log" within the stream name.
-- **The Conflict:** When a user queries `TS <stream-with-log>`:
-  1. The query parser sees `TS` (Time Series).
-  2. Simultaneously, the profile resolution engine runs.
-  3. The engine sees the name matches the "log" pattern.
-  4. The "log" heuristic **overrides** the `TS` command, forcing the UI into "Logs Profile"
-     mode, hiding the metrics grid.
-- **Evidence:** Comment by `lucaslopezf` explicitly links the regex pattern causing the issue
-  to `src/platform/packages/shared/kbn-discover-utils/src/data_types/logs/logs_context_service.ts`
-  (Lines 22-29).
-
-### 3. Affected Components and Code Paths
-- **Primary Component:** Kibana Discover Service / Data Types Context Service.
-- **File Path:** `src/platform/packages/shared/kbn-discover-utils/src/data_types/logs/logs_context_service.ts`
-- **Specific Location:** Lines 22-29 (referenced by commenter `lucaslopezf`).
-- **User Flow Path:**
-  1. User navigates to Discover.
-  2. User inputs query: `TS <data_stream_name>` (where name contains 'log').
-  3. System executes `metricsResolve` and `logsResolve` (implied logic).
-  4. **Bug:** `logsContextService` evaluates `name.includes('log')` as truthy.
-  5. System switches context to Logs view.
-  6. UI fails to render the "grid of metrics".
-
-### 4. Recommended Fix Approach
-**Strategy: Explicit Intent > Heuristic Name**
-
-1. **Implement Priority Fix (Quick & Safe):**
-   ```typescript
-   // Current (Likely):
-   if (streamName.match(logRegex)) { return LogsContext; }
-
-   // Fix:
-   if (streamName.match(logRegex) && !query.startsWith('TS')) {
-      return LogsContext;
-   }
-````
-2. **Architecture Fix (Recommended):**
-   Reorder the profile resolution priority so `metricsResolve` runs **before**
-   `logsContextService` checks naming patterns. If `TS` is detected in the query, lock the
-   profile to Metrics immediately without checking names.
-3. **Test Expansion:**
-   - Add an E2E test verifying `TS logs-some-pattern` displays the metrics grid.
-   - Add a negative test verifying `logs-some-pattern` (without `TS`) still defaults to
-     Logs view.
-   - Verify `TS` prefix is case-insensitive.
-
-**Risk Assessment:**
-Low Risk — this narrows the scope of the regex trigger rather than removing it entirely.
-`````
-
-**Verdict:** A meaningful step up. The paid model correctly understood that the conflict is between *index name matching* and *query command intent* — the right framing for this bug. It accurately named `logsContextService`, cited the correct file and lines, and correctly attributed the `TS`-command-should-win argument to `miguel-sanchez-elastic` in the thread. The architecture fix recommendation (reorder `metricsResolve` before `logsResolve`) mirrors exactly what `lucaslopezf` proposed. The pseudo-code is still placeholder (`streamName.match(logRegex)`) rather than referencing the actual `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS` list, but the logic is correct. It did not discover the second involved file (`create_regexp_pattern_from.ts`) or explain the permissive prefix/suffix matching that makes `metrics-logstash.otel-default` match at all.
-
-## Copilot (Sonnet)
-
-````text
----
-
-## Bug Triage: `[Metrics][Discover] #263137`
-
-### 1. Severity: **High**
-
-A correctly-configured TSDS is silently rendered with the wrong Discover profile — the metrics
-grid is completely absent. Users cannot work around this without renaming their data streams.
-Any OTel/Logstash-named TSDS is affected, which is a common naming pattern in production.
+Still pseudo-code though. Still missed the second file. The gap between "understands the problem" and "can write the patch" is showing.
 
 ---
 
-### 2. Root Cause
+## Copilot: Claude Sonnet — Copilot seat
 
-**File:** `src/platform/packages/shared/kbn-discover-utils/src/data_types/logs/logs_context_service.ts`
-(lines 22–29)
+<div class="model-output">
 
-`````ts
-export const DEFAULT_ALLOWED_LOGS_BASE_PATTERNS = [
-  'log',
-  'logs',
-  'logstash',   // <-- culprit
-  'auditbeat',
-  'filebeat',
-  'winlogbeat',
-];
-````
+**Severity: High.** A correctly-configured TSDS silently renders with the wrong profile. No workaround except renaming data streams.
 
-**File:** `src/platform/packages/shared/kbn-data-view-utils/src/utils/create_regexp_pattern_from.ts`
+**Root cause — two files:**
 
-The regex built by `createRegExpPatternFrom` uses very permissive prefix/suffix matching:
+**File 1:** `logs_context_service.ts` defines the pattern list:
 
 ```ts
-const optionalIndexNamePrefix = `(?:${nameCharacters}${segmentBoundary})?`;
-const optionalIndexNameSuffix = `(?:${segmentBoundary}${nameCharacters})?`;
-`````
+export const DEFAULT_ALLOWED_LOGS_BASE_PATTERNS = [
+  'log', 'logs', 'logstash',  // <-- culprit
+  'auditbeat', 'filebeat', 'winlogbeat',
+];
+```
 
-This means `metrics-logstash.otel-default` matches the logs pattern because:
+**File 2:** `create_regexp_pattern_from.ts` builds a permissive regex with optional prefix/suffix matching:
+
+`metrics-logstash.otel-default` matches because:
 - `metrics-` → matched by `optionalIndexNamePrefix`
-- `logstash` → matched by `indexNames` (it's in `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS`)
+- `logstash` → in `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS`
 - `.otel-default` → matched by `optionalIndexNameSuffix`
 
-The resulting regex (case-insensitive) fires on the full index name string, not just the base
-segment. There is **no check for the `TS` command prefix** before the logs profile is applied,
-so `isLogsIndexPattern("metrics-logstash.otel-default")` returns `true` and the logs
-profile wins.
+There is no check for the `TS` command before the logs profile is applied.
 
----
-
-### 3. Affected Components & Code Paths
-
-| Component | Path | Role |
-|-----------|------|------|
-| Logs context service | `kbn-discover-utils/src/data_types/logs/logs_context_service.ts` | Defines `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS` and exposes `isLogsIndexPattern` |
-| Regex builder | `kbn-data-view-utils/src/utils/create_regexp_pattern_from.ts` | Builds the permissive match regex with optional prefix/suffix |
-| Profile resolver | (wherever `isLogsIndexPattern` is called in Discover's ES|QL path) | Selects logs vs. metrics profile — **missing `TS`-command guard** |
-
----
-
-### 4. Recommended Fix
-
-**Preferred fix — check `TS` command precedence in the profile resolver:**
+**Fix:**
 
 ```ts
-// If the ES|QL query starts with the TS command, it is unambiguously
-// a time-series (metrics) query — skip the log pattern check entirely.
 if (/^\s*TS\s+/i.test(esqlQuery)) {
   return metricsProfile;
 }
 ```
 
-This is semantically correct: ES|QL's `TS` command **requires** a TSDS and cannot target a
-logs stream, so checking the index name for log keywords is irrelevant.
+The `TS` command *requires* a TSDS. Checking the index name for log keywords is irrelevant when the command is unambiguous.
 
-**Fallback quick fix — tighten the regex (fragile, not recommended alone):**
+</div>
 
-Modify `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS_REGEXP` so that a `metrics-` prefix disqualifies
-the match, or remove `'logstash'` from patterns used in the non-`TS` path. This is brittle
-and doesn't address the underlying design flaw: **profile resolution should be
-query-command-aware**, not index-name-only.
+**The verdict.** This is the only output that found the actual data. `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS` with `'logstash'` listed. The second file that builds the regex. The step-by-step decomposition of *why* the prefix `metrics-` doesn't prevent the match. The fix is three lines you could paste into a PR.
 
-**Additional suggestion from the thread (lucaslopezf):** reorder the resolver chain so
-`metricsProfileResolver` runs before `logsProfileResolver` — though the `TS` guard above
-makes ordering irrelevant for this case.
-```
+The difference between "found the right file" and "traced the full match path" is the difference between routing a bug and fixing it.
 
-**Verdict:** Copilot landed the complete root cause. It's the only model that surfaced the *actual* data: `DEFAULT_ALLOWED_LOGS_BASE_PATTERNS` with `'logstash'` explicitly listed, and the second file `create_regexp_pattern_from.ts` that builds the permissive regex allowing `metrics-` as an optional prefix. The step-by-step decomposition of why `metrics-logstash.otel-default` matches the logs pattern — prefix/base/suffix — is mechanically accurate and matches what you'd find reading the source. The fix code is real and directly applicable: a regex guard at the call site rather than pseudo-code. It also noted that the `TS` guard makes resolver ordering irrelevant, which is a sharper observation than either other model produced.
+---
 
 ## Comparison
 
-| Model | Root Cause Found? | Correct File Referenced? | Fix Approach Valid? | Cost |
-|-------|-------------------|--------------------------|---------------------|------|
-| qwen3-8b (free, local) | Partial — right file, wrong mechanism (tested `query` not index name) | `logs_context_service.ts` ✓, missed `create_regexp_pattern_from.ts` | Directionally correct, code fabricated | $0.00 |
-| qwen3.5-flash-02-23 (paid) | Yes — identified name-vs-command conflict correctly | `logs_context_service.ts` ✓, missed `create_regexp_pattern_from.ts` | Correct logic, pseudo-code only | ~$0.001 |
-| Copilot Sonnet | Yes — full mechanism including prefix/suffix regex construction | Both files ✓ | Production-ready guard + explained why ordering is irrelevant | Copilot seat |
+| | Local (qwen3-8b) | Paid (qwen3.5-flash) | Copilot (Sonnet) |
+|---|---|---|---|
+| **Root cause** | Right file, wrong mechanism | Right framing, right file | Full chain — both files, actual patterns |
+| **Fix code** | Fabricated | Pseudo-code | Production-ready |
+| **Thread awareness** | Low | Cited commenter, correct attribution | Cited both files, explained prefix matching |
+| **Cost** | $0.00 | ~$0.001 | Copilot seat |
+
+---
 
 ## Takeaway
 
-Regex-level bugs demand a model that can reason about *what string is being tested and why* — not just *which file is implicated*. All three models found `logs_context_service.ts` from the thread, but only Copilot traced the full match path through `create_regexp_pattern_from.ts` and produced code you could apply without modification. For triage workflows where the issue thread contains real file references, free models are useful for rapid first-pass severity assessment; for root cause precision at the code level, the tier gap is measurable.
+Regex bugs need a model that can reason about *what string is being tested and why* — not just which file is involved. All three found `logs_context_service.ts` from the thread. Only Copilot traced the match through `create_regexp_pattern_from.ts` and produced code you could ship.
+
+The local model earns its keep: right severity, right team, zero cost. The paid model adds the conceptual frame. Copilot writes the patch. That's the tier ladder working as designed.

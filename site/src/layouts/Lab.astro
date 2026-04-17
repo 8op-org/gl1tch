@@ -72,6 +72,21 @@ const { title, description, date } = Astro.props;
     line-height: 1.8;
   }
 
+  .lab-content :global(a) {
+    color: var(--teal);
+    text-decoration: none;
+  }
+  .lab-content :global(a:hover) {
+    text-decoration: underline;
+  }
+
+  .lab-content :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2rem 0;
+    opacity: 0.5;
+  }
+
   .lab-content :global(pre) {
     background: var(--bg-surface);
     border: 1px solid var(--border);
