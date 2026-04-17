@@ -156,7 +156,6 @@ Three tiers: hot paths at top level, management under `glitch workspace`, infras
 ### Hot paths
 
 ```bash
-glitch ask <query>              # smart router — matches against workspace workflows
 glitch run <workflow> [input]   # run a workflow (workspace workflows first, global fallback)
 glitch observe <query>          # observer queries on indexed activity
 ```
@@ -316,7 +315,6 @@ glitch workspace use my-project
 
 # Now every command picks up that workspace's workflows, resources, and defaults:
 glitch run morning-briefing
-glitch ask "review ops#42"
 glitch run pr-review --set pr=42
 
 # Or cd into a different workspace — walk-up wins over the active one:
@@ -375,4 +373,4 @@ One format across global config, workspace config, and workflows.
 - [Workflow Syntax](/docs/workflow-syntax) — the step forms and templates your workspace workflows use
 - [Plugins](/docs/plugins) — reusable data-gathering subcommands that compose with workflows
 - [Local Models](/docs/local-models) — setting up Ollama for your workspace's default model
-- [Batch Comparison Runs](/docs/batch-comparison-runs) — parent/child runs across multiple providers
+- [Batch Runs](/docs/batch-runs) — parent/child runs across multiple providers

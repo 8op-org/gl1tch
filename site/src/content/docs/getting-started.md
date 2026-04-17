@@ -77,15 +77,15 @@ What each part does:
 - `~(step gather)` — injects the previous step's output into the prompt
 - Triple backticks delimit multiline strings, auto-dedented
 
-## Your first ask
+## Your first workflow (named)
+
+Run a workflow by name:
 
 ```bash
-glitch ask "review this code"
+glitch workflow run code-review
 ```
 
-`glitch ask` reads your question, picks the best matching workflow using your local LLM, and runs it. Routing happens entirely on your machine — nothing leaves it unless a workflow's provider says otherwise.
-
-The query above matches the `code-review` workflow, which reviews your staged git changes:
+The `code-review` workflow reviews your staged git changes:
 
 ````glitch
 ;; code-review.glitch

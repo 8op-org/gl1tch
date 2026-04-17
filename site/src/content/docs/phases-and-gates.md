@@ -172,4 +172,4 @@ Rules of thumb:
 
 - [Workflow Syntax](/docs/workflow-syntax) — complete reference for all forms, including phase and gate
 - [Plugins](/docs/plugins) — package reusable subcommands and compose them into workflows
-- [Batch Comparison Runs](/docs/batch-comparison-runs) — run the same workflow across multiple providers and compare results
+- [Batch Runs](/docs/batch-runs) — run the same workflow across multiple providers and compare results
