@@ -6,6 +6,7 @@
   import Breadcrumb from '../lib/components/Breadcrumb.svelte';
   import StatusBadge from '../lib/components/StatusBadge.svelte';
   import RunDialog from './RunDialog.svelte';
+  import PipelineGraph from '../lib/components/PipelineGraph.svelte';
 
   let { params } = $props();
   let name = $derived(params?.name || '');
@@ -247,7 +248,7 @@
               onclick={() => { expandedRunId = expandedRunId === run.id ? null : run.id; }}
             >
               <StatusBadge status={runStatus(run)} />
-              <span class="run-id mono">{run.id?.substring(0, 8) || '--'}</span>
+              <span class="run-id mono">#{run.id ?? '--'}</span>
               <span class="run-name">{run.name || run.workflow || '--'}</span>
               <span class="run-time text-muted">
                 {run.started_at ? new Date(run.started_at).toLocaleString() : '--'}
@@ -260,7 +261,7 @@
                 {formatTokens(run.tokens_in, run.tokens_out)}
               </span>
               <span class="run-cost mono">
-                {formatCost(run.cost)}
+                {formatCost(run.cost_usd)}
               </span>
               <span class="run-chevron">
                 {#if expandedRunId === run.id}
@@ -272,8 +273,7 @@
             </button>
             {#if expandedRunId === run.id}
               <div class="run-detail">
-                <p class="text-muted">Pipeline graph — coming in Task 5</p>
-                <p class="mono" style="font-size: 11px; margin-top: 4px;">Run ID: {run.id}</p>
+                <PipelineGraph runId={run.id} />
               </div>
             {/if}
           {/each}
@@ -468,12 +468,14 @@
   }
 
   .run-detail {
-    padding: 16px;
+    padding: 0;
     border: 1px solid rgba(0, 229, 255, 0.3);
     border-top: none;
     border-radius: 0 0 6px 6px;
     background: var(--bg-elevated);
     margin-bottom: 8px;
+    min-height: 300px;
+    overflow: hidden;
   }
 
   .empty-state {
@@ -493,19 +495,6 @@
   .editor-container {
     flex: 1;
     overflow: hidden;
-  }
-  .source-fallback {
-    flex: 1;
-    width: 100%;
-    resize: none;
-    background: var(--bg-deep);
-    color: var(--text-primary);
-    border: none;
-    padding: 16px 24px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.6;
-    outline: none;
   }
 
   /* Metadata */
