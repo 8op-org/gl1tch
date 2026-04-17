@@ -22,6 +22,7 @@ export function saveWorkflow(name, source) {
 export function runWorkflow(name, params) {
   return request(`/api/workflows/${encodeURIComponent(name)}/run`, { method: 'POST', body: JSON.stringify({ params }) });
 }
+export function listWorkflowRuns(name) { return request(`/api/workflows/${encodeURIComponent(name)}/runs`); }
 export function listRuns() { return request('/api/runs'); }
 export function getRun(id) { return request(`/api/runs/${id}`); }
 export function getResult(path) { return request(`/api/results/${path}`); }

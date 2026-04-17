@@ -74,6 +74,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/workflows/{name}", s.handleGetWorkflow)
 	s.mux.HandleFunc("PUT /api/workflows/{name}", s.handlePutWorkflow)
 	s.mux.HandleFunc("POST /api/workflows/{name}/run", s.handleRunWorkflow)
+	s.mux.HandleFunc("GET /api/workflows/{name}/runs", s.handleListWorkflowRuns)
 	s.mux.HandleFunc("GET /api/runs", s.handleListRuns)
 	s.mux.HandleFunc("GET /api/runs/{id}", s.handleGetRun)
 	s.mux.HandleFunc("GET /api/runs/{id}/tree", s.handleGetRunTree)

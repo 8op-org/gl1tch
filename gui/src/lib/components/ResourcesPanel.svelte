@@ -143,6 +143,7 @@
           <th>Type</th>
           <th>Ref</th>
           <th>Pin</th>
+          <th>Status</th>
           <th>Fetched</th>
           <th></th>
         </tr>
@@ -154,6 +155,15 @@
             <td class="mono">{r.type}</td>
             <td class="mono">{r.ref ?? ''}</td>
             <td class="mono" title={r.pin ?? ''}>{shortPin(r.pin)}</td>
+            <td class="status-cell">
+              {#if busyName === r.name}
+                <span class="status-dot busy-dot"></span><span class="text-muted">busy</span>
+              {:else if r.fetched}
+                <span class="status-dot synced"></span><span class="status-synced">synced</span>
+              {:else}
+                <span class="status-dot stale"></span><span class="status-stale">stale</span>
+              {/if}
+            </td>
             <td class="text-muted">{formatFetched(r.fetched)}</td>
             <td class="actions">
               <button
@@ -259,6 +269,37 @@
     vertical-align: middle;
   }
   .resources-table tr.busy { opacity: 0.5; }
+  .status-cell {
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .status-dot.synced {
+    background: var(--neon-green);
+    box-shadow: 0 0 4px rgba(0, 255, 159, 0.4);
+  }
+  .status-dot.stale {
+    background: var(--neon-amber);
+    box-shadow: 0 0 4px rgba(255, 184, 0, 0.4);
+  }
+  .status-dot.busy-dot {
+    background: var(--neon-cyan);
+    box-shadow: 0 0 4px rgba(0, 255, 255, 0.4);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .status-synced { color: var(--neon-green); }
+  .status-stale { color: var(--neon-amber); }
   .resources-table .actions {
     display: flex;
     gap: 6px;

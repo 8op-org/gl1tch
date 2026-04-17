@@ -19,8 +19,7 @@
   --glow-green: 0 0 8px rgba(0, 255, 159, 0.4);
   --glow-magenta: 0 0 8px rgba(255, 45, 111, 0.4);
   --glow-amber: 0 0 8px rgba(255, 184, 0, 0.4);
-  --sidebar-width-collapsed: 56px;
-  --sidebar-width-expanded: 200px;
+  --sidebar-width-collapsed: 48px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -190,38 +189,6 @@ pre code.hljs {
   padding: 12px 16px;
   font-size: 12px;
   overflow-x: auto;
-}
-
-/* ── CodeMirror theme overrides ─────────────────────────────────────── */
-.cm-editor {
-  background: var(--bg-deep) !important;
-}
-.cm-editor .cm-scroller {
-  font-family: var(--font-mono) !important;
-  font-size: 13px !important;
-  line-height: 1.6 !important;
-}
-.cm-editor .cm-gutters {
-  background: var(--bg-surface) !important;
-  border-right: 1px solid var(--border) !important;
-  color: var(--text-muted) !important;
-}
-.cm-editor .cm-activeLineGutter {
-  background: var(--bg-elevated) !important;
-}
-.cm-editor .cm-activeLine {
-  background: rgba(0, 229, 255, 0.03) !important;
-}
-.cm-editor .cm-selectionBackground,
-.cm-editor .cm-content ::selection {
-  background: rgba(0, 229, 255, 0.15) !important;
-}
-.cm-editor .cm-cursor {
-  border-left-color: var(--neon-cyan) !important;
-}
-.cm-editor .cm-matchingBracket {
-  background: rgba(0, 229, 255, 0.12) !important;
-  outline: 1px solid rgba(0, 229, 255, 0.3);
 }
 
 /* ── Rendered content (markdown, JSON, file previews) ───────────────── */

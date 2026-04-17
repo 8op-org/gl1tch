@@ -89,6 +89,51 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(runs)
 }
 
+func (s *Server) handleListWorkflowRuns(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]runEntry{})
+		return
+	}
+	name := r.PathValue("name")
+	rows, err := s.store.DB().Query(
+		`SELECT id, kind, name, COALESCE(input,''), COALESCE(output,''),
+		        COALESCE(exit_status,0), started_at, COALESCE(finished_at,0),
+		        COALESCE(workflow_file,''), COALESCE(repo,''), COALESCE(model,''),
+		        COALESCE(tokens_in,0), COALESCE(tokens_out,0), COALESCE(cost_usd,0),
+		        COALESCE(parent_run_id,0)
+		 FROM runs WHERE workflow_name = ? ORDER BY id DESC LIMIT 100`, name,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer rows.Close()
+
+	var runs []runEntry
+	for rows.Next() {
+		var re runEntry
+		if err := rows.Scan(&re.ID, &re.Kind, &re.Name, &re.Input, &re.Output,
+			&re.ExitStatus, &re.StartedAt, &re.FinishedAt,
+			&re.WorkflowFile, &re.Repo, &re.Model,
+			&re.TokensIn, &re.TokensOut, &re.CostUSD, &re.ParentRunID); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		runs = append(runs, re)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	if runs == nil {
+		runs = []runEntry{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(runs)
+}
+
 func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	if s.store == nil {
 		http.Error(w, "store not available", 500)
