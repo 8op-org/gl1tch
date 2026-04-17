@@ -236,16 +236,67 @@
     }
   }
 
+  // Compare steps to detect meaningful changes
+  function stepsFingerprint(stepsArr) {
+    return stepsArr.map(s => `${s.step_id}:${s.exit_status ?? 'null'}:${s.kind}`).join('|');
+  }
+
+  let lastFingerprint = '';
+
+  // Update step data on existing layout nodes without re-layout
+  function updateNodeData(newSteps) {
+    const stepMap = {};
+    for (const s of newSteps) stepMap[s.step_id] = s;
+
+    layoutNodes = layoutNodes.map(n => ({
+      ...n,
+      step: stepMap[n.step.step_id] || n.step,
+    }));
+
+    // Update edge colors based on new step statuses
+    layoutEdges = layoutEdges.map((e, i) => {
+      // Re-derive color from source step if we can find it
+      return e; // Edge colors are baked from layout — keep them stable
+    });
+
+    // Update selectedStep if panel is open
+    if (selectedStep) {
+      const updated = stepMap[selectedStep.step_id];
+      if (updated) selectedStep = updated;
+    }
+
+    steps = newSteps;
+  }
+
   // Fetch data and layout
-  async function loadGraph() {
-    loading = true;
-    error = null;
-    selectedStep = null;
+  async function loadGraph(isInitial = true) {
+    if (isInitial) {
+      loading = true;
+      error = null;
+    }
 
     // If externalSteps provided, skip fetch
     if (externalSteps) {
+      const fp = stepsFingerprint(externalSteps);
+      if (!isInitial && fp === lastFingerprint) {
+        // Only step data changed (output, tokens) — update in-place
+        updateNodeData(externalSteps);
+        return;
+      }
+
+      const needsLayout = isInitial || externalSteps.length !== steps.length ||
+        externalSteps.some((s, i) => !steps[i] || s.step_id !== steps[i].step_id);
+
       steps = externalSteps;
-      await doLayout(steps);
+      lastFingerprint = fp;
+
+      if (needsLayout) {
+        if (isInitial) selectedStep = null;
+        await doLayout(steps);
+      } else {
+        // Status changed but same nodes — update data without re-layout
+        updateNodeData(externalSteps);
+      }
       loading = false;
       return;
     }
@@ -254,6 +305,7 @@
       const data = await getRun(runId);
       run = data.run || data;
       steps = data.steps || [];
+      if (isInitial) selectedStep = null;
       await doLayout(steps);
     } catch (e) {
       error = e.message;
@@ -263,12 +315,26 @@
     }
   }
 
+  // Track previous values to detect actual changes
+  let prevRunId = undefined;
+  let prevStepsRef = undefined;
+
   // Reload when runId or externalSteps changes
   $effect(() => {
-    if (externalSteps) {
-      loadGraph();
-    } else if (runId) {
-      loadGraph();
+    const currentRunId = runId;
+    const currentSteps = externalSteps;
+
+    if (currentSteps) {
+      if (currentSteps !== prevStepsRef) {
+        const isInitial = prevStepsRef === undefined;
+        prevStepsRef = currentSteps;
+        prevRunId = currentRunId;
+        loadGraph(isInitial);
+      }
+    } else if (currentRunId && currentRunId !== prevRunId) {
+      prevRunId = currentRunId;
+      prevStepsRef = undefined;
+      loadGraph(true);
     }
   });
 
@@ -439,6 +505,7 @@
     position: relative;
     cursor: grab;
     min-height: 200px;
+    transition: flex 300ms ease;
   }
 
   .graph-canvas:active {
@@ -481,6 +548,12 @@
     background: var(--bg-surface);
     overflow-y: auto;
     height: 100%;
+    animation: slide-in 300ms ease;
+  }
+
+  @keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
   }
 
   .graph-loading {
