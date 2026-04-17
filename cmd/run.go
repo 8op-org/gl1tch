@@ -25,6 +25,7 @@ var (
 	runCompare        bool
 	runReviewCriteria string
 	runWorkflowsDir   string
+	runObjective      string
 )
 
 var runCmd = &cobra.Command{
@@ -42,6 +43,7 @@ func init() {
 	runCmd.Flags().StringVar(&runReviewCriteria, "review-criteria", "", "comma-separated review criteria for comparison")
 	runCmd.Flags().StringVar(&runResultsDir, "results-dir", "", "output directory for results (defaults to <workspace>/results)")
 	runCmd.Flags().StringVar(&runWorkflowsDir, "workflows-dir", "", "directory for resolving call-workflow targets (defaults to workflow file's directory)")
+	runCmd.Flags().StringVar(&runObjective, "objective", "", "objective statement for comparison (required with --variant)")
 	runCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		// Cobra hands the full raw arg slice to HelpFunc, including the
 		// subcommand name and any flag tokens. Pick the first non-flag
@@ -183,7 +185,10 @@ func runRun(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "WARN: --variant needs at least 2 variants to compare, ignoring\n")
 	}
 	if len(runVariants) > 1 {
-		injectImplicitCompare(w, runVariants, runReviewCriteria)
+		if runObjective == "" {
+			return fmt.Errorf("--objective is required when using --variant (what is this comparison measuring?)")
+		}
+		injectImplicitCompare(w, runVariants, runReviewCriteria, runObjective)
 	}
 
 	// Pre-create the parent run row; exit status finalized on defer.
@@ -317,7 +322,7 @@ func resolveWorkflowPath(name string) (string, error) {
 
 // injectImplicitCompare wraps every LLM step (not inside an existing compare) in
 // an implicit compare block with one branch per variant.
-func injectImplicitCompare(w *pipeline.Workflow, variants []string, reviewCriteria string) {
+func injectImplicitCompare(w *pipeline.Workflow, variants []string, reviewCriteria string, objective string) {
 	var criteria []string
 	if reviewCriteria != "" {
 		criteria = strings.Split(reviewCriteria, ",")
@@ -346,6 +351,7 @@ func injectImplicitCompare(w *pipeline.Workflow, variants []string, reviewCriter
 			}
 			original.Form = "compare"
 			original.CompareBranches = branches
+			original.CompareObjective = objective
 			original.LLM = nil
 			if len(criteria) > 0 {
 				original.CompareReview = &pipeline.ReviewConfig{Criteria: criteria}
@@ -374,6 +380,7 @@ func injectImplicitCompare(w *pipeline.Workflow, variants []string, reviewCriter
 			}
 			original.Form = "compare"
 			original.CompareBranches = branches
+			original.CompareObjective = objective
 			original.LLM = nil
 			if len(criteria) > 0 {
 				original.CompareReview = &pipeline.ReviewConfig{Criteria: criteria}

@@ -280,6 +280,90 @@ func Run(ctx context.Context, opts RunOpts) error {
 		fmt.Printf("  %s: %s/manifest.md (winner: %s iter %d)\n", item, itemDir, m.BestVariant, m.BestIteration)
 	}
 
+	// CLEAR Review: batch-level reflection
+	if opts.Config.ProviderRegistry != nil && opts.Config.DefaultModel != "" {
+		fmt.Printf("\n=========================================\n")
+		fmt.Printf("BATCH REFLECTION\n")
+		fmt.Printf("=========================================\n")
+
+		var summaries strings.Builder
+		for _, item := range opts.Items {
+			itemDir := filepath.Join(resultsBase, item)
+			m, err := GenerateManifest(itemDir, item, opts.Variants, opts.Iterations)
+			if err != nil || m.BestVariant == "" {
+				continue
+			}
+			fmt.Fprintf(&summaries, "Item %s: winner=%s (%d/%d)\n", item, m.BestVariant, m.BestScore, m.BestTotal)
+		}
+
+		if summaries.Len() > 0 {
+			reflectionPrompt := fmt.Sprintf(`You are reviewing the results of a batch comparison across multiple items and variants.
+
+Batch summary:
+%s
+Variants tested: %s
+
+Produce a structured batch learning with EXACTLY this format:
+
+FINDING: <one sentence — what pattern emerged across all items?>
+MODEL_INSIGHT: <for each variant, one sentence about consistency/reliability>
+CONFIDENCE: <high|medium|low — how consistent were results across items?>
+RECOMMENDATION: <one sentence — what should future batch runs do differently?>`, summaries.String(), strings.Join(opts.Variants, ", "))
+
+			reflectWf := &pipeline.Workflow{
+				Name: "batch-reflection",
+				Steps: []pipeline.Step{{
+					ID: "reflect",
+					LLM: &pipeline.LLMStep{
+						Prompt: reflectionPrompt,
+						Model:  opts.Config.DefaultModel,
+					},
+				}},
+			}
+			for i := range reflectWf.Steps {
+				reflectWf.Items = append(reflectWf.Items, pipeline.WorkflowItem{Step: &reflectWf.Steps[i]})
+			}
+
+			result, err := pipeline.Run(reflectWf, "", opts.Config.DefaultModel, nil, opts.Config.ProviderRegistry, pipeline.RunOpts{
+				Telemetry:        opts.Config.Telemetry,
+				ProviderResolver: opts.Config.ProviderResolver,
+				Workspace:        opts.Config.Workspace,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "WARN: batch reflection failed: %v\n", err)
+			} else {
+				fmt.Printf("\n%s\n", result.Output)
+
+				if opts.Config.Telemetry != nil {
+					finding, confidence, recommendation := "", "", ""
+					for _, line := range strings.Split(result.Output, "\n") {
+						line = strings.TrimSpace(line)
+						if strings.HasPrefix(line, "FINDING:") {
+							finding = strings.TrimSpace(strings.TrimPrefix(line, "FINDING:"))
+						} else if strings.HasPrefix(line, "CONFIDENCE:") {
+							confidence = strings.TrimSpace(strings.TrimPrefix(line, "CONFIDENCE:"))
+						} else if strings.HasPrefix(line, "RECOMMENDATION:") {
+							recommendation = strings.TrimSpace(strings.TrimPrefix(line, "RECOMMENDATION:"))
+						}
+					}
+
+					opts.Config.Telemetry.IndexLearning(context.Background(), esearch.LearningDoc{
+						RunID:          fmt.Sprintf("batch-%d", parentID),
+						Objective:      "batch aggregate",
+						Scope:          "batch",
+						Finding:        finding,
+						Confidence:     confidence,
+						Recommendation: recommendation,
+						ModelsTested:   opts.Variants,
+						WorkflowName:   "batch",
+						Workspace:      opts.Config.Workspace,
+						Timestamp:      time.Now().UTC().Format(time.RFC3339),
+					})
+				}
+			}
+		}
+	}
+
 	return nil
 }
 

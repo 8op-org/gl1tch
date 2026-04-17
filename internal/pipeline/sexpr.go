@@ -1080,6 +1080,7 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 			s.Form = "compare"
 			s.CompareBranches = cmp.CompareBranches
 			s.CompareReview = cmp.CompareReview
+			s.CompareObjective = cmp.CompareObjective
 		case "plugin":
 			pc, err := convertPluginCall(child, defs)
 			if err != nil {

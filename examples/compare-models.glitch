@@ -3,7 +3,7 @@
 ;; Run with: glitch workflow run compare-models --set topic="Go error handling"
 ;;
 ;; Or use --variant for ad-hoc comparison:
-;;   glitch workflow run compare-models --variant ollama:qwen2.5:7b --variant claude
+;;   glitch workflow run compare-models --variant ollama:qwen2.5:7b --variant claude --objective "find best explainer"
 
 (def model "qwen2.5:7b")
 
@@ -12,6 +12,7 @@
 
   (step "explain"
     (compare
+      :objective "find which model explains topics most clearly and accurately"
       (branch "local"
         (llm :model "qwen2.5:7b"
           :prompt "Explain ~param.topic in 3 sentences."))

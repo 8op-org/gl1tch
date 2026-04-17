@@ -1703,6 +1703,7 @@ func TestSexprWorkflow_CompareBasic(t *testing.T) {
 	  :description "compare smoke"
 	  (step "pick"
 	    (compare
+	      :objective "test fast vs slow"
 	      (branch "fast" (llm :prompt "fast answer"))
 	      (branch "slow" (llm :prompt "slow answer")))))
 	`
@@ -1733,6 +1734,7 @@ func TestSexprWorkflow_CompareMultiStep(t *testing.T) {
 	  :description "multi-step branches"
 	  (compare
 	    :id "impl"
+	    :objective "test multi-step branches"
 	    (branch "local"
 	      (step "plan" (llm :prompt "plan locally"))
 	      (step "code" (run "echo done")))
@@ -1780,6 +1782,7 @@ func TestSexprWorkflow_CompareCustomPrompt(t *testing.T) {
 	  :description "custom review"
 	  (step "tone"
 	    (compare
+	      :objective "test tone comparison"
 	      (branch "formal" (llm :prompt "Write formally"))
 	      (branch "casual" (llm :prompt "Write casually"))
 	      (review :prompt "Which is better?" :model "qwen2.5:7b"))))

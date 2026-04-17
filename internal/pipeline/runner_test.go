@@ -1075,6 +1075,7 @@ func TestRun_Compare_BranchFailure(t *testing.T) {
 	  :description "one branch fails"
 	  (step "pick"
 	    (compare
+	      :objective "test branch failure handling"
 	      (branch "good" (run "echo works"))
 	      (branch "bad" (run "exit 1")))))
 	`
@@ -1096,6 +1097,7 @@ func TestRun_Compare_AllBranchesFail(t *testing.T) {
 	  :description "both fail"
 	  (step "pick"
 	    (compare
+	      :objective "test all branches failing"
 	      (branch "a" (run "exit 1"))
 	      (branch "b" (run "exit 2")))))
 	`
@@ -1114,6 +1116,7 @@ func TestRun_Compare_StepAccessVariant(t *testing.T) {
 	  :description "access specific variant output"
 	  (compare
 	    :id "impl"
+	    :objective "test variant access"
 	    (branch "fast"
 	      (step "out" (run "echo fast-output")))
 	    (branch "slow"

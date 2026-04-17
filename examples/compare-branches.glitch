@@ -9,6 +9,7 @@
 
   (compare
     :id "analysis"
+    :objective "determine which analysis strategy yields more actionable insights"
     (branch "breadth-first"
       (step "scan"
         (llm :model "qwen2.5:7b"

@@ -1261,6 +1261,9 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 	if len(step.CompareBranches) < 2 {
 		return nil, fmt.Errorf("compare %s: need at least 2 branches", step.ID)
 	}
+	if step.CompareObjective == "" {
+		return nil, fmt.Errorf("compare %s: :objective is required — what is this comparison measuring?", step.ID)
+	}
 
 	type branchResult struct {
 		name    string
@@ -1373,6 +1376,97 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 	rctx.steps[step.ID+"/__scores"] = reviewScores
 	rctx.mu.Unlock()
 
+	// CLEAR Review phase: run reflection to generate structured learning
+	if rctx.reg != nil && step.CompareObjective != "" && reviewScores != "" {
+		reflectionPrompt := buildReflectionPrompt(step.CompareObjective, reviewScores, branchOutputs, winnerName)
+		reflectStep := Step{
+			ID: step.ID + "-reflection",
+			LLM: &LLMStep{
+				Prompt: reflectionPrompt,
+				Model:  rctx.defaultModel,
+			},
+		}
+		if step.CompareReview != nil && step.CompareReview.Model != "" {
+			reflectStep.LLM.Model = step.CompareReview.Model
+		}
+		if step.CompareReview != nil && step.CompareReview.Provider != "" {
+			reflectStep.LLM.Provider = step.CompareReview.Provider
+		}
+
+		reflectOutcome, err := runSingleStep(ctx, rctx, reflectStep)
+		if err != nil {
+			ui.CompareWarn(fmt.Sprintf("compare %s: reflection failed: %v", step.ID, err))
+		} else {
+			reflection := ParseReflection(reflectOutcome.output)
+
+			// Store reflection output in steps for downstream access
+			rctx.mu.Lock()
+			rctx.steps[step.ID+"/__reflection"] = reflectOutcome.output
+			rctx.steps[step.ID+"/__finding"] = reflection.Finding
+			rctx.mu.Unlock()
+
+			// Print learning to terminal
+			fmt.Printf("\n── Learning ─────────────────────────────\n")
+			fmt.Printf("Finding: %s\n", reflection.Finding)
+			fmt.Printf("Confidence: %s\n", reflection.Confidence)
+			fmt.Printf("Recommendation: %s\n", reflection.Recommendation)
+
+			// Index learning to ES
+			if rctx.tel != nil {
+				margin := 0
+				scores := ParseCrossReview(reviewScores)
+				if len(scores) >= 2 {
+					bestScore, secondScore := 0, 0
+					for _, s := range scores {
+						if s.Winner {
+							bestScore = s.Passed
+						} else if s.Passed > secondScore {
+							secondScore = s.Passed
+						}
+					}
+					margin = bestScore - secondScore
+				}
+
+				modelsTested := make([]string, 0, len(step.CompareBranches))
+				for _, br := range step.CompareBranches {
+					for _, s := range br.Steps {
+						if s.LLM != nil {
+							model := s.LLM.Model
+							if model == "" {
+								model = rctx.defaultModel
+							}
+							modelsTested = append(modelsTested, model)
+							break
+						}
+					}
+				}
+
+				var criteria []string
+				if step.CompareReview != nil {
+					criteria = step.CompareReview.Criteria
+				}
+
+				rctx.tel.IndexLearning(context.Background(), esearch.LearningDoc{
+					RunID:          rctx.runID,
+					CompareID:      step.ID,
+					Objective:      step.CompareObjective,
+					Scope:          "compare",
+					Finding:        reflection.Finding,
+					ModelInsight:   reflection.ModelInsight,
+					Confidence:     reflection.Confidence,
+					Recommendation: reflection.Recommendation,
+					Criteria:       criteria,
+					Winner:         winnerName,
+					Margin:         margin,
+					ModelsTested:   modelsTested,
+					WorkflowName:   rctx.workflow,
+					Workspace:      rctx.workspace,
+					Timestamp:      time.Now().UTC().Format(time.RFC3339),
+				})
+			}
+		}
+	}
+
 	composite := &stepOutcome{output: winnerOutput}
 	for _, r := range results {
 		if r.outcome != nil && r.outcome.isLLM {
@@ -1410,7 +1504,7 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 		reviewProvider = step.CompareReview.Provider
 	}
 
-	prompt := buildReviewPrompt(step.CompareReview, branchOutputs)
+	prompt := buildReviewPrompt(step.CompareReview, branchOutputs, step.CompareObjective)
 
 	reviewStep := Step{
 		ID: step.ID + "-review",
@@ -1446,6 +1540,8 @@ func runCompareReview(ctx context.Context, rctx *runCtx, step Step, branchOutput
 				CompareID:    step.ID,
 				Scope:        "step",
 				Workspace:    rctx.workspace,
+				Phase:        "action",
+				Objective:    step.CompareObjective,
 				Timestamp:    time.Now().UTC().Format(time.RFC3339),
 			})
 		}

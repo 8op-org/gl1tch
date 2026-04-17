@@ -15,6 +15,7 @@ type Manifest struct {
 	BestScore     int
 	BestTotal     int
 	Scores        []IterationScores
+	Learnings     string // batch reflection summary
 }
 
 // IterationScores holds per-variant scores for one iteration.
@@ -168,6 +169,10 @@ func WriteManifest(issueDir string, m *Manifest, variants []string, iterations i
 		if data, err := os.ReadFile(crPath); err == nil {
 			fmt.Fprintf(&b, "### Iteration %d\n\n%s\n\n", iter, strings.TrimSpace(string(data)))
 		}
+	}
+
+	if m.Learnings != "" {
+		fmt.Fprintf(&b, "\n## Learnings\n\n%s\n", m.Learnings)
 	}
 
 	return os.WriteFile(filepath.Join(issueDir, "manifest.md"), []byte(b.String()), 0o644)

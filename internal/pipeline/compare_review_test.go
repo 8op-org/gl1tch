@@ -10,7 +10,7 @@ func TestBuildReviewPrompt_Default(t *testing.T) {
 		"fast": "quick answer here",
 		"slow": "detailed answer here",
 	}
-	prompt := buildReviewPrompt(nil, branches)
+	prompt := buildReviewPrompt(nil, branches, "")
 	if !strings.Contains(prompt, "FAST") {
 		t.Error("prompt should contain branch name 'FAST'")
 	}
@@ -34,7 +34,7 @@ func TestBuildReviewPrompt_Criteria(t *testing.T) {
 		"b": "output b",
 	}
 	cfg := &ReviewConfig{Criteria: []string{"accuracy", "completeness"}}
-	prompt := buildReviewPrompt(cfg, branches)
+	prompt := buildReviewPrompt(cfg, branches, "")
 	if !strings.Contains(prompt, "accuracy") {
 		t.Error("prompt should contain criterion 'accuracy'")
 	}
@@ -52,7 +52,7 @@ func TestBuildReviewPrompt_CustomPrompt(t *testing.T) {
 		"casual": "Hey dude",
 	}
 	cfg := &ReviewConfig{Prompt: "Which matches brand voice?"}
-	prompt := buildReviewPrompt(cfg, branches)
+	prompt := buildReviewPrompt(cfg, branches, "")
 	if !strings.Contains(prompt, "Which matches brand voice?") {
 		t.Error("prompt should contain custom text")
 	}
