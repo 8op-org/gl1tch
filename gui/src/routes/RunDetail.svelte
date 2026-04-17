@@ -6,6 +6,7 @@
   import Breadcrumb from '../lib/components/Breadcrumb.svelte';
   import StatusBadge from '../lib/components/StatusBadge.svelte';
   import PipelineGraph from '../lib/components/PipelineGraph.svelte';
+  import ArtifactsBar from '../lib/components/ArtifactsBar.svelte';
 
   let { params } = $props();
   let runId = $derived(Number(params?.id));
@@ -197,6 +198,7 @@
       <PipelineGraph {runId} externalSteps={steps} />
     {/if}
   </div>
+  <ArtifactsBar {steps} />
 </div>
 
 <style>
