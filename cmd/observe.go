@@ -16,12 +16,14 @@ var (
 	observeRepo     string
 	observeProvider string
 	observeModel    string
+	observeDepth    int
 )
 
 func init() {
 	observeCmd.Flags().StringVar(&observeRepo, "repo", "", "scope query to a specific repository (e.g. elastic/kibana)")
 	observeCmd.Flags().StringVar(&observeProvider, "provider", "copilot", "LLM provider for query generation and synthesis")
 	observeCmd.Flags().StringVar(&observeModel, "model", "", "model name (provider-specific)")
+	observeCmd.Flags().IntVar(&observeDepth, "depth", 1, "BFS traversal depth for graph queries")
 	rootCmd.AddCommand(observeCmd)
 }
 
@@ -45,6 +47,9 @@ var observeCmd = &cobra.Command{
 		engine := observer.NewQueryEngine(es, llm)
 		if observeRepo != "" {
 			engine = engine.WithRepo(observeRepo)
+		}
+		if observeDepth > 0 {
+			engine.WithDepth(observeDepth)
 		}
 		answer, err := engine.Answer(cmd.Context(), question)
 		if err != nil {

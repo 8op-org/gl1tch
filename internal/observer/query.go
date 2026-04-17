@@ -14,17 +14,60 @@ import (
 // could be Ollama, Copilot, Claude, or any other provider.
 type LLMFunc func(prompt string) (string, error)
 
+// EdgeHit represents a single edge in the code graph.
+type EdgeHit struct {
+	SourceID string `json:"source_id"`
+	TargetID string `json:"target_id"`
+	Kind     string `json:"kind"`
+}
+
+// graphBFS performs breadth-first traversal on edges from a starting symbol.
+func graphBFS(edgeFetcher func(symbolID, edgeKind string) []EdgeHit, startID, edgeKind string, depth int) []string {
+	if edgeFetcher == nil || depth < 1 {
+		return nil
+	}
+	visited := map[string]bool{startID: true}
+	frontier := []string{startID}
+	var collected []string
+	for d := 0; d < depth && len(frontier) > 0; d++ {
+		var next []string
+		for _, id := range frontier {
+			edges := edgeFetcher(id, edgeKind)
+			for _, e := range edges {
+				targetID := e.TargetID
+				if e.TargetID == id {
+					targetID = e.SourceID
+				}
+				if !visited[targetID] {
+					visited[targetID] = true
+					next = append(next, targetID)
+					collected = append(collected, targetID)
+				}
+			}
+		}
+		frontier = next
+	}
+	return collected
+}
+
 // QueryEngine bridges natural language questions to Elasticsearch and
 // synthesizes answers via an LLM.
 type QueryEngine struct {
-	es   *esearch.Client
-	llm  LLMFunc
-	repo string
+	es    *esearch.Client
+	llm   LLMFunc
+	repo  string
+	depth int
 }
 
 // WithRepo returns a copy of the engine scoped to a specific repository.
 func (q *QueryEngine) WithRepo(repo string) *QueryEngine {
-	return &QueryEngine{es: q.es, llm: q.llm, repo: repo}
+	return &QueryEngine{es: q.es, llm: q.llm, repo: repo, depth: q.depth}
+}
+
+// WithDepth sets the BFS traversal depth for graph queries.
+func (q *QueryEngine) WithDepth(d int) *QueryEngine {
+	q.depth = d
+	return q
 }
 
 // NewQueryEngine returns a new QueryEngine using the given LLM function.
@@ -39,6 +82,17 @@ func allIndices() []string {
 		esearch.IndexToolCalls,
 		esearch.IndexLLMCalls,
 	}
+}
+
+func allIndicesForRepo(repo string) []string {
+	base := allIndices()
+	if repo != "" {
+		base = append(base,
+			esearch.IndexSymbolsPrefix+repo,
+			esearch.IndexEdgesPrefix+repo,
+		)
+	}
+	return base
 }
 
 // knowledgeIndex returns the knowledge index name for a repo (e.g. "elastic/oblt-cli" → "glitch-knowledge-oblt-cli").
@@ -77,11 +131,12 @@ func (q *QueryEngine) searchWithFallback(ctx context.Context, question string) (
 		raw, _ = json.Marshal(defaultQueryWithRepo(question, q.repo))
 	}
 
-	resp, err := q.es.Search(ctx, allIndices(), json.RawMessage(raw))
+	indices := allIndicesForRepo(q.repo)
+	resp, err := q.es.Search(ctx, indices, json.RawMessage(raw))
 	if err != nil {
 		// Retry with the plain default query
 		fallbackRaw, _ := json.Marshal(defaultQueryWithRepo(question, q.repo))
-		resp, err = q.es.Search(ctx, allIndices(), json.RawMessage(fallbackRaw))
+		resp, err = q.es.Search(ctx, indices, json.RawMessage(fallbackRaw))
 		if err != nil {
 			// Index-not-found or similar — return empty results
 			resp = &esearch.SearchResponse{}

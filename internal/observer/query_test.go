@@ -136,6 +136,70 @@ func contains(haystack, needle string) bool {
 	return len(haystack) > 0 && len(needle) > 0 && strings.Contains(haystack, needle)
 }
 
+func TestAllIndicesForRepo(t *testing.T) {
+	indices := allIndicesForRepo("gl1tch")
+	hasSymbols := false
+	hasEdges := false
+	for _, idx := range indices {
+		if idx == esearch.IndexSymbolsPrefix+"gl1tch" {
+			hasSymbols = true
+		}
+		if idx == esearch.IndexEdgesPrefix+"gl1tch" {
+			hasEdges = true
+		}
+	}
+	if !hasSymbols {
+		t.Error("missing symbols index")
+	}
+	if !hasEdges {
+		t.Error("missing edges index")
+	}
+}
+
+func TestAllIndicesForRepoEmpty(t *testing.T) {
+	indices := allIndicesForRepo("")
+	// Should equal allIndices() — no graph indices added
+	base := allIndices()
+	if len(indices) != len(base) {
+		t.Errorf("empty repo: got %d indices, want %d", len(indices), len(base))
+	}
+}
+
+func TestGraphBFSEmpty(t *testing.T) {
+	results := graphBFS(nil, "sym1", "calls", 2)
+	if len(results) != 0 {
+		t.Errorf("nil fetcher: got %d, want 0", len(results))
+	}
+}
+
+func TestGraphBFSTraversal(t *testing.T) {
+	edges := map[string][]EdgeHit{
+		"a": {{SourceID: "a", TargetID: "b", Kind: "calls"}, {SourceID: "a", TargetID: "c", Kind: "calls"}},
+		"b": {{SourceID: "b", TargetID: "d", Kind: "calls"}},
+	}
+	fetcher := func(id, kind string) []EdgeHit { return edges[id] }
+
+	result := graphBFS(fetcher, "a", "calls", 1)
+	if len(result) != 2 {
+		t.Errorf("depth 1: got %d, want 2", len(result))
+	}
+
+	result2 := graphBFS(fetcher, "a", "calls", 2)
+	if len(result2) != 3 {
+		t.Errorf("depth 2: got %d, want 3", len(result2))
+	}
+}
+
+func TestGraphBFSZeroDepth(t *testing.T) {
+	fetcher := func(id, kind string) []EdgeHit {
+		return []EdgeHit{{SourceID: "a", TargetID: "b", Kind: "calls"}}
+	}
+	results := graphBFS(fetcher, "a", "calls", 0)
+	if len(results) != 0 {
+		t.Errorf("zero depth: got %d, want 0", len(results))
+	}
+}
+
 func TestAllIndices(t *testing.T) {
 	indices := allIndices()
 	want := []string{
