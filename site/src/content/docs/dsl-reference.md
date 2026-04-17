@@ -21,7 +21,7 @@ The forms below extend your workflows with data pipelines, conditional logic, na
       (llm :model "qwen2.5:7b"
         :prompt ```
           Turn these commits into a changelog:
-          {{step "commits"}}
+          ~(step commits)
           ```)))
 ````
 
@@ -31,12 +31,12 @@ Inside a thread, SDK forms like `search`, `flatten`, and `filter` are auto-wrapp
 (-> (search :index "docs" :query "{\"match_all\":{}}" :ndjson)
     (filter
       (step "has-content"
-        (run "echo '{{.param.item}}' | jq -e '.content | length > 0'")))
+        (run "echo '~item' | jq -e '.content | length > 0'")))
     (step "summarize"
       (llm :model "qwen2.5:7b"
         :prompt ```
           Summarize these documents:
-          {{step "has-content"}}
+          ~(step has-content)
           ```)))
 ````
 
@@ -54,10 +54,10 @@ Iterates over a step's output (one item per line), runs a body step for each, an
 
 (filter "files"
   (step "has-tests"
-    (run "test -f '{{.param.item | replace \".go\" \"_test.go\"}}' && echo yes")))
+    (run "test -f '~(replace \".go\" \"_test.go\" item)' && echo yes")))
 ```
 
-Inside the body step, `{{.param.item}}` is the current line and `{{.param.item_index}}` is the zero-based index — same as `map`.
+Inside the body step, `~item` is the current line and `~item_index` is the zero-based index — same as `map`.
 
 ### reduce
 
@@ -72,16 +72,16 @@ Folds over a step's output with an accumulator. The body runs once per item, and
     (llm :model "qwen2.5:7b"
       :prompt ```
         Running summary so far:
-        {{.param.accumulator}}
+        ~param.accumulator
 
         New item:
-        {{.param.item}}
+        ~item
 
         Update the summary to include the new item. Be concise.
         ```)))
 ````
 
-The body step receives `{{.param.item}}`, `{{.param.item_index}}`, and `{{.param.accumulator}}`. The accumulator starts as an empty string.
+The body step receives `~item`, `~item_index`, and `~param.accumulator`. The accumulator starts as an empty string.
 
 ## Conditionals
 
@@ -105,7 +105,7 @@ The inverse of `when`. Runs the body only if the predicate fails (exits non-zero
 (when-not "git diff --cached --quiet"
   (step "review"
     (llm :model "qwen2.5:7b"
-      :prompt "Review these staged changes: {{step \"diff\"}}")))
+      :prompt "Review these staged changes: ~(step diff)")))
 ```
 
 Use `when-not` to gate on "something has changed" patterns — `git diff --quiet` exits 0 when there are no changes.
@@ -146,14 +146,14 @@ Index a document into Elasticsearch:
 ```glitch
 (step "store"
   (index :index "summaries"
-    :doc "{{step \"summary\"}}"
-    :id "{{.param.repo}}-latest"))
+    :doc "~(step summary)"
+    :id "~param.repo-latest"))
 ```
 
 | Keyword | Required | What it does |
 |---------|----------|-------------|
 | `:index` | yes | Target index name |
-| `:doc` | yes | JSON document (template-rendered) |
+| `:doc` | yes | JSON document (unquote-rendered) |
 | `:id` | no | Explicit document `_id` |
 | `:upsert` | no | Set to `false` to skip if document exists (op_type=create) |
 | `:es` | no | Override the ES URL |
@@ -163,7 +163,7 @@ You can also auto-embed a field at index time:
 ```glitch
 (step "store-with-vectors"
   (index :index "docs"
-    :doc "{{step \"doc-json\"}}"
+    :doc "~(step doc-json)"
     :embed :field "content" :model "nomic-embed-text"))
 ```
 
@@ -191,12 +191,12 @@ Generate vector embeddings from text via Ollama.
 
 ```glitch
 (step "vectors"
-  (embed :input "{{step \"summary\"}}" :model "nomic-embed-text"))
+  (embed :input "~(step summary)" :model "nomic-embed-text"))
 ```
 
 | Keyword | Required | What it does |
 |---------|----------|-------------|
-| `:input` | yes | Text to embed (template-rendered) |
+| `:input` | yes | Text to embed (unquote-rendered) |
 | `:model` | yes | Ollama embedding model name |
 
 The output is a JSON array of floats — your embedding vector. Use it with `index :embed` for end-to-end vector search pipelines.
@@ -216,7 +216,7 @@ Converts a JSON array into NDJSON (one JSON object per line). This bridges JSON 
 
 (map "as-lines"
   (step "process"
-    (run "echo '{{.param.item}}' | jq '.message'")))
+    (run "echo '~item' | jq '.message'")))
 ```
 
 Or skip the manual `flatten` — use `:ndjson` on `search` to get line-oriented output directly.
@@ -228,31 +228,31 @@ Inside a `(->)` thread, `(flatten)` with no arguments automatically flattens the
     (flatten)
     (each
       (step "process"
-        (run "echo '{{.param.item}}' | jq '.title'"))))
+        (run "echo '~item' | jq '.title'"))))
 ```
 
-### assoc (template function)
+### assoc
 
-Sets a key on a JSON object string. Use it in templates to enrich data flowing through your pipeline:
+Sets a key on a JSON object string. Use it in unquote expressions to enrich data flowing through your pipeline:
 
 ```glitch
 (step "enrich"
-  (run "echo '{{step \"data\" | assoc \"status\" \"reviewed\"}}'"))
+  (run "echo '~(assoc :status \"reviewed\" (step data))'"))
 ```
 
-`assoc` takes the key, the value, and the JSON string (piped). It returns the updated JSON.
+`assoc` takes a keyword key, a value, and the JSON source. It returns the updated JSON.
 
-### pick (template function)
+### pick
 
 Extracts a single field from a JSON object string. Supports dot notation for nested access:
 
 ```glitch
 (step "get-title"
-  (run "echo '{{pick \"title\" (step \"issue-json\")}}'"))
+  (run "echo '~(pick :title (step issue-json))'"))
 
 ;; Nested access with dot notation
 (step "get-email"
-  (run "echo '{{pick \"author.email\" (step \"commit-json\")}}'"))
+  (run "echo '~(pick :author.email (step commit-json))'"))
 ```
 
 `pick` returns the field value as a string. If the field holds a nested object or array, it returns the JSON representation.
@@ -274,12 +274,12 @@ Extracts a single field from a JSON object string. Supports dot notation for nes
 | `(embed :input "..." :model "...")` | Generate vector embeddings via Ollama |
 | `(flatten "step-id")` | JSON array to NDJSON (one object per line) |
 
-### New template functions
+### Unquote functions
 
 | Function | Description |
 |----------|-------------|
-| `assoc "key" "val" jsonStr` | Set a field on a JSON object |
-| `pick "key" jsonStr` | Extract a field (supports dot notation) |
+| `~(assoc :key "val" source)` | Set a field on a JSON object |
+| `~(pick :key source)` | Extract a field (supports dot notation) |
 
 ## Next steps
 

@@ -98,7 +98,7 @@ A minimal workspace is just a name:
 | `:model` | Default model for `(llm ...)` steps |
 | `:provider` | Default provider (`ollama`, `copilot`, `claude`, etc.) |
 | `:elasticsearch` | Default Elasticsearch URL for search/index/observe |
-| `(params :<key> "<value>")` | Key-value pairs injected as `{{.param.<key>}}` in every workflow |
+| `(params :<key> "<value>")` | Key-value pairs injected as `~param.<key>` in every workflow |
 
 ### Resource types
 
@@ -112,30 +112,30 @@ Local resources ship symlink-only. If you need a snapshot of a non-git folder, p
 
 ## Referencing resources from workflows
 
-Resources are exposed to workflows via `.resource.<name>.<field>` template bindings:
+Resources are exposed to workflows via `~resource.<name>.<field>` bindings:
 
 ```glitch
 (step "backend-status"
-  (run "cd {{.resource.backend.path}} && git status --short"))
+  (run "cd ~resource.backend.path && git status --short"))
 
 (step "frontend-head"
-  (run "git -C {{.resource.frontend.path}} rev-parse HEAD"))
+  (run "git -C ~resource.frontend.path rev-parse HEAD"))
 
 (step "tracker-info"
-  (run "gh repo view {{.resource.ops-tracker.repo}}"))
+  (run "gh repo view ~resource.ops-tracker.repo"))
 ```
 
 Available fields per type:
 
 | Expression | git | local | tracker |
 |------------|-----|-------|---------|
-| `{{.resource.<name>.path}}` | clone path | symlink path | empty |
-| `{{.resource.<name>.url}}` | git URL | empty | empty |
-| `{{.resource.<name>.ref}}` | declared ref | empty | empty |
-| `{{.resource.<name>.pin}}` | resolved SHA | empty | empty |
-| `{{.resource.<name>.repo}}` | inferred from URL if GitHub | empty | declared `:repo` |
+| `~resource.<name>.path` | clone path | symlink path | empty |
+| `~resource.<name>.url` | git URL | empty | empty |
+| `~resource.<name>.ref` | declared ref | empty | empty |
+| `~resource.<name>.pin` | resolved SHA | empty | empty |
+| `~resource.<name>.repo` | inferred from URL if GitHub | empty | declared `:repo` |
 
-Missing resources evaluate to empty string, matching `.param.missing` behavior. In global mode (no active workspace), `.resource.*` is always empty.
+Missing resources evaluate to empty string, matching `~param.missing` behavior. In global mode (no active workspace), `~resource.*` is always empty.
 
 ### Cross-resource iteration with map-resources
 
@@ -144,10 +144,10 @@ Loop over resources of a given type — parallel to `map`, but pulled from works
 ```glitch
 (map-resources :type "git"
   (step "git-status"
-    (run "cd {{.resource.item.path}} && git status --short")))
+    (run "cd ~resource.item.path && git status --short")))
 ```
 
-Each iteration binds the current resource to `.resource.item`, so `{{.resource.item.path}}`, `{{.resource.item.ref}}`, and the rest are all available in the body.
+Each iteration binds the current resource to `~resource.item`, so `~resource.item.path`, `~resource.item.ref`, and the rest are all available in the body.
 
 ## The CLI surface
 
@@ -237,12 +237,12 @@ Sub-workflow invocation via the `call-workflow` s-expr form. The runner starts a
   (step "review-each-pr"
     (call-workflow "pr-review"
       :set (repo "acme/backend")
-      :set (pr "{{.param.item}}"))))
+      :set (pr "~item"))))
 
 (step "summary"
   (llm :prompt ```
     Summarize these PR reviews:
-    {{step "review-each-pr"}}
+    ~(step review-each-pr)
     ```))
 ```
 
@@ -289,7 +289,7 @@ Params declared in `(defaults (params ...))` become template variables in every 
       :team "platform")))
 ```
 
-Any workflow can now use `{{.param.repo}}` and `{{.param.team}}` without `--set` flags. Explicit `--set` on the command line overrides workspace defaults when both are present.
+Any workflow can now use `~param.repo` and `~param.team` without `--set` flags. Explicit `--set` on the command line overrides workspace defaults when both are present.
 
 ## The workspace registry
 
@@ -332,12 +332,12 @@ glitch run build-release
 
   (map-resources :type "git"
     (step "prs"
-      (run "gh pr list --repo {{.resource.item.repo}} --json number,title,state | jq '.'")))
+      (run "gh pr list --repo ~resource.item.repo --json number,title,state | jq '.'")))
 
   (step "briefing"
     (llm :prompt ```
       Summarize open PRs across my repos as a terse bullet list:
-      {{step "prs"}}
+      ~(step prs)
       ```)))
 ```
 

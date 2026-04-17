@@ -29,21 +29,21 @@ The simplest case: send the same prompt to two models and see which one answers 
     (compare
       (branch "local"
         (llm :model "qwen2.5:7b"
-          :prompt "Explain {{.param.topic}} in 3 sentences."))
+          :prompt "Explain ~param.topic in 3 sentences."))
       (branch "large"
         (llm :model "llama3.2"
-          :prompt "Explain {{.param.topic}} in 3 sentences."))
+          :prompt "Explain ~param.topic in 3 sentences."))
       (review :criteria ("accuracy" "clarity" "conciseness"))))
 
   (step "report"
-    (save "results/compare-{{.param.topic}}.md" :from "explain")))
+    (save "results/compare-~param.topic.md" :from "explain")))
 ````
 
 What happens when you run this:
 
 1. Both branches execute — `"local"` sends the prompt to `qwen2.5:7b`, `"large"` sends it to `llama3.2`
 2. The `(review ...)` block scores each branch on your three criteria
-3. The winning branch's output becomes the step result, available downstream as `{{step "explain"}}`
+3. The winning branch's output becomes the step result, available downstream as `~(step explain)`
 4. The `(save ...)` step writes the winner to disk
 
 ## Compare strategies
@@ -58,7 +58,7 @@ Branches don't have to use different models. You can compare entirely different 
 (workflow "compare-branches"
   :description "Compare analysis strategies for a repo"
 
-  (step "files" (run "find {{.param.repo}} -name '*.go' -type f | head -20"))
+  (step "files" (run "find ~param.repo -name '*.go' -type f | head -20"))
 
   (compare
     :id "analysis"
@@ -67,31 +67,31 @@ Branches don't have to use different models. You can compare entirely different 
         (llm :model "qwen2.5:7b"
           :prompt ```
           List all packages and their responsibilities:
-          {{step "files"}}
+          ~(step files)
           ```))
       (step "summary"
         (llm :model "qwen2.5:7b"
-          :prompt "Summarize this package map:\n{{step \"scan\"}}")))
+          :prompt "Summarize this package map:\n~(step scan)")))
     (branch "depth-first"
       (step "pick"
-        (run "echo '{{step \"files\"}}' | head -5"))
+        (run "echo '~(step files)' | head -5"))
       (step "deep-dive"
         (llm :model "qwen2.5:7b"
           :prompt ```
           Do a deep analysis of these files:
-          {{step "pick"}}
+          ~(step pick)
           ```)))
     (review
       :criteria ("insight_depth" "actionability" "coverage")
       :model "qwen2.5:7b"))
 
   (step "winner-report"
-    (save "results/{{.param.repo}}/analysis.md" :from "analysis")))
+    (save "results/~param.repo/analysis.md" :from "analysis")))
 ````
 
 Notice the differences from the first example:
 
-- **`:id "analysis"`** — names the compare block so you can reference it later with `{{step "analysis"}}` or `:from "analysis"`
+- **`:id "analysis"`** — names the compare block so you can reference it later with `~(step analysis)` or `:from "analysis"`
 - **Multi-step branches** — `"breadth-first"` runs two LLM steps in sequence; `"depth-first"` runs a shell step then an LLM step
 - **`:model` on `(review ...)`** — pins the judge to a specific model instead of using the default
 
@@ -177,7 +177,7 @@ Compare results save like any other step output. Use `(save ...)` with `:from` p
 
 ```glitch
 (step "winner-report"
-  (save "results/{{.param.repo}}/analysis.md" :from "analysis"))
+  (save "results/~param.repo/analysis.md" :from "analysis"))
 ```
 
 The saved file contains the winning branch's output. For the full scoring breakdown, the review scores are written to your results directory automatically.
@@ -186,7 +186,7 @@ Read saved results back into a later workflow:
 
 ```glitch
 (step "previous"
-  (read "results/{{.param.repo}}/analysis.md"))
+  (read "results/~param.repo/analysis.md"))
 ```
 
 ## Next steps

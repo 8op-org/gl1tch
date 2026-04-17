@@ -91,7 +91,7 @@ This is from `site-create-page.glitch` — the workflow that generates documenta
 
   ;; ── Save and rebuild ─────────────────────────────
   (step "save-stub"
-    (run "cat '{{stepfile \"generate\"}}' | python3 scripts/save-generated-page.py"))
+    (run "cat '~(stepfile generate)' | python3 scripts/save-generated-page.py"))
 
   (step "rebuild-json"
     (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
