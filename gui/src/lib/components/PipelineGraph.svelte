@@ -65,8 +65,8 @@
   function buildElkGraph(steps) {
     if (!steps || steps.length === 0) return null;
 
-    const nodeWidth = 200;
-    const nodeHeight = 72;
+    const nodeWidth = 180;
+    const nodeHeight = 68;
 
     // Identify par groups: consecutive steps with kind === 'par'
     // Fan out from previous non-par step, converge to next non-par step
@@ -177,16 +177,19 @@
         };
         const sourceStep = stepMap[e.sources?.[0]];
         const st = sourceStep ? stepStatus(sourceStep) : 'default';
+        const lastSection = adjusted.sections?.[adjusted.sections.length - 1];
         return {
           path: edgePath(adjusted),
           color: statusColor(st),
           running: st === 'running',
+          endX: lastSection?.endPoint?.x || 0,
+          endY: lastSection?.endPoint?.y || 0,
         };
       });
 
-      // Set SVG dimensions with padding — add extra space for node widths at edges
-      svgWidth = (laid.width || 800) + padding * 2 + 40;
-      svgHeight = (laid.height || 400) + padding * 2 + 40;
+      // Set SVG dimensions — ELK width/height already includes all nodes
+      svgWidth = (laid.width || 800) + padding * 4;
+      svgHeight = (laid.height || 400) + padding * 4;
     } catch (e) {
       console.error('ELK layout failed:', e);
     }
@@ -236,7 +239,9 @@
       <div class="graph-viewport" style="width: {svgWidth}px; height: {svgHeight}px; position: relative;">
         <svg width={svgWidth} height={svgHeight} style="position: absolute; top: 0; left: 0;">
           {#each layoutEdges as edge}
-            <path d={edge.path} fill="none" stroke={edge.color} stroke-width="2" class:running={edge.running} />
+            <path d={edge.path} fill="none" stroke={edge.color} stroke-width="2" stroke-opacity="0.6" class:running={edge.running} />
+            <!-- Arrow marker at end -->
+            <circle cx={edge.endX} cy={edge.endY} r="3" fill={edge.color} opacity="0.8" />
           {/each}
         </svg>
         {#each layoutNodes as node}
@@ -261,7 +266,7 @@
   .graph-container {
     display: flex;
     flex-direction: row;
-    min-height: 300px;
+    min-height: 200px;
     max-height: 500px;
     overflow: hidden;
   }

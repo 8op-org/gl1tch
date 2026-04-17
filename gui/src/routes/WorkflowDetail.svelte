@@ -471,7 +471,8 @@
     border-radius: 0 0 6px 6px;
     background: var(--bg-elevated);
     margin-bottom: 8px;
-    min-height: 300px;
+    min-height: 200px;
+    overflow-x: auto;
     overflow: hidden;
   }
 
