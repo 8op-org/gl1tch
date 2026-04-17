@@ -1,26 +1,18 @@
 <script>
   import Router from 'svelte-spa-router';
-  import Sidebar from './lib/components/Sidebar.svelte';
-  import WorkspaceSwitcher from './lib/components/WorkspaceSwitcher.svelte';
+  import ActivityBar from './lib/components/ActivityBar.svelte';
   import WorkflowList from './routes/WorkflowList.svelte';
-  import Editor from './routes/Editor.svelte';
-  import RunList from './routes/RunList.svelte';
-  import RunView from './routes/RunView.svelte';
-  import ResultsBrowser from './routes/ResultsBrowser.svelte';
+  import WorkflowDetail from './routes/WorkflowDetail.svelte';
   import Settings from './routes/Settings.svelte';
 
   const routes = {
     '/': WorkflowList,
-    '/workflow/:name': Editor,
-    '/runs': RunList,
-    '/run/:id': RunView,
-    '/results': ResultsBrowser,
+    '/workflow/:name': WorkflowDetail,
     '/settings': Settings,
   };
 </script>
 
-<Sidebar />
+<ActivityBar />
 <main class="main-area">
-  <WorkspaceSwitcher />
   <Router {routes} />
 </main>
