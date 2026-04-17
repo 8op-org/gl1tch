@@ -9,6 +9,8 @@ const (
 	IndexCrossReviews    = "glitch-cross-reviews"
 	IndexRuns            = "glitch-runs"
 	IndexKnowledgePrefix = "glitch-knowledge-"
+	IndexSymbolsPrefix   = "glitch-symbols-"
+	IndexEdgesPrefix     = "glitch-edges-"
 )
 
 const EventsMapping = `{
@@ -150,6 +152,40 @@ const RunsMapping = `{
   }
 }`
 
+const SymbolsMapping = `{
+  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": {
+    "properties": {
+      "id":         { "type": "keyword" },
+      "file":       { "type": "keyword" },
+      "kind":       { "type": "keyword" },
+      "name":       { "type": "text", "fields": { "raw": { "type": "keyword" } } },
+      "signature":  { "type": "text" },
+      "language":   { "type": "keyword" },
+      "start_line": { "type": "integer" },
+      "end_line":   { "type": "integer" },
+      "parent_id":  { "type": "keyword" },
+      "docstring":  { "type": "text" },
+      "file_hash":  { "type": "keyword" },
+      "repo":       { "type": "keyword" },
+      "indexed_at": { "type": "date" }
+    }
+  }
+}`
+
+const EdgesMapping = `{
+  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": {
+    "properties": {
+      "source_id": { "type": "keyword" },
+      "target_id": { "type": "keyword" },
+      "kind":      { "type": "keyword" },
+      "file":      { "type": "keyword" },
+      "repo":      { "type": "keyword" }
+    }
+  }
+}`
+
 // AllIndices returns a map of index name → mapping JSON for all managed indices.
 func AllIndices() map[string]string {
 	return map[string]string{
@@ -159,6 +195,8 @@ func AllIndices() map[string]string {
 		IndexLLMCalls:     LLMCallsMapping,
 		IndexWorkflowRuns:  WorkflowRunsMapping,
 		IndexCrossReviews:  CrossReviewsMapping,
-		IndexRuns:          RunsMapping,
+		IndexRuns:           RunsMapping,
+		IndexSymbolsPrefix:  SymbolsMapping,
+		IndexEdgesPrefix:    EdgesMapping,
 	}
 }
