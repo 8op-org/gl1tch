@@ -285,4 +285,4 @@ Extracts a single field from a JSON object string. Supports dot notation for nes
 
 - [Workflow Syntax](/docs/workflow-syntax) — core forms, step references, LLM options, and control flow
 - [Plugins](/docs/plugins) — package reusable subcommands and compose them into workflows
-- [Batch Comparison Runs](/docs/batch-comparison-runs) — run multiple model variants side by side
+- [Batch Runs](/docs/batch-runs) — run multiple model variants side by side

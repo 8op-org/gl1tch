@@ -4,7 +4,6 @@ gl1tch chains shell commands and LLMs into automated workflows you own.
 
 ## Commands
 
-- `glitch ask "<question>"` — routes to the best matching workflow via local LLM
 - `glitch workflow list` / `glitch wf list` — list available workflows
 - `glitch workflow run <name> [input]` — run a workflow
 - `glitch workflow run <name> --set key=value` — parameterized run
@@ -35,7 +34,7 @@ Workflows use s-expressions (`.glitch` files). Save to `.glitch/workflows/` for 
       :model model
       :prompt ```
         Summarize these PRs:
-        {{step "fetch"}}
+        ~(step fetch)
         ```)))
 ```
 
@@ -48,9 +47,9 @@ Workflows use s-expressions (`.glitch` files). Save to `.glitch/workflows/` for 
 | `(step "id" (run "cmd"))` | Shell step |
 | `(step "id" (llm :prompt "..."))` | LLM step |
 | `(step "id" (save "path" :from "id"))` | Save step output to file |
-| `{{step "id"}}` | Reference prior step output |
-| `{{.input}}` | User input |
-| `{{.param.key}}` | Runtime param from `--set key=value` |
+| `~(step id)` | Reference prior step output |
+| `~input` | User input |
+| `~param.key` | Runtime param from `--set key=value` |
 | `#_(...)` | Reader discard (comment out a form) |
 | `` ``` `` | Triple-backtick multiline string |
 
@@ -66,5 +65,5 @@ Workflows use s-expressions (`.glitch` files). Save to `.glitch/workflows/` for 
 
 - **Shell steps fetch data** — `gh`, `git`, `curl`, `jq`
 - **LLM steps reason about data** — never use LLM for API calls
-- **Templates use Go text/template** — `{{.param.key}}` needs the dot
+- **Templates use tilde interpolation** — `~param.key`, `~(step id)`, `~input`
 - **One workflow, one job**

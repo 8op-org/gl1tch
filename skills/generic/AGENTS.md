@@ -6,7 +6,6 @@ PRs, issues, CI, or git activity.
 
 ## Commands
 
-- `glitch ask "<question>"` — routes to the best matching workflow
 - `glitch workflow list` — list workflows
 - `glitch workflow run <name> [input]` — run a workflow
 - `glitch workflow run <name> --set key=value` — parameterized run
@@ -30,7 +29,7 @@ Location: `.glitch/workflows/*.glitch` (s-expression format)
       :model model
       :prompt ```
         Categorize these issues:
-        {{step "fetch"}}
+        ~(step fetch)
         ```)))
 ```
 
@@ -38,8 +37,8 @@ Location: `.glitch/workflows/*.glitch` (s-expression format)
 
 - Shell steps fetch data (`gh`, `git`, `curl`, `jq`)
 - LLM steps reason about data — never call APIs from LLM steps
-- `{{step "id"}}` references prior step output
-- `{{.input}}` for user input, `{{.param.key}}` for `--set` params
+- `~(step id)` references prior step output
+- `~input` for user input, `~param.key` for `--set` params
 - `:provider` options: "ollama" (local), "claude", "copilot", "gemini"
 - `:format "json"` validates output structure
 - `:tier 0/1/2` pins to escalation tier (local → cheap → premium)

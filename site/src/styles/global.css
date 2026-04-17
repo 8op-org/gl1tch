@@ -642,18 +642,18 @@ footer {
 
 /* ── Doc layout ───────────────────────────── */
 .doc-layout {
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 40px;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 64px;
+  grid-template-columns: 220px 1fr;
+  gap: 0 48px;
   position: relative;
   z-index: 1;
 }
 
 .doc-layout:has(.doc-toc) {
-  grid-template-columns: 1fr 200px;
+  grid-template-columns: 220px 1fr 200px;
 }
 
 .doc-main {
@@ -707,12 +707,26 @@ footer {
   font-weight: 600;
 }
 
+@media (max-width: 1200px) {
+  .doc-layout,
+  .doc-layout:has(.doc-toc) {
+    grid-template-columns: 220px 1fr;
+  }
+  .doc-toc { display: none; }
+}
+
 @media (max-width: 900px) {
-  .doc-layout {
+  .doc-layout,
+  .doc-layout:has(.doc-toc) {
     grid-template-columns: 1fr;
     padding: 0 24px;
   }
+  .doc-sidebar-col { display: none; }
   .doc-toc { display: none; }
+  /* Show sidebar when toggle is checked */
+  .sidebar-toggle-input:checked ~ .doc-layout .doc-sidebar-col {
+    display: block;
+  }
 }
 
 /* ── Doc content ───────────────────────────── */
@@ -817,6 +831,130 @@ footer {
   border: none;
   border-top: 1px solid var(--border);
   margin: 48px 0;
+}
+
+/* ── Doc sidebar ───────────────────────────── */
+.doc-sidebar-col {
+  position: relative;
+}
+
+.doc-sidebar-inner {
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.doc-sidebar-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.doc-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 40px;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--dim);
+  opacity: 0.6;
+  margin-bottom: 8px;
+  padding-left: 12px;
+}
+
+.sidebar-link {
+  font-size: 0.78rem;
+  color: var(--dim);
+  text-decoration: none;
+  padding: 5px 12px;
+  border-radius: 3px;
+  border-left: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  line-height: 1.4;
+}
+
+.sidebar-link:hover {
+  color: var(--fg);
+  background: var(--glow);
+  border-left-color: var(--border);
+}
+
+.sidebar-link.active {
+  color: var(--teal);
+  border-left-color: var(--teal);
+  background: rgba(125, 207, 255, 0.06);
+}
+
+/* ── Sidebar mobile toggle (checkbox hack) ── */
+.sidebar-toggle-input {
+  display: none;
+}
+
+.sidebar-toggle-btn {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 200;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.sidebar-toggle-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--dim);
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.sidebar-toggle-btn:hover span {
+  background: var(--teal);
+}
+
+@media (max-width: 900px) {
+  .sidebar-toggle-btn {
+    display: flex;
+  }
+
+  .sidebar-toggle-input:checked ~ .doc-layout .doc-sidebar-col,
+  .sidebar-toggle-input:checked + label ~ .doc-layout .doc-sidebar-col {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    z-index: 150;
+    padding: 80px 0 40px;
+    overflow-y: auto;
+  }
+
+  .sidebar-toggle-input:checked ~ .doc-layout .doc-sidebar-col .doc-sidebar-inner {
+    position: static;
+    max-height: none;
+    padding: 0 20px;
+  }
 }
 
 /* ── Provenance ────────────────────────────── */
