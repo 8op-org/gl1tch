@@ -347,8 +347,138 @@
         ~(step fetch-containerd-issue)
         ```))
 
+  ;; ── Lab 4: Bug Triage — Kibana ───────────────────────
+
+  (step "fetch-kibana-issue"
+    (run "gh issue view 263137 -R elastic/kibana --json title,body,comments,labels"))
+
+  (step "kibana-triage-free"
+    (llm
+      :provider "openrouter"
+      :model "google/gemma-4-31b-it:free"
+      :prompt ```
+        You are a senior frontend engineer triaging a Kibana bug report.
+
+        Analyze this issue and provide:
+        1. Severity assessment (critical/high/medium/low) with reasoning
+        2. Root cause hypothesis based on the discussion
+        3. Affected components and code paths
+        4. Recommended fix approach
+
+        Be specific — reference exact files, regex patterns, or code if mentioned.
+
+        Issue data:
+        ~(step fetch-kibana-issue)
+        ```))
+
+  (step "kibana-triage-paid"
+    (llm
+      :provider "openrouter"
+      :model "qwen/qwen3.5-flash-02-23"
+      :prompt ```
+        You are a senior frontend engineer triaging a Kibana bug report.
+
+        Analyze this issue and provide:
+        1. Severity assessment (critical/high/medium/low) with reasoning
+        2. Root cause hypothesis based on the discussion
+        3. Affected components and code paths
+        4. Recommended fix approach
+
+        Be specific — reference exact files, regex patterns, or code if mentioned.
+
+        Issue data:
+        ~(step fetch-kibana-issue)
+        ```))
+
+  (step "kibana-triage-copilot"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :prompt ```
+        You are a senior frontend engineer triaging a Kibana bug report.
+
+        Analyze this issue and provide:
+        1. Severity assessment (critical/high/medium/low) with reasoning
+        2. Root cause hypothesis based on the discussion
+        3. Affected components and code paths
+        4. Recommended fix approach
+
+        Be specific — reference exact files, regex patterns, or code if mentioned.
+
+        Issue data:
+        ~(step fetch-kibana-issue)
+        ```))
+
+  ;; ── Assemble Lab 4 narrative ────────────────────────
+
+  (step "write-lab-4"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :format "json"
+      :prompt ```
+        Write a lab case study about using gl1tch to triage a Kibana bug.
+
+        VOICE: Write for dev architects evaluating gl1tch. Direct, technical,
+        no hype. Show the real output, let quality speak for itself.
+
+        STRUCTURE your output as a JSON object (no markdown fence):
+        {
+          "slug": "bug-triage-kibana",
+          "title": "Triaging a Kibana Regex Bug Across Three Tiers",
+          "description": "A data stream naming collision triggers the wrong Discover profile — three models attempt the diagnosis",
+          "date": "2026-04-17",
+          "content": "<markdown>"
+        }
+
+        The "content" field must follow this structure exactly:
+
+        ## The Scenario
+        Briefly describe elastic/kibana#263137 — time-series data streams
+        containing "logs" in their name incorrectly trigger the logs Discover
+        profile instead of metrics. A regex detection issue. Link to the real issue.
+
+        ## The Workflow
+        Show the actual glitch workflow that ran this (the fetch + 3 triage
+        steps in sexpr).
+
+        ## Free Tier: google/gemma-4-31b-it
+        Show the FULL raw output from the free model in a code block.
+        Then a **Verdict** paragraph analyzing what it got right and wrong.
+
+        ## Paid Tier: qwen/qwen3.5-flash-02-23
+        Show the FULL raw output from the paid model in a code block.
+        Then a **Verdict** paragraph on where it improved.
+
+        ## Copilot (Sonnet)
+        Show the FULL raw output from Copilot in a code block.
+        Then a **Verdict** paragraph.
+
+        ## Comparison
+        A markdown table: | Model | Root Cause Found? | Correct File Referenced? | Fix Approach Valid? | Cost |
+
+        ## Takeaway
+        2-3 sentences on what this demonstrates — especially how models
+        handle regex-level debugging with real code references in the thread.
+
+        RAW OUTPUTS:
+
+        FREE MODEL OUTPUT:
+        ~(step kibana-triage-free)
+
+        PAID MODEL OUTPUT:
+        ~(step kibana-triage-paid)
+
+        COPILOT OUTPUT:
+        ~(step kibana-triage-copilot)
+
+        ORIGINAL ISSUE:
+        ~(step fetch-kibana-issue)
+        ```))
+
   ;; ── Save lab JSON ───────────────────────────────────
 
   (save "site/generated/labs/issue-triage-kubernetes.json" :from "write-lab-1")
   (save "site/generated/labs/pr-review-prometheus.json" :from "write-lab-2")
-  (save "site/generated/labs/model-showdown-containerd.json" :from "write-lab-3"))
+  (save "site/generated/labs/model-showdown-containerd.json" :from "write-lab-3")
+  (save "site/generated/labs/bug-triage-kibana.json" :from "write-lab-4"))
