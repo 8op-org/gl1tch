@@ -94,6 +94,7 @@ A minimal workspace is just a name:
 | `:model` | Default model for `(llm ...)` steps |
 | `:provider` | Default provider (`ollama`, `copilot`, `claude`, etc.) |
 | `:elasticsearch` | Default Elasticsearch URL for search/index/observe |
+| `:websearch` | SearXNG instance URL (e.g. `"http://localhost:8080"`). Required by the `(websearch ...)` workflow form. |
 | `(params :<key> "<value>")` | Key-value pairs injected as `~param.<key>` in every workflow |
 
 ### Resource types

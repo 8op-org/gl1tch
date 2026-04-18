@@ -21,6 +21,7 @@ type Defaults struct {
 	Model         string
 	Provider      string
 	Elasticsearch string
+	WebSearch     string
 	Params        map[string]string
 }
 
@@ -143,6 +144,8 @@ func convertDefaults(n *sexpr.Node) (Defaults, error) {
 				d.Provider = val.StringVal()
 			case "elasticsearch":
 				d.Elasticsearch = val.StringVal()
+			case "websearch":
+				d.WebSearch = val.StringVal()
 			default:
 				return Defaults{}, fmt.Errorf("line %d: unknown defaults keyword :%s", child.Line, key)
 			}

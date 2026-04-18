@@ -1400,6 +1400,12 @@ func convertStep(n *sexpr.Node, defs map[string]string) (Step, error) {
 				return s, err
 			}
 			s.Embed = emb
+		case "websearch":
+			ws, err := convertWebSearch(child, defs)
+			if err != nil {
+				return s, err
+			}
+			s.WebSearch = ws
 		case "compare":
 			cmp, err := convertCompare(child, defs)
 			if err != nil {
@@ -1857,6 +1863,50 @@ func convertEmbed(n *sexpr.Node, defs map[string]string) (*EmbedStep, error) {
 		return nil, fmt.Errorf("line %d: embed missing :model", n.Line)
 	}
 	return emb, nil
+}
+
+func convertWebSearch(n *sexpr.Node, defs map[string]string) (*WebSearchStep, error) {
+	children := n.Children[1:] // skip "websearch"
+	if len(children) < 1 {
+		return nil, fmt.Errorf("line %d: (websearch) missing query", n.Line)
+	}
+	ws := &WebSearchStep{
+		Query:   resolveVal(children[0], defs),
+		Results: 5,
+		Lang:    "en",
+	}
+	for i := 1; i < len(children); i++ {
+		child := children[i]
+		if child.IsAtom() && child.Atom.Type == sexpr.TokenKeyword {
+			key := child.KeywordVal()
+			i++
+			if i >= len(children) {
+				return nil, fmt.Errorf("line %d: keyword :%s missing value", child.Line, key)
+			}
+			val := children[i]
+			switch key {
+			case "engines":
+				if val.IsList() {
+					for _, e := range val.Children {
+						ws.Engines = append(ws.Engines, resolveVal(e, defs))
+					}
+				} else {
+					ws.Engines = append(ws.Engines, resolveVal(val, defs))
+				}
+			case "results":
+				num, err := strconv.Atoi(resolveVal(val, defs))
+				if err != nil {
+					return nil, fmt.Errorf("line %d: :results must be an integer", val.Line)
+				}
+				ws.Results = num
+			case "lang":
+				ws.Lang = resolveVal(val, defs)
+			default:
+				return nil, fmt.Errorf("line %d: unknown websearch keyword :%s", child.Line, key)
+			}
+		}
+	}
+	return ws, nil
 }
 
 func convertLLM(n *sexpr.Node, defs map[string]string) (*LLMStep, error) {

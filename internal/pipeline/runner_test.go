@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1137,5 +1139,84 @@ func TestRun_Compare_StepAccessVariant(t *testing.T) {
 	}
 	if check != "winner=fast-output" && check != "winner=slow-output" {
 		t.Errorf("check = %q, expected one of the branch outputs", check)
+	}
+}
+
+func TestWebSearchStep(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			http.Error(w, "not found", 404)
+			return
+		}
+		q := r.URL.Query().Get("q")
+		if q == "" {
+			http.Error(w, "missing q", 400)
+			return
+		}
+		format := r.URL.Query().Get("format")
+		if format != "json" {
+			http.Error(w, "format must be json", 400)
+			return
+		}
+		resp := map[string]any{
+			"results": []map[string]any{
+				{
+					"title":   "Test Result",
+					"url":     "https://example.com",
+					"content": "A test result snippet",
+					"engine":  "google",
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	src := []byte(fmt.Sprintf(`
+(workflow "websearch-test"
+  (step "find"
+    (websearch "test query" :results 1)))
+`))
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Run(w, "", "", nil, nil, RunOpts{
+		WebSearchURL: srv.URL,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var results []map[string]any
+	if err := json.Unmarshal([]byte(result.Output), &results); err != nil {
+		t.Fatalf("output is not valid JSON array: %v\noutput: %s", err, result.Output)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0]["title"] != "Test Result" {
+		t.Fatalf("title = %v, want %q", results[0]["title"], "Test Result")
+	}
+}
+
+func TestWebSearchStep_NoURL(t *testing.T) {
+	src := []byte(`
+(workflow "websearch-nourl"
+  (step "find"
+    (websearch "test query")))
+`)
+	w, err := LoadBytes(src, "test.glitch")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Run(w, "", "", nil, nil, RunOpts{})
+	if err == nil {
+		t.Fatal("expected error for missing websearch URL")
+	}
+	if !strings.Contains(err.Error(), "no websearch endpoint configured") {
+		t.Fatalf("error = %q, want mention of 'no websearch endpoint configured'", err.Error())
 	}
 }

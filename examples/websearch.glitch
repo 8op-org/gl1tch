@@ -1,0 +1,9 @@
+(workflow "websearch"
+  :description "Search the web and summarize results"
+
+  (step "search"
+    (websearch "~input"
+      :results 3))
+
+  (step "summarize"
+    (llm :prompt "Summarize these search results for the user:\n\n~(step search)")))
