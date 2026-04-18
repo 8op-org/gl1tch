@@ -1,0 +1,13 @@
+;; site/shared.glitch — shared context for all site workflows
+;;
+;; Usage: (include "site/shared.glitch") at top of any site workflow.
+;; Provides ~conventions and ~examples for LLM prompts.
+
+(def conventions (read-file "site/conventions.md"))
+
+(def examples
+  (-> (glob "examples/*.glitch")
+      (map read-file)
+      (join "\n\n")))
+
+(def model "qwen2.5:7b")
