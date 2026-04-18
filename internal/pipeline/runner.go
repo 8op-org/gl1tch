@@ -2251,6 +2251,86 @@ func runSingleStep(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome, 
 		return nil, fmt.Errorf("step %s: plugin %q not found, searched: %s", step.ID, pc.Plugin, strings.Join(searchDirs, ", "))
 	}
 
+	if step.WebSearch != nil {
+		if rctx.webSearchURL == "" {
+			return nil, fmt.Errorf("step %s: no websearch endpoint configured — add :websearch to workspace defaults", step.ID)
+		}
+
+		queryRendered, err := renderInStep(step.WebSearch.Query, scopeFromData(data), stepsSnap, rctx.workflowObj, &step)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: websearch query render: %w", step.ID, err)
+		}
+
+		searchURL := fmt.Sprintf("%s/search", strings.TrimRight(rctx.webSearchURL, "/"))
+		req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: websearch request: %w", step.ID, err)
+		}
+
+		q := req.URL.Query()
+		q.Set("q", queryRendered)
+		q.Set("format", "json")
+		if step.WebSearch.Lang != "" {
+			q.Set("language", step.WebSearch.Lang)
+		}
+		if len(step.WebSearch.Engines) > 0 {
+			q.Set("engines", strings.Join(step.WebSearch.Engines, ","))
+		}
+		req.URL.RawQuery = q.Encode()
+
+		ui.StepSDK(step.ID, "websearch")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: websearch: %w", step.ID, err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: websearch read body: %w", step.ID, err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("step %s: websearch %d: %s", step.ID, resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+
+		var searxResp struct {
+			Results []struct {
+				Title   string `json:"title"`
+				URL     string `json:"url"`
+				Content string `json:"content"`
+				Engine  string `json:"engine"`
+			} `json:"results"`
+		}
+		if err := json.Unmarshal(body, &searxResp); err != nil {
+			return nil, fmt.Errorf("step %s: websearch parse response: %w", step.ID, err)
+		}
+
+		results := searxResp.Results
+		if len(results) > step.WebSearch.Results {
+			results = results[:step.WebSearch.Results]
+		}
+
+		type searchResult struct {
+			Title   string `json:"title"`
+			URL     string `json:"url"`
+			Content string `json:"content"`
+			Engine  string `json:"engine"`
+		}
+		out := make([]searchResult, len(results))
+		for i, r := range results {
+			out[i] = searchResult{
+				Title:   r.Title,
+				URL:     r.URL,
+				Content: r.Content,
+				Engine:  r.Engine,
+			}
+		}
+		outJSON, err := json.Marshal(out)
+		if err != nil {
+			return nil, fmt.Errorf("step %s: websearch marshal: %w", step.ID, err)
+		}
+		return &stepOutcome{output: string(outJSON)}, nil
+	}
+
 	return nil, fmt.Errorf("step %s: must have either 'run', 'llm', or 'save'", step.ID)
 }
 
