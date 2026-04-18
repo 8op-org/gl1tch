@@ -106,6 +106,7 @@ jobs:
           LINUX_AMD64_SHA=$(grep "linux_amd64" artifacts/checksums.txt | awk '{print $1}')
           BASE_URL="https://github.com/8op-org/gl1tch/releases/download/v${VERSION}"
 
+          FORMULA_PATH="$(pwd)/formula.rb"
           cat > formula.rb <<FORMULA
           class Glitch < Formula
             desc "gl1tch — your GitHub co-pilot"
@@ -143,7 +144,7 @@ jobs:
           git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" tap
           cd tap
           mkdir -p Formula
-          cp "${OLDPWD}/formula.rb" Formula/glitch.rb
+          cp "${FORMULA_PATH}" Formula/glitch.rb
           # Strip leading whitespace from heredoc indentation
           sed -i 's/^          //' Formula/glitch.rb
           git config user.name "github-actions[bot]"
