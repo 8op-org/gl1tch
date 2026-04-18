@@ -340,3 +340,93 @@ func TestEval_RegexFindNil(t *testing.T) {
 		t.Fatalf("want empty, got %q", got)
 	}
 }
+
+func TestEval_Count(t *testing.T) {
+	got := evalHelper(t, `(count (list "a" "b" "c"))`)
+	if got != "3" {
+		t.Fatalf("want %q, got %q", "3", got)
+	}
+}
+
+func TestEval_CountString(t *testing.T) {
+	got := evalHelper(t, `(count "hello")`)
+	if got != "5" {
+		t.Fatalf("want %q, got %q", "5", got)
+	}
+}
+
+func TestEval_Some(t *testing.T) {
+	got := evalHelper(t, `(some (list "a" "bb" "ccc") (fn (x) (starts-with x "b")))`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_SomeFalse(t *testing.T) {
+	got := evalHelper(t, `(some (list "a" "b" "c") (fn (x) (starts-with x "z")))`)
+	if got != "false" {
+		t.Fatalf("want %q, got %q", "false", got)
+	}
+}
+
+func TestEval_Every(t *testing.T) {
+	got := evalHelper(t, `(every (list "ab" "ac" "ad") (fn (x) (starts-with x "a")))`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_Set(t *testing.T) {
+	src := `(join (set (list "a" "b" "a" "c" "b")) ",")`
+	got := evalHelper(t, src)
+	if got != "a,b,c" {
+		t.Fatalf("want %q, got %q", "a,b,c", got)
+	}
+}
+
+func TestEval_Difference(t *testing.T) {
+	src := `(join (difference (list "a" "b" "c") (list "b")) ",")`
+	got := evalHelper(t, src)
+	if got != "a,c" {
+		t.Fatalf("want %q, got %q", "a,c", got)
+	}
+}
+
+func TestEval_Flatten(t *testing.T) {
+	src := `(join (flatten (list (list "a" "b") (list "c"))) ",")`
+	got := evalHelper(t, src)
+	if got != "a,b,c" {
+		t.Fatalf("want %q, got %q", "a,b,c", got)
+	}
+}
+
+func TestEval_Assert(t *testing.T) {
+	got := evalHelper(t, `(assert true "should not fail")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_AssertFail(t *testing.T) {
+	ev := NewEvaluator()
+	ev.Input = "test"
+	ev.Params = map[string]string{}
+	_, err := ev.RunSource([]byte(`(assert false "expected failure")`))
+	if err == nil {
+		t.Fatal("expected error from assert false")
+	}
+	if !strings.Contains(err.Error(), "expected failure") {
+		t.Fatalf("want error containing %q, got %q", "expected failure", err.Error())
+	}
+}
+
+func TestEval_LessThan(t *testing.T) {
+	got := evalHelper(t, `(< 3 5)`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+	got = evalHelper(t, `(< 5 3)`)
+	if got != "false" {
+		t.Fatalf("want %q, got %q", "false", got)
+	}
+}

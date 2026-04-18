@@ -46,6 +46,18 @@ func (ev *Evaluator) registerBuiltins(env *Env) {
 	// Collections
 	b("list", ev.builtinList)
 	b("assoc", ev.builtinAssoc)
+	b("count", ev.builtinCount)
+	b("some", ev.builtinSome)
+	b("every", ev.builtinEvery)
+	b("set", ev.builtinSet)
+	b("difference", ev.builtinDifference)
+	b("flatten", ev.builtinFlatten)
+
+	// Control
+	b("assert", ev.builtinAssert)
+
+	// Comparison
+	b("<", ev.builtinLessThan)
 
 	// Boolean
 	b("not", ev.builtinNot)
@@ -1104,6 +1116,242 @@ func (ev *Evaluator) builtinRegexFind(_ *Evaluator, env *Env, args []*sexpr.Node
 		return StringVal(m[1]), nil
 	}
 	return StringVal(m[0]), nil
+}
+
+// toList converts a Value to a ListVal. Strings are split on newlines.
+func toList(v Value) ListVal {
+	if l, ok := v.(ListVal); ok {
+		return l
+	}
+	s := v.String()
+	if s == "" {
+		return ListVal{}
+	}
+	parts := strings.Split(s, "\n")
+	result := make(ListVal, len(parts))
+	for i, p := range parts {
+		result[i] = StringVal(p)
+	}
+	return result
+}
+
+// applyValue calls a function value with a single pre-evaluated argument.
+func (ev *Evaluator) applyValue(env *Env, fn Value, arg Value) (Value, error) {
+	switch f := fn.(type) {
+	case *FnVal:
+		child := NewEnv(f.Env)
+		if len(f.Params) > 0 {
+			child.Set(f.Params[0], arg)
+		}
+		var result Value = NilVal{}
+		var err error
+		for _, body := range f.Body {
+			result, err = ev.Eval(child, body)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("not callable: %v", fn)
+	}
+}
+
+// builtinCount: (count list) or (count string) — returns length as StringVal
+func (ev *Evaluator) builtinCount(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("count: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	switch val := v.(type) {
+	case ListVal:
+		return StringVal(strconv.Itoa(len(val))), nil
+	case *MapVal:
+		return StringVal(strconv.Itoa(len(val.Keys))), nil
+	default:
+		return StringVal(strconv.Itoa(len(v.String()))), nil
+	}
+}
+
+// builtinSome: (some list pred) — true if any item matches predicate fn
+func (ev *Evaluator) builtinSome(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("some: need list and predicate")
+	}
+	listVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	predVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	items := toList(listVal)
+	for _, item := range items {
+		result, err := ev.applyValue(env, predVal, item)
+		if err != nil {
+			return nil, err
+		}
+		if isTruthy(result) {
+			return BoolVal(true), nil
+		}
+	}
+	return BoolVal(false), nil
+}
+
+// builtinEvery: (every list pred) — true if all items match predicate fn
+func (ev *Evaluator) builtinEvery(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("every: need list and predicate")
+	}
+	listVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	predVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	items := toList(listVal)
+	for _, item := range items {
+		result, err := ev.applyValue(env, predVal, item)
+		if err != nil {
+			return nil, err
+		}
+		if !isTruthy(result) {
+			return BoolVal(false), nil
+		}
+	}
+	return BoolVal(true), nil
+}
+
+// builtinSet: (set list) — deduplicate preserving order
+func (ev *Evaluator) builtinSet(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("set: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	items := toList(v)
+	seen := make(map[string]bool)
+	result := make(ListVal, 0, len(items))
+	for _, item := range items {
+		key := item.String()
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, item)
+		}
+	}
+	return result, nil
+}
+
+// builtinDifference: (difference set-a set-b) — items in a not in b
+func (ev *Evaluator) builtinDifference(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("difference: need two lists")
+	}
+	aVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	bVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	aItems := toList(aVal)
+	bItems := toList(bVal)
+	bSet := make(map[string]bool, len(bItems))
+	for _, item := range bItems {
+		bSet[item.String()] = true
+	}
+	result := make(ListVal, 0, len(aItems))
+	for _, item := range aItems {
+		if !bSet[item.String()] {
+			result = append(result, item)
+		}
+	}
+	return result, nil
+}
+
+// builtinFlatten: (flatten list-of-lists) — flatten one level
+func (ev *Evaluator) builtinFlatten(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("flatten: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	outer, ok := v.(ListVal)
+	if !ok {
+		return v, nil
+	}
+	result := make(ListVal, 0)
+	for _, item := range outer {
+		if inner, ok := item.(ListVal); ok {
+			result = append(result, inner...)
+		} else {
+			result = append(result, item)
+		}
+	}
+	return result, nil
+}
+
+// builtinAssert: (assert condition message) — error if falsy
+func (ev *Evaluator) builtinAssert(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("assert: need condition and message")
+	}
+	cond, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	if !isTruthy(cond) {
+		msgVal, err := ev.Eval(env, args[1])
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("assert: %s", msgVal.String())
+	}
+	return BoolVal(true), nil
+}
+
+// builtinLessThan: (< a b) — numeric less-than, falls back to string comparison
+func (ev *Evaluator) builtinLessThan(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("<: need two arguments")
+	}
+	// Handle bare numeric atoms (parsed as symbols)
+	var aStr, bStr string
+	if args[0].IsAtom() && args[0].Atom.Type == sexpr.TokenSymbol {
+		aStr = args[0].Atom.Val
+	} else {
+		av, err := ev.Eval(env, args[0])
+		if err != nil {
+			return nil, err
+		}
+		aStr = av.String()
+	}
+	if args[1].IsAtom() && args[1].Atom.Type == sexpr.TokenSymbol {
+		bStr = args[1].Atom.Val
+	} else {
+		bv, err := ev.Eval(env, args[1])
+		if err != nil {
+			return nil, err
+		}
+		bStr = bv.String()
+	}
+	aF, aErr := strconv.ParseFloat(aStr, 64)
+	bF, bErr := strconv.ParseFloat(bStr, 64)
+	if aErr == nil && bErr == nil {
+		return BoolVal(aF < bF), nil
+	}
+	return BoolVal(aStr < bStr), nil
 }
 
 // Ensure exec is available even if provider.RunShell signature changes.
