@@ -1,0 +1,227 @@
+;; lab-review-learns.glitch — glitch reviews the same PR three times with increasing context
+;;
+;; Pass 1: cold review — just the diff
+;; Pass 2: diff + reviewer feedback from pass 1's mistakes
+;; Pass 3: diff + all prior rounds — shows learning
+;;
+;; Target: prometheus/prometheus#18531 — smoothSeries @ modifier bug
+;;
+;; Run with: glitch run lab-review-learns
+
+(workflow "lab-review-learns"
+  :description "Three-pass PR review — glitch learns from feedback each round"
+
+  ;; ── Fetch PR data ───────────────────────────────────
+
+  (step "fetch-pr"
+    (run "gh pr view 18531 -R prometheus/prometheus --json title,body,files"))
+
+  (step "fetch-diff"
+    (run "gh pr diff 18531 -R prometheus/prometheus"))
+
+  (step "fetch-reviews"
+    (run "gh api repos/prometheus/prometheus/pulls/18531/reviews --jq '.[].body'"))
+
+  (step "fetch-comments"
+    (run "gh api repos/prometheus/prometheus/pulls/18531/comments --jq '.[] | \"FILE: \" + .path + \"\\nLINE: \" + (.line|tostring) + \"\\n\" + .body + \"\\n---\"'"))
+
+  ;; ── Pass 1: Cold review — diff only ─────────────────
+
+  (step "review-cold"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :prompt ```
+        You are a senior Go engineer reviewing a Prometheus pull request.
+        You have ONLY the diff. No discussion, no reviewer feedback.
+
+        Review for:
+        1. Correctness — does the fix actually solve the stated problem?
+        2. Edge cases — what inputs could still break?
+        3. Test coverage — are the tests sufficient?
+        4. Missed issues — anything the author didn't address?
+
+        Be specific. Reference file names and line numbers.
+
+        PR metadata:
+        ~(step fetch-pr)
+
+        Diff:
+        ~(step fetch-diff)
+        ```))
+
+  ;; ── Pass 2: Informed — cold review + real reviewer feedback ──
+
+  (step "review-informed"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :prompt ```
+        You are a senior Go engineer reviewing a Prometheus pull request.
+        You have the diff AND feedback from a previous review pass.
+
+        A previous reviewer (you, in an earlier pass) wrote this review:
+
+        --- PREVIOUS REVIEW ---
+        ~(step review-cold)
+        --- END PREVIOUS REVIEW ---
+
+        Now here is what the ACTUAL maintainer reviewers said:
+
+        --- MAINTAINER REVIEWS ---
+        ~(step fetch-reviews)
+        --- END MAINTAINER REVIEWS ---
+
+        --- INLINE REVIEW COMMENTS ---
+        ~(step fetch-comments)
+        --- END INLINE COMMENTS ---
+
+        Compare your previous review to the maintainer feedback.
+        What did you get right? What did you miss? What did the
+        maintainers catch that you didn't?
+
+        Now write an IMPROVED review incorporating everything you
+        learned. Be specific about what changed in your assessment.
+
+        Structure your response as:
+        ## What I missed
+        (list what the maintainer feedback taught you)
+
+        ## Improved review
+        (your corrected, more thorough review)
+        ```))
+
+  ;; ── Pass 3: Full context — all prior rounds ─────────
+
+  (step "review-full"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :prompt ```
+        You are a senior Go engineer on your THIRD review pass of a
+        Prometheus pull request. You have everything:
+
+        - The diff
+        - Your cold review (pass 1)
+        - The maintainer feedback
+        - Your improved review (pass 2)
+
+        --- PASS 1 (cold) ---
+        ~(step review-cold)
+        --- END PASS 1 ---
+
+        --- MAINTAINER FEEDBACK ---
+        ~(step fetch-reviews)
+
+        ~(step fetch-comments)
+        --- END MAINTAINER FEEDBACK ---
+
+        --- PASS 2 (informed) ---
+        ~(step review-informed)
+        --- END PASS 2 ---
+
+        --- DIFF ---
+        ~(step fetch-diff)
+        --- END DIFF ---
+
+        Write your FINAL review. This should be your best work —
+        informed by two prior passes and real maintainer feedback.
+
+        Then write a self-assessment:
+        ## Final review
+        (your definitive review)
+
+        ## Self-assessment
+        Rate each pass (1-10) on:
+        - Correctness of analysis
+        - Edge cases identified
+        - Actionable feedback quality
+        - Alignment with maintainer perspective
+
+        Show the scores as a table.
+        ```))
+
+  ;; ── Assemble lab page ───────────────────────────────
+
+  (step "write-lab"
+    (llm
+      :provider "copilot"
+      :model "sonnet"
+      :format "json"
+      :prompt ```
+        Write a lab case study showing how glitch improves its PR review
+        quality across three passes on the same pull request.
+
+        VOICE: Write for dev architects evaluating glitch. Direct, technical,
+        no hype. Show the real output, let quality speak for itself.
+
+        Output a JSON object (no markdown fence):
+        {
+          "slug": "review-learns-prometheus",
+          "title": "Learning to Review: Three Passes on the Same PR",
+          "description": "glitch reviews prometheus/prometheus#18531 three times — cold, with feedback, then with full context. Watch the review quality improve.",
+          "date": "2026-04-18",
+          "content": "<markdown>"
+        }
+
+        IMPORTANT: Keep the content CONCISE. No more than 200 lines of markdown.
+        Summarize model output — do NOT dump raw responses. Use short quotes
+        (1-3 sentences) to illustrate key points. Use tables for comparisons.
+
+        The "content" field structure:
+
+        ## The PR
+        One paragraph describing prometheus/prometheus#18531. Link to it.
+        What was the bug, what was the fix.
+
+        ## Pass 1: Cold Review
+        2-3 sentence summary of what the cold review found.
+        One short quote showing what it got right.
+        One short quote showing what it missed.
+
+        ## What the Maintainers Actually Said
+        2-3 sentence summary of the real reviewer feedback.
+        The key insight the maintainers caught.
+
+        ## Pass 2: Informed Review
+        2-3 sentences on how the review improved.
+        What it learned from the feedback. One short quote.
+
+        ## Pass 3: Full Context
+        2-3 sentences on the final review quality.
+        One short quote showing the improvement.
+
+        ## Score Progression
+        Use the self-assessment table from pass 3.
+
+        ## Takeaway
+        2-3 sentences on iterative review with accumulated context.
+
+        RAW DATA:
+
+        PR:
+        ~(step fetch-pr)
+
+        PASS 1:
+        ~(step review-cold)
+
+        MAINTAINER REVIEWS:
+        ~(step fetch-reviews)
+
+        MAINTAINER COMMENTS:
+        ~(step fetch-comments)
+
+        PASS 2:
+        ~(step review-informed)
+
+        PASS 3:
+        ~(step review-full)
+        ```))
+
+  ;; ── Save ────────────────────────────────────────────
+
+  (step "save-lab"
+    (save "site/generated/labs/review-learns-prometheus.json" :from "write-lab"))
+
+  (step "done"
+    (run "echo 'Lab generated. Run: glitch run site --set action=sync to publish.'")))
