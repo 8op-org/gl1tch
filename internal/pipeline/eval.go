@@ -149,6 +149,10 @@ func (ev *Evaluator) evalAtom(env *Env, node *sexpr.Node) (Value, error) {
 		if v, ok := env.Get(sym); ok {
 			return v, nil
 		}
+		// Bare numbers (e.g. 1, 42, -3) resolve as StringVal.
+		if isNumericSymbol(sym) {
+			return StringVal(sym), nil
+		}
 		return nil, fmt.Errorf("line %d: undefined symbol %q", node.Line, sym)
 	}
 	return NilVal{}, nil
@@ -905,6 +909,23 @@ func (ev *Evaluator) specialThread(env *Env, args []*sexpr.Node) (Value, error) 
 		}
 	}
 	return result, nil
+}
+
+// isNumericSymbol returns true if s looks like an integer (optional leading minus, then digits).
+func isNumericSymbol(s string) bool {
+	if s == "" || s == "-" {
+		return false
+	}
+	start := 0
+	if s[0] == '-' {
+		start = 1
+	}
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // apply calls a function value with arguments.

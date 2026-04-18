@@ -3,8 +3,11 @@ package pipeline
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/8op-org/gl1tch/internal/sexpr"
 )
 
 func evalHelper(t *testing.T, src string) string {
@@ -447,6 +450,34 @@ func TestEval_WriteFilePositional(t *testing.T) {
 	}
 }
 
+func TestEval_ManifestLoad(t *testing.T) {
+	data, err := os.ReadFile("../../site-manifest.glitch")
+	if err != nil {
+		t.Skip("site-manifest.glitch not found")
+	}
+	ev := NewEvaluator()
+	ev.Params = map[string]string{}
+	result, err := ev.RunSource(data)
+	if err != nil {
+		t.Fatalf("manifest eval: %v", err)
+	}
+	m, ok := result.(*MapVal)
+	if !ok {
+		t.Fatalf("manifest should return MapVal, got %T", result)
+	}
+	site, found := m.Get("site")
+	if !found || site.String() != "gl1tch" {
+		t.Fatalf("want site=gl1tch, got %v", site)
+	}
+	sections, found := m.Get("sections")
+	if !found {
+		t.Fatal("missing :sections key")
+	}
+	if _, ok := sections.(ListVal); !ok {
+		t.Fatalf("sections should be ListVal, got %T", sections)
+	}
+}
+
 func TestEval_SavePositional(t *testing.T) {
 	tmp := t.TempDir()
 	path := tmp + "/out.txt"
@@ -457,5 +488,39 @@ func TestEval_SavePositional(t *testing.T) {
 	data, _ := os.ReadFile(path)
 	if string(data) != "content here" {
 		t.Fatalf("file content: want %q, got %q", "content here", string(data))
+	}
+}
+
+func TestEval_GateWorkflowsParse(t *testing.T) {
+	files, _ := filepath.Glob("../../workflows/gate-*.glitch")
+	if len(files) == 0 {
+		t.Skip("no gate workflows found")
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		_, err = sexpr.Parse(data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", f, err)
+		}
+	}
+}
+
+func TestEval_SiteWorkflowsParse(t *testing.T) {
+	patterns := []string{"../../workflows/site*.glitch", "../../site/shared.glitch"}
+	for _, pat := range patterns {
+		files, _ := filepath.Glob(pat)
+		for _, f := range files {
+			data, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatalf("read %s: %v", f, err)
+			}
+			_, err = sexpr.Parse(data)
+			if err != nil {
+				t.Fatalf("parse %s: %v", f, err)
+			}
+		}
 	}
 }
