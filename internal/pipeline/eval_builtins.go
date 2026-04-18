@@ -252,6 +252,14 @@ func (ev *Evaluator) builtinSave(_ *Evaluator, env *Env, args []*sexpr.Node) (Va
 			}
 			continue
 		}
+		// Positional: first non-keyword arg is the path
+		if to == "" {
+			v, err := ev.Eval(env, n)
+			if err != nil {
+				return nil, err
+			}
+			to = v.String()
+		}
 	}
 
 	if to == "" {
@@ -391,6 +399,14 @@ func (ev *Evaluator) builtinWriteFile(_ *Evaluator, env *Env, args []*sexpr.Node
 				}
 			}
 			continue
+		}
+		// Positional: first non-keyword arg is the path
+		if to == "" {
+			v, err := ev.Eval(env, n)
+			if err != nil {
+				return nil, err
+			}
+			to = v.String()
 		}
 	}
 

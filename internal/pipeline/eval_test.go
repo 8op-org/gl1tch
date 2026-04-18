@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -428,5 +430,32 @@ func TestEval_LessThan(t *testing.T) {
 	got = evalHelper(t, `(< 5 3)`)
 	if got != "false" {
 		t.Fatalf("want %q, got %q", "false", got)
+	}
+}
+
+func TestEval_WriteFilePositional(t *testing.T) {
+	tmp := t.TempDir()
+	path := tmp + "/test.txt"
+	src := fmt.Sprintf(`(write-file "%s" :content "hello")`, path)
+	got := evalHelper(t, src)
+	if got != path {
+		t.Fatalf("want %q, got %q", path, got)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != "hello" {
+		t.Fatalf("file content: want %q, got %q", "hello", string(data))
+	}
+}
+
+func TestEval_SavePositional(t *testing.T) {
+	tmp := t.TempDir()
+	path := tmp + "/out.txt"
+	src := fmt.Sprintf(`(workflow save-test
+	  (step data "content here")
+	  (save "%s" :from "data"))`, path)
+	evalHelper(t, src)
+	data, _ := os.ReadFile(path)
+	if string(data) != "content here" {
+		t.Fatalf("file content: want %q, got %q", "content here", string(data))
 	}
 }
