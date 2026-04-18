@@ -374,4 +374,4 @@ One format across global config, workspace config, and workflows.
 - [Workflow Syntax](/docs/workflow-syntax) — the step forms and templates your workspace workflows use
 - [Plugins](/docs/plugins) — reusable data-gathering subcommands that compose with workflows
 - [Local Models](/docs/local-models) — setting up Ollama for your workspace's default model
-- [Batch Comparison Runs](/docs/batch-comparison-runs) — parent/child runs across multiple providers
+- [Compare](/docs/compare) — parent/child runs across multiple providers
