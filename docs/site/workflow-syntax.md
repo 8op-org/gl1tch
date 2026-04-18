@@ -94,6 +94,47 @@ The string passed to `(workflow ...)` is the name you use with `glitch workflow 
 
 Defs are simple text substitution — use them for anything you repeat: model names, provider strings, repo paths, usernames.
 
+## Sharing Definitions
+
+Use `(include)` to import `(def ...)` bindings from another file:
+
+````glitch
+(include "site/shared.glitch")
+
+(workflow "my-workflow"
+  :description "uses shared defs"
+  (step "s1"
+    (llm :model model :prompt "~conventions")))
+````
+
+Only `(def ...)` forms are imported — workflows and steps in the included file are ignored. Circular includes produce a parse error.
+
+## Evaluated Definitions
+
+`(def)` can evaluate forms at parse time, not just literal strings:
+
+````glitch
+;; Read a file into a constant
+(def conventions (read-file "site/conventions.md"))
+
+;; Glob + read + join via threading
+(def examples
+  (-> (glob "examples/*.glitch")
+      (map read-file)
+      (join "\n\n")))
+
+;; Filter lines from a file
+(def commands
+  (-> (read-file "valid-commands.txt")
+      (lines)
+      (filter (contains "glitch"))
+      (join "\n")))
+````
+
+Available forms in `(def)` context: `read-file`, `glob`, `->`, `map`, `filter`, `lines`, `join`, `split`, `trim`, `upper`, `lower`, `replace`, `contains`, `flatten`.
+
+These evaluate at parse time — they produce constants. Runtime references like `~param.*` or `~(step ...)` are not available in `(def)`.
+
 ## Steps
 
 Every step has an ID and a single action. The ID names the output so later steps can reference it.
