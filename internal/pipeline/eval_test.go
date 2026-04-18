@@ -217,3 +217,126 @@ func TestEval_AssocInList(t *testing.T) {
 		t.Fatalf("want %q, got %q", "intro", got)
 	}
 }
+
+func TestEval_Replace(t *testing.T) {
+	got := evalHelper(t, `(replace "hello world" "world" "earth")`)
+	if got != "hello earth" {
+		t.Fatalf("want %q, got %q", "hello earth", got)
+	}
+}
+
+func TestEval_ReplaceMultiple(t *testing.T) {
+	got := evalHelper(t, `(replace "a/b/c.md" "a/b/" "" ".md" "")`)
+	if got != "c" {
+		t.Fatalf("want %q, got %q", "c", got)
+	}
+}
+
+func TestEval_Contains(t *testing.T) {
+	got := evalHelper(t, `(contains "hello world" "world")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_ContainsList(t *testing.T) {
+	got := evalHelper(t, `(contains (list "a" "b" "c") "b")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_Join(t *testing.T) {
+	got := evalHelper(t, `(join (list "a" "b" "c") ",")`)
+	if got != "a,b,c" {
+		t.Fatalf("want %q, got %q", "a,b,c", got)
+	}
+}
+
+func TestEval_Split(t *testing.T) {
+	src := `(def parts (split "a,b,c" ",")) (pick parts 1)`
+	got := evalHelper(t, src)
+	if got != "b" {
+		t.Fatalf("want %q, got %q", "b", got)
+	}
+}
+
+func TestEval_Trim(t *testing.T) {
+	got := evalHelper(t, `(trim "  hello  ")`)
+	if got != "hello" {
+		t.Fatalf("want %q, got %q", "hello", got)
+	}
+}
+
+func TestEval_Upper(t *testing.T) {
+	got := evalHelper(t, `(upper "hello")`)
+	if got != "HELLO" {
+		t.Fatalf("want %q, got %q", "HELLO", got)
+	}
+}
+
+func TestEval_Lower(t *testing.T) {
+	got := evalHelper(t, `(lower "HELLO")`)
+	if got != "hello" {
+		t.Fatalf("want %q, got %q", "hello", got)
+	}
+}
+
+func TestEval_Lines(t *testing.T) {
+	src := `(def ls (lines "a\nb\nc")) (pick ls 1)`
+	got := evalHelper(t, src)
+	if got != "b" {
+		t.Fatalf("want %q, got %q", "b", got)
+	}
+}
+
+func TestEval_StartsWith(t *testing.T) {
+	got := evalHelper(t, `(starts-with "glitch run" "glitch")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_EndsWith(t *testing.T) {
+	got := evalHelper(t, `(ends-with "hello.md" ".md")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_Slice(t *testing.T) {
+	got := evalHelper(t, `(slice "hello world" 6 11)`)
+	if got != "world" {
+		t.Fatalf("want %q, got %q", "world", got)
+	}
+}
+
+func TestEval_RegexMatch(t *testing.T) {
+	src := `(def matches (regex-match "\\d+" "a1b22c333")) (join matches ",")`
+	got := evalHelper(t, src)
+	if got != "1,22,333" {
+		t.Fatalf("want %q, got %q", "1,22,333", got)
+	}
+}
+
+func TestEval_RegexMatchCapture(t *testing.T) {
+	src := `(def matches (regex-match "\\(([a-z]+)" "(foo) (bar)")) (join matches ",")`
+	got := evalHelper(t, src)
+	if got != "foo,bar" {
+		t.Fatalf("want %q, got %q", "foo,bar", got)
+	}
+}
+
+func TestEval_RegexFind(t *testing.T) {
+	got := evalHelper(t, `(regex-find "\\d+" "abc123def")`)
+	if got != "123" {
+		t.Fatalf("want %q, got %q", "123", got)
+	}
+}
+
+func TestEval_RegexFindNil(t *testing.T) {
+	got := evalHelper(t, `(regex-find "\\d+" "abcdef")`)
+	if got != "" {
+		t.Fatalf("want empty, got %q", got)
+	}
+}

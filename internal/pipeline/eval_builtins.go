@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -72,6 +73,21 @@ func (ev *Evaluator) registerBuiltins(env *Env) {
 	// JSON / collection access
 	b("json-pick", ev.builtinPick)
 	b("pick", ev.builtinPick)
+
+	// String operations
+	b("replace", ev.builtinReplace)
+	b("contains", ev.builtinContains)
+	b("join", ev.builtinJoin)
+	b("split", ev.builtinSplit)
+	b("trim", ev.builtinTrim)
+	b("upper", ev.builtinUpper)
+	b("lower", ev.builtinLower)
+	b("lines", ev.builtinLines)
+	b("starts-with", ev.builtinStartsWith)
+	b("ends-with", ev.builtinEndsWith)
+	b("slice", ev.builtinSlice)
+	b("regex-match", ev.builtinRegexMatch)
+	b("regex-find", ev.builtinRegexFind)
 }
 
 // builtinSh: (sh "command") — execute a shell command
@@ -802,6 +818,292 @@ func (ev *Evaluator) builtinPick(_ *Evaluator, env *Env, args []*sexpr.Node) (Va
 		_ = v
 	}
 	return result, nil
+}
+
+// builtinReplace: (replace text old new [old new ...]) — multi-pair string replacement
+func (ev *Evaluator) builtinReplace(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 3 {
+		return nil, fmt.Errorf("replace: need at least text, old, new")
+	}
+	textVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	text := textVal.String()
+	for i := 1; i+1 < len(args); i += 2 {
+		oldVal, err := ev.Eval(env, args[i])
+		if err != nil {
+			return nil, err
+		}
+		newVal, err := ev.Eval(env, args[i+1])
+		if err != nil {
+			return nil, err
+		}
+		text = strings.ReplaceAll(text, oldVal.String(), newVal.String())
+	}
+	return StringVal(text), nil
+}
+
+// builtinContains: (contains text substr) or (contains list item)
+func (ev *Evaluator) builtinContains(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("contains: need two arguments")
+	}
+	target, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	needle, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	if l, ok := target.(ListVal); ok {
+		ns := needle.String()
+		for _, item := range l {
+			if item.String() == ns {
+				return BoolVal(true), nil
+			}
+		}
+		return BoolVal(false), nil
+	}
+	return BoolVal(strings.Contains(target.String(), needle.String())), nil
+}
+
+// builtinJoin: (join list sep) — join ListVal elements with separator
+func (ev *Evaluator) builtinJoin(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("join: need list and separator")
+	}
+	listVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	sepVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	l, ok := listVal.(ListVal)
+	if !ok {
+		return nil, fmt.Errorf("join: first argument must be a list")
+	}
+	parts := make([]string, len(l))
+	for i, v := range l {
+		parts[i] = v.String()
+	}
+	return StringVal(strings.Join(parts, sepVal.String())), nil
+}
+
+// builtinSplit: (split text sep) — split string into ListVal
+func (ev *Evaluator) builtinSplit(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("split: need text and separator")
+	}
+	textVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	sepVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(textVal.String(), sepVal.String())
+	vals := make(ListVal, len(parts))
+	for i, p := range parts {
+		vals[i] = StringVal(p)
+	}
+	return vals, nil
+}
+
+// builtinTrim: (trim text) — strings.TrimSpace
+func (ev *Evaluator) builtinTrim(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("trim: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	return StringVal(strings.TrimSpace(v.String())), nil
+}
+
+// builtinUpper: (upper text) — strings.ToUpper
+func (ev *Evaluator) builtinUpper(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("upper: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	return StringVal(strings.ToUpper(v.String())), nil
+}
+
+// builtinLower: (lower text) — strings.ToLower
+func (ev *Evaluator) builtinLower(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("lower: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	return StringVal(strings.ToLower(v.String())), nil
+}
+
+// builtinLines: (lines text) — split on \n, return ListVal
+func (ev *Evaluator) builtinLines(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("lines: missing argument")
+	}
+	v, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(v.String(), "\n")
+	vals := make(ListVal, len(parts))
+	for i, p := range parts {
+		vals[i] = StringVal(p)
+	}
+	return vals, nil
+}
+
+// builtinStartsWith: (starts-with text prefix) — return BoolVal
+func (ev *Evaluator) builtinStartsWith(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("starts-with: need text and prefix")
+	}
+	textVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	prefixVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	return BoolVal(strings.HasPrefix(textVal.String(), prefixVal.String())), nil
+}
+
+// builtinEndsWith: (ends-with text suffix) — return BoolVal
+func (ev *Evaluator) builtinEndsWith(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("ends-with: need text and suffix")
+	}
+	textVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	suffixVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	return BoolVal(strings.HasSuffix(textVal.String(), suffixVal.String())), nil
+}
+
+// builtinSlice: (slice text start end) — substring extraction, bounds-safe
+func (ev *Evaluator) builtinSlice(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 3 {
+		return nil, fmt.Errorf("slice: need text, start, end")
+	}
+	textVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	// Handle bare numeric atoms (parsed as symbols) like pick does
+	var startStr, endStr string
+	if args[1].IsAtom() && args[1].Atom.Type == sexpr.TokenSymbol {
+		startStr = args[1].Atom.Val
+	} else {
+		sv, err := ev.Eval(env, args[1])
+		if err != nil {
+			return nil, err
+		}
+		startStr = sv.String()
+	}
+	if args[2].IsAtom() && args[2].Atom.Type == sexpr.TokenSymbol {
+		endStr = args[2].Atom.Val
+	} else {
+		sv, err := ev.Eval(env, args[2])
+		if err != nil {
+			return nil, err
+		}
+		endStr = sv.String()
+	}
+	text := textVal.String()
+	start, err := strconv.Atoi(startStr)
+	if err != nil {
+		return nil, fmt.Errorf("slice: invalid start: %w", err)
+	}
+	end, err := strconv.Atoi(endStr)
+	if err != nil {
+		return nil, fmt.Errorf("slice: invalid end: %w", err)
+	}
+	// Bounds-safe clamping
+	if start < 0 {
+		start = 0
+	}
+	if end > len(text) {
+		end = len(text)
+	}
+	if start > end {
+		return StringVal(""), nil
+	}
+	return StringVal(text[start:end]), nil
+}
+
+// builtinRegexMatch: (regex-match pattern text) — all matches, returns ListVal
+func (ev *Evaluator) builtinRegexMatch(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("regex-match: need pattern and text")
+	}
+	patVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	textVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	re, err := regexp.Compile(patVal.String())
+	if err != nil {
+		return nil, fmt.Errorf("regex-match: %w", err)
+	}
+	matches := re.FindAllStringSubmatch(textVal.String(), -1)
+	vals := make(ListVal, 0, len(matches))
+	for _, m := range matches {
+		if len(m) > 1 {
+			vals = append(vals, StringVal(m[1]))
+		} else {
+			vals = append(vals, StringVal(m[0]))
+		}
+	}
+	return vals, nil
+}
+
+// builtinRegexFind: (regex-find pattern text) — first match, returns StringVal or NilVal
+func (ev *Evaluator) builtinRegexFind(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("regex-find: need pattern and text")
+	}
+	patVal, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+	textVal, err := ev.Eval(env, args[1])
+	if err != nil {
+		return nil, err
+	}
+	re, err := regexp.Compile(patVal.String())
+	if err != nil {
+		return nil, fmt.Errorf("regex-find: %w", err)
+	}
+	m := re.FindStringSubmatch(textVal.String())
+	if m == nil {
+		return NilVal{}, nil
+	}
+	if len(m) > 1 {
+		return StringVal(m[1]), nil
+	}
+	return StringVal(m[0]), nil
 }
 
 // Ensure exec is available even if provider.RunShell signature changes.
