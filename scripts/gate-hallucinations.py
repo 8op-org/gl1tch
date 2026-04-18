@@ -64,6 +64,10 @@ VALID_FORMS = {
     "phase", "gate", "par",
     "json-pick", "lines", "merge",
     "http-get", "http-post", "read-file", "write-file", "glob", "websearch",
+    # aliases documented in workflow-syntax
+    "fetch", "send", "write",
+    # def-context transform forms
+    "join", "split", "trim", "upper", "lower", "replace", "contains",
     # workspace mechanics
     "workspace", "workspaces", "defaults", "params", "repos",
     "resource", "resources", "resource-state", "map-resources",
