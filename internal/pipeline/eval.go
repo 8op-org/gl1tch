@@ -46,6 +46,9 @@ type Evaluator struct {
 	TotalLatencyMS int64
 	TotalCostUSD   float64
 	LLMSteps       int
+
+	// Call-workflow cycle detection
+	CallStack []string
 }
 
 // NewEvaluator creates a new evaluator with default values.

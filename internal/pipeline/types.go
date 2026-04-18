@@ -22,6 +22,7 @@ type Workflow struct {
 	Steps       []Step         `yaml:"steps"`
 	Items       []WorkflowItem `yaml:"-"`
 	SourceFile  string         `yaml:"-"`
+	Source      []byte         `yaml:"-"` // raw .glitch source for evaluator
 	Args        []plugin.ArgDef `yaml:"-"`
 	Input       *InputDef       `yaml:"-"`
 }
