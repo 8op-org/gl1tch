@@ -79,6 +79,8 @@
   (phase "verify" :retries 1
     (gate "no-hallucinations"
       (run "python3 scripts/gate-hallucinations.py"))
+    (gate "syntax"
+      (run "python3 scripts/gate-syntax.py"))
     (gate "stub-coverage"
       (run "python3 scripts/gate-coverage.py"))
     (gate "structure-and-tone"
