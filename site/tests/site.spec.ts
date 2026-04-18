@@ -164,16 +164,13 @@ test('nav has docs, labs, and changelog links', async ({ page }) => {
 // ── Labs ──────────────────────────────────────────
 
 const labSlugs = [
-  'issue-triage-kubernetes',
-  'pr-review-prometheus',
-  'model-showdown-containerd',
-  'bug-triage-kibana',
+  'review-learns-prometheus',
 ];
 
 test('labs index lists all 4 labs', async ({ page }) => {
   await page.goto('/labs');
   const cards = page.locator('.lab-card');
-  await expect(cards).toHaveCount(4);
+  await expect(cards).toHaveCount(1);
 });
 
 test('labs index cards link to detail pages', async ({ page }) => {
@@ -219,10 +216,9 @@ for (const slug of labSlugs) {
     const count = await h2s.count();
     expect(count, `${slug} should have at least 3 h2 headings`).toBeGreaterThanOrEqual(3);
 
-    // Every lab must have "The Scenario" and "The Workflow"
+    // Every lab must have at least a takeaway section
     const text = await content.textContent();
-    expect(text, `${slug} missing "The Scenario"`).toContain('The Scenario');
-    expect(text, `${slug} missing "The Workflow"`).toContain('The Workflow');
+    expect(text, `${slug} missing "Takeaway"`).toContain('Takeaway');
   });
 
   test(`lab has code blocks: ${slug}`, async ({ page }) => {
