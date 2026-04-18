@@ -161,6 +161,37 @@ func TestParseWorkspace_NoParams(t *testing.T) {
 	}
 }
 
+func TestParseWorkspace_WebSearch(t *testing.T) {
+	src := []byte(`
+(workspace "test"
+  (defaults
+    :model "qwen2.5:7b"
+    :provider "ollama"
+    :websearch "http://localhost:8080"))
+`)
+	w, err := ParseFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Defaults.WebSearch != "http://localhost:8080" {
+		t.Fatalf("websearch = %q, want http://localhost:8080", w.Defaults.WebSearch)
+	}
+}
+
+func TestParseWorkspace_WebSearchDefault(t *testing.T) {
+	src := []byte(`
+(workspace "test"
+  (defaults :model "qwen2.5:7b"))
+`)
+	w, err := ParseFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Defaults.WebSearch != "" {
+		t.Fatalf("websearch should be empty by default, got %q", w.Defaults.WebSearch)
+	}
+}
+
 func TestSerialize_Full(t *testing.T) {
 	w := &Workspace{
 		Name:        "stokagent",
@@ -171,6 +202,7 @@ func TestSerialize_Full(t *testing.T) {
 			Model:         "qwen2.5:7b",
 			Provider:      "ollama",
 			Elasticsearch: "http://localhost:9200",
+			WebSearch:     "http://localhost:8080",
 			Params:        map[string]string{"repo": "elastic/kibana", "results-dir": "results/kibana"},
 		},
 	}
@@ -206,6 +238,9 @@ func TestSerialize_Full(t *testing.T) {
 	}
 	if w2.Defaults.Elasticsearch != w.Defaults.Elasticsearch {
 		t.Errorf("Elasticsearch: got %q, want %q", w2.Defaults.Elasticsearch, w.Defaults.Elasticsearch)
+	}
+	if w2.Defaults.WebSearch != w.Defaults.WebSearch {
+		t.Errorf("WebSearch: got %q, want %q", w2.Defaults.WebSearch, w.Defaults.WebSearch)
 	}
 	if w2.Defaults.Params["repo"] != w.Defaults.Params["repo"] {
 		t.Errorf("Params[repo]: got %q, want %q", w2.Defaults.Params["repo"], w.Defaults.Params["repo"])

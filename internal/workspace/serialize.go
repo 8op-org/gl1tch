@@ -27,7 +27,7 @@ func Serialize(w *Workspace) []byte {
 	}
 
 	hasDefaults := w.Defaults.Model != "" || w.Defaults.Provider != "" ||
-		w.Defaults.Elasticsearch != "" || len(w.Defaults.Params) > 0
+		w.Defaults.Elasticsearch != "" || w.Defaults.WebSearch != "" || len(w.Defaults.Params) > 0
 	if hasDefaults {
 		b.WriteString("\n  (defaults")
 		if w.Defaults.Model != "" {
@@ -38,6 +38,9 @@ func Serialize(w *Workspace) []byte {
 		}
 		if w.Defaults.Elasticsearch != "" {
 			b.WriteString(fmt.Sprintf("\n    :elasticsearch %q", w.Defaults.Elasticsearch))
+		}
+		if w.Defaults.WebSearch != "" {
+			b.WriteString(fmt.Sprintf("\n    :websearch %q", w.Defaults.WebSearch))
 		}
 		if len(w.Defaults.Params) > 0 {
 			b.WriteString("\n    (params")
