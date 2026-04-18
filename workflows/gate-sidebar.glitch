@@ -1,0 +1,28 @@
+(workflow "gate-sidebar"
+  :description "Sidebar matches manifest in correct order"
+
+  (def manifest (include "site-manifest.glitch"))
+  (def sidebar-text (read-file "site/src/components/DocSidebar.astro"))
+
+  (def manifest-sections
+    (-> (filter (pick manifest :sections) (pick item :sidebar))
+        (map (fn (s) (assoc
+          :label (pick s :label)
+          :slugs (map (pick s :pages) (fn (p) (pick p :slug))))))))
+
+  (def sidebar-labels (regex-match "label:\\s*\"([^\"]+)\"" sidebar-text))
+  (def sidebar-slugs  (regex-match "slug:\\s*\"([^\"]+)\"" sidebar-text))
+
+  (assert (= (count manifest-sections) (count sidebar-labels))
+    (str "section count mismatch: manifest " (count manifest-sections)
+         " vs sidebar " (count sidebar-labels)))
+
+  ;; Verify all manifest slugs appear in sidebar in order
+  (def expected-slugs (-> manifest-sections (map (fn (s) (pick s :slugs))) (flatten)))
+  (assert (= expected-slugs sidebar-slugs)
+    (str "sidebar slug order mismatch:\n  expected: " (join expected-slugs ", ")
+         "\n  got: " (join sidebar-slugs ", ")))
+
+  (println (str "PASS: sidebar matches manifest ("
+                (count manifest-sections) " sections, "
+                (count expected-slugs) " pages)")))

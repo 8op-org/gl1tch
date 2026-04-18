@@ -1,0 +1,31 @@
+(workflow "gate-structure"
+  :description "Valid frontmatter, no internals leaked, your framing"
+
+  (def internals (list "BubbleTea" "bubbletea" "tea.Model" "tea.Cmd"
+                       "internal/tui" "lipgloss" "sqlite3" "SQLite"))
+  (def docs (glob "site/src/content/docs/*.md"))
+
+  (map docs
+    (let (content (read-file item)
+          slug (replace item "site/src/content/docs/" "" ".md" "")
+          fm-block (regex-find "(?s)^---\\n(.+?)\\n---" content)
+          body (-> (split content "---") (slice 2) (join "---")))
+      (do
+        (when-not (regex-find "title:" fm-block)
+          (assert false (str slug ": missing frontmatter: title")))
+        (when-not (regex-find "order:" fm-block)
+          (assert false (str slug ": missing frontmatter: order")))
+        (when-not (regex-find "description:" fm-block)
+          (assert false (str slug ": missing frontmatter: description")))
+
+        (map internals
+          (when (contains content item)
+            (assert false (str slug ": leaked internal: " item))))
+
+        (when (< (count (trim body)) 200)
+          (assert false (str slug ": suspiciously short body")))
+
+        (when (regex-find "(?i)\\bthe user\\b" content)
+          (println (str "  [warn] " slug ": found 'the user' — prefer you/your framing"))))))
+
+  (println (str "PASS: " (count docs) " docs valid, no internals leaked")))
