@@ -22,12 +22,14 @@ def check_file(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     slug = path.stem
 
+    fm_lines = 0
     if text.startswith("---"):
         end = text.find("\n---", 3)
         if end != -1:
+            fm_lines = text[:end + 4].count("\n")
             text = text[end + 4:]
 
-    for line_num, line in enumerate(text.splitlines(), start=1):
+    for line_num, line in enumerate(text.splitlines(), start=fm_lines + 1):
         for pattern, msg in BAD_PATTERNS:
             if pattern.search(line):
                 errors.append(f"{slug}:{line_num}: {msg}")

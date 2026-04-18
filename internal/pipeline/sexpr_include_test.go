@@ -125,11 +125,17 @@ func TestSexpr_DefReadFile(t *testing.T) {
 (workflow "test-def-readfile"
   :description "def evaluates read-file"
   (step "s1"
-    (run "echo test")))`
+    (llm :prompt conventions)))`
 
-	_, err := parseSexprWorkflow([]byte(src))
+	w, err := parseSexprWorkflow([]byte(src))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if w.Steps[0].LLM == nil {
+		t.Fatal("expected LLM step")
+	}
+	if w.Steps[0].LLM.Prompt != "these are my conventions" {
+		t.Fatalf("expected def value in prompt, got %q", w.Steps[0].LLM.Prompt)
 	}
 }
 
@@ -182,7 +188,7 @@ func TestSexpr_DefGlob(t *testing.T) {
 
 func TestSexpr_DefThread_GlobMapReadFile(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.glitch"), []byte("content-a"), 0o644)
+	os.WriteFile(filepath.Join(dir, "a.glitch"), []byte("content-a\nwith newlines"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.glitch"), []byte("content-b"), 0o644)
 
 	src := `(def examples (-> (glob "` + filepath.Join(dir, "*.glitch") + `") (map read-file) (join "\n\n")))
@@ -190,11 +196,22 @@ func TestSexpr_DefThread_GlobMapReadFile(t *testing.T) {
 (workflow "test-thread"
   :description "threading in def"
   (step "s1"
-    (run "echo test")))`
+    (llm :prompt examples)))`
 
-	_, err := parseSexprWorkflow([]byte(src))
+	w, err := parseSexprWorkflow([]byte(src))
 	if err != nil {
 		t.Fatal(err)
+	}
+	prompt := w.Steps[0].LLM.Prompt
+	// Files should be separated by \n\n, with internal newlines preserved
+	if !strings.Contains(prompt, "content-a\nwith newlines") {
+		t.Fatalf("expected file-a content with internal newlines preserved, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "content-b") {
+		t.Fatalf("expected file-b content, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "\n\n") {
+		t.Fatalf("expected double-newline separator between files, got %q", prompt)
 	}
 }
 

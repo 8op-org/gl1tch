@@ -216,6 +216,11 @@ func resolveThread(n *sexpr.Node, defs map[string]string) string {
 	return val
 }
 
+// defListSep is a sentinel separator for internal list representation in def
+// threading. Using a separator that won't appear in file content prevents
+// (join) from splitting on newlines inside file contents.
+const defListSep = "\x00\n\x00"
+
 // applyDefForm applies a form to a value in def/thread context.
 func applyDefForm(n *sexpr.Node, input string, defs map[string]string) string {
 	if !n.IsList() || len(n.Children) == 0 {
@@ -232,15 +237,21 @@ func applyDefForm(n *sexpr.Node, input string, defs map[string]string) string {
 		if formName == "" {
 			formName = n.Children[1].StringVal()
 		}
-		lines := strings.Split(input, "\n")
+		// Split on sentinel separator if present, otherwise newlines (from glob)
+		var items []string
+		if strings.Contains(input, defListSep) {
+			items = strings.Split(input, defListSep)
+		} else {
+			items = strings.Split(input, "\n")
+		}
 		var results []string
-		for _, line := range lines {
-			if line == "" {
+		for _, item := range items {
+			if item == "" {
 				continue
 			}
 			switch formName {
 			case "read-file", "read":
-				data, err := os.ReadFile(line)
+				data, err := os.ReadFile(item)
 				if err != nil {
 					panic(fmt.Sprintf("(map read-file): %v", err))
 				}
@@ -249,16 +260,22 @@ func applyDefForm(n *sexpr.Node, input string, defs map[string]string) string {
 				panic(fmt.Sprintf("(map %s): unsupported form in def context", formName))
 			}
 		}
-		return strings.Join(results, "\n")
+		return strings.Join(results, defListSep)
 
 	case "join":
 		sep := "\n"
 		if len(n.Children) >= 2 {
 			sep = resolveVal(n.Children[1], defs)
 		}
-		lines := strings.Split(input, "\n")
+		// Split on sentinel if present, otherwise newlines
+		var items []string
+		if strings.Contains(input, defListSep) {
+			items = strings.Split(input, defListSep)
+		} else {
+			items = strings.Split(input, "\n")
+		}
 		var nonEmpty []string
-		for _, l := range lines {
+		for _, l := range items {
 			if l != "" {
 				nonEmpty = append(nonEmpty, l)
 			}
@@ -298,11 +315,16 @@ func applyDefForm(n *sexpr.Node, input string, defs map[string]string) string {
 			panic("(filter): missing predicate")
 		}
 		pred := n.Children[1]
-		lines := strings.Split(input, "\n")
+		var items []string
+		if strings.Contains(input, defListSep) {
+			items = strings.Split(input, defListSep)
+		} else {
+			items = strings.Split(input, "\n")
+		}
 		var kept []string
-		for _, line := range lines {
-			if evalDefPredicate(pred, line, defs) {
-				kept = append(kept, line)
+		for _, item := range items {
+			if evalDefPredicate(pred, item, defs) {
+				kept = append(kept, item)
 			}
 		}
 		return strings.Join(kept, "\n")

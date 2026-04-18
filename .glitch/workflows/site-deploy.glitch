@@ -2,8 +2,6 @@
 ;;
 ;; Run with: glitch workflow run site-deploy
 
-(include "site/shared.glitch")
-
 (workflow "site-deploy"
   :description "Verify, build, commit, push for GitHub Pages"
 
