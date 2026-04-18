@@ -3,6 +3,8 @@
 ;; Run with: glitch workflow run site-update-page --set page=plugins
 ;; Or:       glitch workflow run site-update-page --set page=getting-started --set instructions="add section about par form"
 
+(include "site/shared.glitch")
+
 (workflow "site-update-page"
   :description "AI-rewrite an existing doc page with gated verification"
 
@@ -10,9 +12,6 @@
 
   (step "current-page"
     (run "cat docs/site/~(trim param.page).md"))
-
-  (step "examples"
-    (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
   (step "repo-structure"
     (run "find internal/ cmd/ -name '*.go' -not -path '*/testdata/*' | head -40"))
@@ -23,10 +22,7 @@
   (step "workflows"
     (run "for f in .glitch/workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
-  (step "conventions"
-    (read-file "site/conventions.md"))
-
-  ;; ── Rewrite (tiered) ─────────────────────────────
+  ;; ── Rewrite ───────────────────────────────────────
 
   (step "rewrite"
     (llm
@@ -34,7 +30,7 @@
         You are a technical writer for gl1tch (8op.org).
 
         CONVENTIONS — follow these exactly:
-        ~(step conventions)
+        ~conventions
 
         INSTRUCTIONS: ~param.instructions
 
@@ -42,7 +38,7 @@
         ~(step current-page)
 
         REAL WORKFLOW EXAMPLES (use this exact syntax in code blocks):
-        ~(step examples)
+        ~examples
 
         REAL WORKFLOWS:
         ~(step workflows)
@@ -62,10 +58,10 @@
   (step "save"
     (save "docs/site/~(trim param.page).md" :from "rewrite"))
 
-  ;; ── Rebuild and verify ────────────────────────────
-
   (step "rebuild"
     (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
+
+  ;; ── Verify ────────────────────────────────────────
 
   (phase "verify" :retries 1
     (gate "no-hallucinations"

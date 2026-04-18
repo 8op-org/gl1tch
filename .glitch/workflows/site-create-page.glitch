@@ -1,18 +1,16 @@
 ;; site-create-page.glitch — AI generates a doc page, gates verify it
 ;;
 ;; Run with: glitch workflow run site-create-page --set topic="batch comparison runs"
-;; Or:       glitch workflow run site-create-page --set topic="par form"
+
+(include "site/shared.glitch")
 
 (workflow "site-create-page"
   :description "AI-generate a new doc page with gated verification"
 
-  ;; ── Gather context (shell, 0 tokens) ──────────────
+  ;; ── Gather context ────────────────────────────────
 
   (step "existing-docs"
     (run "for f in docs/site/*.md; do echo '=== '$f' ==='; head -5 \"$f\"; echo; done"))
-
-  (step "examples"
-    (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
   (step "repo-structure"
     (run "find internal/ cmd/ -name '*.go' -not -path '*/testdata/*' | head -40"))
@@ -23,13 +21,7 @@
   (step "existing-pages"
     (run "python3 -c \"import glob,os; [print(os.path.splitext(os.path.basename(p))[0]) for p in sorted(glob.glob('docs/site/*.md'))]\""))
 
-  (step "conventions"
-    (read-file "site/conventions.md"))
-
-  (step "example-workflows"
-    (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
-
-  ;; ── Generate page (tiered — local first, escalate if needed) ──
+  ;; ── Generate page ─────────────────────────────────
 
   (step "generate"
     (llm
@@ -38,7 +30,7 @@
         You are a technical writer for gl1tch (8op.org).
 
         CONVENTIONS — follow these exactly:
-        ~(step conventions)
+        ~conventions
 
         TOPIC: ~param.topic
 
@@ -49,7 +41,7 @@
         ~(step existing-docs)
 
         REAL WORKFLOW EXAMPLES (use this exact syntax in code blocks):
-        ~(step example-workflows)
+        ~examples
 
         REPO STRUCTURE:
         ~(step repo-structure)
@@ -64,12 +56,10 @@
         The content should be complete and ready to publish.
         ```))
 
-  ;; ── Save generated page as a stub ─────────────────
+  ;; ── Save generated page ───────────────────────────
 
   (step "save-stub"
     (run "cat '~(stepfile generate)' | python3 scripts/save-generated-page.py"))
-
-  ;; ── Rebuild docs.json with new page ───────────────
 
   (step "rebuild-json"
     (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
@@ -85,8 +75,6 @@
       (run "python3 scripts/gate-coverage.py"))
     (gate "structure-and-tone"
       (run "python3 scripts/gate-structure.py")))
-
-  ;; ── Page tests ────────────────────────────────────
 
   (phase "page-tests" :retries 0
     (gate "playwright"
