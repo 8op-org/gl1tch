@@ -25,12 +25,27 @@ func ParseInput(src []byte) (*InputDef, error) {
 		return nil, fmt.Errorf("parse input: %w", err)
 	}
 
-	var found *InputDef
+	return findInput(nodes, nil)
+}
+
+// findInput walks nodes looking for (input ...) forms, recursing into
+// (workflow ...) children so (input ...) can appear at the file top level
+// or inside the workflow form.
+func findInput(nodes []*sexpr.Node, found *InputDef) (*InputDef, error) {
 	for _, n := range nodes {
 		if !n.IsList() || len(n.Children) == 0 {
 			continue
 		}
-		if n.Children[0].SymbolVal() != "input" {
+		head := n.Children[0].SymbolVal()
+		if head == "workflow" {
+			var err error
+			found, err = findInput(n.Children[1:], found)
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if head != "input" {
 			continue
 		}
 		if found != nil {

@@ -1851,3 +1851,33 @@ func TestLoadBytes_CollectsArgForms(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadBytes_ArgFormsInsideWorkflow(t *testing.T) {
+	src := []byte(`
+(workflow "w"
+  (arg "action" :required true :description "Which action to run")
+  (arg "topic" :default "" :description "Topic name")
+
+  (cond
+    ("test '~param.action' = 'create'"
+      (step "create" (run "echo ~param.topic")))))
+`)
+	w, err := LoadBytes(src, "w.glitch")
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if len(w.Args) != 2 {
+		t.Fatalf("Args len = %d, want 2", len(w.Args))
+	}
+	if w.Args[0].Name != "action" || w.Args[0].Description != "Which action to run" {
+		t.Errorf("Args[0] = %+v", w.Args[0])
+	}
+	if w.Args[1].Name != "topic" || w.Args[1].Description != "Topic name" {
+		t.Errorf("Args[1] = %+v", w.Args[1])
+	}
+	for _, a := range w.Args {
+		if a.Implicit {
+			t.Errorf("declared arg %q marked Implicit=true", a.Name)
+		}
+	}
+}

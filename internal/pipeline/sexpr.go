@@ -433,6 +433,12 @@ func convertWorkflow(n *sexpr.Node, defs map[string]string) (*Workflow, error) {
 			if head == "gate" {
 				return nil, fmt.Errorf("line %d: (gate) must be inside a (phase)", child.Line)
 			}
+			// (arg ...) and (input ...) are declaration forms parsed
+			// separately by ParseArgs / ParseInput — skip them here.
+			if head == "arg" || head == "input" {
+				i++
+				continue
+			}
 			steps, err := convertForm(child, head, defs)
 			if err != nil {
 				return nil, err

@@ -34,22 +34,37 @@ func ParseArgs(src []byte) ([]ArgDef, error) {
 	}
 
 	var defs []ArgDef
+	if err := collectArgs(nodes, &defs); err != nil {
+		return nil, err
+	}
+	return defs, nil
+}
+
+// collectArgs walks a slice of nodes, collecting (arg ...) forms.
+// It recurses into (workflow ...) children so args can be declared
+// either at the file top level or inside the workflow form.
+func collectArgs(nodes []*sexpr.Node, defs *[]ArgDef) error {
 	for _, node := range nodes {
 		if !node.IsList() || len(node.Children) == 0 {
 			continue
 		}
-		head := node.Children[0]
-		if head.SymbolVal() != "arg" {
+		head := node.Children[0].SymbolVal()
+		if head == "workflow" {
+			if err := collectArgs(node.Children[1:], defs); err != nil {
+				return err
+			}
 			continue
 		}
-
+		if head != "arg" {
+			continue
+		}
 		def, err := parseArgNode(node)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		defs = append(defs, def)
+		*defs = append(*defs, def)
 	}
-	return defs, nil
+	return nil
 }
 
 // parseArgNode converts a single (arg ...) list node into an ArgDef.

@@ -20,6 +20,11 @@
 (workflow "site"
   :description "Unified site workflow — sync, create, update, deploy, dev"
 
+  (arg "action" :required true :description "Action to run: sync, create, update, deploy, dev")
+  (arg "topic" :required false :description "Topic for create action" :example "batch comparison runs")
+  (arg "page" :required false :description "Page slug for update action" :example "plugins")
+  (arg "instructions" :required false :description "Extra instructions for update action" :example "add section about par form")
+
   (cond
     ("test '~param.action' = 'sync'"
       (step "dispatch-sync"
