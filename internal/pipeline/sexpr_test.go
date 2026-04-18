@@ -1851,3 +1851,68 @@ func TestLoadBytes_CollectsArgForms(t *testing.T) {
 		}
 	}
 }
+
+func TestSexprWorkflow_WebSearch(t *testing.T) {
+	src := []byte(`
+(workflow "web-research"
+  (step "find"
+    (websearch "kubernetes pod eviction"
+      :engines ("google" "stackoverflow")
+      :results 3
+      :lang "en")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(w.Steps))
+	}
+	s := w.Steps[0]
+	if s.WebSearch == nil {
+		t.Fatal("expected WebSearch step")
+	}
+	if s.WebSearch.Query != "kubernetes pod eviction" {
+		t.Fatalf("query = %q, want %q", s.WebSearch.Query, "kubernetes pod eviction")
+	}
+	if len(s.WebSearch.Engines) != 2 {
+		t.Fatalf("engines len = %d, want 2", len(s.WebSearch.Engines))
+	}
+	if s.WebSearch.Engines[0] != "google" || s.WebSearch.Engines[1] != "stackoverflow" {
+		t.Fatalf("engines = %v, want [google stackoverflow]", s.WebSearch.Engines)
+	}
+	if s.WebSearch.Results != 3 {
+		t.Fatalf("results = %d, want 3", s.WebSearch.Results)
+	}
+	if s.WebSearch.Lang != "en" {
+		t.Fatalf("lang = %q, want %q", s.WebSearch.Lang, "en")
+	}
+}
+
+func TestSexprWorkflow_WebSearchDefaults(t *testing.T) {
+	src := []byte(`
+(workflow "web-minimal"
+  (step "find"
+    (websearch "test query")))
+`)
+	w, err := parseSexprWorkflow(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := w.Steps[0]
+	if s.WebSearch == nil {
+		t.Fatal("expected WebSearch step")
+	}
+	if s.WebSearch.Query != "test query" {
+		t.Fatalf("query = %q, want %q", s.WebSearch.Query, "test query")
+	}
+	if s.WebSearch.Results != 5 {
+		t.Fatalf("results = %d, want default 5", s.WebSearch.Results)
+	}
+	if s.WebSearch.Lang != "en" {
+		t.Fatalf("lang = %q, want default %q", s.WebSearch.Lang, "en")
+	}
+	if len(s.WebSearch.Engines) != 0 {
+		t.Fatalf("engines should be empty by default, got %v", s.WebSearch.Engines)
+	}
+}

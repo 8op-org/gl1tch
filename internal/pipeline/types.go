@@ -115,6 +115,9 @@ type Step struct {
 	// Embedding
 	Embed *EmbedStep `yaml:"-"`
 
+	// Web search
+	WebSearch *WebSearchStep `yaml:"-"`
+
 	// call-workflow: invokes a sibling workflow by name as a nested run.
 	CallWorkflow string            `yaml:"-"` // workflow name
 	CallInput    string            `yaml:"-"` // template-rendered input for child
@@ -221,6 +224,14 @@ type DeleteStep struct {
 type EmbedStep struct {
 	Input string // template-rendered text to embed
 	Model string
+}
+
+// WebSearchStep queries a SearXNG instance and returns results as JSON.
+type WebSearchStep struct {
+	Query   string   // search query (template-rendered)
+	Engines []string // SearXNG engine names (empty = SearXNG defaults)
+	Results int      // max results (default 5)
+	Lang    string   // language filter (default "en")
 }
 
 // LoadFile reads a single workflow file (YAML or sexpr).
