@@ -148,12 +148,16 @@ func runRun(cmd *cobra.Command, args []string) error {
 	wsName := workspace.ResolveWorkspace(wsDir)
 	var wsParsed *workspace.Workspace
 	var wsESURL string
+	var wsWebSearchURL string
 	wsFile := filepath.Join(wsDir, "workspace.glitch")
 	if wsData, err := os.ReadFile(wsFile); err == nil {
 		if ws, err := workspace.ParseFile(wsData); err == nil {
 			wsParsed = ws
 			if ws.Defaults.Elasticsearch != "" {
 				wsESURL = ws.Defaults.Elasticsearch
+			}
+			if ws.Defaults.WebSearch != "" {
+				wsWebSearchURL = ws.Defaults.WebSearch
 			}
 		}
 	}
@@ -263,6 +267,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		Tiers:            cfg.Tiers,
 		EvalThreshold:    cfg.EvalThreshold,
 		ESURL:            wsESURL,
+		WebSearchURL:     wsWebSearchURL,
 		Workspace:        wsName,
 		Resources:        resources,
 		WorkflowsDir:     wfDir,

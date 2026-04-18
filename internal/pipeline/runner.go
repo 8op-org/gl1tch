@@ -54,6 +54,7 @@ type runCtx struct {
 	prevStepID       string
 	mu               sync.Mutex
 	esURL            string
+	webSearchURL     string
 	tel              *esearch.Telemetry
 	runID            string
 	workflow         string
@@ -113,6 +114,7 @@ type RunOpts struct {
 	EvalThreshold    int
 	SeedSteps        map[string]string // pre-computed step outputs; matching step IDs are skipped
 	ESURL            string            // default ES URL from workspace config
+	WebSearchURL     string            // default SearXNG URL from workspace config
 	Workspace        string            // resolved workspace name for ~workspace references
 	Resources        map[string]map[string]string // resource name → field → value (from active workspace)
 
@@ -269,6 +271,11 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		esURL = opts[0].ESURL
 	}
 
+	var webSearchURL string
+	if len(opts) > 0 && opts[0].WebSearchURL != "" {
+		webSearchURL = opts[0].WebSearchURL
+	}
+
 	var workspaceName string
 	if len(opts) > 0 {
 		workspaceName = opts[0].Workspace
@@ -295,6 +302,7 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		evalThreshold:    evalThreshold,
 		steps:            steps,
 		esURL:            esURL,
+		webSearchURL:     webSearchURL,
 		tel:              tel,
 		runID:            runID,
 		workflow:         w.Name,
@@ -1328,6 +1336,7 @@ func executeCompare(ctx context.Context, rctx *runCtx, step Step) (*stepOutcome,
 				evalThreshold:    rctx.evalThreshold,
 				steps:            rctx.stepsSnapshot(), // copy outer steps
 				esURL:            rctx.esURL,
+				webSearchURL:     rctx.webSearchURL,
 				tel:              rctx.tel,
 				runID:            rctx.runID,
 				workflow:         rctx.workflow,
@@ -1655,6 +1664,7 @@ func executeCallWorkflow(ctx context.Context, rctx *runCtx, step Step) (*stepOut
 		Tiers:            rctx.tiers,
 		EvalThreshold:    rctx.evalThreshold,
 		ESURL:            rctx.esURL,
+		WebSearchURL:     rctx.webSearchURL,
 		Workspace:        rctx.workspace,
 		Resources:        rctx.resources,
 		WorkflowsDir:     rctx.workflowsDir,
