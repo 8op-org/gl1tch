@@ -23,6 +23,9 @@
   (step "workflows"
     (run "for f in .glitch/workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
+  (step "conventions"
+    (read-file "site/conventions.md"))
+
   ;; ── Rewrite (tiered) ─────────────────────────────
 
   (step "rewrite"
@@ -30,21 +33,15 @@
       :prompt ```
         You are a technical writer for gl1tch (8op.org).
 
-        RULES:
-        - "your" framing throughout, never "the user"
-        - examples before explanation
-        - no internal implementation details (no BubbleTea, tmux, SQLite, Go types)
-        - code examples must be real — use the repo context below
-        - do NOT invent commands, flags, or features
-        - preserve the page's slug and general structure
-        - improve accuracy, add missing content, fix outdated information
+        CONVENTIONS — follow these exactly:
+        ~(step conventions)
 
         INSTRUCTIONS: ~param.instructions
 
         CURRENT PAGE CONTENT:
         ~(step current-page)
 
-        REAL EXAMPLES FROM REPO:
+        REAL WORKFLOW EXAMPLES (use this exact syntax in code blocks):
         ~(step examples)
 
         REAL WORKFLOWS:

@@ -23,6 +23,12 @@
   (step "existing-pages"
     (run "python3 -c \"import glob,os; [print(os.path.splitext(os.path.basename(p))[0]) for p in sorted(glob.glob('docs/site/*.md'))]\""))
 
+  (step "conventions"
+    (read-file "site/conventions.md"))
+
+  (step "example-workflows"
+    (run "for f in examples/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
+
   ;; ── Generate page (tiered — local first, escalate if needed) ──
 
   (step "generate"
@@ -31,14 +37,8 @@
       :prompt ```
         You are a technical writer for gl1tch (8op.org).
 
-        RULES:
-        - "your" framing throughout, never "the user"
-        - examples before explanation
-        - no internal implementation details (no BubbleTea, tmux, SQLite, Go types)
-        - code examples must be real — use the repo context below
-        - do NOT invent commands, flags, or features
-        - start with a # Heading matching the topic
-        - be thorough but concise — this is documentation, not a blog post
+        CONVENTIONS — follow these exactly:
+        ~(step conventions)
 
         TOPIC: ~param.topic
 
@@ -48,8 +48,8 @@
         EXISTING DOC STUBS (for tone reference):
         ~(step existing-docs)
 
-        REAL EXAMPLES FROM REPO:
-        ~(step examples)
+        REAL WORKFLOW EXAMPLES (use this exact syntax in code blocks):
+        ~(step example-workflows)
 
         REPO STRUCTURE:
         ~(step repo-structure)
