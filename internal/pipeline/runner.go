@@ -316,6 +316,58 @@ func Run(w *Workflow, input string, defaultModel string, params map[string]strin
 		rctx.stepRecorder = opts[0].StepRecorder
 	}
 
+	// Evaluator path for sexpr workflows: use when Source is set and the old
+	// converter did not produce any Steps/Items (pure evaluator workflow).
+	if w.Source != nil && len(w.Steps) == 0 && len(w.Items) == 0 {
+		ev := NewEvaluator()
+		ev.Input = input
+		ev.Params = params
+		ev.DefaultModel = defaultModel
+		ev.Workspace = workspaceName
+		ev.Resources = resources
+		ev.ProviderReg = reg
+		ev.ProviderResolver = providerResolver
+		ev.Tiers = tiers
+		ev.EvalThreshold = evalThreshold
+		ev.ESURL = esURL
+		ev.WebSearchURL = webSearchURL
+		ev.WorkflowName = w.Name
+		ev.WorkflowsDir = rctx.workflowsDir
+		ev.StepRecorder = rctx.stepRecorder
+		if len(opts) > 0 {
+			ev.CallStack = opts[0].CallStack
+		}
+
+		// Pre-seed steps from SeedSteps
+		if len(opts) > 0 && opts[0].SeedSteps != nil {
+			for k, v := range opts[0].SeedSteps {
+				ev.mu.Lock()
+				ev.steps[k] = v
+				ev.mu.Unlock()
+			}
+		}
+
+		_, err := ev.RunSource(w.Source)
+		if err != nil {
+			return nil, err
+		}
+
+		evSteps := ev.Steps()
+
+		// Find last step output
+		var lastOutput string
+		for _, s := range evSteps {
+			lastOutput = s
+		}
+
+		return &Result{
+			Workflow: w.Name,
+			Output:   lastOutput,
+			Steps:    evSteps,
+			RunID:    rctx.parentRunID,
+		}, nil
+	}
+
 	// Emit run-start document
 	startTime := time.Now()
 	hasCompare := workflowHasCompare(w)

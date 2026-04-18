@@ -669,6 +669,14 @@ func (ev *Evaluator) builtinCallWorkflow(_ *Evaluator, env *Env, args []*sexpr.N
 		return nil, fmt.Errorf("call-workflow: read %q: %w", wfPath, err)
 	}
 
+	// Cycle detection: check if this workflow is already on the call stack
+	resolvedName := filepath.Base(wfPath)
+	for _, ancestor := range ev.CallStack {
+		if ancestor == resolvedName || ancestor == name {
+			return nil, fmt.Errorf("call-workflow: cycle detected: %s already on call stack %v", name, ev.CallStack)
+		}
+	}
+
 	// Create child evaluator
 	child := NewEvaluator()
 	child.Input = input
@@ -684,6 +692,7 @@ func (ev *Evaluator) builtinCallWorkflow(_ *Evaluator, env *Env, args []*sexpr.N
 	child.WebSearchURL = ev.WebSearchURL
 	child.WorkflowsDir = ev.WorkflowsDir
 	child.StepRecorder = ev.StepRecorder
+	child.CallStack = append(append([]string{}, ev.CallStack...), resolvedName)
 
 	result, err := child.RunSource(data)
 	if err != nil {

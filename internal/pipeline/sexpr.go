@@ -84,7 +84,12 @@ func parseSexprWorkflowWithIncludes(src []byte, visited map[string]bool) (w *Wor
 	// Find workflow
 	for _, n := range nodes {
 		if n.IsList() && len(n.Children) > 0 && n.Children[0].StringVal() == "workflow" {
-			return convertWorkflow(n, defs)
+			w, err := convertWorkflow(n, defs)
+			if err != nil {
+				return nil, err
+			}
+			w.Source = src
+			return w, nil
 		}
 	}
 	return nil, fmt.Errorf("no (workflow ...) form found")
