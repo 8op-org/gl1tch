@@ -98,6 +98,47 @@ The string passed to `(workflow ...)` is the name you use with `glitch workflow 
 
 Defs are simple text substitution — use them for anything you repeat: model names, provider strings, repo paths, usernames.
 
+## Sharing Definitions
+
+Use `(include)` to import `(def ...)` bindings from another file:
+
+````glitch
+(include "site/shared.glitch")
+
+(workflow "my-workflow"
+  :description "uses shared defs"
+  (step "s1"
+    (llm :model model :prompt "~conventions")))
+````
+
+Only `(def ...)` forms are imported — workflows and steps in the included file are ignored. Circular includes produce a parse error.
+
+## Evaluated Definitions
+
+`(def)` can evaluate forms at parse time, not just literal strings:
+
+````glitch
+;; Read a file into a constant
+(def conventions (read-file "site/conventions.md"))
+
+;; Glob + read + join via threading
+(def examples
+  (-> (glob "examples/*.glitch")
+      (map read-file)
+      (join "\n\n")))
+
+;; Filter lines from a file
+(def commands
+  (-> (read-file "valid-commands.txt")
+      (lines)
+      (filter (contains "glitch"))
+      (join "\n")))
+````
+
+Available forms in `(def)` context: `read-file`, `glob`, `->`, `map`, `filter`, `lines`, `join`, `split`, `trim`, `upper`, `lower`, `replace`, `contains`, `flatten`.
+
+These evaluate at parse time — they produce constants. Runtime references like `~param.*` or `~(step ...)` are not available in `(def)`.
+
 ## Steps
 
 Every step has an ID and a single action. The ID names the output so later steps can reference it.
@@ -148,7 +189,7 @@ gl1tch uses `~` templates for variable substitution.
 |-----------|-------------|
 | `~(step id)` | Insert a named step's output |
 | `~(stepfile id)` | Write step output to a temp file, return the path |
-| `~input` | The value passed as trailing arg |
+| `~input` | The value passed to `glitch ask` or as trailing arg |
 | `~param.key` | A runtime parameter from `--set key=value` |
 
 Use `~(stepfile id)` when step output contains characters that break shell escaping:
@@ -438,9 +479,11 @@ HTTP requests without shelling out:
 
 ```glitch
 (step "fetch-data"
+  (fetch "https://api.example.com/data"
     :headers {"Authorization" "Bearer ~param.token"}))
 
 (step "submit"
+  (send "https://api.example.com/submit"
     :body "~(step payload)"
     :headers {"Content-Type" "application/json"}))
 ```
@@ -456,7 +499,7 @@ File I/O without shell commands:
   (read "config/settings.json"))
 
 (step "save-output"
-  (save "output/report.json" :from "analysis"))
+  (write "output/report.json" :from "analysis"))
 ```
 
 ### glob
@@ -665,6 +708,16 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
 | `(pick "expr" :from "step-id")` | Run jq expression on step output |
 | `(lines "step-id")` | Split output by newline into JSON array |
 | `(merge "a" "b" ...)` | Combine JSON from multiple steps |
+| `(fetch "url" :headers {...})` | HTTP GET request |
+| `(send "url" :body "..." :headers {...})` | HTTP POST request |
+| `(read "path")` | Read file into step output |
+| `(write "path" :from "step-id")` | Write step output to file |
+| `(glob "pattern" :dir "path")` | Match files, newline-separated output |
+| `(search :index "idx" :query {...})` | Query Elasticsearch |
+| `(index :index "idx" :doc "...")` | Index a document to Elasticsearch |
+| `(delete :index "idx" :query {...})` | Delete documents from Elasticsearch |
+| `(embed :input "..." :provider "..." :model "...")` | Generate an embedding vector |
+
 ### Wrapper forms (around steps)
 
 | Form | Description |

@@ -1,10 +1,10 @@
 ---
 title: "Workspaces"
 order: 8
-description: "Declared resources, scoped workflows, nested runs, and shared defaults — glitch workspace init once, every command knows where it is."
+description: "A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defau"
 ---
 
-A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defaults. You run `glitch workspace init` once, then every subsequent command — `glitch run`, `glitch observe`, `glitch workspace gui` — knows where it is and what it's working on.
+A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defaults. You run `glitch workspace init` once, then every subsequent command — `glitch run`, `glitch ask`, `glitch workspace gui` — knows where it is and what it's working on.
 
 ## Quick start
 
@@ -112,7 +112,7 @@ Local resources ship symlink-only. If you need a snapshot of a non-git folder, p
 
 ## Referencing resources from workflows
 
-Resources are exposed to workflows via `~resource.<name>.<field>` bindings:
+Resources are exposed to workflows via `~resource.<name>.<field>` template bindings:
 
 ```glitch
 (step "backend-status"
@@ -147,7 +147,7 @@ Loop over resources of a given type — parallel to `map`, but pulled from works
     (run "cd ~resource.item.path && git status --short")))
 ```
 
-Each iteration binds the current resource to `~resource.item`, so `~resource.item.path`, `~resource.item.ref`, and the rest are all available in the body.
+Each iteration binds the current resource to `.resource.item`, so `~resource.item.path`, `~resource.item.ref`, and the rest are all available in the body.
 
 ## The CLI surface
 
@@ -156,6 +156,7 @@ Three tiers: hot paths at top level, management under `glitch workspace`, infras
 ### Hot paths
 
 ```bash
+glitch ask <query>              # smart router — matches against workspace workflows
 glitch run <workflow> [input]   # run a workflow (workspace workflows first, global fallback)
 glitch observe <query>          # observer queries on indexed activity
 ```
@@ -236,7 +237,7 @@ Sub-workflow invocation via the `call-workflow` s-expr form. The runner starts a
   (step "review-each-pr"
     (call-workflow "pr-review"
       :set (repo "acme/backend")
-      :set (pr "~item"))))
+      :set (pr "~param.item"))))
 
 (step "summary"
   (llm :prompt ```
@@ -315,6 +316,7 @@ glitch workspace use my-project
 
 # Now every command picks up that workspace's workflows, resources, and defaults:
 glitch run morning-briefing
+glitch ask "review ops#42"
 glitch run pr-review --set pr=42
 
 # Or cd into a different workspace — walk-up wins over the active one:
@@ -373,4 +375,4 @@ One format across global config, workspace config, and workflows.
 - [Workflow Syntax](/docs/workflow-syntax) — the step forms and templates your workspace workflows use
 - [Plugins](/docs/plugins) — reusable data-gathering subcommands that compose with workflows
 - [Local Models](/docs/local-models) — setting up Ollama for your workspace's default model
-- [Batch Runs](/docs/batch-runs) — parent/child runs across multiple providers
+- [Batch Comparison Runs](/docs/batch-comparison-runs) — parent/child runs across multiple providers
