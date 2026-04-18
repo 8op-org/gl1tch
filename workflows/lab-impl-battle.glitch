@@ -64,8 +64,8 @@
   ;; Step 1: Free model does initial design
   (step "tier-a-design"
     (llm
-      :provider "openrouter"
-      :model "google/gemma-3-27b-it:free"
+      :provider "lm-studio"
+      :model "qwen3-8b"
       :prompt ```
         You are a C systems programmer contributing to the Janet language.
 
@@ -93,7 +93,7 @@
   (step "tier-a-impl"
     (llm
       :provider "openrouter"
-      :model "qwen/qwen3-32b"
+      :model "qwen/qwen3.5-flash-02-23"
       :prompt ```
         You are a C systems programmer implementing a feature for the Janet language.
 
