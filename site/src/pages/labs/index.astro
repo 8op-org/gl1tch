@@ -14,7 +14,7 @@ const labs = (await getCollection('labs')).sort(
       <p class="labs-intro">Real workflows, real issues, real output. Each lab runs gl1tch against a public GitHub issue or PR and shows you exactly what comes back — from free models to paid.</p>
 
       {labs.length === 0 && (
-        <p class="labs-empty">No labs yet. Run <code>glitch workflow run labs-generate</code> to create them.</p>
+        <p class="labs-empty">No labs yet. Run <code>glitch run lab-impl-battle</code> to generate one.</p>
       )}
 
       <div class="labs-grid">
