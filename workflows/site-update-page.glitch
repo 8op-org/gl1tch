@@ -20,7 +20,7 @@
     (run "git log --oneline -30 -- cmd/ internal/ examples/ .glitch/"))
 
   (step "workflows"
-    (run "for f in .glitch/workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
+    (run "for f in workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
 
   ;; ── Rewrite ───────────────────────────────────────
 

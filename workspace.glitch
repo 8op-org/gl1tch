@@ -1,0 +1,3 @@
+(workspace "gl1tch"
+  :description "gl1tch workflow engine and site"
+  (resource "x" :type "local" :path "/tmp"))

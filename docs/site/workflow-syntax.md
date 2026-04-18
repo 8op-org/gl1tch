@@ -8,7 +8,7 @@ gl1tch workflows are `.glitch` files written in s-expression syntax — parenthe
 (form arg1 arg2 :keyword value)
 ```
 
-Drop your files in `.glitch/workflows/` for automatic discovery. This page is the complete reference for every form available.
+Drop your files in `workflows/` for automatic discovery. This page is the complete reference for every form available.
 
 ## Form Aliases
 

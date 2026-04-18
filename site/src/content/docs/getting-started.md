@@ -117,7 +117,7 @@ Shell steps fetch the data (free, deterministic). LLM steps make sense of it (ex
 
 ## Writing your own workflow
 
-Create `.glitch/workflows/my-workflow.glitch`:
+Create `workflows/my-workflow.glitch`:
 
 ````glitch
 (def model "qwen2.5:7b")
@@ -229,7 +229,7 @@ Write any step's output to a file with `(save ...)`:
 
 Workflows are discovered from these locations:
 
-- `.glitch/workflows/` in your current project — project-local
+- `workflows/` in your current project — project-local
 - `~/.config/glitch/workflows/` — user-global
 
 Project-local workflows override globals with the same name.

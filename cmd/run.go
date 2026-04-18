@@ -307,6 +307,14 @@ func resolveWorkflowPath(name string) (string, error) {
 		}
 	}
 
+	// CWD workflows/ fallback.
+	for _, ext := range exts {
+		p := filepath.Join("workflows", name+ext)
+		if _, err := os.Stat(p); err == nil {
+			return filepath.Abs(p)
+		}
+	}
+
 	// Global fallback.
 	if home, err := os.UserHomeDir(); err == nil {
 		globalDir := filepath.Join(home, ".config", "glitch", "workflows")

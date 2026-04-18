@@ -300,7 +300,7 @@ func loadWorkflows() (map[string]*pipeline.Workflow, error) {
 			}
 		}
 	}
-	if m, err := pipeline.LoadDir(".glitch/workflows"); err == nil {
+	if m, err := pipeline.LoadDir("workflows"); err == nil {
 		for k, v := range m {
 			workflows[k] = v
 		}

@@ -48,8 +48,13 @@ func TestListResourcesEmptyOrPopulated(t *testing.T) {
 }
 
 func TestListResourcesNoWorkspace(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
 	t.Setenv("GLITCH_WORKSPACE", "")
+	// Run from a temp dir so cwd walkUp doesn't find a workspace.glitch.
+	orig, _ := os.Getwd()
+	os.Chdir(tmp)
+	t.Cleanup(func() { os.Chdir(orig) })
 	s := &Server{workspace: ""}
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace/resources", nil)
 	rec := httptest.NewRecorder()
@@ -109,8 +114,12 @@ func TestAddResourceDuplicate(t *testing.T) {
 }
 
 func TestAddResourceNoWorkspace(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
 	t.Setenv("GLITCH_WORKSPACE", "")
+	orig, _ := os.Getwd()
+	os.Chdir(tmp)
+	t.Cleanup(func() { os.Chdir(orig) })
 	s := &Server{workspace: ""}
 	body := strings.NewReader(`{"input":"/tmp","name":"x"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace/resources", body)

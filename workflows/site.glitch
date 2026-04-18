@@ -1,0 +1,49 @@
+;; site.glitch — unified site workflow
+;;
+;; Dispatches to the appropriate sub-workflow based on --set action=<action>.
+;;
+;; Actions:
+;;   sync         — reconcile manifest, generate pages, verify, build
+;;   create       — AI-generate a new doc page (requires --set topic="...")
+;;   update       — AI-rewrite an existing doc page (requires --set page=...)
+;;   deploy       — verify, build, commit, push for GitHub Pages
+;;   dev          — start astro dev server
+;;
+;; Examples:
+;;   glitch run site --set action=sync
+;;   glitch run site --set action=create --set topic="batch comparison runs"
+;;   glitch run site --set action=update --set page=plugins
+;;   glitch run site --set action=update --set page=getting-started --set instructions="add section about par form"
+;;   glitch run site --set action=deploy
+;;   glitch run site --set action=dev
+
+(workflow "site"
+  :description "Unified site workflow — sync, create, update, deploy, dev"
+
+  (cond
+    ("test '~param.action' = 'sync'"
+      (step "dispatch-sync"
+        (call-workflow "site-sync")))
+
+    ("test '~param.action' = 'create'"
+      (step "dispatch-create"
+        (call-workflow "site-create-page"
+          :set "topic=~param.topic")))
+
+    ("test '~param.action' = 'update'"
+      (step "dispatch-update"
+        (call-workflow "site-update-page"
+          :set "page=~param.page"
+          :set "instructions=~param.instructions")))
+
+    ("test '~param.action' = 'deploy'"
+      (step "dispatch-deploy"
+        (call-workflow "site-deploy")))
+
+    ("test '~param.action' = 'dev'"
+      (step "dispatch-dev"
+        (call-workflow "site-dev")))
+
+    (else
+      (step "usage"
+        (run "echo 'Usage: glitch run site --set action=<sync|create|update|deploy|dev>' && exit 1")))))

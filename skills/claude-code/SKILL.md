@@ -157,11 +157,11 @@ gl1tch supports two workflow formats:
 ### File Locations
 
 - **Global workflows**: `~/.config/glitch/workflows/` — loaded by all `glitch` runs
-- **Project-local workflows**: `.glitch/workflows/` — override globals for the project
+- **Project-local workflows**: `workflows/` — override globals for the project
 - **Workspace workflows**: `<workspace>/workflows/` — when `--workspace` is set (replaces global)
 - **Config**: `~/.config/glitch/config.yaml`
 
-Loading order: global dir first, then `.glitch/workflows/` (local overrides global). With `--workspace`, only `<workspace>/workflows/` is loaded.
+Loading order: global dir first, then `workflows/` (local overrides global). With `--workspace`, only `<workspace>/workflows/` is loaded.
 
 ### S-Expression Format (.glitch) — Preferred
 

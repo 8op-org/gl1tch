@@ -17,7 +17,7 @@ When the user asks to review a PR, triage issues, check CI, summarize git activi
 
 ## Workflow authoring
 
-Workflows use s-expressions (`.glitch` files). Save to `.glitch/workflows/` for auto-discovery.
+Workflows use s-expressions (`.glitch` files). Save to `workflows/` for auto-discovery.
 
 ```clojure
 ;; Shell steps fetch data. LLM steps reason about it.

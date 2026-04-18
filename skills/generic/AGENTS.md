@@ -13,7 +13,7 @@ PRs, issues, CI, or git activity.
 
 ## Workflow files
 
-Location: `.glitch/workflows/*.glitch` (s-expression format)
+Location: `workflows/*.glitch` (s-expression format)
 
 ```clojure
 (def model "qwen2.5:7b")

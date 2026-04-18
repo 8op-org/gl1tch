@@ -11,7 +11,7 @@ func TestFormatHelp_AllFields(t *testing.T) {
 	w := &Workflow{
 		Name:        "site-create-page",
 		Description: "AI-generate a new doc page with gated verification",
-		SourceFile:  ".glitch/workflows/site-create-page.glitch",
+		SourceFile:  "workflows/site-create-page.glitch",
 		Args: []plugin.ArgDef{
 			{Name: "topic", Required: true, Description: "Topic of the page.", Example: "batch comparison"},
 			{Name: "audience", Default: "developers", Description: "Target reader.", Example: "ops engineer"},
@@ -31,7 +31,7 @@ func TestFormatHelp_AllFields(t *testing.T) {
 		"audience",
 		"developers",
 		"Free-form context.",
-		".glitch/workflows/site-create-page.glitch",
+		"workflows/site-create-page.glitch",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("FormatHelp output missing %q\n---\n%s", want, out)
