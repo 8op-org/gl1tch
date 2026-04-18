@@ -189,7 +189,7 @@ gl1tch uses `~` templates for variable substitution.
 |-----------|-------------|
 | `~(step id)` | Insert a named step's output |
 | `~(stepfile id)` | Write step output to a temp file, return the path |
-| `~input` | The value passed to `glitch ask` or as trailing arg |
+| `~input` | The value passed as trailing arg to `glitch run` |
 | `~param.key` | A runtime parameter from `--set key=value` |
 
 Use `~(stepfile id)` when step output contains characters that break shell escaping:
