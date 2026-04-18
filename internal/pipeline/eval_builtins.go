@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/8op-org/gl1tch/internal/provider"
@@ -43,6 +44,7 @@ func (ev *Evaluator) registerBuiltins(env *Env) {
 
 	// Collections
 	b("list", ev.builtinList)
+	b("assoc", ev.builtinAssoc)
 
 	// Boolean
 	b("not", ev.builtinNot)
@@ -67,9 +69,9 @@ func (ev *Evaluator) registerBuiltins(env *Env) {
 	// Workflow invocation
 	b("call-workflow", ev.builtinCallWorkflow)
 
-	// JSON
-	b("json-pick", ev.builtinJsonPick)
-	b("pick", ev.builtinJsonPick)
+	// JSON / collection access
+	b("json-pick", ev.builtinPick)
+	b("pick", ev.builtinPick)
 }
 
 // builtinSh: (sh "command") — execute a shell command
@@ -711,19 +713,93 @@ func (ev *Evaluator) builtinCallWorkflow(_ *Evaluator, env *Env, args []*sexpr.N
 	return result, nil
 }
 
-// builtinJsonPick: (json-pick "expr" data) — placeholder for jq integration
-func (ev *Evaluator) builtinJsonPick(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
-	if len(args) == 0 {
+// builtinAssoc: (assoc :key val :key val ...) — build a MapVal from keyword-value pairs
+func (ev *Evaluator) builtinAssoc(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	m := &MapVal{}
+	for i := 0; i < len(args); i += 2 {
+		if i+1 >= len(args) {
+			return nil, fmt.Errorf("assoc: odd number of arguments — need key-value pairs")
+		}
+		keyNode := args[i]
+		if !keyNode.IsAtom() || keyNode.Atom.Type != sexpr.TokenKeyword {
+			return nil, fmt.Errorf("assoc: expected keyword, got %v", keyNode)
+		}
+		key := keyNode.KeywordVal()
+
+		val, err := ev.Eval(env, args[i+1])
+		if err != nil {
+			return nil, err
+		}
+		m.Keys = append(m.Keys, key)
+		m.Values = append(m.Values, val)
+	}
+	return m, nil
+}
+
+// builtinPick: (pick map :key) or (pick list index) or (pick json-string ".path")
+func (ev *Evaluator) builtinPick(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
+	if len(args) < 2 {
 		return NilVal{}, nil
 	}
-	// For now, evaluate and return the last arg (passthrough)
-	var result Value = NilVal{}
-	for _, a := range args {
+
+	target, err := ev.Eval(env, args[0])
+	if err != nil {
+		return nil, err
+	}
+
+	keyNode := args[1]
+
+	// MapVal + keyword key
+	if m, ok := target.(*MapVal); ok {
+		if keyNode.IsAtom() && keyNode.Atom.Type == sexpr.TokenKeyword {
+			v, found := m.Get(keyNode.KeywordVal())
+			if !found {
+				return NilVal{}, nil
+			}
+			return v, nil
+		}
+		keyVal, err := ev.Eval(env, keyNode)
+		if err != nil {
+			return nil, err
+		}
+		v, found := m.Get(keyVal.String())
+		if !found {
+			return NilVal{}, nil
+		}
+		return v, nil
+	}
+
+	// ListVal + numeric index
+	if l, ok := target.(ListVal); ok {
+		// Try raw atom value first (bare numbers are symbols, not defined vars)
+		var idxStr string
+		if keyNode.IsAtom() && keyNode.Atom.Type == sexpr.TokenSymbol {
+			idxStr = keyNode.Atom.Val
+		} else {
+			keyVal, err := ev.Eval(env, keyNode)
+			if err != nil {
+				return nil, err
+			}
+			idxStr = keyVal.String()
+		}
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
+			return NilVal{}, nil
+		}
+		if idx < 0 || idx >= len(l) {
+			return NilVal{}, nil
+		}
+		return l[idx], nil
+	}
+
+	// Fallback: passthrough (existing behavior for json-pick placeholder)
+	var result Value = target
+	for _, a := range args[1:] {
 		v, err := ev.Eval(env, a)
 		if err != nil {
 			return nil, err
 		}
-		result = v
+		_ = v
 	}
 	return result, nil
 }

@@ -28,6 +28,30 @@ func (l ListVal) String() string {
 	return strings.Join(parts, "\n")
 }
 
+// MapVal is an ordered associative map (keyword → Value).
+type MapVal struct {
+	Keys   []string
+	Values []Value
+}
+
+func (m *MapVal) String() string {
+	parts := make([]string, len(m.Keys))
+	for i, k := range m.Keys {
+		parts[i] = ":" + k + " " + m.Values[i].String()
+	}
+	return "{" + strings.Join(parts, " ") + "}"
+}
+
+// Get looks up a key in the map. Returns (value, true) or (nil, false).
+func (m *MapVal) Get(key string) (Value, bool) {
+	for i, k := range m.Keys {
+		if k == key {
+			return m.Values[i], true
+		}
+	}
+	return nil, false
+}
+
 // NilVal represents the absence of a value.
 type NilVal struct{}
 
@@ -80,6 +104,8 @@ func isTruthy(v Value) bool {
 		return string(val) != ""
 	case ListVal:
 		return len(val) > 0
+	case *MapVal:
+		return len(val.Keys) > 0
 	default:
 		return true
 	}

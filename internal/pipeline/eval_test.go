@@ -185,3 +185,35 @@ func TestEval_Str(t *testing.T) {
 		t.Fatalf("want %q, got %q", "abc", got)
 	}
 }
+
+func TestEval_Assoc(t *testing.T) {
+	got := evalHelper(t, `(def m (assoc :name "gl1tch" :version "0.1")) (pick m :name)`)
+	if got != "gl1tch" {
+		t.Fatalf("want %q, got %q", "gl1tch", got)
+	}
+}
+
+func TestEval_AssocNested(t *testing.T) {
+	src := `(def m (assoc :meta (assoc :title "hello"))) (pick (pick m :meta) :title)`
+	got := evalHelper(t, src)
+	if got != "hello" {
+		t.Fatalf("want %q, got %q", "hello", got)
+	}
+}
+
+func TestEval_PickFromList(t *testing.T) {
+	src := `(def items (list "a" "b" "c")) (pick items 1)`
+	got := evalHelper(t, src)
+	if got != "b" {
+		t.Fatalf("want %q, got %q", "b", got)
+	}
+}
+
+func TestEval_AssocInList(t *testing.T) {
+	src := `(def pages (list (assoc :slug "intro") (assoc :slug "guide")))
+	         (pick (pick pages 0) :slug)`
+	got := evalHelper(t, src)
+	if got != "intro" {
+		t.Fatalf("want %q, got %q", "intro", got)
+	}
+}
