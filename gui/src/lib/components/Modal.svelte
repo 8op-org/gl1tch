@@ -31,15 +31,18 @@
   .modal {
     width: 90%;
     max-width: 480px;
-    border-color: var(--neon-cyan);
-    box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+    background: linear-gradient(145deg, rgba(17,24,32,0.95), rgba(26,34,48,0.85));
+    border: 1px solid rgba(0,229,255,0.1);
+    border-radius: 16px;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+    backdrop-filter: blur(16px);
   }
   .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(30,42,58,0.5);
   }
   .modal-header h2 { font-size: 15px; font-weight: 500; }
   .close-btn {

@@ -122,71 +122,94 @@
 
 <section class="resources-panel">
   <div class="card-header">
-    <h2>{@html icon('folder', 16)} Resources</h2>
-    <button class="primary" onclick={() => showAdd = true}>+ Add</button>
+    <div class="card-icon">{@html icon('folder', 18)}</div>
+    <div>
+      <h2>Resources</h2>
+      <p class="card-subtitle">Synced repositories and data sources</p>
+    </div>
+    <button class="add-resource-btn" onclick={() => showAdd = true}>
+      <span class="add-resource-icon">+</span> Add
+    </button>
   </div>
 
-  {#if error}
-    <p class="status-fail" style="font-size:12px; margin-bottom: 8px;">{error}</p>
-  {/if}
+  <div class="resources-body">
+    {#if error}
+      <p class="status-fail" style="font-size:12px; padding: 12px 20px;">{error}</p>
+    {/if}
 
-  {#if loading && resources.length === 0}
-    <p class="text-muted">Loading...</p>
-  {:else if resources.length === 0}
-    <p class="text-muted">No resources declared. Click &ldquo;Add resource&rdquo; to add one.</p>
-  {:else}
-    <table class="resources-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Ref</th>
-          <th>Pin</th>
-          <th>Status</th>
-          <th>Fetched</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each resources as r}
-          <tr class:busy={busyName === r.name}>
-            <td class="mono">{r.name}</td>
-            <td class="mono">{r.type}</td>
-            <td class="mono">{r.ref ?? ''}</td>
-            <td class="mono" title={r.pin ?? ''}>{shortPin(r.pin)}</td>
-            <td class="status-cell">
-              {#if busyName === r.name}
-                <span class="status-dot busy-dot"></span><span class="text-muted">busy</span>
-              {:else if r.fetched}
-                <span class="status-dot synced"></span><span class="status-synced">synced</span>
-              {:else}
-                <span class="status-dot stale"></span><span class="status-stale">stale</span>
-              {/if}
-            </td>
-            <td class="text-muted">{formatFetched(r.fetched)}</td>
-            <td class="actions">
+    {#if loading && resources.length === 0}
+      <div class="empty-state">
+        <div class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    {:else if resources.length === 0}
+      <div class="empty-state">
+        <div class="empty-icon">{@html icon('folder', 32)}</div>
+        <p>No resources yet</p>
+        <span class="text-muted">Add a repository or data source to get started</span>
+      </div>
+    {:else}
+      <div class="resource-list">
+        {#each resources as r, i}
+          <div class="resource-card" class:busy={busyName === r.name} style="animation-delay: {i * 40}ms">
+            <div class="resource-main">
+              <div class="resource-info">
+                <span class="resource-name">{r.name}</span>
+                <div class="resource-meta">
+                  <span class="resource-type">{r.type}</span>
+                  {#if r.ref}
+                    <span class="resource-ref">{r.ref}</span>
+                  {/if}
+                  {#if r.pin}
+                    <span class="resource-pin" title={r.pin}>{shortPin(r.pin)}</span>
+                  {/if}
+                </div>
+              </div>
+              <div class="resource-status">
+                {#if busyName === r.name}
+                  <span class="status-badge busy">
+                    <span class="status-dot busy-dot"></span> syncing
+                  </span>
+                {:else if r.fetched}
+                  <span class="status-badge synced">
+                    <span class="status-dot synced"></span> synced
+                  </span>
+                {:else}
+                  <span class="status-badge stale">
+                    <span class="status-dot stale"></span> stale
+                  </span>
+                {/if}
+                {#if r.fetched && busyName !== r.name}
+                  <span class="resource-fetched">{formatFetched(r.fetched)}</span>
+                {/if}
+              </div>
+            </div>
+            <div class="resource-actions">
               <button
+                class="action-btn"
                 disabled={busyName === r.name}
                 onclick={() => onSync(r.name)}
                 title="Re-fetch resource"
               >Sync</button>
               <button
+                class="action-btn"
                 disabled={busyName === r.name}
                 onclick={() => onPin(r.name)}
                 title="Pin to a specific ref/sha"
               >Pin</button>
               <button
-                class="danger"
+                class="action-btn danger"
                 disabled={busyName === r.name}
                 onclick={() => onRemove(r.name)}
                 title="Remove resource"
               >Remove</button>
-            </td>
-          </tr>
+            </div>
+          </div>
         {/each}
-      </tbody>
-    </table>
-  {/if}
+      </div>
+    {/if}
+  </div>
 </section>
 
 {#if showAdd}
@@ -194,34 +217,40 @@
     <form onsubmit={(e) => { e.preventDefault(); onAdd(); }} class="flex flex-col gap-md">
       <label class="field">
         <span class="field-label">URL or path</span>
-        <!-- svelte-ignore a11y_autofocus -->
-        <input
-          type="text"
-          bind:value={addInput}
-          placeholder="https://github.com/org/repo or /abs/path or org/repo"
-          autofocus
-        />
+        <div class="input-wrap">
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            type="text"
+            bind:value={addInput}
+            placeholder="https://github.com/org/repo or /abs/path or org/repo"
+            autofocus
+          />
+        </div>
       </label>
       <label class="field">
         <span class="field-label">Name (optional)</span>
-        <input
-          type="text"
-          bind:value={addName}
-          placeholder="inferred from input"
-        />
+        <div class="input-wrap">
+          <input
+            type="text"
+            bind:value={addName}
+            placeholder="inferred from input"
+          />
+        </div>
       </label>
       <label class="field">
         <span class="field-label">Pin / ref (optional)</span>
-        <input
-          type="text"
-          bind:value={addPin}
-          placeholder="main, tag, sha"
-        />
+        <div class="input-wrap">
+          <input
+            type="text"
+            bind:value={addPin}
+            placeholder="main, tag, sha"
+          />
+        </div>
       </label>
       {#if error}
         <p class="status-fail" style="font-size:12px">{error}</p>
       {/if}
-      <div class="flex justify-between" style="margin-top:8px">
+      <div class="flex justify-between" style="margin-top:12px">
         <button type="button" onclick={closeAdd}>Cancel</button>
         <button type="submit" class="primary" disabled={adding || !addInput.trim()}>
           {#if adding}Adding...{:else}Add{/if}
@@ -237,116 +266,323 @@
     flex-direction: column;
     height: 100%;
   }
+
   .card-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(0, 229, 255, 0.02);
+    gap: 14px;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.06);
+    background: linear-gradient(
+      180deg,
+      rgba(0, 229, 255, 0.03) 0%,
+      transparent 100%
+    );
   }
-  .card-header h2 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
+  .card-icon {
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 0;
+    justify-content: center;
+    border-radius: 10px;
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.12);
+    flex-shrink: 0;
   }
-  .card-header h2 :global(svg) {
+  .card-icon :global(svg) {
     color: var(--neon-cyan);
   }
-  .card-header .primary {
+  .card-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .card-subtitle {
     font-size: 12px;
-    padding: 4px 12px;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+    font-weight: 400;
   }
 
-  .resources-table {
-    width: 100%;
-    border-collapse: collapse;
+  .add-resource-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    background: rgba(0, 229, 255, 0.06);
+    color: var(--neon-cyan);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .add-resource-btn:hover {
+    background: rgba(0, 229, 255, 0.12);
+    border-color: rgba(0, 229, 255, 0.35);
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.1);
+  }
+  .add-resource-icon {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .resources-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+
+  /* ── Empty state ─────────────────────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+    text-align: center;
+    gap: 8px;
+  }
+  .empty-icon {
+    opacity: 0.15;
+    margin-bottom: 8px;
+  }
+  .empty-icon :global(svg) {
+    color: var(--text-primary);
+  }
+  .empty-state p {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .empty-state span {
     font-size: 12px;
   }
-  .resources-table th {
-    text-align: left;
-    padding: 8px 10px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
+
+  .loading-dots {
+    display: flex;
+    gap: 6px;
   }
-  .resources-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-  }
-  .resources-table tr.busy { opacity: 0.5; }
-  .status-cell {
-    white-space: nowrap;
-    font-size: 11px;
-  }
-  .status-dot {
+  .loading-dots span {
     width: 8px;
     height: 8px;
     border-radius: 50%;
+    background: var(--neon-cyan);
+    animation: dot-pulse 1.2s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dot-pulse {
+    0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+  }
+
+  /* ── Resource cards ──────────────────────────────────── */
+  .resource-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .resource-card {
+    padding: 14px 16px;
+    background: rgba(10, 14, 20, 0.4);
+    border: 1px solid rgba(30, 42, 58, 0.5);
+    border-radius: 12px;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    animation: resource-in 0.3s ease-out both;
+  }
+  @keyframes resource-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .resource-card:hover {
+    border-color: rgba(0, 229, 255, 0.12);
+    background: rgba(10, 14, 20, 0.6);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  }
+  .resource-card.busy {
+    opacity: 0.6;
+  }
+
+  .resource-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .resource-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .resource-name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .resource-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .resource-type,
+  .resource-ref,
+  .resource-pin {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(26, 34, 48, 0.6);
+    color: var(--text-muted);
+    border: 1px solid rgba(30, 42, 58, 0.5);
+  }
+
+  .resource-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .status-badge.synced {
+    color: var(--neon-green);
+    background: rgba(0, 255, 159, 0.06);
+  }
+  .status-badge.stale {
+    color: var(--neon-amber);
+    background: rgba(255, 184, 0, 0.06);
+  }
+  .status-badge.busy {
+    color: var(--neon-cyan);
+    background: rgba(0, 229, 255, 0.06);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
     display: inline-block;
-    margin-right: 6px;
-    vertical-align: middle;
+    flex-shrink: 0;
   }
   .status-dot.synced {
     background: var(--neon-green);
-    box-shadow: 0 0 4px rgba(0, 255, 159, 0.4);
+    box-shadow: 0 0 6px rgba(0, 255, 159, 0.5);
   }
   .status-dot.stale {
     background: var(--neon-amber);
-    box-shadow: 0 0 4px rgba(255, 184, 0, 0.4);
+    box-shadow: 0 0 6px rgba(255, 184, 0, 0.5);
   }
   .status-dot.busy-dot {
     background: var(--neon-cyan);
-    box-shadow: 0 0 4px rgba(0, 255, 255, 0.4);
+    box-shadow: 0 0 6px rgba(0, 255, 255, 0.5);
     animation: pulse 1s ease-in-out infinite;
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-  .status-synced { color: var(--neon-green); }
-  .status-stale { color: var(--neon-amber); }
-  .resources-table .actions {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
-  }
-  .resources-table .actions button {
-    padding: 3px 10px;
-    font-size: 12px;
+    50% { opacity: 0.3; }
   }
 
+  .resource-fetched {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .resource-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(30, 42, 58, 0.3);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .resource-card:hover .resource-actions {
+    opacity: 1;
+  }
+
+  .action-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    border-radius: 6px;
+    border: 1px solid rgba(30, 42, 58, 0.6);
+    background: rgba(26, 34, 48, 0.4);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .action-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(0, 229, 255, 0.2);
+    background: rgba(0, 229, 255, 0.05);
+  }
+  .action-btn.danger:hover {
+    color: var(--neon-magenta);
+    border-color: rgba(255, 45, 111, 0.25);
+    background: rgba(255, 45, 111, 0.06);
+  }
+  .action-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* ── Modal fields ────────────────────────────────────── */
   .field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
   .field-label {
     font-family: var(--font-mono);
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
   }
-  .field input {
+  .input-wrap {
+    border-radius: 10px;
     background: var(--bg-deep);
+    border: 1px solid rgba(30, 42, 58, 0.8);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-wrap:focus-within {
+    border-color: rgba(0, 229, 255, 0.4);
+    box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.06);
+  }
+  .input-wrap input {
+    width: 100%;
+    background: transparent;
     color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 6px 10px;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
     font-family: var(--font-mono);
     font-size: 12px;
-  }
-  .field input:focus {
     outline: none;
-    border-color: var(--neon-cyan);
   }
 </style>

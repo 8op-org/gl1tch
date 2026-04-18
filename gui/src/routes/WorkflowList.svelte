@@ -139,7 +139,7 @@
     {:else}
       <div class="card-grid">
         {#each filtered as wf}
-          <button class="card surface" onclick={() => push(`/workflow/${wf.file}`)}>
+          <button class="card" onclick={() => push(`/workflow/${wf.file}`)}>
             <div class="card-name mono">{@html icon('zap', 14)} {wf.name}</div>
             {#if wf.description}<p class="card-desc text-muted">{wf.description}</p>{/if}
             {#if wf.tags?.length}
@@ -167,39 +167,60 @@
   /* View toggle */
   .view-btn {
     background: none;
-    border: 1px solid transparent;
+    border: 1px solid rgba(0, 229, 255, 0.06);
     color: var(--text-muted);
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 6px 10px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .view-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(0, 229, 255, 0.12);
+    background: rgba(0, 229, 255, 0.04);
   }
   .view-btn.active {
     color: var(--neon-cyan);
-    border-color: var(--neon-cyan);
+    border-color: rgba(0, 229, 255, 0.25);
     background: rgba(0, 229, 255, 0.08);
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.06);
   }
 
-  /* Grouped view — modern list style */
-  .groups { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .group { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-surface); }
+  /* ── Grouped view ─────────────────────────────────────── */
+  .groups { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .group {
+    background: linear-gradient(145deg, rgba(17, 24, 32, 0.85), rgba(26, 34, 48, 0.6));
+    border: 1px solid rgba(0, 229, 255, 0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .group:hover {
+    border-color: rgba(0, 229, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
   .group-header {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
     text-align: left;
-    padding: 12px 20px;
-    background: transparent;
+    padding: 14px 22px;
+    background: linear-gradient(180deg, rgba(0, 229, 255, 0.03) 0%, transparent 100%);
     border: none;
     color: var(--text-primary);
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.02em;
-    transition: background 0.15s;
+    transition: background 0.25s;
   }
-  .group-header:hover { background: var(--bg-elevated); }
+  .group-header:hover { background: rgba(0, 229, 255, 0.04); }
   .group-chevron { display: flex; align-items: center; color: var(--neon-cyan); }
   .group-name { text-transform: capitalize; }
   .group-count {
@@ -217,17 +238,17 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 20px 10px 44px;
+    padding: 11px 22px 11px 46px;
     background: none;
     border: none;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid rgba(0, 229, 255, 0.06);
     color: var(--text-primary);
     cursor: pointer;
     text-align: left;
-    transition: background 0.1s;
+    transition: background 0.2s;
     width: 100%;
   }
-  .group-item:hover { background: var(--bg-elevated); }
+  .group-item:hover { background: rgba(0, 229, 255, 0.03); }
   .group-item-icon { color: var(--neon-cyan); display: flex; flex-shrink: 0; }
   .group-item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
   .group-item-name { font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); }
@@ -235,19 +256,108 @@
   .group-item-status { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
   .group-item-time { font-size: 11px; color: var(--text-muted); }
 
-  /* Card grid */
-  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
-  .card { text-align: left; padding: 16px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
-  .card:hover { border-color: rgba(0, 229, 255, 0.3); box-shadow: 0 0 12px rgba(0, 229, 255, 0.06); }
-  .card-name { font-family: var(--font-mono); font-size: 14px; color: var(--neon-cyan); display: flex; align-items: center; gap: 6px; }
-  .card-desc { font-size: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* ── Card grid ────────────────────────────────────────── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .card {
+    text-align: left;
+    padding: 20px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: linear-gradient(145deg, rgba(17, 24, 32, 0.85), rgba(26, 34, 48, 0.6));
+    border: 1px solid rgba(0, 229, 255, 0.08);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+  }
+  .card:hover {
+    border-color: rgba(0, 229, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                0 0 0 1px rgba(0, 229, 255, 0.05);
+    transform: translateY(-2px);
+  }
+  .card-name {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--neon-cyan);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .card-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-  .card-footer { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+  .card-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0, 229, 255, 0.06);
+  }
   .card-sep { color: var(--text-muted); opacity: 0.4; }
 
-  /* List view */
-  .wf-table { margin-top: 16px; }
+  /* ── List / table view ────────────────────────────────── */
+  .wf-table {
+    margin-top: 16px;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+  }
+  .wf-table :global(thead tr th) {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    border: none;
+  }
+  .wf-table :global(tbody tr) {
+    background: linear-gradient(145deg, rgba(17, 24, 32, 0.7), rgba(26, 34, 48, 0.45));
+    border-radius: 12px;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .wf-table :global(tbody tr:hover) {
+    background: linear-gradient(145deg, rgba(17, 24, 32, 0.9), rgba(26, 34, 48, 0.7));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  }
+  .wf-table :global(tbody tr td) {
+    padding: 10px 14px;
+    border-top: 1px solid rgba(0, 229, 255, 0.05);
+    border-bottom: 1px solid rgba(0, 229, 255, 0.05);
+  }
+  .wf-table :global(tbody tr td:first-child) {
+    border-left: 1px solid rgba(0, 229, 255, 0.05);
+    border-radius: 12px 0 0 12px;
+  }
+  .wf-table :global(tbody tr td:last-child) {
+    border-right: 1px solid rgba(0, 229, 255, 0.05);
+    border-radius: 0 12px 12px 0;
+  }
   .clickable { cursor: pointer; }
+
+  /* ── Shared utilities ─────────────────────────────────── */
   .mono { font-family: var(--font-mono); font-size: 12px; }
   .text-cyan { color: var(--neon-cyan); }
+
+  /* ── Pill override for tags ───────────────────────────── */
+  .card-tags :global(.pill),
+  .wf-table :global(.pill) {
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 11px;
+  }
 </style>

@@ -233,8 +233,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(0, 229, 255, 0.08);
     flex-shrink: 0;
+    transition: border-color 0.2s ease;
   }
 
   .header-actions {
@@ -243,32 +244,65 @@
     gap: 12px;
   }
 
+  .header-actions .primary {
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(0, 229, 255, 0.04));
+    border-radius: 10px;
+    color: var(--neon-cyan);
+    padding: 6px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .header-actions .primary:hover {
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.18), rgba(0, 229, 255, 0.08));
+    border-color: rgba(0, 229, 255, 0.5);
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.1);
+  }
+
   .poll-banner {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    padding: 8px;
-    background: rgba(255, 45, 111, 0.1);
-    border-bottom: 1px solid rgba(255, 45, 111, 0.3);
+    padding: 10px 16px;
+    background: rgba(255, 45, 111, 0.08);
+    border-bottom: 1px solid rgba(255, 45, 111, 0.15);
+    border-radius: 0 0 12px 12px;
     font-size: 12px;
     color: var(--neon-magenta);
     flex-shrink: 0;
+    transition: background 0.2s ease;
   }
   .poll-banner button {
     font-size: 12px;
-    padding: 4px 12px;
+    padding: 4px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 45, 111, 0.3);
+    background: rgba(255, 45, 111, 0.1);
+    color: var(--neon-magenta);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .poll-banner button:hover {
+    background: rgba(255, 45, 111, 0.18);
+    border-color: rgba(255, 45, 111, 0.5);
   }
 
   .metadata-strip {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 12px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-surface);
+    gap: 12px;
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.08);
+    background: linear-gradient(145deg, rgba(17, 24, 32, 0.85), rgba(26, 34, 48, 0.6));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     flex-shrink: 0;
     overflow-x: auto;
+    border-radius: 0;
+    transition: background 0.3s ease;
   }
 
   .meta-pill {
@@ -276,6 +310,16 @@
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+    background: rgba(10, 14, 20, 0.5);
+    border: 1px solid rgba(30, 42, 58, 0.6);
+    border-radius: 10px;
+    padding: 6px 14px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .meta-pill:hover {
+    border-color: rgba(0, 229, 255, 0.15);
+    background: rgba(10, 14, 20, 0.65);
   }
 
   .meta-label {

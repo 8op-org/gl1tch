@@ -340,31 +340,38 @@
   /* Tabs */
   .tabs {
     display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
+    gap: 4px;
+    border-bottom: 1px solid rgba(30, 42, 58, 0.6);
     padding: 0 24px;
   }
   .tab {
-    padding: 10px 16px;
+    padding: 10px 18px;
     font-size: 13px;
     background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
     color: var(--text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 6px;
-    transition: all 0.15s;
-    border-radius: 0;
+    transition: all 0.25s ease;
+    border-radius: 10px 10px 0 0;
+    margin-bottom: -1px;
   }
   .tab:hover {
     color: var(--text-primary);
-    background: none;
+    background: rgba(0, 229, 255, 0.03);
   }
   .tab.active {
     color: var(--neon-cyan);
-    border-bottom-color: var(--neon-cyan);
+    background: linear-gradient(
+      180deg,
+      rgba(0, 229, 255, 0.06) 0%,
+      rgba(0, 229, 255, 0.02) 100%
+    );
+    border-color: rgba(0, 229, 255, 0.12);
+    border-bottom-color: transparent;
   }
 
   /* Tab content area */
@@ -379,26 +386,37 @@
   .runs-list {
     display: flex;
     flex-direction: column;
+    gap: 8px;
   }
   .run-row {
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-surface);
+    padding: 14px 18px;
+    border: 1px solid rgba(0, 229, 255, 0.08);
+    border-radius: 14px;
+    background: linear-gradient(
+      145deg,
+      rgba(17, 24, 32, 0.85),
+      rgba(26, 34, 48, 0.6)
+    );
+    backdrop-filter: blur(12px);
     cursor: pointer;
-    transition: all 0.15s;
-    margin-bottom: 8px;
+    transition: all 0.25s ease;
     text-align: left;
     width: 100%;
     font-size: 13px;
     color: var(--text-primary);
   }
   .run-row:hover {
-    border-color: rgba(0, 229, 255, 0.3);
-    background: var(--bg-elevated);
+    border-color: rgba(0, 229, 255, 0.25);
+    background: linear-gradient(
+      145deg,
+      rgba(17, 24, 32, 0.95),
+      rgba(26, 34, 48, 0.75)
+    );
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25),
+                0 0 0 1px rgba(0, 229, 255, 0.05);
   }
 
   .run-id {
@@ -445,13 +463,26 @@
     display: flex;
     align-items: center;
     color: var(--text-muted);
+    transition: color 0.2s ease;
+  }
+  .run-row:hover .run-chevron {
+    color: var(--neon-cyan);
   }
 
   .empty-state {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 48px 24px;
+    padding: 64px 24px;
+    background: linear-gradient(
+      145deg,
+      rgba(17, 24, 32, 0.5),
+      rgba(26, 34, 48, 0.3)
+    );
+    border: 1px solid rgba(0, 229, 255, 0.06);
+    border-radius: 16px;
+    backdrop-filter: blur(8px);
   }
 
   /* Editor */
@@ -473,8 +504,21 @@
   .meta-grid {
     display: grid;
     grid-template-columns: 140px 1fr;
-    gap: 12px 16px;
-    max-width: 600px;
+    gap: 14px 20px;
+    max-width: 640px;
+    background: linear-gradient(
+      145deg,
+      rgba(17, 24, 32, 0.85),
+      rgba(26, 34, 48, 0.6)
+    );
+    border: 1px solid rgba(0, 229, 255, 0.08);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    padding: 24px;
+    transition: border-color 0.3s ease;
+  }
+  .meta-grid:hover {
+    border-color: rgba(0, 229, 255, 0.15);
   }
   .meta-label {
     font-family: var(--font-mono);
@@ -506,5 +550,23 @@
   .mono {
     font-family: var(--font-mono);
     font-size: 12px;
+  }
+
+  /* Primary / Save buttons — gradient border style */
+  .header-actions :global(button.primary) {
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(0, 229, 255, 0.04));
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    border-radius: 10px;
+    color: var(--neon-cyan);
+    transition: all 0.25s ease;
+  }
+  .header-actions :global(button.primary:hover:not(:disabled)) {
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.18), rgba(0, 229, 255, 0.08));
+    border-color: rgba(0, 229, 255, 0.5);
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.1);
+  }
+  .header-actions :global(button.primary:disabled) {
+    opacity: 0.35;
+    cursor: not-allowed;
   }
 </style>

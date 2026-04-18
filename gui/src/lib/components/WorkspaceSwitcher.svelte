@@ -79,7 +79,7 @@
   .ws-avatar {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: 10px;
     background: linear-gradient(135deg, rgba(0, 229, 255, 0.15), rgba(255, 45, 111, 0.1));
     border: 1px solid var(--border);
     color: var(--neon-cyan);
@@ -110,10 +110,11 @@
     left: 52px;
     top: 4px;
     min-width: 200px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(145deg, rgba(17,24,32,0.95), rgba(26,34,48,0.85));
+    border: 1px solid rgba(0,229,255,0.1);
+    border-radius: 12px;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+    backdrop-filter: blur(16px);
     z-index: 100;
     overflow: hidden;
   }
@@ -143,7 +144,7 @@
     transition: background 0.1s;
   }
   .ws-option:hover {
-    background: rgba(0, 229, 255, 0.06);
+    background: rgba(0, 229, 255, 0.04);
   }
   .ws-option.active {
     color: var(--neon-cyan);

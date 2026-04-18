@@ -24,10 +24,25 @@
     gap: 6px;
     font-family: var(--font-mono);
     font-weight: 500;
+    border-radius: 20px;
+    padding: 4px 12px;
+    border: 1px solid transparent;
   }
   .badge.sm { font-size: 11px; }
   .badge.md { font-size: 13px; }
   .badge.lg { font-size: 15px; }
+  .badge.status-pass {
+    background: rgba(0,255,159,0.06);
+    border-color: rgba(0,255,159,0.15);
+  }
+  .badge.status-fail {
+    background: rgba(255,45,111,0.06);
+    border-color: rgba(255,45,111,0.15);
+  }
+  .badge.status-running {
+    background: rgba(255,184,0,0.06);
+    border-color: rgba(255,184,0,0.15);
+  }
   .dot {
     width: 8px;
     height: 8px;

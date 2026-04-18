@@ -8,12 +8,10 @@ tasks:
       - go build -o glitch .
 
   gui:build:
-    desc: Build GUI frontend and copy dist for embedding
+    desc: Build GUI frontend for embedding
     dir: gui
     cmds:
       - npm run build
-      - rm -rf ../internal/gui/dist
-      - cp -r dist ../internal/gui/dist
 
   gui:test:
     desc: Run GUI Playwright tests
@@ -23,7 +21,16 @@ tasks:
       - npx playwright test
 
   gui:dev:
-    desc: Run GUI dev server (proxies API to Go backend)
+    desc: Run Go backend + Vite dev server together
+    deps: [gui:dev:backend, gui:dev:frontend]
+
+  gui:dev:backend:
+    desc: Run Go backend in dev mode
+    cmds:
+      - go run . workspace gui --dev
+
+  gui:dev:frontend:
+    desc: Run Vite dev server
     dir: gui
     cmds:
       - npm run dev
