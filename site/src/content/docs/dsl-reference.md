@@ -1,25 +1,81 @@
 ---
-title: "DSL Reference — stub"
+title: "DSL Reference"
 order: 2
-description: "Sister page to workflow-syntax. Covers new forms shipped in the DSL improvements branch."
+description: "Extended forms for data pipelines, conditionals, and Elasticsearch integration."
 ---
 
-Sister page to workflow-syntax. Covers new forms shipped in the DSL improvements branch.
+This page covers forms beyond the basics in [Workflow Syntax](/docs/workflow-syntax). If you haven't read that first, start there.
 
-## Sections
+## Threading macro
 
-- **Threading macro** — `(-> ...)` pipes data between forms
-- **Collection forms** — `filter`, `reduce` for data pipelines
-- **Conditionals** — `when`, `when-not` for predicate-gated execution
-- **Elasticsearch forms** — `search`, `index`, `delete` native ES integration
-- **Embedding** — `embed` for vector embeddings via Ollama
-- **Data transforms** — `flatten`, `assoc`, `pick` for reshaping JSON
+Pipe data through a chain of transforms:
 
-## Tone cues
+```glitch
+(def context
+  (-> (read-file "data.json")
+      (filter (contains "error"))
+      (join "\n")))
+```
 
-- "your" framing, never "the user"
-- Examples before explanation
-- No internals (no BubbleTea, tmux, SQLite, Go types)
-- Build on Workflow Syntax: "This page builds on Workflow Syntax. If you haven't read it, start there."
-- Every form gets a short example + one-line description
-- End with "Next steps" links
+## Collection forms
+
+```glitch
+(step "errors-only"
+  (filter (contains "ERROR") :from "logs"))
+
+(step "totals"
+  (reduce "+" :from "counts"))
+```
+
+## Conditionals
+
+Run steps only when a predicate passes:
+
+```glitch
+(when "test -f results.json"
+  (step "upload"
+    (run "curl -X POST -d @results.json https://api.example.com/results")))
+
+(when-not "git diff --quiet"
+  (step "commit"
+    (run "git add -A && git commit -m 'auto-commit'")))
+```
+
+## Elasticsearch forms
+
+Native ES integration — no shell curl needed:
+
+```glitch
+(step "find-errors"
+  (search :index "logs-*" :query {"match": {"level": "error"}} :size 50))
+
+(step "store-result"
+  (index :index "results" :doc "~(step analysis)"))
+
+(step "cleanup"
+  (delete :index "temp-*" :query {"match_all": {}}))
+```
+
+## Embedding
+
+Generate vector embeddings via your configured provider:
+
+```glitch
+(step "vectorize"
+  (embed :input "~(step summary)" :provider "ollama" :model "nomic-embed-text"))
+```
+
+## Data transforms
+
+Reshape JSON between steps:
+
+```glitch
+(step "flatten-results"
+  (flatten "nested-data"))
+
+(step "pick-fields"
+  (pick :key "title" :key "status" :from "raw-data"))
+
+(step "add-metadata"
+  (assoc :key "reviewed" :status "true" :from "record"))
+```
