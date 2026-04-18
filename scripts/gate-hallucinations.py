@@ -39,6 +39,8 @@ VALID_KEYWORDS = {
     ":es", ":doc", ":upsert",
     # embed form
     ":input", ":embed", ":field",
+    # websearch form
+    ":websearch", ":engines", ":results", ":lang",
     # assoc / pick (key names used as keyword args)
     ":key", ":status", ":title", ":author",
     # workspace defaults / params
@@ -61,7 +63,7 @@ VALID_FORMS = {
     "arg", "retry", "timeout", "catch", "cond", "map", "let",
     "phase", "gate", "par",
     "json-pick", "lines", "merge",
-    "http-get", "http-post", "read-file", "write-file", "glob",
+    "http-get", "http-post", "read-file", "write-file", "glob", "websearch",
     # workspace mechanics
     "workspace", "workspaces", "defaults", "params", "repos",
     "resource", "resources", "resource-state", "map-resources",

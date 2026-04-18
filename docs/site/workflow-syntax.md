@@ -589,6 +589,33 @@ Generate an embedding vector from text:
 
 Returns a JSON array of floats.
 
+### websearch
+
+Query a SearXNG instance and return results as JSON:
+
+```glitch
+(step "find-sources"
+  (websearch "kubernetes pod eviction causes"
+    :engines ("google" "stackoverflow")
+    :results 5
+    :lang "en"))
+```
+
+| keyword | required | default | description |
+|---------|----------|---------|-------------|
+| query (1st arg) | yes | — | Search query. Supports template refs. |
+| `:engines` | no | SearXNG defaults | List of engine names to target. |
+| `:results` | no | 5 | Max number of results. |
+| `:lang` | no | `"en"` | Language filter. |
+
+Output is a JSON array:
+
+```json
+[{"title": "...", "url": "...", "content": "...", "engine": "..."}]
+```
+
+Requires `:websearch` in workspace defaults. See [workspaces](workspaces.md).
+
 ## ES connection
 
 The Elasticsearch URL is resolved in this order:
@@ -713,6 +740,7 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
 | `(index :index "idx" :doc "...")` | Index a document to Elasticsearch |
 | `(delete :index "idx" :query {...})` | Delete documents from Elasticsearch |
 | `(embed :input "..." :provider "..." :model "...")` | Generate an embedding vector |
+| `(websearch "query" :engines (...) :results N :lang "...")` | Query SearXNG, return JSON results |
 
 ### Wrapper forms (around steps)
 
