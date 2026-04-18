@@ -4,7 +4,7 @@ order: 8
 description: "A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defau"
 ---
 
-A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defaults. You run `glitch workspace init` once, then every subsequent command — `glitch run`, `glitch ask`, `glitch workspace gui` — knows where it is and what it's working on.
+A workspace is a self-contained project environment: declared resources, scoped workflows, nested runs, and shared defaults. You run `glitch workspace init` once, then every subsequent command — `glitch run`, `glitch observe`, `glitch workspace gui` — knows where it is and what it's working on.
 
 ## Quick start
 
@@ -157,7 +157,6 @@ Three tiers: hot paths at top level, management under `glitch workspace`, infras
 ### Hot paths
 
 ```bash
-glitch ask <query>              # smart router — matches against workspace workflows
 glitch run <workflow> [input]   # run a workflow (workspace workflows first, global fallback)
 glitch observe <query>          # observer queries on indexed activity
 ```
@@ -317,7 +316,6 @@ glitch workspace use my-project
 
 # Now every command picks up that workspace's workflows, resources, and defaults:
 glitch run morning-briefing
-glitch ask "review ops#42"
 glitch run pr-review --set pr=42
 
 # Or cd into a different workspace — walk-up wins over the active one:
