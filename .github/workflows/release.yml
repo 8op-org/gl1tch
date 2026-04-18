@@ -19,9 +19,6 @@ jobs:
           - runner: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
-          - runner: macos-13
-            goos: darwin
-            goarch: amd64
           - runner: macos-latest
             goos: darwin
             goarch: arm64
@@ -105,7 +102,6 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           DARWIN_ARM64_SHA=$(grep "darwin_arm64" artifacts/checksums.txt | awk '{print $1}')
-          DARWIN_AMD64_SHA=$(grep "darwin_amd64" artifacts/checksums.txt | awk '{print $1}')
           LINUX_ARM64_SHA=$(grep "linux_arm64" artifacts/checksums.txt | awk '{print $1}')
           LINUX_AMD64_SHA=$(grep "linux_amd64" artifacts/checksums.txt | awk '{print $1}')
           BASE_URL="https://github.com/8op-org/gl1tch/releases/download/v${VERSION}"
@@ -118,13 +114,8 @@ jobs:
             version "${VERSION}"
 
             on_macos do
-              if Hardware::CPU.arm?
-                url "${BASE_URL}/glitch_${VERSION}_darwin_arm64.tar.gz"
-                sha256 "${DARWIN_ARM64_SHA}"
-              else
-                url "${BASE_URL}/glitch_${VERSION}_darwin_amd64.tar.gz"
-                sha256 "${DARWIN_AMD64_SHA}"
-              end
+              url "${BASE_URL}/glitch_${VERSION}_darwin_arm64.tar.gz"
+              sha256 "${DARWIN_ARM64_SHA}"
             end
 
             on_linux do
