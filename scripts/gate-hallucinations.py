@@ -57,7 +57,7 @@ VALID_KEYWORDS = {
 
 # Every valid form name
 VALID_FORMS = {
-    "def", "workflow", "step", "run", "llm", "save", "plugin",
+    "def", "workflow", "step", "run", "llm", "save", "plugin", "include",
     "arg", "retry", "timeout", "catch", "cond", "map", "let",
     "phase", "gate", "par",
     "json-pick", "lines", "merge",
