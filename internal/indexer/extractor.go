@@ -40,6 +40,7 @@ type LanguageExtractor struct {
 	ImportQuery   string
 	ExportQuery   string
 	CallQuery     string
+	RefQuery      string
 	PathResolver  func(importPath, fromFile, repoRoot string) string
 }
 

@@ -26,7 +26,8 @@ const (
 	EdgeExports    = "exports"
 	EdgeExtends    = "extends"
 	EdgeImplements = "implements"
-	EdgeCalls      = "calls"
+	EdgeCalls       = "calls"
+	EdgeReferences  = "references"
 )
 
 // SymbolDoc is a symbol node in the code graph.
