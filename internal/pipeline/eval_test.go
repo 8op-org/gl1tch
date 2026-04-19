@@ -524,3 +524,71 @@ func TestEval_SiteWorkflowsParse(t *testing.T) {
 		}
 	}
 }
+
+func TestEval_MapOverAssocList(t *testing.T) {
+	src := `(def pages (list (assoc :slug "intro" :order 1) (assoc :slug "guide" :order 2)))
+	         (join (map pages (fn (p) (pick p :slug))) ",")`
+	got := evalHelper(t, src)
+	if got != "intro,guide" {
+		t.Fatalf("want %q, got %q", "intro,guide", got)
+	}
+}
+
+func TestEval_FilterAssocList(t *testing.T) {
+	src := `(def pages (list (assoc :slug "a" :sidebar true) (assoc :slug "b" :sidebar false)))
+	         (count (filter pages (fn (p) (pick p :sidebar))))`
+	got := evalHelper(t, src)
+	if got != "1" {
+		t.Fatalf("want %q, got %q", "1", got)
+	}
+}
+
+func TestEval_MapWithBody(t *testing.T) {
+	src := `(def items (list "a" "b" "c"))
+	         (join (map items (fn (x) (str x "!"))) ",")`
+	got := evalHelper(t, src)
+	if got != "a!,b!,c!" {
+		t.Fatalf("want %q, got %q", "a!,b!,c!", got)
+	}
+}
+
+func TestEval_GlobMultiPattern(t *testing.T) {
+	// Create temp files to glob against
+	tmp := t.TempDir()
+	os.WriteFile(filepath.Join(tmp, "a.txt"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "b.md"), []byte("b"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "c.txt"), []byte("c"), 0o644)
+
+	src := fmt.Sprintf(`(count (glob "%s/*.txt" "%s/*.md"))`, tmp, tmp)
+	got := evalHelper(t, src)
+	if got != "3" {
+		t.Fatalf("want %q, got %q", "3", got)
+	}
+}
+
+func TestEval_PickFallthroughNil(t *testing.T) {
+	src := `(pick "hello" :key)`
+	got := evalHelper(t, src)
+	if got != "" {
+		t.Fatalf("want empty (NilVal), got %q", got)
+	}
+}
+
+func TestEval_FilterPreservesValue(t *testing.T) {
+	src := `(def items (list "alpha" "beta" "gamma"))
+	         (join (filter items (fn (x) (starts-with x "b"))) ",")`
+	got := evalHelper(t, src)
+	if got != "beta" {
+		t.Fatalf("want %q, got %q", "beta", got)
+	}
+}
+
+func TestEval_MapWithItemBinding(t *testing.T) {
+	// Test the do-body pattern still works with "item" binding
+	src := `(def items (list "x" "y"))
+	         (join (map items (str item "!")) ",")`
+	got := evalHelper(t, src)
+	if got != "x!,y!" {
+		t.Fatalf("want %q, got %q", "x!,y!", got)
+	}
+}

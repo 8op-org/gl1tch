@@ -1,7 +1,7 @@
 (workflow "site-dev"
   :description "Regenerate docs and start dev server"
 
-  (when-not (run "test -f site/generated/changelog.md")
+  (when-not (catch (run "test -f site/generated/changelog.md") false)
     (write-file "site/generated/changelog.md" :content "# No changelog yet"))
 
   (write-file "site/generated/build-report.md" :content "PASS")

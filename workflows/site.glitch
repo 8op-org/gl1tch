@@ -2,11 +2,11 @@
   :description "Unified site workflow — sync, create, update, deploy, dev"
 
   (cond
-    (= ~param.action "sync")    (call-workflow "site-sync")
-    (= ~param.action "create")  (call-workflow "site-create-page" :set "topic=~param.topic")
-    (= ~param.action "update")  (call-workflow "site-update-page"
-                                  :set "page=~param.page"
-                                  :set "instructions=~param.instructions")
-    (= ~param.action "deploy")  (call-workflow "site-deploy")
-    (= ~param.action "dev")     (call-workflow "site-dev")
+    (= "~param.action" "sync")    (call-workflow "site-sync")
+    (= "~param.action" "create")  (call-workflow "site-create-page" :set "topic=~param.topic")
+    (= "~param.action" "update")  (call-workflow "site-update-page"
+                                    :set "page=~param.page"
+                                    :set "instructions=~param.instructions")
+    (= "~param.action" "deploy")  (call-workflow "site-deploy")
+    (= "~param.action" "dev")     (call-workflow "site-dev")
     else (run "echo 'Usage: glitch run site --set action=<sync|create|update|deploy|dev>' && exit 1")))

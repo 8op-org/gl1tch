@@ -433,22 +433,24 @@ func (ev *Evaluator) builtinWriteFile(_ *Evaluator, env *Env, args []*sexpr.Node
 	return StringVal(to), nil
 }
 
-// builtinGlob: (glob "pattern")
+// builtinGlob: (glob "pattern" ...) — match one or more glob patterns
 func (ev *Evaluator) builtinGlob(_ *Evaluator, env *Env, args []*sexpr.Node) (Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("glob: missing pattern argument")
 	}
-	v, err := ev.Eval(env, args[0])
-	if err != nil {
-		return nil, err
-	}
-	matches, err := filepath.Glob(v.String())
-	if err != nil {
-		return nil, fmt.Errorf("glob: %w", err)
-	}
-	vals := make(ListVal, len(matches))
-	for i, m := range matches {
-		vals[i] = StringVal(m)
+	var vals ListVal
+	for _, a := range args {
+		v, err := ev.Eval(env, a)
+		if err != nil {
+			return nil, err
+		}
+		matches, err := filepath.Glob(v.String())
+		if err != nil {
+			return nil, fmt.Errorf("glob: %w", err)
+		}
+		for _, m := range matches {
+			vals = append(vals, StringVal(m))
+		}
 	}
 	return vals, nil
 }
@@ -836,16 +838,8 @@ func (ev *Evaluator) builtinPick(_ *Evaluator, env *Env, args []*sexpr.Node) (Va
 		return l[idx], nil
 	}
 
-	// Fallback: passthrough (existing behavior for json-pick placeholder)
-	var result Value = target
-	for _, a := range args[1:] {
-		v, err := ev.Eval(env, a)
-		if err != nil {
-			return nil, err
-		}
-		_ = v
-	}
-	return result, nil
+	// Fallback: unrecognized type, return nil
+	return NilVal{}, nil
 }
 
 // builtinReplace: (replace text old new [old new ...]) — multi-pair string replacement
