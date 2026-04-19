@@ -229,6 +229,51 @@ def helper(x, y):
 	}
 }
 
+func TestRefQueryRegistered(t *testing.T) {
+	langs := []string{"go", "python", "javascript", "jsx", "typescript", "tsx", "c", "rust", "java"}
+	for _, lang := range langs {
+		ext := ExtractorForLanguage(lang)
+		if ext == nil {
+			t.Errorf("no extractor for %s", lang)
+			continue
+		}
+		if ext.RefQuery == "" {
+			t.Errorf("RefQuery not set for %s", lang)
+		}
+	}
+}
+
+func TestGoRefQueryExtractsMethodValue(t *testing.T) {
+	src := []byte(`package main
+
+type Handler struct{}
+
+func (h *Handler) Serve() {}
+
+func register() {
+	h := &Handler{}
+	callback := h.Serve
+	_ = callback
+}
+`)
+	ext := ExtractorForLanguage("go")
+	refs, err := ext.ExtractRefs(src, "main.go")
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+
+	names := make(map[string]bool)
+	for _, r := range refs {
+		names[r.CalleeName] = true
+	}
+	if !names["Serve"] {
+		t.Error("expected ref to Serve (method value)")
+	}
+	if !names["Handler"] {
+		t.Error("expected ref to Handler (type identifier)")
+	}
+}
+
 // TestAllLanguageQueriesCompile verifies that every registered language's
 // queries can be compiled against its grammar without error.
 func TestAllLanguageQueriesCompile(t *testing.T) {
@@ -264,6 +309,13 @@ func TestAllLanguageQueriesCompile(t *testing.T) {
 				_, err := ext.ExtractCalls(src, "test.txt")
 				if err != nil {
 					t.Fatalf("call query compile error for %s: %v", lang, err)
+				}
+			}
+
+			if ext.RefQuery != "" {
+				_, err := ext.ExtractRefs(src, "test.txt")
+				if err != nil {
+					t.Fatalf("ref query compile error for %s: %v", lang, err)
 				}
 			}
 		})

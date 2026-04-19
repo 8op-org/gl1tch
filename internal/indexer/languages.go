@@ -47,6 +47,10 @@ func init() {
 			`(call_expression function: (identifier) @callee)`,
 			`(call_expression function: (selector_expression field: (field_identifier) @callee))`,
 		}, "\n"),
+		RefQuery: strings.Join([]string{
+			`(selector_expression field: (field_identifier) @ref)`,
+			`(type_identifier) @ref`,
+		}, "\n"),
 		PathResolver: goPathResolver,
 	}
 	registry["go"] = goExt
@@ -68,6 +72,7 @@ func init() {
 			`(call function: (identifier) @callee)`,
 			`(call function: (attribute attribute: (identifier) @callee))`,
 		}, "\n"),
+		RefQuery:     `(attribute attribute: (identifier) @ref)`,
 		PathResolver: pythonPathResolver,
 	}
 	registry["python"] = pyExt
@@ -87,6 +92,7 @@ func init() {
 			`(call_expression function: (identifier) @callee)`,
 			`(call_expression function: (member_expression property: (property_identifier) @callee))`,
 		}, "\n"),
+		RefQuery:     `(member_expression property: (property_identifier) @ref)`,
 		PathResolver: jsPathResolver,
 	}
 	registry["javascript"] = jsExt
@@ -113,6 +119,10 @@ func init() {
 			`(call_expression function: (identifier) @callee)`,
 			`(call_expression function: (member_expression property: (property_identifier) @callee))`,
 		}, "\n"),
+		RefQuery: strings.Join([]string{
+			`(member_expression property: (property_identifier) @ref)`,
+			`(type_identifier) @ref`,
+		}, "\n"),
 		PathResolver: jsPathResolver,
 	}
 	registry["typescript"] = tsExt
@@ -133,6 +143,10 @@ func init() {
 		CallQuery: strings.Join([]string{
 			`(call_expression function: (identifier) @callee)`,
 			`(call_expression function: (member_expression property: (property_identifier) @callee))`,
+		}, "\n"),
+		RefQuery: strings.Join([]string{
+			`(member_expression property: (property_identifier) @ref)`,
+			`(type_identifier) @ref`,
 		}, "\n"),
 		PathResolver: jsPathResolver,
 	}
@@ -165,6 +179,10 @@ func init() {
 		},
 		ImportQuery: `(use_declaration argument: (_) @path)`,
 		CallQuery:   `(call_expression function: (identifier) @callee)`,
+		RefQuery: strings.Join([]string{
+			`(field_expression field: (field_identifier) @ref)`,
+			`(type_identifier) @ref`,
+		}, "\n"),
 	}
 
 	// ── Java ────────────────────────────────────────────────────────────
@@ -179,6 +197,10 @@ func init() {
 		},
 		ImportQuery: `(import_declaration (scoped_identifier) @path)`,
 		CallQuery:   `(method_invocation name: (identifier) @callee)`,
+		RefQuery: strings.Join([]string{
+			`(field_access field: (identifier) @ref)`,
+			`(type_identifier) @ref`,
+		}, "\n"),
 	}
 
 	// ── C ───────────────────────────────────────────────────────────────
@@ -193,6 +215,10 @@ func init() {
 		},
 		ImportQuery: `(preproc_include path: (_) @path)`,
 		CallQuery:   `(call_expression function: (identifier) @callee)`,
+		RefQuery: strings.Join([]string{
+			`(field_expression field: (field_identifier) @ref)`,
+			`(type_identifier) @ref`,
+		}, "\n"),
 	}
 
 	// ── C++ ─────────────────────────────────────────────────────────────
