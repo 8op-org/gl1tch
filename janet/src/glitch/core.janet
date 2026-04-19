@@ -81,3 +81,104 @@
 (defn get-steps []
   "Return a snapshot of all step outputs."
   (table/clone *steps*))
+
+# --- Workflow macro ---
+
+(defmacro workflow [name & body]
+  "Define and execute a workflow. Returns {:name :output :steps}."
+  ~(do
+     (var wf-last nil)
+     ,;(seq [form :in body
+             :when (not (keyword? form))]
+         ~(set wf-last ,form))
+     {:name ,name
+      :output (string wf-last)
+      :steps (,get-steps)}))
+
+# --- Parallel execution ---
+
+(defmacro par [& forms]
+  "Execute forms concurrently via ev/gather. Returns array of results."
+  ~(ev/gather ,;forms))
+
+# --- Retry ---
+
+(defmacro retry [n & body]
+  "Retry body up to n times."
+  ~(do
+     (var last-err nil)
+     (var result nil)
+     (var succeeded false)
+     (for i 0 ,n
+       (try
+         (do (set result (do ,;body))
+             (set succeeded true)
+             (break))
+         ([err] (set last-err err))))
+     (if succeeded
+       result
+       (error (string "retry exhausted after " ,n " attempts: " last-err)))))
+
+# --- Timeout ---
+
+(defmacro with-timeout [seconds & body]
+  "Execute body with a timeout. Raises on expiry."
+  ~(ev/with-deadline ,seconds (do ,;body)))
+
+# --- Gate ---
+
+(defn gate [id predicate]
+  "Assert a gate condition. Records result."
+  (when *step-recorder*
+    (*step-recorder* {:step-id id :output (string predicate)
+                      :kind "gate" :gate-passed (if predicate 1 0)}))
+  (put *steps* id (string predicate))
+  predicate)
+
+# --- Phase ---
+
+(defmacro phase [name & body]
+  "Group steps under a named phase. Returns last value."
+  ~(do
+     (when ,*step-recorder*
+       (,*step-recorder* {:step-id ,name :kind "phase" :output "started"}))
+     (var phase-result nil)
+     ,;(map (fn [f] ~(set phase-result ,f)) body)
+     (when ,*step-recorder*
+       (,*step-recorder* {:step-id ,name :kind "phase"
+                         :output (string phase-result)}))
+     phase-result))
+
+# --- Call-workflow ---
+
+(var- *call-stack* @[])
+(var- *workflows-dir* ".")
+
+(defn set-workflows-dir! [d]
+  (set *workflows-dir* d))
+
+(defn call-workflow [name &named input set]
+  "Execute another workflow file by name. Detects cycles."
+  (when (find |(= $ name) *call-stack*)
+    (errorf "call-workflow cycle: %s already on stack %s"
+            name (string/join *call-stack* " -> ")))
+  (array/push *call-stack* name)
+  (defer (array/pop *call-stack*)
+    (def path (string *workflows-dir* "/" name ".janet"))
+    (unless (os/stat path)
+      (errorf "call-workflow: %s not found" path))
+    (def saved-input *input*)
+    (def saved-steps *steps*)
+    (set *input* (or input ""))
+    (set *steps* @{})
+    (when set
+      (eachp [k v] set
+        (put *params* k v)))
+    (dofile path)
+    (def child-steps (table/clone *steps*))
+    (var last-output "")
+    (eachp [_ v] child-steps (set last-output v))
+    (def result {:output last-output :steps child-steps})
+    (set *input* saved-input)
+    (set *steps* saved-steps)
+    result))
