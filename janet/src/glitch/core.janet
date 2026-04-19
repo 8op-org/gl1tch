@@ -182,3 +182,34 @@
     (set *input* saved-input)
     (set *steps* saved-steps)
     result))
+
+# --- LLM invocation ---
+
+(var- *provider-fn* nil)
+
+(defn set-provider-fn! [f]
+  "Set the LLM provider dispatch function."
+  (set *provider-fn* f))
+
+(defn llm [& kvs]
+  "Call an LLM provider. Keyword args: :prompt :model :provider :skill.
+   Returns the response string."
+  (def opts (table ;kvs))
+  (unless *provider-fn*
+    (error "llm: no provider function set — call set-provider-fn! first"))
+  (when (opts :skill)
+    (def skill-content (string (slurp (opts :skill))))
+    (put opts :prompt (string skill-content "\n\n" (opts :prompt))))
+  (def start (os/clock))
+  (def result (*provider-fn* opts))
+  (def elapsed (- (os/clock) start))
+  (when *step-recorder*
+    (*step-recorder* {:step-id (or (opts :step-id) "llm")
+                      :prompt (opts :prompt)
+                      :output (result :response)
+                      :model (or (opts :model) "")
+                      :duration (math/round (* elapsed 1000))
+                      :kind "llm"
+                      :tokens-in (or (result :tokens-in) 0)
+                      :tokens-out (or (result :tokens-out) 0)}))
+  (result :response))
