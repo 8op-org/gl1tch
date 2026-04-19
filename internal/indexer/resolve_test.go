@@ -286,7 +286,7 @@ func TestResolveRefsLocalScope(t *testing.T) {
 		},
 	}
 
-	edges := r.ResolveRefs(refs)
+	edges := r.ResolveRefs(refs, nil)
 
 	if len(edges) != 1 {
 		t.Fatalf("expected 1 references edge, got %d", len(edges))
@@ -342,7 +342,7 @@ func TestResolveRefsMatchesTypes(t *testing.T) {
 		},
 	}
 
-	edges := r.ResolveRefs(refs)
+	edges := r.ResolveRefs(refs, nil)
 
 	if len(edges) != 1 {
 		t.Fatalf("expected 1 references edge, got %d", len(edges))

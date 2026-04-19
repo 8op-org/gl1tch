@@ -452,8 +452,9 @@ func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 	var allEdges []EdgeDoc
 	allEdges = append(allEdges, resolver.ResolveContains()...)
 	allEdges = append(allEdges, resolver.ResolveImports(allImports)...)
-	allEdges = append(allEdges, resolver.ResolveCalls(allCalls)...)
-	allEdges = append(allEdges, resolver.ResolveRefs(allRefs)...)
+	callEdges := resolver.ResolveCalls(allCalls)
+	allEdges = append(allEdges, callEdges...)
+	allEdges = append(allEdges, resolver.ResolveRefs(allRefs, callEdges)...)
 	allEdges = append(allEdges, resolver.ResolveExports()...)
 	allEdges = append(allEdges, resolver.ResolveExtendsImplements()...)
 

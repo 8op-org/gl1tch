@@ -248,7 +248,15 @@ func (r *Resolver) ResolveExports() []EdgeDoc {
 // ResolveCalls which only matches functions/methods, this also matches types,
 // interfaces, and classes — capturing non-call symbol usage like method values,
 // type identifiers in struct fields, params, returns, and composite literals.
-func (r *Resolver) ResolveRefs(refs []CallSite) []EdgeDoc {
+// callEdges is used to deduplicate: if a call edge already exists from the same
+// source to the same target, the reference edge is skipped.
+func (r *Resolver) ResolveRefs(refs []CallSite, callEdges []EdgeDoc) []EdgeDoc {
+	// Build set of existing call edge pairs for dedup.
+	callPairs := make(map[string]bool, len(callEdges))
+	for _, e := range callEdges {
+		callPairs[e.SourceID+":"+e.TargetID] = true
+	}
+
 	var edges []EdgeDoc
 	for _, ref := range refs {
 		targetID := r.findRefTarget(ref)
@@ -257,6 +265,10 @@ func (r *Resolver) ResolveRefs(refs []CallSite) []EdgeDoc {
 		}
 		callerID := r.findEnclosing(ref.File, ref.Line)
 		if callerID == "" {
+			continue
+		}
+		// Skip if a call edge already covers this source→target pair.
+		if callPairs[callerID+":"+targetID] {
 			continue
 		}
 		edges = append(edges, EdgeDoc{
