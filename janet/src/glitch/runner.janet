@@ -73,10 +73,8 @@
       (dofile workflow-path)
       # Gather results from core state
       (def steps (g/get-steps))
-      (var last-output "")
-      (eachp [_ v] steps (set last-output v))
       (set result {:name ""
-                   :output last-output
+                   :output (g/last-output)
                    :steps steps}))
     ([err]
       (when db

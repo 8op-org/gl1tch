@@ -6,6 +6,7 @@
 (import glitch/store :as store)
 (import glitch/workspace :as ws)
 (import glitch/provider :as prov)
+(import glitch/gui :as gui)
 
 (defn resolve-command [argv]
   "Return the command name from argv, or nil."
@@ -118,7 +119,7 @@
 (defn- ws-init [argv]
   (def name (or (first argv) (last (string/split "/" (os/cwd)))))
   (def dir (string (os/cwd) "/.glitch"))
-  (os/shell (string "mkdir -p " dir))
+  (g/mkdir-p dir)
   (spit (string dir "/workspace.janet")
     (string "(import glitch/workspace :as ws)\n"
             "(ws/workspace " (string/format "%q" name) "\n"
@@ -169,6 +170,19 @@
   (when (mod :main)
     ((mod :main) (tuple/slice argv 1))))
 
+(defn cmd-gui [argv]
+  (def res
+    (argparse
+      "Start the GUI server"
+      "addr"      {:kind :option :short "a"
+                   :help "Listen address (default localhost:3000)"}
+      "workspace" {:kind :option :short "w"
+                   :help "Workspace path"}))
+  (unless res (os/exit 1))
+  (def workspace (ws/resolve :workspace-flag (res "workspace")))
+  (gui/start {:addr (or (res "addr") "localhost:3000")
+              :workspace (when workspace (workspace :path))}))
+
 (defn cmd-up []
   (each tool ["janet" "curl"]
     (def proc (os/spawn ["which" tool] :p {:out :pipe}))
@@ -184,6 +198,7 @@
   {"run"       cmd-run
    "check"     cmd-check
    "eval"      cmd-eval
+   "gui"       cmd-gui
    "workspace" cmd-workspace
    "plugin"    cmd-plugin
    "up"        (fn [_] (cmd-up))

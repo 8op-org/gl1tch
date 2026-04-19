@@ -3,6 +3,14 @@
 
 (import sqlite3 :as sql)
 
+(defn- mkdir-p [dir]
+  "Create directory and all parents. No-op if exists."
+  (when (and dir (not= dir "") (not (os/stat dir)))
+    (def parts (string/find-all "/" dir))
+    (when (not (empty? parts))
+      (mkdir-p (string/slice dir 0 (last parts))))
+    (os/mkdir dir)))
+
 (def- schema-stmts
   [`CREATE TABLE IF NOT EXISTS runs (
      id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +69,7 @@
     (def idx (last parts))
     (def dir (string/slice path 0 idx))
     (when (and (not= dir "") (not (os/stat dir)))
-      (os/shell (string "mkdir -p " dir))))
+      (mkdir-p dir)))
   (def db (sql/open path))
   (each stmt schema-stmts
     (sql/eval db stmt))

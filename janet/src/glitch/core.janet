@@ -1,15 +1,29 @@
 # Core workflow primitives.
 # Replaces: internal/pipeline/eval.go + eval_builtins.go
 
-# --- Workflow state ---
+# --- mkdir helper (no os/shell) ---
+
+(defn mkdir-p [dir]
+  "Create directory and all parents. No-op if exists."
+  (when (and dir (not= dir "") (not (os/stat dir)))
+    (def parts (string/find-all "/" dir))
+    (when (not (empty? parts))
+      (mkdir-p (string/slice dir 0 (last parts))))
+    (os/mkdir dir)))
+
+# --- Workflow state (module-level) ---
+# Module vars are shared across all importers via Janet's module cache.
+# Janet's cooperative scheduling means concurrent put on shared tables is safe.
 
 (var- *steps* @{})
+(var- *step-order* @[])
 (var- *input* "")
 (var- *params* @{})
 (var- *step-recorder* nil)
 
 (defn reset-steps! []
-  (set *steps* @{}))
+  (set *steps* @{})
+  (set *step-order* @[]))
 
 (defn set-input! [s]
   (set *input* s))
@@ -44,6 +58,7 @@
   "Record a step output. Returns the body value (converted to string)."
   (def val (if (string? body) body (string body)))
   (put *steps* id val)
+  (array/push *step-order* id)
   (when *step-recorder*
     (*step-recorder* {:step-id id :output val :kind "step"}))
   val)
@@ -65,8 +80,7 @@
   (when (not (empty? parts))
     (def idx (last parts))
     (def dir (string/slice path 0 idx))
-    (when (and (not= dir "") (not (os/stat dir)))
-      (os/shell (string "mkdir -p " dir))))
+    (mkdir-p dir))
   (spit path (if (string? content) content (string content)))
   content)
 
@@ -82,15 +96,28 @@
   "Return a snapshot of all step outputs."
   (table/clone *steps*))
 
+(defn last-output []
+  "Return the output of the most recently recorded step."
+  (if (empty? *step-order*)
+    ""
+    (or (get *steps* (last *step-order*)) "")))
+
 # --- Workflow macro ---
 
 (defmacro workflow [name & body]
-  "Define and execute a workflow. Returns {:name :output :steps}."
+  "Define and execute a workflow. Returns {:name :output :steps}.
+   Skips keyword+value pairs (e.g. :description \"...\")."
+  (def forms @[])
+  (var i 0)
+  (while (< i (length body))
+    (if (keyword? (in body i))
+      (set i (+ i 2))
+      (do
+        (array/push forms ~(set wf-last ,(in body i)))
+        (set i (+ i 1)))))
   ~(do
      (var wf-last nil)
-     ,;(seq [form :in body
-             :when (not (keyword? form))]
-         ~(set wf-last ,form))
+     ,;forms
      {:name ,name
       :output (string wf-last)
       :steps (,get-steps)}))
@@ -137,16 +164,20 @@
 
 # --- Phase ---
 
+(defn- get-step-recorder []
+  "Return the current step recorder (for use in macros at runtime)."
+  *step-recorder*)
+
 (defmacro phase [name & body]
   "Group steps under a named phase. Returns last value."
   ~(do
-     (when ,*step-recorder*
-       (,*step-recorder* {:step-id ,name :kind "phase" :output "started"}))
+     (when (,get-step-recorder)
+       ((,get-step-recorder) {:step-id ,name :kind "phase" :output "started"}))
      (var phase-result nil)
      ,;(map (fn [f] ~(set phase-result ,f)) body)
-     (when ,*step-recorder*
-       (,*step-recorder* {:step-id ,name :kind "phase"
-                         :output (string phase-result)}))
+     (when (,get-step-recorder)
+       ((,get-step-recorder) {:step-id ,name :kind "phase"
+                               :output (string phase-result)}))
      phase-result))
 
 # --- Call-workflow ---
@@ -169,18 +200,20 @@
       (errorf "call-workflow: %s not found" path))
     (def saved-input *input*)
     (def saved-steps *steps*)
+    (def saved-order *step-order*)
     (set *input* (or input ""))
     (set *steps* @{})
+    (set *step-order* @[])
     (when set
       (eachp [k v] set
         (put *params* k v)))
     (dofile path)
     (def child-steps (table/clone *steps*))
-    (var last-output "")
-    (eachp [_ v] child-steps (set last-output v))
-    (def result {:output last-output :steps child-steps})
+    (def child-last (last-output))
+    (def result {:output child-last :steps child-steps})
     (set *input* saved-input)
     (set *steps* saved-steps)
+    (set *step-order* saved-order)
     result))
 
 # --- LLM invocation ---
@@ -196,7 +229,7 @@
    Returns the response string."
   (def opts (table ;kvs))
   (unless *provider-fn*
-    (error "llm: no provider function set — call set-provider-fn! first"))
+    (error "llm: no provider function set -- call set-provider-fn! first"))
   (when (opts :skill)
     (def skill-content (string (slurp (opts :skill))))
     (put opts :prompt (string skill-content "\n\n" (opts :prompt))))
