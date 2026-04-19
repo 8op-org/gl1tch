@@ -3,3 +3,11 @@
 (def fetch-json
   (fn (url)
     (json-pick "$" (http-get url))))
+
+(def read-lines
+  (fn (path)
+    (lines (read-file path))))
+
+(def write-lines
+  (fn (path data)
+    (write-file :to path :content (join data "\n"))))

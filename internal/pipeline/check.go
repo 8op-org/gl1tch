@@ -80,6 +80,20 @@ var knownBuiltins = map[string]bool{
 	"http-post": true, "send": true,
 	"call-workflow": true,
 	"json-pick": true, "pick": true,
+	// String manipulation
+	"upper": true, "lower": true, "trim": true,
+	"replace": true, "contains": true,
+	"starts-with": true, "ends-with": true,
+	"split": true, "join": true, "lines": true,
+	"count": true, "slice": true,
+	// Collection predicates
+	"some": true, "every": true,
+	// Map/set operations
+	"assoc": true, "flatten": true, "set": true, "difference": true,
+	// Regex
+	"regex-match": true, "regex-find": true,
+	// Comparison
+	"<": true, "assert": true,
 }
 
 // checkScope tracks names visible at a given point during the walk.

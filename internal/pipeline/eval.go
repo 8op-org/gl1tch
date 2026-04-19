@@ -50,6 +50,9 @@ type Evaluator struct {
 
 	// Call-workflow cycle detection
 	CallStack []string
+
+	// Include cycle detection
+	includes map[string]bool
 }
 
 // NewEvaluator creates a new evaluator with default values.
@@ -58,6 +61,7 @@ func NewEvaluator() *Evaluator {
 		steps:     make(map[string]string),
 		Params:    make(map[string]string),
 		Resources: make(map[string]map[string]string),
+		includes:  make(map[string]bool),
 	}
 }
 
@@ -602,6 +606,12 @@ func (ev *Evaluator) specialInclude(env *Env, args []*sexpr.Node, node *sexpr.No
 		return nil, err
 	}
 	path := pathVal.String()
+
+	// Circular include detection
+	if ev.includes[path] {
+		return NilVal{}, nil // already included — skip silently
+	}
+	ev.includes[path] = true
 
 	// Resolve std/ includes from the embedded stdlib FS.
 	if strings.HasPrefix(path, "std/") {
