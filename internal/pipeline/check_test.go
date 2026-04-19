@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/8op-org/gl1tch/internal/sexpr"
@@ -90,6 +91,15 @@ func TestCheck_ParDemo(t *testing.T) {
 	for _, d := range diags {
 		if d.Severity == SeverityError {
 			t.Errorf("unexpected error: %s", d)
+		}
+	}
+}
+
+func TestCheck_StdlibInclude(t *testing.T) {
+	diags := checkHelper(t, `(include "std/strings") (workflow "test" (step "a" (kebab-case "Hello World")))`)
+	for _, d := range diags {
+		if d.Kind == DiagUnknownSymbol && strings.Contains(d.Message, "kebab-case") {
+			t.Fatal("checker should not flag stdlib-defined 'kebab-case' as unknown")
 		}
 	}
 }
