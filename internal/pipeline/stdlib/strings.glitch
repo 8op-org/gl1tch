@@ -1,0 +1,15 @@
+;; std/strings — string utility functions
+
+(def kebab-case
+  (fn (s)
+    (sh (str "echo " "'" s "'" " | tr '[:upper:]' '[:lower:]' | tr ' _' '--'"))))
+
+(def snake-case
+  (fn (s)
+    (sh (str "echo " "'" s "'" " | tr '[:upper:]' '[:lower:]' | tr ' -' '__'"))))
+
+(def blank?
+  (fn (s) (= s "")))
+
+(def present?
+  (fn (s) (not (= s ""))))

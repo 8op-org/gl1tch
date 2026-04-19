@@ -1,0 +1,5 @@
+;; std/io — file and HTTP convenience wrappers
+
+(def fetch-json
+  (fn (url)
+    (json-pick "$" (http-get url))))

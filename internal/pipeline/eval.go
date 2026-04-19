@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/8op-org/gl1tch/internal/pipeline/stdlib"
 	"github.com/8op-org/gl1tch/internal/provider"
 	"github.com/8op-org/gl1tch/internal/sexpr"
 )
@@ -601,6 +602,27 @@ func (ev *Evaluator) specialInclude(env *Env, args []*sexpr.Node, node *sexpr.No
 		return nil, err
 	}
 	path := pathVal.String()
+
+	// Resolve std/ includes from the embedded stdlib FS.
+	if strings.HasPrefix(path, "std/") {
+		name := strings.TrimPrefix(path, "std/") + ".glitch"
+		data, err := stdlib.FS.ReadFile(name)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: include %q: %w", node.Line, path, err)
+		}
+		nodes, parseErr := sexpr.Parse(data)
+		if parseErr != nil {
+			return nil, fmt.Errorf("line %d: include %q: %w", node.Line, path, parseErr)
+		}
+		var result Value = NilVal{}
+		for _, n := range nodes {
+			result, err = ev.Eval(env, n)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {

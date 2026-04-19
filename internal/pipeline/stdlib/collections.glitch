@@ -1,0 +1,5 @@
+;; std/collections — collection helpers
+
+(def compact
+  (fn (source)
+    (filter source (not (= item "")))))
