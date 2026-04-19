@@ -378,6 +378,7 @@ func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 	var allSymbols []SymbolDoc
 	var allImports []UnresolvedImport
 	var allCalls []CallSite
+	var allRefs []CallSite
 
 	for _, file := range toIndex {
 		fe := fileEntries[file]
@@ -410,6 +411,13 @@ func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 			fmt.Fprintf(os.Stderr, "  warn: extract calls %s: %v\n", fe.relPath, err)
 		} else {
 			allCalls = append(allCalls, calls...)
+		}
+
+		refs, err := ext.ExtractRefs(fe.content, fe.relPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  warn: extract refs %s: %v\n", fe.relPath, err)
+		} else {
+			allRefs = append(allRefs, refs...)
 		}
 	}
 
@@ -445,6 +453,7 @@ func IndexRepoGraph(root string, es *esearch.Client, opts IndexOpts) error {
 	allEdges = append(allEdges, resolver.ResolveContains()...)
 	allEdges = append(allEdges, resolver.ResolveImports(allImports)...)
 	allEdges = append(allEdges, resolver.ResolveCalls(allCalls)...)
+	allEdges = append(allEdges, resolver.ResolveRefs(allRefs)...)
 	allEdges = append(allEdges, resolver.ResolveExports()...)
 	allEdges = append(allEdges, resolver.ResolveExtendsImplements()...)
 
