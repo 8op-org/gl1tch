@@ -1,458 +1,182 @@
-;; site-sync.glitch — reconcile site-manifest.glitch against disk
+;; site-sync.glitch — reconcile site-manifest against disk
 ;;
-;; Idempotent: if the manifest hasn't changed and no upstream source files
-;; have been modified since the last doc was written, steps 3-7 are no-ops
-;; because diff-disk produces an empty create/update list.
-;;
-;; Run with: glitch workflow run site-sync
+;; Idempotent: if manifest hasn't changed and no upstream source files
+;; have been modified since the last doc was written, generation is skipped.
 
 (workflow "site-sync"
   :description "Reconcile site-manifest against disk, generate/update doc pages, verify"
 
-  ;; ── Step 1: parse manifest ────────────────────────────────────────────────
-  ;;
-  ;; Emits a JSON object with sections[], pages[], all_slugs[], homepage.
+  ;; ── Load manifest ────────────────────────────────────────────────
+  (def manifest (include "site-manifest.glitch"))
+  (def sections (filter (pick manifest :sections) (pick item :sidebar)))
+  (def manifest-pages (-> sections (map (fn (s) (pick s :pages))) (flatten)))
 
-  (step "read-manifest"
-    (run "python3 scripts/site-read-manifest.py"))
+  ;; ── Diff disk ────────────────────────────────────────────────────
+  (def disk-slugs
+    (-> (glob "site/src/content/docs/*.md")
+        (map (fn (f) (replace f "site/src/content/docs/" "" ".md" "")))))
 
-  ;; ── Step 2: diff disk ─────────────────────────────────────────────────────
-  ;;
-  ;; Compares manifest JSON against site/src/content/docs/*.md.
-  ;; Emits { create: [...], update: [...], ok: [...], orphan: [...] }
+  (def needs-create
+    (filter manifest-pages
+      (not (contains disk-slugs (pick item :slug)))))
 
-  (step "diff-disk"
-    (run "python3 scripts/site-diff-disk.py < '~(stepfile read-manifest)'"))
+  (def needs-update
+    (filter manifest-pages
+      (let (slug (pick item :slug)
+            disk-path (str "site/src/content/docs/" slug ".md"))
+        (when (contains disk-slugs slug)
+          (let (content (read-file disk-path)
+                fm-title (json-pick content "title"))
+            (or (not (= fm-title (pick item :title)))
+                (run (str "test -n \"$(find " (join (pick item :context-paths) " ")
+                          " -newer " disk-path " 2>/dev/null)\""))))))))
 
-  ;; ── Step 2b: summary of what needs work ──────────────────────────────────
+  (def orphans
+    (filter disk-slugs
+      (not (contains (map manifest-pages (fn (p) (pick p :slug))) item))))
 
+  (def needs-work (list needs-create needs-update))
+
+  ;; ── Summary ──────────────────────────────────────────────────────
   (step "diff-summary"
-    (run ```
-      python3 - <<'EOF'
-      import json, sys
-      diff = json.loads(open('~(stepfile diff-disk)').read())
-      create = diff.get('create', [])
-      update = diff.get('update', [])
-      ok     = diff.get('ok', [])
-      orphan = diff.get('orphan', [])
-      total  = len(create) + len(update)
-      print(f"create={len(create)} update={len(update)} ok={len(ok)} orphan={len(orphan)}")
-      if total == 0:
-          print("SKIP: manifest is in sync — no pages to generate")
-      else:
-          for p in create:
-              print(f"CREATE {p['slug']}")
-          for p in update:
-              print(f"UPDATE {p['slug']} ({', '.join(p.get('reason', []))})")
-      EOF
-      ```))
+    (str "create=" (count needs-create) " update=" (count needs-update)
+         " ok=" (count (difference disk-slugs (map needs-work (fn (p) (pick p :slug)))))
+         " orphan=" (count orphans)))
 
-  ;; ── Step 3a: gather code-index context per page ───────────────────────────
-  ;;
-  ;; For each page that needs create/update, query the code index.
-  ;; We run one bulk query covering all context-queries concatenated.
-  ;; If ES is not available the step exits 0 with empty output (shell handles it).
+  ;; ── Gather context (parallel) ────────────────────────────────────
+  (par
+    (step "es-context"
+      (catch
+        (-> (http-post "http://localhost:9200/glitch-code-*/_search"
+              :content-type "application/json"
+              :body (str ```
+                {"query":{"query_string":{"query":"
+                ~(-> needs-work
+                    (map (fn (p) (str "(" (pick p :context-query) ")")))
+                    (join " OR "))
+                ","default_field":"content"}},"size":30,
+                "_source":["file_path","content"]}
+                ```))
+            (json-pick ".hits.hits[]._source"))
+        ""))
 
-  (step "query-code-index"
-    (run ```
-      python3 - <<'EOF'
-      import json, sys, subprocess, os
+    (step "fallback-context"
+      (map needs-work
+        (let (paths (pick item :context-paths))
+          (-> paths
+              (map (fn (cp)
+                (-> (glob cp)
+                    (map (fn (f) (str "=== " f " ===\n" (read-file f))))
+                    (join "\n\n"))))
+              (join "\n\n"))))))
 
-      diff_path = '~(stepfile diff-disk)'
-      diff = json.loads(open(diff_path).read())
-      pages = diff.get('create', []) + diff.get('update', [])
+  (step "merged-context"
+    (map needs-work
+      (let (slug (pick item :slug))
+        (str "=== CONTEXT FOR: " slug " ===\n"
+             (ref "es-context") "\n" (ref "fallback-context")))))
 
-      if not pages:
-          print('{}')
-          sys.exit(0)
+  ;; ── Generate pages ───────────────────────────────────────────────
+  (map needs-work
+    (let (slug (pick item :slug)
+          title (pick item :title)
+          order (pick item :order)
+          description (pick item :description))
 
-      # Build a combined query covering all context-queries
-      queries = [p['context_query'] for p in pages if p.get('context_query')]
-      combined = ' OR '.join(f'({q})' for q in queries) if queries else ''
+      (step "generate-page"
+        (llm
+          :provider "claude"
+          :model "sonnet"
+          :prompt ```
+            You are a technical writer for gl1tch (https://8op.org).
 
-      if not combined:
-          print('{}')
-          sys.exit(0)
+            VOICE RULES — follow these exactly:
+            - "your" framing throughout; never say "the user"
+            - examples before explanation; show real code first, explain second
+            - no internal implementation details: never mention BubbleTea, tmux,
+              SQLite, Go types, OTel, or any internal package names
+            - every code example must be real — drawn from the CONTEXT below
+            - do NOT invent commands, flags, or features that aren't in the context
 
-      # Try ES search; fall through silently if ES is not running
-      payload = json.dumps({
-          "query": {"query_string": {"query": combined, "default_field": "content"}},
-          "size": 30,
-          "_source": ["file_path", "content", "symbols", "language"]
-      })
+            Write the documentation page for slug "~slug".
 
-      try:
-          r = subprocess.run(
-              ["curl", "-sf", "-X", "POST",
-               "http://localhost:9200/glitch-code-*/_search",
-               "-H", "Content-Type: application/json",
-               "-d", payload],
-              capture_output=True, text=True, timeout=10
-          )
-          if r.returncode != 0 or not r.stdout.strip():
-              print('{}')
-              sys.exit(0)
-          hits = json.loads(r.stdout).get("hits", {}).get("hits", [])
-          result = {}
-          for h in hits:
-              src = h.get("_source", {})
-              fp  = src.get("file_path", "unknown")
-              result[fp] = src.get("content", "")
-          print(json.dumps(result))
-      except Exception:
-          print('{}')
-      EOF
-      ```))
+            CONTEXT:
+            ~(ref "merged-context")
 
-  ;; ── Step 3b: gather fallback context from context_paths ──────────────────
-  ;;
-  ;; For pages where the index missed content, cat the declared context_paths
-  ;; directly from disk. Output: JSON map of { slug → combined_text }
+            Output: markdown body only — no frontmatter, start with ## heading.
+            ```))
 
-  (step "gather-fallback"
-    (run ```
-      python3 - <<'EOF'
-      import json, sys, os, glob
+      (write-file (str "site/src/content/docs/" slug ".md")
+        :content ```
+          ---
+          title: "~(replace title "\"" "\\\"")"
+          order: ~order
+          description: "~(replace description "\"" "\\\"")"
+          ---
 
-      diff_path = '~(stepfile diff-disk)'
-      diff = json.loads(open(diff_path).read())
-      pages = diff.get('create', []) + diff.get('update', [])
-
-      if not pages:
-          print('{}')
-          sys.exit(0)
-
-      result = {}
-      for page in pages:
-          slug    = page['slug']
-          cpaths  = page.get('context_paths', [])
-          chunks  = []
-          for cp in cpaths:
-              # Expand globs like cmd/workspace*.go
-              expanded = glob.glob(cp)
-              if not expanded and os.path.isdir(cp):
-                  expanded = glob.glob(os.path.join(cp, '*.go'))
-              if not expanded:
-                  expanded = [cp] if os.path.exists(cp) else []
-              for f in sorted(expanded)[:8]:  # cap at 8 files per path
-                  try:
-                      text = open(f).read()
-                      chunks.append(f'=== {f} ===\n{text[:4000]}')
-                  except Exception:
-                      pass
-          result[slug] = '\n\n'.join(chunks)
-
-      print(json.dumps(result))
-      EOF
-      ```))
-
-  ;; ── Step 3c: merge context ────────────────────────────────────────────────
-  ;;
-  ;; Combine ES hits (3a) and fallback text (3b) into a per-slug context bundle.
-  ;; Deduplicates by file path. Output: JSON map of { slug → context_text }
-
-  (step "merge-context"
-    (run ```
-      python3 - <<'EOF'
-      import json, sys
-
-      index_hits = json.loads(open('~(stepfile query-code-index)').read())
-      fallback   = json.loads(open('~(stepfile gather-fallback)').read())
-
-      diff = json.loads(open('~(stepfile diff-disk)').read())
-      pages = diff.get('create', []) + diff.get('update', [])
-
-      if not pages:
-          print('{}')
-          sys.exit(0)
-
-      # Build set of file paths covered by ES hits
-      es_files = set(index_hits.keys())
-
-      result = {}
-      for page in pages:
-          slug   = page['slug']
-          chunks = []
-
-          # ES context (shared across all pages in the query)
-          for fp, content in index_hits.items():
-              if content:
-                  chunks.append(f'=== {fp} (index) ===\n{content[:3000]}')
-
-          # Fallback text for files not in ES hits
-          fb = fallback.get(slug, '')
-          if fb:
-              # Only include fallback lines whose file header wasn't in ES
-              for block in fb.split('\n\n'):
-                  first = block.split('\n')[0]
-                  # Check if any ES file matches the block header
-                  in_es = any(f in first for f in es_files) if es_files else False
-                  if not in_es and block.strip():
-                      chunks.append(block)
-
-          result[slug] = '\n\n'.join(chunks)[:12000]  # cap per-page context
-
-      print(json.dumps(result))
-      EOF
-      ```))
-
-  ;; ── Step 4: generate pages ────────────────────────────────────────────────
-  ;;
-  ;; Map over the list of pages that need create/update.
-  ;; Each iteration: Claude Sonnet writes/rewrites the markdown body.
-  ;; One JSON object per page: { slug, content }
-  ;;
-  ;; The (map ...) iterates over lines from diff-summary that start with
-  ;; CREATE or UPDATE.  We use a shell step per line to invoke the LLM.
-
-  (step "pages-needing-work"
-    (run ```
-      python3 - <<'EOF'
-      import json
-      diff = json.loads(open('~(stepfile diff-disk)').read())
-      for p in diff.get('create', []) + diff.get('update', []):
-          print(p['slug'])
-      EOF
-      ```))
-
-  (map "pages-needing-work"
-    (step "page-context"
-      (run ```
-        python3 - <<'EOF'
-        import json, sys
-        slug    = '~param.item'
-        ctx_map = json.loads(open('~(stepfile merge-context)').read())
-        diff    = json.loads(open('~(stepfile diff-disk)').read())
-
-        # Context for this specific page
-        context = ctx_map.get(slug, '')
-        print(f'=== CONTEXT FOR: {slug} ===')
-        print(context or '(no context available)')
-
-        # Existing content for this page (if updating)
-        for p in diff.get('update', []):
-            if p['slug'] == slug:
-                print(f'\n=== EXISTING CONTENT ===')
-                print(p.get('existing_content', ''))
-                break
-        EOF
-        ```))
-
-    (step "generate-page"
-      (llm
-        :provider "claude"
-        :model "sonnet"
-        :format "json"
-        :prompt ```
-          You are a technical writer for gl1tch (https://8op.org).
-
-          VOICE RULES — follow these exactly:
-          - "your" framing throughout; never say "the user"
-          - examples before explanation; show real code first, explain second
-          - no internal implementation details: never mention BubbleTea, tmux,
-            SQLite, Go types, OTel, or any internal package names
-          - every code example must be real — drawn from the CONTEXT below
-          - do NOT invent commands, flags, or features that aren't in the context
-          - no glitch ask — it has been decommissioned; exclude from all content
-
-          YOUR TASK: Write or rewrite the documentation page for slug "~param.item".
-
-          MANIFEST (all pages — use for accurate cross-links):
-          ~(step read-manifest)
-
-          CONTEXT FOR THIS PAGE (real source code and existing content):
-          ~(step page-context)
-
-          OUTPUT: A single JSON object — no markdown fence, no preamble:
-          {
-            "slug": "~param.item",
-            "content": "<full markdown body — no frontmatter, start with ## heading>"
-          }
-
-          The content field must be complete markdown ready to publish.
-          Do not include YAML frontmatter — it will be injected separately.
-          Start with a ## heading (not #).
+          ~(ref "generate-page")
           ```)))
 
-  ;; ── Step 5: inject frontmatter ────────────────────────────────────────────
-  ;;
-  ;; Stamp YAML frontmatter from manifest metadata onto each generated page.
-  ;; Reads the JSON output of the generate-page map step.
+  ;; ── Homepage sync ────────────────────────────────────────────────
+  (let (manifest-sections (pick (pick manifest :homepage) :sections)
+        index-text (read-file "site/src/pages/index.astro"))
 
-  (step "inject-frontmatter"
-    (run ```
-      python3 - <<'EOF'
-      import json, sys, os, re
-      from pathlib import Path
+    (step "disk-sections"
+      (llm :prompt ```
+        Extract all <section> id attributes from this file.
+        Output one id per line, nothing else.
 
-      diff    = json.loads(open('~(stepfile diff-disk)').read())
-      manifest= json.loads(open('~(stepfile read-manifest)').read())
-
-      # Build slug → manifest page metadata map
-      page_meta = {}
-      for section in manifest.get('sections', []):
-          for p in section.get('pages', []):
-              page_meta[p['slug']] = p
-
-      # Collect generated JSON from the map step output
-      # generate-page outputs one JSON object per line (map step concatenates them)
-      generated_path = '~(stepfile generate-page)'
-      raw = open(generated_path).read().strip()
-
-      # The map step may emit multiple JSON objects — parse each
-      pages_out = []
-      decoder = json.JSONDecoder()
-      pos = 0
-      while pos < len(raw):
-          raw_remaining = raw[pos:].lstrip()
-          if not raw_remaining:
-              break
-          try:
-              obj, idx = decoder.raw_decode(raw_remaining)
-              pages_out.append(obj)
-              pos += len(raw) - len(raw_remaining) + idx
-          except json.JSONDecodeError:
-              break
-
-      if not pages_out:
-          print('No pages generated', file=sys.stderr)
-          sys.exit(0)
-
-      out_dir = Path('site/src/content/docs')
-      out_dir.mkdir(parents=True, exist_ok=True)
-
-      written = []
-      for page in pages_out:
-          slug    = page.get('slug', '')
-          content = page.get('content', '')
-          if not slug or not content:
-              continue
-
-          meta = page_meta.get(slug, {})
-          title       = meta.get('title', slug.replace('-', ' ').title())
-          order       = meta.get('order', 0)
-          description = meta.get('description', '')
-
-          # Escape quotes in YAML values
-          title_esc = title.replace('"', '\\"')
-          desc_esc  = description.replace('"', '\\"')
-
-          frontmatter = f'---\ntitle: "{title_esc}"\norder: {order}\ndescription: "{desc_esc}"\n---\n\n'
-          full = frontmatter + content.lstrip('\n')
-
-          out_path = out_dir / f'{slug}.md'
-          out_path.write_text(full, encoding='utf-8')
-          written.append(slug)
-
-      print(f"Wrote {len(written)} pages: {', '.join(written)}")
-      EOF
-      ```))
-
-  ;; ── Step 6: write-pages summary ──────────────────────────────────────────
-  ;;
-  ;; Report what landed on disk.
-
-  (step "write-pages"
-    (run ```
-      python3 - <<'EOF'
-      from pathlib import Path
-      docs = sorted(Path('site/src/content/docs').glob('*.md'))
-      print(f'{len(docs)} pages on disk:')
-      for d in docs:
-          print(f'  {d}')
-      EOF
-      ```))
-
-  ;; ── Step 7: sync-homepage ────────────────────────────────────────────────
-  ;;
-  ;; Update index.astro hero/features/how-it-works/agents sections if the
-  ;; manifest homepage sections list changed vs what's in the file.
-  ;; Only runs if the homepage entry exists and sections differ.
-
-  (step "homepage-diff"
-    (run ```
-      python3 - <<'EOF'
-      import json, re, sys
-      from pathlib import Path
-
-      manifest  = json.loads(open('~(stepfile read-manifest)').read())
-      homepage  = manifest.get('homepage', {})
-      if not homepage:
-          print('SKIP')
-          sys.exit(0)
-
-      manifest_sections = homepage.get('sections', [])
-
-      index_path = Path('site/src/pages/index.astro')
-      if not index_path.exists():
-          print('SKIP')
-          sys.exit(0)
-
-      text = index_path.read_text(encoding='utf-8')
-      # Extract existing section id attributes  id="..."
-      disk_sections = re.findall(r'<section[^>]+id="([^"]+)"', text)
-
-      if set(manifest_sections) == set(disk_sections):
-          print('SKIP')
-      else:
-          print('UPDATE')
-          print(f'manifest sections: {manifest_sections}')
-          print(f'disk sections:     {disk_sections}')
-      EOF
-      ```))
-
-  (step "read-index-astro"
-    (run "cat site/src/pages/index.astro"))
-
-  (step "sync-homepage"
-    (llm
-      :provider "claude"
-      :model "sonnet"
-      :prompt ```
-        You are a technical writer for gl1tch (https://8op.org).
-
-        Homepage diff result:
-        ~(step homepage-diff)
-
-        If the result starts with SKIP, reply with exactly: SKIP
-
-        Otherwise, read the current index.astro below and the manifest,
-        then update the homepage sections to match the manifest's declared
-        sections list. Keep all existing HTML structure, CSS classes, and
-        copy. Only add or remove <section> blocks as needed.
-
-        Return the complete updated index.astro file content, verbatim —
-        no preamble, no explanation, no markdown fences.
-
-        CURRENT index.astro:
-        ~(step read-index-astro)
-
-        MANIFEST HOMEPAGE ENTRY:
-        ~(step read-manifest)
+        ~index-text
         ```))
 
-  (step "save-homepage"
-    (run ```
-      python3 - <<'EOF'
-      content = open('~(stepfile sync-homepage)').read().strip()
-      if content == 'SKIP':
-          print('Homepage unchanged — skipping write')
-      else:
-          open('site/src/pages/index.astro', 'w').write(content)
-          print('Homepage updated')
-      EOF
-      ```))
+    (when-not (= (ref "disk-sections") (join manifest-sections "\n"))
+      (step "rewrite-homepage"
+        (llm
+          :provider "claude"
+          :model "sonnet"
+          :prompt ```
+            Update this index.astro to match these sections: ~(join manifest-sections ", ")
+            Keep all existing HTML/CSS. Only add/remove <section> blocks.
+            Return the complete file, no fences.
 
-  ;; ── Step 8: build-sidebar ────────────────────────────────────────────────
-  ;;
-  ;; Deterministic: reads manifest and emits DocSidebar.astro.
-  ;; Always runs so sidebar stays in sync even if no pages changed.
+            ~index-text
+            ```))
+      (write-file "site/src/pages/index.astro" :content (ref "rewrite-homepage"))))
 
-  (step "build-sidebar"
-    (run "python3 scripts/site-build-sidebar.py"))
+  ;; ── Sidebar ──────────────────────────────────────────────────────
+  (let (sidebar-sections (filter (pick manifest :sections) (pick item :sidebar)))
+    (write-file "site/src/components/DocSidebar.astro"
+      :content ```
+        ---
+        const { currentSlug } = Astro.props;
+        const sections = [
+        ~(-> sidebar-sections
+            (map (fn (s) (str
+              "  { label: \"" (pick s :label) "\", pages: [\n"
+              (-> (pick s :pages)
+                  (map (fn (p) (str "    { slug: \"" (pick p :slug)
+                                    "\", title: \"" (pick p :title) "\" }")))
+                  (join ",\n"))
+              "\n  ]}")))
+            (join ",\n"))
+        ];
+        ---
+        <nav class="doc-sidebar">
+          {sections.map(s => (
+            <div class="sidebar-section">
+              <div class="sidebar-label">{s.label}</div>
+              {s.pages.map(p => (
+                <a href={`/docs/${p.slug}`}
+                   class:list={["sidebar-link", { active: currentSlug === p.slug }]}>
+                  {p.title}
+                </a>
+              ))}
+            </div>
+          ))}
+        </nav>
+        ```))
 
-  ;; ── Changelog ─────────────────────────────────────────────────────────────
-
+  ;; ── Changelog ────────────────────────────────────────────────────
   (step "changelog-raw"
     (run "git log --oneline --since='2025-01-01' -- cmd/ internal/ examples/ .glitch/ docs/site/"))
 
@@ -466,103 +190,60 @@
         Output as markdown. Each entry: ### heading, then bullet points.
 
         Commits:
-        ~(step changelog-raw)
+        ~(ref "changelog-raw")
         ```))
 
-  (step "save-changelog"
-    (save "site/generated/changelog.md" :from "enrich-changelog"))
+  (save "site/generated/changelog.md" :from "enrich-changelog")
 
-  ;; ── Labs injection (conditional) ──────────────────────────────────────────
+  ;; ── Labs injection ───────────────────────────────────────────────
+  (let (lab-files (glob "site/generated/labs/*.json"))
+    (when lab-files
+      (-> (glob "site/src/content/labs/*.md")
+          (filter (fn (f) (not (contains f ".gitkeep"))))
+          (map (fn (f) (run (str "rm " f)))))
 
-  (step "inject-labs"
-    (run ```
-      python3 - <<'EOF'
-      import json, os, sys
-      from pathlib import Path
+      (map lab-files
+        (let (lab (read-file item)
+              slug (json-pick lab ".slug")
+              title (json-pick lab ".title")
+              desc (json-pick lab ".description")
+              date (json-pick lab ".date")
+              content (json-pick lab ".content"))
+          (write-file (str "site/src/content/labs/" slug ".md")
+            :content ```
+              ---
+              title: "~(replace title "\"" "\\\"")"
+              slug: "~slug"
+              description: "~(replace desc "\"" "\\\"")"
+              date: "~date"
+              ---
 
-      labs_dir = Path('site/generated/labs')
-      out_dir  = Path('site/src/content/labs')
+              ~content
+              ```)))))
 
-      if not labs_dir.exists() or not list(labs_dir.glob('*.json')):
-          print('SKIP: no labs to inject')
-          sys.exit(0)
-
-      out_dir.mkdir(parents=True, exist_ok=True)
-
-      # Clear old injected labs
-      for old in out_dir.glob('*.md'):
-          if old.name != '.gitkeep':
-              old.unlink()
-
-      for f in labs_dir.glob('*.json'):
-          lab = json.loads(f.read_text())
-          slug  = lab['slug']
-          title = lab['title'].replace('"', '\\"')
-          desc  = lab.get('description', '').replace('"', '\\"')
-          date  = lab.get('date', '')
-
-          frontmatter = f'---\ntitle: "{title}"\nslug: "{slug}"\ndescription: "{desc}"\ndate: "{date}"\n---\n\n'
-          content = frontmatter + lab['content']
-          (out_dir / f'{slug}.md').write_text(content)
-          print(f'  injected: {slug}.md')
-
-      print(f'Injected {len(list(labs_dir.glob("*.json")))} lab(s)')
-      EOF
-      ```))
-
-  ;; ── Phase: verify ────────────────────────────────────────────────────────
-
+  ;; ── Verify ───────────────────────────────────────────────────────
   (phase "verify" :retries 1
-    (gate "hallucinations"
-      (run "python3 scripts/gate-hallucinations.py"))
-    (gate "syntax"
-      (run "python3 scripts/gate-syntax.py"))
-    (gate "structure"
-      (run "python3 scripts/gate-structure.py"))
-    (gate "links"
-      (run "python3 scripts/gate-links.py"))
-    (gate "sidebar"
-      (run "python3 scripts/gate-sidebar.py")))
+    (par
+      (gate "hallucinations" (call-workflow "gate-hallucinations"))
+      (gate "syntax"         (call-workflow "gate-syntax"))
+      (gate "structure"      (call-workflow "gate-structure"))
+      (gate "links"          (call-workflow "gate-links"))
+      (gate "sidebar"        (call-workflow "gate-sidebar"))))
 
-  ;; ── Build ─────────────────────────────────────────────────────────────────
-
-  (step "build-report"
-    (run "echo 'PASS' > site/generated/build-report.md && echo 'All gates passed.'"))
-
-  (step "build-site"
-    (run "cd site && bash build.sh 2>&1"))
-
-  ;; ── Phase: build-test ────────────────────────────────────────────────────
+  (write-file "site/generated/build-report.md" :content "PASS\nAll gates passed.")
+  (step "build-site" (run "cd site && bash build.sh 2>&1"))
 
   (phase "build-test" :retries 0
-    (gate "playwright"
-      (run "bash scripts/gate-playwright.sh")))
+    (gate "playwright" (run "cd site && npx playwright test --reporter=line 2>&1")))
 
-  ;; ── Done ─────────────────────────────────────────────────────────────────
-
+  ;; ── Done ─────────────────────────────────────────────────────────
   (step "done"
-    (run ```
-      python3 - <<'EOF'
-      import json
-      from pathlib import Path
+    (str ```
+      site-sync complete
+        created: ~(join (map needs-create (fn (p) (pick p :slug))) ", ")
+        updated: ~(join (map needs-update (fn (p) (pick p :slug))) ", ")
+        orphans: ~(join orphans ", ")
 
-      diff = json.loads(open('~(stepfile diff-disk)').read())
-      created = [p['slug'] for p in diff.get('create', [])]
-      updated = [p['slug'] for p in diff.get('update', [])]
-      ok      = diff.get('ok', [])
-      orphan  = diff.get('orphan', [])
-      labs    = list(Path('site/src/content/labs').glob('*.md'))
-      labs    = [l.stem for l in labs if l.name != '.gitkeep']
-
-      print('site-sync complete')
-      print(f'  created : {len(created)} page(s)  {created}')
-      print(f'  updated : {len(updated)} page(s)  {updated}')
-      print(f'  ok      : {len(ok)} page(s) already in sync')
-      print(f'  labs    : {len(labs)} lab(s)  {labs}')
-      if orphan:
-          print(f'  orphan  : {orphan} — on disk but not in manifest')
-      print()
-      print('Site built to site/dist/')
-      print('Preview: cd site && npx astro preview')
-      EOF
+      Site built to site/dist/
+      Preview: cd site && npx astro preview
       ```)))

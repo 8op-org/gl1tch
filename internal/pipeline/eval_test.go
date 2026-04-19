@@ -1,8 +1,13 @@
 package pipeline
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/8op-org/gl1tch/internal/sexpr"
 )
 
 func evalHelper(t *testing.T, src string) string {
@@ -183,5 +188,407 @@ func TestEval_Str(t *testing.T) {
 	got := evalHelper(t, `(str "a" "b" "c")`)
 	if got != "abc" {
 		t.Fatalf("want %q, got %q", "abc", got)
+	}
+}
+
+func TestEval_Assoc(t *testing.T) {
+	got := evalHelper(t, `(def m (assoc :name "gl1tch" :version "0.1")) (pick m :name)`)
+	if got != "gl1tch" {
+		t.Fatalf("want %q, got %q", "gl1tch", got)
+	}
+}
+
+func TestEval_AssocNested(t *testing.T) {
+	src := `(def m (assoc :meta (assoc :title "hello"))) (pick (pick m :meta) :title)`
+	got := evalHelper(t, src)
+	if got != "hello" {
+		t.Fatalf("want %q, got %q", "hello", got)
+	}
+}
+
+func TestEval_PickFromList(t *testing.T) {
+	src := `(def items (list "a" "b" "c")) (pick items 1)`
+	got := evalHelper(t, src)
+	if got != "b" {
+		t.Fatalf("want %q, got %q", "b", got)
+	}
+}
+
+func TestEval_AssocInList(t *testing.T) {
+	src := `(def pages (list (assoc :slug "intro") (assoc :slug "guide")))
+	         (pick (pick pages 0) :slug)`
+	got := evalHelper(t, src)
+	if got != "intro" {
+		t.Fatalf("want %q, got %q", "intro", got)
+	}
+}
+
+func TestEval_Replace(t *testing.T) {
+	got := evalHelper(t, `(replace "hello world" "world" "earth")`)
+	if got != "hello earth" {
+		t.Fatalf("want %q, got %q", "hello earth", got)
+	}
+}
+
+func TestEval_ReplaceMultiple(t *testing.T) {
+	got := evalHelper(t, `(replace "a/b/c.md" "a/b/" "" ".md" "")`)
+	if got != "c" {
+		t.Fatalf("want %q, got %q", "c", got)
+	}
+}
+
+func TestEval_Contains(t *testing.T) {
+	got := evalHelper(t, `(contains "hello world" "world")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_ContainsList(t *testing.T) {
+	got := evalHelper(t, `(contains (list "a" "b" "c") "b")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_Join(t *testing.T) {
+	got := evalHelper(t, `(join (list "a" "b" "c") ",")`)
+	if got != "a,b,c" {
+		t.Fatalf("want %q, got %q", "a,b,c", got)
+	}
+}
+
+func TestEval_Split(t *testing.T) {
+	src := `(def parts (split "a,b,c" ",")) (pick parts 1)`
+	got := evalHelper(t, src)
+	if got != "b" {
+		t.Fatalf("want %q, got %q", "b", got)
+	}
+}
+
+func TestEval_Trim(t *testing.T) {
+	got := evalHelper(t, `(trim "  hello  ")`)
+	if got != "hello" {
+		t.Fatalf("want %q, got %q", "hello", got)
+	}
+}
+
+func TestEval_Upper(t *testing.T) {
+	got := evalHelper(t, `(upper "hello")`)
+	if got != "HELLO" {
+		t.Fatalf("want %q, got %q", "HELLO", got)
+	}
+}
+
+func TestEval_Lower(t *testing.T) {
+	got := evalHelper(t, `(lower "HELLO")`)
+	if got != "hello" {
+		t.Fatalf("want %q, got %q", "hello", got)
+	}
+}
+
+func TestEval_Lines(t *testing.T) {
+	src := `(def ls (lines "a\nb\nc")) (pick ls 1)`
+	got := evalHelper(t, src)
+	if got != "b" {
+		t.Fatalf("want %q, got %q", "b", got)
+	}
+}
+
+func TestEval_StartsWith(t *testing.T) {
+	got := evalHelper(t, `(starts-with "glitch run" "glitch")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_EndsWith(t *testing.T) {
+	got := evalHelper(t, `(ends-with "hello.md" ".md")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_Slice(t *testing.T) {
+	got := evalHelper(t, `(slice "hello world" 6 11)`)
+	if got != "world" {
+		t.Fatalf("want %q, got %q", "world", got)
+	}
+}
+
+func TestEval_RegexMatch(t *testing.T) {
+	src := `(def matches (regex-match "\\d+" "a1b22c333")) (join matches ",")`
+	got := evalHelper(t, src)
+	if got != "1,22,333" {
+		t.Fatalf("want %q, got %q", "1,22,333", got)
+	}
+}
+
+func TestEval_RegexMatchCapture(t *testing.T) {
+	src := `(def matches (regex-match "\\(([a-z]+)" "(foo) (bar)")) (join matches ",")`
+	got := evalHelper(t, src)
+	if got != "foo,bar" {
+		t.Fatalf("want %q, got %q", "foo,bar", got)
+	}
+}
+
+func TestEval_RegexFind(t *testing.T) {
+	got := evalHelper(t, `(regex-find "\\d+" "abc123def")`)
+	if got != "123" {
+		t.Fatalf("want %q, got %q", "123", got)
+	}
+}
+
+func TestEval_RegexFindNil(t *testing.T) {
+	got := evalHelper(t, `(regex-find "\\d+" "abcdef")`)
+	if got != "" {
+		t.Fatalf("want empty, got %q", got)
+	}
+}
+
+func TestEval_Count(t *testing.T) {
+	got := evalHelper(t, `(count (list "a" "b" "c"))`)
+	if got != "3" {
+		t.Fatalf("want %q, got %q", "3", got)
+	}
+}
+
+func TestEval_CountString(t *testing.T) {
+	got := evalHelper(t, `(count "hello")`)
+	if got != "5" {
+		t.Fatalf("want %q, got %q", "5", got)
+	}
+}
+
+func TestEval_Some(t *testing.T) {
+	got := evalHelper(t, `(some (list "a" "bb" "ccc") (fn (x) (starts-with x "b")))`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_SomeFalse(t *testing.T) {
+	got := evalHelper(t, `(some (list "a" "b" "c") (fn (x) (starts-with x "z")))`)
+	if got != "false" {
+		t.Fatalf("want %q, got %q", "false", got)
+	}
+}
+
+func TestEval_Every(t *testing.T) {
+	got := evalHelper(t, `(every (list "ab" "ac" "ad") (fn (x) (starts-with x "a")))`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_Set(t *testing.T) {
+	src := `(join (set (list "a" "b" "a" "c" "b")) ",")`
+	got := evalHelper(t, src)
+	if got != "a,b,c" {
+		t.Fatalf("want %q, got %q", "a,b,c", got)
+	}
+}
+
+func TestEval_Difference(t *testing.T) {
+	src := `(join (difference (list "a" "b" "c") (list "b")) ",")`
+	got := evalHelper(t, src)
+	if got != "a,c" {
+		t.Fatalf("want %q, got %q", "a,c", got)
+	}
+}
+
+func TestEval_Flatten(t *testing.T) {
+	src := `(join (flatten (list (list "a" "b") (list "c"))) ",")`
+	got := evalHelper(t, src)
+	if got != "a,b,c" {
+		t.Fatalf("want %q, got %q", "a,b,c", got)
+	}
+}
+
+func TestEval_Assert(t *testing.T) {
+	got := evalHelper(t, `(assert true "should not fail")`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+}
+
+func TestEval_AssertFail(t *testing.T) {
+	ev := NewEvaluator()
+	ev.Input = "test"
+	ev.Params = map[string]string{}
+	_, err := ev.RunSource([]byte(`(assert false "expected failure")`))
+	if err == nil {
+		t.Fatal("expected error from assert false")
+	}
+	if !strings.Contains(err.Error(), "expected failure") {
+		t.Fatalf("want error containing %q, got %q", "expected failure", err.Error())
+	}
+}
+
+func TestEval_LessThan(t *testing.T) {
+	got := evalHelper(t, `(< 3 5)`)
+	if got != "true" {
+		t.Fatalf("want %q, got %q", "true", got)
+	}
+	got = evalHelper(t, `(< 5 3)`)
+	if got != "false" {
+		t.Fatalf("want %q, got %q", "false", got)
+	}
+}
+
+func TestEval_WriteFilePositional(t *testing.T) {
+	tmp := t.TempDir()
+	path := tmp + "/test.txt"
+	src := fmt.Sprintf(`(write-file "%s" :content "hello")`, path)
+	got := evalHelper(t, src)
+	if got != path {
+		t.Fatalf("want %q, got %q", path, got)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != "hello" {
+		t.Fatalf("file content: want %q, got %q", "hello", string(data))
+	}
+}
+
+func TestEval_ManifestLoad(t *testing.T) {
+	data, err := os.ReadFile("../../site-manifest.glitch")
+	if err != nil {
+		t.Skip("site-manifest.glitch not found")
+	}
+	ev := NewEvaluator()
+	ev.Params = map[string]string{}
+	result, err := ev.RunSource(data)
+	if err != nil {
+		t.Fatalf("manifest eval: %v", err)
+	}
+	m, ok := result.(*MapVal)
+	if !ok {
+		t.Fatalf("manifest should return MapVal, got %T", result)
+	}
+	site, found := m.Get("site")
+	if !found || site.String() != "gl1tch" {
+		t.Fatalf("want site=gl1tch, got %v", site)
+	}
+	sections, found := m.Get("sections")
+	if !found {
+		t.Fatal("missing :sections key")
+	}
+	if _, ok := sections.(ListVal); !ok {
+		t.Fatalf("sections should be ListVal, got %T", sections)
+	}
+}
+
+func TestEval_SavePositional(t *testing.T) {
+	tmp := t.TempDir()
+	path := tmp + "/out.txt"
+	src := fmt.Sprintf(`(workflow save-test
+	  (step data "content here")
+	  (save "%s" :from "data"))`, path)
+	evalHelper(t, src)
+	data, _ := os.ReadFile(path)
+	if string(data) != "content here" {
+		t.Fatalf("file content: want %q, got %q", "content here", string(data))
+	}
+}
+
+func TestEval_GateWorkflowsParse(t *testing.T) {
+	files, _ := filepath.Glob("../../workflows/gate-*.glitch")
+	if len(files) == 0 {
+		t.Skip("no gate workflows found")
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		_, err = sexpr.Parse(data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", f, err)
+		}
+	}
+}
+
+func TestEval_SiteWorkflowsParse(t *testing.T) {
+	patterns := []string{"../../workflows/site*.glitch", "../../site/shared.glitch"}
+	for _, pat := range patterns {
+		files, _ := filepath.Glob(pat)
+		for _, f := range files {
+			data, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatalf("read %s: %v", f, err)
+			}
+			_, err = sexpr.Parse(data)
+			if err != nil {
+				t.Fatalf("parse %s: %v", f, err)
+			}
+		}
+	}
+}
+
+func TestEval_MapOverAssocList(t *testing.T) {
+	src := `(def pages (list (assoc :slug "intro" :order 1) (assoc :slug "guide" :order 2)))
+	         (join (map pages (fn (p) (pick p :slug))) ",")`
+	got := evalHelper(t, src)
+	if got != "intro,guide" {
+		t.Fatalf("want %q, got %q", "intro,guide", got)
+	}
+}
+
+func TestEval_FilterAssocList(t *testing.T) {
+	src := `(def pages (list (assoc :slug "a" :sidebar true) (assoc :slug "b" :sidebar false)))
+	         (count (filter pages (fn (p) (pick p :sidebar))))`
+	got := evalHelper(t, src)
+	if got != "1" {
+		t.Fatalf("want %q, got %q", "1", got)
+	}
+}
+
+func TestEval_MapWithBody(t *testing.T) {
+	src := `(def items (list "a" "b" "c"))
+	         (join (map items (fn (x) (str x "!"))) ",")`
+	got := evalHelper(t, src)
+	if got != "a!,b!,c!" {
+		t.Fatalf("want %q, got %q", "a!,b!,c!", got)
+	}
+}
+
+func TestEval_GlobMultiPattern(t *testing.T) {
+	// Create temp files to glob against
+	tmp := t.TempDir()
+	os.WriteFile(filepath.Join(tmp, "a.txt"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "b.md"), []byte("b"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "c.txt"), []byte("c"), 0o644)
+
+	src := fmt.Sprintf(`(count (glob "%s/*.txt" "%s/*.md"))`, tmp, tmp)
+	got := evalHelper(t, src)
+	if got != "3" {
+		t.Fatalf("want %q, got %q", "3", got)
+	}
+}
+
+func TestEval_PickFallthroughNil(t *testing.T) {
+	src := `(pick "hello" :key)`
+	got := evalHelper(t, src)
+	if got != "" {
+		t.Fatalf("want empty (NilVal), got %q", got)
+	}
+}
+
+func TestEval_FilterPreservesValue(t *testing.T) {
+	src := `(def items (list "alpha" "beta" "gamma"))
+	         (join (filter items (fn (x) (starts-with x "b"))) ",")`
+	got := evalHelper(t, src)
+	if got != "beta" {
+		t.Fatalf("want %q, got %q", "beta", got)
+	}
+}
+
+func TestEval_MapWithItemBinding(t *testing.T) {
+	// Test the do-body pattern still works with "item" binding
+	src := `(def items (list "x" "y"))
+	         (join (map items (str item "!")) ",")`
+	got := evalHelper(t, src)
+	if got != "x!,y!" {
+		t.Fatalf("want %q, got %q", "x!,y!", got)
 	}
 }

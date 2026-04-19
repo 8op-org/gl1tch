@@ -1,0 +1,64 @@
+(workflow "gate-hallucinations"
+  :description "Verify no hallucinated commands, keywords, or forms in docs"
+
+  (def valid-commands (set (list
+    "glitch run" "glitch workflow run" "glitch workflow list"
+    "glitch wf list" "glitch plugin list" "glitch plugin"
+    "glitch observe" "glitch up" "glitch down" "glitch index"
+    "glitch config show" "glitch config set" "glitch config"
+    "glitch version" "glitch --help" "glitch --workspace"
+    "glitch workspace init" "glitch workspace use" "glitch workspace list"
+    "glitch workspace status" "glitch workspace gui"
+    "glitch workspace register" "glitch workspace unregister"
+    "glitch workspace add" "glitch workspace rm"
+    "glitch workspace sync" "glitch workspace pin"
+    "glitch workspace workflow" "glitch workspace")))
+
+  (def valid-forms (set (list
+    "def" "workflow" "step" "run" "llm" "save" "plugin" "include"
+    "arg" "retry" "timeout" "catch" "cond" "map" "let" "phase" "gate" "par"
+    "json-pick" "lines" "merge" "http-get" "http-post" "read-file" "write-file"
+    "glob" "websearch" "fetch" "send" "write" "join" "split" "trim"
+    "upper" "lower" "replace" "contains" "call-workflow" "fn" "list" "assoc"
+    "pick" "->" "filter" "reduce" "flatten" "when" "when-not" "each"
+    "compare" "branch" "review" "do" "begin" "str" "println" "ref"
+    "or" "not" "read" "set" "regex-match" "regex-find" "some" "every"
+    "starts-with" "ends-with" "slice" "difference" "count" "assert"
+    "sh" "<" "=" "if")))
+
+  (def valid-keywords (set (list
+    ":prompt" ":provider" ":model" ":skill" ":format" ":tier"
+    ":description" ":from" ":default" ":type" ":dir" ":headers"
+    ":body" ":retries" ":version" ":set" ":content" ":content-type"
+    ":id" ":criteria" ":index" ":query" ":size" ":fields" ":sort"
+    ":hint" ":to" ":sidebar" ":slug" ":title" ":order"
+    ":template" ":sections" ":context-query" ":context-paths"
+    ":label" ":pages" ":site" ":url" ":ndjson")))
+
+  (def docs (glob "site/src/content/docs/*.md"))
+
+  (map docs
+    (let (content (read-file item)
+          slug (replace item "site/src/content/docs/" "" ".md" "")
+          blocks (regex-match "```[\\s\\S]*?```" content))
+      (map blocks
+        (let (block-lines (lines item))
+          (map block-lines
+            (do
+              ;; Check CLI commands
+              (when (or (starts-with item "glitch ") (starts-with item "$ glitch "))
+                (let (cmd (trim (replace item "$ " "")))
+                  (when-not (some valid-commands (fn (v) (starts-with cmd v)))
+                    (assert false (str slug ": invalid command: " cmd)))))
+
+              ;; Check sexpr forms
+              (-> (regex-match "\\(([a-z>][-a-z_>/]*)" item)
+                  (filter (fn (form) (not (contains valid-forms form))))
+                  (map (fn (form) (assert false (str slug ": invalid form (" form " ...)")))))
+
+              ;; Check keywords
+              (-> (regex-match ":[a-z][-a-z_]*" item)
+                  (filter (fn (kw) (not (contains valid-keywords kw))))
+                  (map (fn (kw) (assert false (str slug ": invalid keyword " kw)))))))))))
+
+  (println (str "PASS: no hallucinated commands, keywords, or forms (" (count docs) " docs)")))

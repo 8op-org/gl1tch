@@ -1,47 +1,27 @@
-;; site-deploy.glitch — gate, build, commit, push for GitHub Pages
-;;
-;; Run with: glitch workflow run site-deploy
-
 (workflow "site-deploy"
   :description "Verify, build, commit, push for GitHub Pages"
 
-  ;; ── Verify current disk state ─────────────────────
+  (def manifest (include "site-manifest.glitch"))
 
   (phase "verify" :retries 0
-    (gate "hallucinations"
-      (run "python3 scripts/gate-hallucinations.py"))
-    (gate "syntax"
-      (run "python3 scripts/gate-syntax.py"))
-    (gate "structure"
-      (run "python3 scripts/gate-structure.py"))
-    (gate "links"
-      (run "python3 scripts/gate-links.py"))
-    (gate "sidebar"
-      (run "python3 scripts/gate-sidebar.py")))
+    (par
+      (gate "hallucinations" (call-workflow "gate-hallucinations"))
+      (gate "syntax"         (call-workflow "gate-syntax"))
+      (gate "structure"      (call-workflow "gate-structure"))
+      (gate "links"          (call-workflow "gate-links"))
+      (gate "sidebar"        (call-workflow "gate-sidebar"))))
 
-  ;; ── Build ─────────────────────────────────────────
-
-  (step "build-sidebar"
-    (run "python3 scripts/site-build-sidebar.py"))
-
-  (step "build"
-    (run "cd site && npx astro build 2>&1"))
-
-  ;; ── Smoke test ────────────────────────────────────
+  (step "build-sidebar" (call-workflow "build-sidebar"))
+  (step "build" (run "cd site && npx astro build 2>&1"))
 
   (phase "smoke" :retries 0
-    (gate "playwright"
-      (run "bash scripts/gate-playwright.sh")))
+    (gate "playwright" (run "cd site && npx playwright test --reporter=line 2>&1")))
 
-  ;; ── Commit and push ───────────────────────────────
+  (step "commit" (run ```
+    git add site/src/content/ site/src/pages/ site/src/components/
+    git diff --cached --quiet && echo 'nothing to commit' && exit 0
+    git commit -m "docs: update site content"
+    git push
+    ```))
 
-  (step "commit"
-    (run ```
-      git add site/src/content/ site/src/pages/ site/src/components/
-      git diff --cached --quiet && echo 'nothing to commit' && exit 0
-      git commit -m "docs: update site content"
-      git push
-      ```))
-
-  (step "done"
-    (run "echo 'Deployed. GitHub Pages will pick it up.'")))
+  (step "done" "Deployed. GitHub Pages will pick it up."))

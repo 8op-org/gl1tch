@@ -1,31 +1,27 @@
-;; site-create-page.glitch — AI generates a doc page, gates verify it
-;;
-;; Run with: glitch workflow run site-create-page --set topic="batch comparison runs"
-
 (include "site/shared.glitch")
+(include "site-manifest.glitch")
 
 (workflow "site-create-page"
   :description "AI-generate a new doc page with gated verification"
 
-  ;; ── Gather context ────────────────────────────────
+  ;; ── Gather context in parallel ────────────────────────
+  (par
+    (step "existing-pages"
+      (-> (glob "site/src/content/docs/*.md")
+          (map (fn (f) (replace f "site/src/content/docs/" "" ".md" "")))))
 
-  (step "existing-docs"
-    (run "for f in docs/site/*.md; do echo '=== '$f' ==='; head -5 \"$f\"; echo; done"))
+    (step "repo-structure"
+      (-> (glob "internal/**/*.go" "cmd/**/*.go")
+          (filter (fn (f) (not (contains f "testdata"))))))
 
-  (step "repo-structure"
-    (run "find internal/ cmd/ -name '*.go' -not -path '*/testdata/*' | head -40"))
+    (step "recent-commits"
+      (run "git log --oneline -30 -- cmd/ internal/ examples/ .glitch/")))
 
-  (step "recent-commits"
-    (run "git log --oneline -30 -- cmd/ internal/ examples/ .glitch/"))
-
-  (step "existing-pages"
-    (run "python3 -c \"import glob,os; [print(os.path.splitext(os.path.basename(p))[0]) for p in sorted(glob.glob('docs/site/*.md'))]\""))
-
-  ;; ── Generate page ─────────────────────────────────
-
+  ;; ── Generate page ─────────────────────────────────────
   (step "generate"
     (llm
       :tier 0
+      :format "json"
       :prompt ```
         You are a technical writer for gl1tch (8op.org).
 
@@ -35,50 +31,49 @@
         TOPIC: ~param.topic
 
         EXISTING PAGES (don't duplicate these):
-        ~(step existing-pages)
+        ~(ref "existing-pages")
 
-        EXISTING DOC STUBS (for tone reference):
-        ~(step existing-docs)
-
-        REAL WORKFLOW EXAMPLES (use this exact syntax in code blocks):
+        REAL WORKFLOW EXAMPLES:
         ~examples
 
         REPO STRUCTURE:
-        ~(step repo-structure)
+        ~(ref "repo-structure")
 
         RECENT CHANGES:
-        ~(step recent-commits)
+        ~(ref "recent-commits")
 
         OUTPUT: A single JSON object:
-        {"slug": "kebab-case-name", "title": "Page Title", "order": N, "description": "one line", "content": "full markdown body starting after the title"}
-
-        The order should be after the last existing page. The slug should be descriptive.
-        The content should be complete and ready to publish.
+        {"slug": "kebab-case-name", "title": "Page Title",
+         "order": N, "description": "one line",
+         "content": "full markdown body starting after the title"}
         ```))
 
-  ;; ── Save generated page ───────────────────────────
+  ;; ── Save directly ─────────────────────────────────────
+  (let (slug (json-pick (ref "generate") ".slug")
+        title (json-pick (ref "generate") ".title")
+        order (json-pick (ref "generate") ".order")
+        desc (json-pick (ref "generate") ".description")
+        content (json-pick (ref "generate") ".content"))
 
-  (step "save-stub"
-    (run "cat '~(stepfile generate)' | python3 scripts/save-generated-page.py"))
+    (write-file (str "site/src/content/docs/" slug ".md")
+      :content ```
+        ---
+        title: "~(replace title "\"" "\\\"")"
+        order: ~order
+        description: "~(replace desc "\"" "\\\"")"
+        ---
 
-  (step "rebuild-json"
-    (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
+        ~content
+        ```))
 
-  ;; ── Verify ────────────────────────────────────────
-
+  ;; ── Verify ────────────────────────────────────────────
   (phase "verify" :retries 1
-    (gate "no-hallucinations"
-      (run "python3 scripts/gate-hallucinations.py"))
-    (gate "syntax"
-      (run "python3 scripts/gate-syntax.py"))
-    (gate "stub-coverage"
-      (run "python3 scripts/gate-coverage.py"))
-    (gate "structure-and-tone"
-      (run "python3 scripts/gate-structure.py")))
+    (par
+      (gate "hallucinations" (call-workflow "gate-hallucinations"))
+      (gate "syntax"         (call-workflow "gate-syntax"))
+      (gate "structure"      (call-workflow "gate-structure"))))
 
   (phase "page-tests" :retries 0
-    (gate "playwright"
-      (run "bash scripts/gate-playwright.sh")))
+    (gate "playwright" (run "cd site && npx playwright test --reporter=line 2>&1")))
 
-  (step "done"
-    (run "echo 'Page created and tested. Run: glitch workflow run site-dev to preview.'")))
+  (step "done" "Page created. Run: glitch workflow run site-dev to preview."))

@@ -1,0 +1,19 @@
+(workflow "gate-syntax"
+  :description "Verify no stale interpolation syntax in docs"
+
+  (def docs (glob "site/src/content/docs/*.md" "site/src/content/labs/*.md"))
+
+  (map docs
+    (let (content (read-file item)
+          slug (replace item "site/src/content/docs/" "" "site/src/content/labs/" "" ".md" ""))
+      (do
+        (when (regex-find "\\{\\{step\\s+[\"']" content)
+          (assert false (str slug ": old Go template step reference")))
+        (when (regex-find "\\{\\{\\.param\\." content)
+          (assert false (str slug ": old Go template param reference")))
+        (when (regex-find "\\{\\{\\.input\\b" content)
+          (assert false (str slug ": old Go template input reference")))
+        (when (regex-find "\\bglitch ask\\b" content)
+          (assert false (str slug ": decommissioned command: glitch ask"))))))
+
+  (println (str "PASS: no stale syntax (" (count docs) " files)")))

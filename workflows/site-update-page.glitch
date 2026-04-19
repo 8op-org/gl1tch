@@ -1,29 +1,26 @@
-;; site-update-page.glitch — AI rewrites an existing doc page with gated verification
-;;
-;; Run with: glitch workflow run site-update-page --set page=plugins
-;; Or:       glitch workflow run site-update-page --set page=getting-started --set instructions="add section about par form"
-
 (include "site/shared.glitch")
 
 (workflow "site-update-page"
   :description "AI-rewrite an existing doc page with gated verification"
 
-  ;; ── Gather context ────────────────────────────────
+  ;; ── Gather context in parallel ────────────────────────
+  (par
+    (step "current-page"
+      (read-file (str "site/src/content/docs/" (trim ~param.page) ".md")))
 
-  (step "current-page"
-    (run "cat docs/site/~(trim param.page).md"))
+    (step "repo-structure"
+      (-> (glob "internal/**/*.go" "cmd/**/*.go")
+          (filter (fn (f) (not (contains f "testdata"))))))
 
-  (step "repo-structure"
-    (run "find internal/ cmd/ -name '*.go' -not -path '*/testdata/*' | head -40"))
+    (step "recent-commits"
+      (run "git log --oneline -30 -- cmd/ internal/ examples/ .glitch/"))
 
-  (step "recent-commits"
-    (run "git log --oneline -30 -- cmd/ internal/ examples/ .glitch/"))
+    (step "workflows"
+      (-> (glob "workflows/*.glitch")
+          (map (fn (f) (str "=== " f " ===\n" (read-file f))))
+          (join "\n\n"))))
 
-  (step "workflows"
-    (run "for f in workflows/*.glitch; do echo '=== '$f' ==='; cat \"$f\"; echo; done"))
-
-  ;; ── Rewrite ───────────────────────────────────────
-
+  ;; ── Rewrite ───────────────────────────────────────────
   (step "rewrite"
     (llm
       :prompt ```
@@ -35,43 +32,36 @@
         INSTRUCTIONS: ~param.instructions
 
         CURRENT PAGE CONTENT:
-        ~(step current-page)
+        ~(ref "current-page")
 
-        REAL WORKFLOW EXAMPLES (use this exact syntax in code blocks):
+        REAL WORKFLOW EXAMPLES:
         ~examples
 
         REAL WORKFLOWS:
-        ~(step workflows)
+        ~(ref "workflows")
 
         REPO STRUCTURE:
-        ~(step repo-structure)
+        ~(ref "repo-structure")
 
         RECENT CHANGES:
-        ~(step recent-commits)
+        ~(ref "recent-commits")
 
-        OUTPUT: The complete updated markdown page. Start with the # Heading.
-        Include everything — this replaces the entire file.
+        OUTPUT: The complete updated markdown body.
+        No frontmatter — start with ## heading.
         ```))
 
-  ;; ── Save ──────────────────────────────────────────
+  ;; ── Save (preserve existing frontmatter) ──────────────
+  (let (page-path (str "site/src/content/docs/" (trim ~param.page) ".md")
+        existing (read-file page-path)
+        frontmatter (-> existing (split "---") (pick 1)))
+    (write-file page-path
+      :content (str "---\n" frontmatter "\n---\n\n" (ref "rewrite"))))
 
-  (step "save"
-    (save "docs/site/~(trim param.page).md" :from "rewrite"))
-
-  (step "rebuild"
-    (run "python3 scripts/stubs-to-json.py > site/generated/docs.json && python3 scripts/split-docs.py"))
-
-  ;; ── Verify ────────────────────────────────────────
-
+  ;; ── Verify ────────────────────────────────────────────
   (phase "verify" :retries 1
-    (gate "no-hallucinations"
-      (run "python3 scripts/gate-hallucinations.py"))
-    (gate "syntax"
-      (run "python3 scripts/gate-syntax.py"))
-    (gate "stub-coverage"
-      (run "python3 scripts/gate-coverage.py"))
-    (gate "structure-and-tone"
-      (run "python3 scripts/gate-structure.py")))
+    (par
+      (gate "hallucinations" (call-workflow "gate-hallucinations"))
+      (gate "syntax"         (call-workflow "gate-syntax"))
+      (gate "structure"      (call-workflow "gate-structure"))))
 
-  (step "done"
-    (run "echo 'Page updated. Run: glitch workflow run site-dev to preview.'")))
+  (step "done" "Page updated. Run: glitch workflow run site-dev to preview."))

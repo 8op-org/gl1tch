@@ -1,0 +1,22 @@
+(workflow "gate-coverage"
+  :description "Every stub in docs/site/ has a matching entry in docs.json"
+
+  (def stubs
+    (-> (glob "docs/site/*.md")
+        (map (fn (f) (replace f "docs/site/" "" ".md" "")))
+        (set)))
+
+  (def docs-json (read-file "site/generated/docs.json"))
+  (def slugs (-> (json-pick docs-json ".[].slug") (set)))
+
+  (def missing (difference stubs slugs))
+  (def extra (difference slugs stubs))
+
+  (when (or missing extra)
+    (when missing
+      (map missing (fn (m) (println (str "  missing doc for stub: " m)))))
+    (when extra
+      (map extra (fn (e) (println (str "  extra doc without stub: " e)))))
+    (assert false "stub/doc coverage mismatch"))
+
+  (println (str "PASS: all " (count stubs) " stubs covered")))

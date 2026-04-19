@@ -1,0 +1,32 @@
+(workflow "gate-links"
+  :description "Internal /docs/ links resolve to manifest slugs"
+
+  (def manifest (include "site-manifest.glitch"))
+  (def valid-slugs
+    (-> (pick manifest :sections)
+        (map (fn (s) (map (pick s :pages) (fn (p) (pick p :slug)))))
+        (flatten)
+        (set)))
+
+  (def docs (glob "site/src/content/docs/*.md"))
+
+  (map docs
+    (let (content (read-file item)
+          slug (replace item "site/src/content/docs/" "" ".md" "")
+          links (regex-match "\\[([^\\]]+)\\]\\(/docs/([^)#\\s]+)\\)" content))
+      (map links
+        (let (target (pick item 2))
+          (when-not (contains valid-slugs target)
+            (assert false (str slug ": broken link /docs/" target " — not in manifest")))))))
+
+  (map (list "site/src/pages/index.astro" "site/src/layouts/Base.astro")
+    (catch
+      (let (content (read-file item)
+            links (regex-match "href=[\"']/docs/([^\"'#\\s]+)[\"']" content))
+        (map links
+          (when-not (contains valid-slugs item)
+            (assert false (str item ": broken link /docs/" item)))))
+      nil))
+
+  (println (str "PASS: all /docs/ links valid (" (count docs) " docs, "
+                (count valid-slugs) " slugs)")))

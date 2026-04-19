@@ -149,6 +149,10 @@ func (ev *Evaluator) evalAtom(env *Env, node *sexpr.Node) (Value, error) {
 		if v, ok := env.Get(sym); ok {
 			return v, nil
 		}
+		// Bare numbers (e.g. 1, 42, -3) resolve as StringVal.
+		if isNumericSymbol(sym) {
+			return StringVal(sym), nil
+		}
 		return nil, fmt.Errorf("line %d: undefined symbol %q", node.Line, sym)
 	}
 	return NilVal{}, nil
@@ -594,7 +598,7 @@ func (ev *Evaluator) specialInclude(env *Env, args []*sexpr.Node, node *sexpr.No
 	return result, nil
 }
 
-// specialMap: (map source body...) — split source by newlines, eval body per item
+// specialMap: (map source body...) — iterate source, eval body per item
 func (ev *Evaluator) specialMap(env *Env, args []*sexpr.Node, node *sexpr.Node) (Value, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("line %d: map requires source and body", node.Line)
@@ -604,15 +608,42 @@ func (ev *Evaluator) specialMap(env *Env, args []*sexpr.Node, node *sexpr.Node) 
 	if err != nil {
 		return nil, err
 	}
-	items := strings.Split(sourceVal.String(), "\n")
 
+	// Preserve Value types for ListVal; fall back to newline-split for strings
+	var items []Value
+	if lv, ok := sourceVal.(ListVal); ok {
+		items = lv
+	} else {
+		for _, s := range strings.Split(sourceVal.String(), "\n") {
+			if s != "" {
+				items = append(items, StringVal(s))
+			}
+		}
+	}
+
+	// Check if body is a single function expression (fn-as-mapper pattern)
+	if len(args[1:]) == 1 {
+		bodyVal, err := ev.Eval(env, args[1])
+		if err == nil {
+			if _, ok := bodyVal.(*FnVal); ok {
+				results := make(ListVal, 0, len(items))
+				for _, item := range items {
+					result, err := ev.applyValue(env, bodyVal, item)
+					if err != nil {
+						return nil, err
+					}
+					results = append(results, result)
+				}
+				return results, nil
+			}
+		}
+	}
+
+	// Fall through to do-body pattern with "item" binding
 	results := make(ListVal, 0, len(items))
 	for _, item := range items {
-		if item == "" {
-			continue
-		}
 		child := NewEnv(env)
-		child.Set("item", StringVal(item))
+		child.Set("item", item)
 		val, err := ev.specialDo(child, args[1:])
 		if err != nil {
 			return nil, err
@@ -632,21 +663,50 @@ func (ev *Evaluator) specialFilter(env *Env, args []*sexpr.Node, node *sexpr.Nod
 	if err != nil {
 		return nil, err
 	}
-	items := strings.Split(sourceVal.String(), "\n")
 
+	// Preserve Value types for ListVal; fall back to newline-split for strings
+	var items []Value
+	if lv, ok := sourceVal.(ListVal); ok {
+		items = lv
+	} else {
+		for _, s := range strings.Split(sourceVal.String(), "\n") {
+			if s != "" {
+				items = append(items, StringVal(s))
+			}
+		}
+	}
+
+	// Check if predicate is a function expression (fn-as-predicate pattern)
+	if len(args[1:]) == 1 {
+		predVal, err := ev.Eval(env, args[1])
+		if err == nil {
+			if _, ok := predVal.(*FnVal); ok {
+				results := make(ListVal, 0)
+				for _, item := range items {
+					result, err := ev.applyValue(env, predVal, item)
+					if err != nil {
+						return nil, err
+					}
+					if isTruthy(result) {
+						results = append(results, item)
+					}
+				}
+				return results, nil
+			}
+		}
+	}
+
+	// Fall through to do-body pattern with "item" binding
 	results := make(ListVal, 0)
 	for _, item := range items {
-		if item == "" {
-			continue
-		}
 		child := NewEnv(env)
-		child.Set("item", StringVal(item))
+		child.Set("item", item)
 		pred, err := ev.Eval(child, args[1])
 		if err != nil {
 			return nil, err
 		}
 		if isTruthy(pred) {
-			results = append(results, StringVal(item))
+			results = append(results, item)
 		}
 	}
 	return results, nil
@@ -905,6 +965,23 @@ func (ev *Evaluator) specialThread(env *Env, args []*sexpr.Node) (Value, error) 
 		}
 	}
 	return result, nil
+}
+
+// isNumericSymbol returns true if s looks like an integer (optional leading minus, then digits).
+func isNumericSymbol(s string) bool {
+	if s == "" || s == "-" {
+		return false
+	}
+	start := 0
+	if s[0] == '-' {
+		start = 1
+	}
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // apply calls a function value with arguments.
