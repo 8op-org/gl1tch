@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/8op-org/gl1tch/internal/plugin"
-	"gopkg.in/yaml.v3"
 )
 
 // Workflow is a named sequence of steps loaded from YAML.
@@ -56,10 +55,9 @@ type Step struct {
 	Timeout string `yaml:"timeout,omitempty"` // deadline duration, e.g. "30s", "2m"
 
 	// Compound forms — Form discriminates the variant.
-	Form     string       `yaml:"-"` // "cond", "map", "map-resources", "catch", or "" for regular steps
-	Fallback *Step        `yaml:"-"` // catch: step to run on failure
-	Branches []CondBranch `yaml:"-"` // cond: ordered predicate→step pairs
-	MapOver  string       `yaml:"-"` // map: step ID whose output to iterate (newline-split)
+	Form     string `yaml:"-"` // "cond", "map", "map-resources", "catch", or "" for regular steps
+	Fallback *Step  `yaml:"-"` // catch: step to run on failure
+	MapOver  string `yaml:"-"` // map: step ID whose output to iterate (newline-split)
 	MapBody  *Step        `yaml:"-"` // map: template step executed per item (single step or first of chain)
 	MapSteps []Step       `yaml:"-"` // map: extra body steps executed after MapBody per iteration
 
@@ -89,9 +87,6 @@ type Step struct {
 	CompareID        string          `yaml:"-"` // compare: id for top-level compare blocks
 	CompareObjective string          `yaml:"-"` // compare: required objective statement
 
-	// Plugin invocation
-	PluginCall *PluginCallStep `yaml:"-"`
-
 	// Display hint — shown in CLI output next to the step name
 	Hint string `yaml:"-"`
 
@@ -99,25 +94,10 @@ type Step struct {
 	IsGate bool `yaml:"-"`
 
 	// SDK forms
-	JsonPick  *JsonPickStep  `yaml:"-"`
-	Lines     string         `yaml:"-"` // step ID to split by newlines
-	Flatten   string         `yaml:"-"` // step ID whose JSON array output to flatten to NDJSON
-	Merge     []string       `yaml:"-"` // step IDs to merge
-	HttpCall  *HttpCallStep  `yaml:"-"`
-	ReadFile  string         `yaml:"-"` // file path to read
-	WriteFile *WriteFileStep `yaml:"-"`
-	GlobPat   *GlobStep      `yaml:"-"`
-
-	// ES forms
-	Search *SearchStep `yaml:"-"`
-	Index  *IndexStep  `yaml:"-"`
-	Delete *DeleteStep `yaml:"-"`
-
-	// Embedding
-	Embed *EmbedStep `yaml:"-"`
-
-	// Web search
-	WebSearch *WebSearchStep `yaml:"-"`
+	Lines   string   `yaml:"-"` // step ID to split by newlines
+	Flatten string   `yaml:"-"` // step ID whose JSON array output to flatten to NDJSON
+	Merge   []string `yaml:"-"` // step IDs to merge
+	ReadFile string  `yaml:"-"` // file path to read
 
 	// call-workflow: invokes a sibling workflow by name as a nested run.
 	CallWorkflow string            `yaml:"-"` // workflow name
@@ -127,12 +107,6 @@ type Step struct {
 	// Source location (populated from sexpr nodes; zero for YAML-loaded steps).
 	Line int `yaml:"-"`
 	Col  int `yaml:"-"`
-}
-
-// CondBranch is one arm of a (cond ...) form.
-type CondBranch struct {
-	Pred string // shell command predicate (exit 0 = true), or "else"
-	Step Step   // step to execute if predicate succeeds
 }
 
 // CompareBranch is one named alternative in a (compare ...) form.
@@ -159,82 +133,6 @@ type LLMStep struct {
 	Format   string `yaml:"format,omitempty"`
 }
 
-// PluginCallStep invokes a plugin subcommand as a sub-workflow.
-type PluginCallStep struct {
-	Plugin     string            // plugin name
-	Subcommand string            // subcommand name
-	Args       map[string]string // keyword args
-}
-
-// JsonPickStep runs a jq expression against a step's output.
-type JsonPickStep struct {
-	Expr string // jq expression
-	From string // step ID
-}
-
-// HttpCallStep performs an HTTP request.
-type HttpCallStep struct {
-	Method  string            // "GET" or "POST"
-	URL     string            // template-rendered
-	Body    string            // template-rendered (POST only)
-	Headers map[string]string // template-rendered
-}
-
-// WriteFileStep writes a step's output to a file.
-type WriteFileStep struct {
-	Path string // template-rendered file path
-	From string // step ID whose output to write
-}
-
-// GlobStep matches files against a pattern.
-type GlobStep struct {
-	Pattern string // glob pattern
-	Dir     string // optional base directory
-}
-
-// SearchStep queries Elasticsearch and returns hits as JSON.
-type SearchStep struct {
-	IndexName string
-	Query     string   // raw JSON query body
-	Size      int      // max hits (default 10)
-	Fields    []string // _source field filter
-	ESURL     string   // override ES URL (empty = workspace default)
-	Sort      string   // raw JSON sort clause
-	NDJSON    bool     // output as NDJSON instead of JSON array
-}
-
-// IndexStep indexes a single document into Elasticsearch.
-type IndexStep struct {
-	IndexName  string
-	Doc        string // template-rendered JSON document
-	DocID      string // optional explicit _id
-	ESURL      string
-	EmbedField string // field in doc to embed (empty = no embedding)
-	EmbedModel string
-	Upsert     *bool // nil = default (upsert), false = skip if exists (op_type=create)
-}
-
-// DeleteStep deletes documents matching a query from Elasticsearch.
-type DeleteStep struct {
-	IndexName string
-	Query     string // raw JSON query body
-	ESURL     string
-}
-
-// EmbedStep generates an embedding vector from text.
-type EmbedStep struct {
-	Input string // template-rendered text to embed
-	Model string
-}
-
-// WebSearchStep queries a SearXNG instance and returns results as JSON.
-type WebSearchStep struct {
-	Query   string   // search query (template-rendered)
-	Engines []string // SearXNG engine names (empty = SearXNG defaults)
-	Results int      // max results (default 5)
-	Lang    string   // language filter (default "en")
-}
-
 // LoadFile reads a single workflow file (YAML or sexpr).
 func LoadFile(path string) (*Workflow, error) {
 	data, err := os.ReadFile(path)
@@ -244,48 +142,34 @@ func LoadFile(path string) (*Workflow, error) {
 	return LoadBytes(data, path)
 }
 
-// LoadBytes parses a workflow from raw bytes, dispatching on file extension.
+// LoadBytes parses a workflow from raw bytes. Only .glitch sexpr files are supported.
 func LoadBytes(data []byte, filename string) (*Workflow, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".glitch":
-		args, err := plugin.ParseArgs(data)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", filename, err)
-		}
-		input, err := ParseInput(data)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", filename, err)
-		}
-		w, err := parseSexprWorkflow(data)
-		if err != nil {
-			return nil, err
-		}
-		w.Args = args
-		w.Input = input
-		w.SourceFile = filename
-		for _, warn := range MergeImplicitArgs(w) {
-			fmt.Fprintf(os.Stderr, "warning: %s: %s\n", filename, warn)
-		}
-		return w, nil
-	default:
-		var w Workflow
-		if err := yaml.Unmarshal(data, &w); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", filename, err)
-		}
-		if w.Name == "" {
-			// Fallback name is the file's basename without extension — the
-			// full path lives on SourceFile, which keeps the two concerns
-			// separate.
-			base := filepath.Base(filename)
-			w.Name = strings.TrimSuffix(base, filepath.Ext(base))
-		}
-		w.SourceFile = filename
-		return &w, nil
+	if ext != ".glitch" {
+		return nil, fmt.Errorf("unsupported workflow format %q — only .glitch files are supported", ext)
 	}
+	args, err := plugin.ParseArgs(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", filename, err)
+	}
+	input, err := ParseInput(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", filename, err)
+	}
+	w, err := parseSexprWorkflow(data)
+	if err != nil {
+		return nil, err
+	}
+	w.Args = args
+	w.Input = input
+	w.SourceFile = filename
+	for _, warn := range MergeImplicitArgs(w) {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", filename, warn)
+	}
+	return w, nil
 }
 
-// LoadDir reads all .yaml files from a directory, keyed by workflow name.
+// LoadDir reads all .glitch workflow files from a directory, keyed by workflow name.
 // Later entries overwrite earlier ones (allows local overrides).
 func LoadDir(dir string) (map[string]*Workflow, error) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -307,8 +191,7 @@ func LoadDir(dir string) (map[string]*Workflow, error) {
 			}
 			return nil
 		}
-		ext := filepath.Ext(d.Name())
-		if ext != ".yaml" && ext != ".yml" && ext != ".glitch" {
+		if filepath.Ext(d.Name()) != ".glitch" {
 			return nil
 		}
 		w, loadErr := LoadFile(path)
