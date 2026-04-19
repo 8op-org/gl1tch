@@ -23,7 +23,8 @@
     "pick" "->" "filter" "reduce" "flatten" "when" "when-not" "each"
     "compare" "branch" "review" "do" "begin" "str" "println" "ref"
     "or" "not" "read" "set" "regex-match" "regex-find" "some" "every"
-    "starts-with" "ends-with" "slice" "difference" "count" "assert")))
+    "starts-with" "ends-with" "slice" "difference" "count" "assert"
+    "sh" "<" "=" "if")))
 
   (def valid-keywords (set (list
     ":prompt" ":provider" ":model" ":skill" ":format" ":tier"
