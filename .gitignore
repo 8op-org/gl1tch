@@ -1,5 +1,5 @@
-glitch
-gl1tch
+/glitch
+/gl1tch
 dist/
 .env
 .worktrees/
@@ -9,3 +9,5 @@ results/
 gui/node_modules/
 gui/dist/
 test-results/
+janet/build/
+janet/jpm_tree/
