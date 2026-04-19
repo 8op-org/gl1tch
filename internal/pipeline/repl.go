@@ -66,6 +66,7 @@ func (r *REPL) Run() error {
 	// If we hit EOF with a non-empty buffer, the input was incomplete.
 	if remaining := strings.TrimSpace(buf.String()); remaining != "" {
 		fmt.Fprintf(r.out, "error: unexpected end of input (unbalanced expression)\n")
+		return fmt.Errorf("unexpected end of input")
 	}
 	return scanner.Err()
 }

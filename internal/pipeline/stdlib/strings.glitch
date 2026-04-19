@@ -2,11 +2,11 @@
 
 (def kebab-case
   (fn (s)
-    (sh (str "echo " "'" s "'" " | tr '[:upper:]' '[:lower:]' | tr ' _' '--'"))))
+    (sh (str "printf '%s' " "\"" s "\"" " | tr '[:upper:]' '[:lower:]' | tr ' _' '--'"))))
 
 (def snake-case
   (fn (s)
-    (sh (str "echo " "'" s "'" " | tr '[:upper:]' '[:lower:]' | tr ' -' '__'"))))
+    (sh (str "printf '%s' " "\"" s "\"" " | tr '[:upper:]' '[:lower:]' | tr ' -' '__'"))))
 
 (def blank?
   (fn (s) (= s "")))

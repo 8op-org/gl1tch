@@ -58,9 +58,9 @@ func TestCheckCmd_InvalidFile(t *testing.T) {
 
 	err := runCheck(checkCmd, []string{wf})
 	if err == nil {
-		// Check if diagnostics were printed even without error
-		if !strings.Contains(out.String(), "frobnicate") {
-			t.Fatalf("expected diagnostic mentioning frobnicate, got: %s", out.String())
-		}
+		t.Fatal("expected error for unknown symbol 'frobnicate'")
+	}
+	if !strings.Contains(out.String(), "frobnicate") {
+		t.Fatalf("expected diagnostic mentioning frobnicate, got: %s", out.String())
 	}
 }
