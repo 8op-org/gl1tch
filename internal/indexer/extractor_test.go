@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"strings"
 	"testing"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -185,6 +186,62 @@ func TestTrimQuotes(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("trimQuotes(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestExtractRefs(t *testing.T) {
+	src := []byte(`package main
+
+type Server struct{}
+
+func (s *Server) Start() {}
+
+func main() {
+	handler := s.Start
+	var srv Server
+}
+`)
+	ext := &LanguageExtractor{
+		Language:   "go",
+		Grammar:    golang.GetLanguage(),
+		Extensions: []string{".go"},
+		RefQuery: strings.Join([]string{
+			`(selector_expression field: (field_identifier) @ref)`,
+			`(type_identifier) @ref`,
+		}, "\n"),
+	}
+	refs, err := ext.ExtractRefs(src, "main.go")
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	if len(refs) == 0 {
+		t.Fatal("expected at least 1 ref, got 0")
+	}
+
+	names := make(map[string]bool)
+	for _, r := range refs {
+		names[r.CalleeName] = true
+	}
+	if !names["Start"] {
+		t.Error("expected ref to Start (selector expression)")
+	}
+	if !names["Server"] {
+		t.Error("expected ref to Server (type identifier)")
+	}
+}
+
+func TestExtractRefsEmptyQuery(t *testing.T) {
+	ext := &LanguageExtractor{
+		Language:   "go",
+		Grammar:    golang.GetLanguage(),
+		Extensions: []string{".go"},
+	}
+	refs, err := ext.ExtractRefs([]byte(`package main`), "main.go")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(refs) != 0 {
+		t.Fatalf("expected 0 refs when no query set, got %d", len(refs))
 	}
 }
 

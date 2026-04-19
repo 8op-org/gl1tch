@@ -244,6 +244,64 @@ func (r *Resolver) ResolveExports() []EdgeDoc {
 	return edges
 }
 
+// ResolveRefs resolves reference sites into "references" edges. Unlike
+// ResolveCalls which only matches functions/methods, this also matches types,
+// interfaces, and classes — capturing non-call symbol usage like method values,
+// type identifiers in struct fields, params, returns, and composite literals.
+// callEdges is used to deduplicate: if a call edge already exists from the same
+// source to the same target, the reference edge is skipped.
+func (r *Resolver) ResolveRefs(refs []CallSite, callEdges []EdgeDoc) []EdgeDoc {
+	// Build set of existing call edge pairs for dedup.
+	callPairs := make(map[string]bool, len(callEdges))
+	for _, e := range callEdges {
+		callPairs[e.SourceID+":"+e.TargetID] = true
+	}
+
+	var edges []EdgeDoc
+	for _, ref := range refs {
+		targetID := r.findRefTarget(ref)
+		if targetID == "" {
+			continue
+		}
+		callerID := r.findEnclosing(ref.File, ref.Line)
+		if callerID == "" {
+			continue
+		}
+		// Skip if a call edge already covers this source→target pair.
+		if callPairs[callerID+":"+targetID] {
+			continue
+		}
+		edges = append(edges, EdgeDoc{
+			SourceID: callerID,
+			TargetID: targetID,
+			Kind:     EdgeReferences,
+			File:     ref.File,
+			Repo:     r.repo,
+		})
+	}
+	return edges
+}
+
+// findRefTarget finds the target symbol for a reference. Unlike findCallTarget,
+// this matches any symbol kind (types, interfaces, classes, functions, methods).
+func (r *Resolver) findRefTarget(ref CallSite) string {
+	// Local scope: same file, matching name.
+	if syms, ok := r.byFile[ref.File]; ok {
+		for _, s := range syms {
+			if s.Name == ref.CalleeName {
+				return s.ID
+			}
+		}
+	}
+	// Global: any symbol by name.
+	if syms, ok := r.byName[ref.CalleeName]; ok {
+		if len(syms) > 0 {
+			return syms[0].ID
+		}
+	}
+	return ""
+}
+
 // ResolveExtendsImplements is a placeholder for extends/implements edge
 // resolution. Go uses implicit interfaces (requires type-checker, not just
 // AST), and other languages would need additional tree-sitter queries for

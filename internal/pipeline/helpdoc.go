@@ -34,46 +34,7 @@ func ExtractImplicitRefs(w *Workflow) (params []string, usesInput bool) {
 			visit(step.LLM.Prompt)
 		}
 		visit(step.Save)
-		if step.HttpCall != nil {
-			visit(step.HttpCall.URL)
-			visit(step.HttpCall.Body)
-			for _, v := range step.HttpCall.Headers {
-				visit(v)
-			}
-		}
-		if step.JsonPick != nil {
-			visit(step.JsonPick.Expr)
-		}
 		visit(step.ReadFile)
-		if step.WriteFile != nil {
-			visit(step.WriteFile.Path)
-		}
-		if step.GlobPat != nil {
-			visit(step.GlobPat.Dir)
-			visit(step.GlobPat.Pattern)
-		}
-		if step.Search != nil {
-			visit(step.Search.IndexName)
-			visit(step.Search.Query)
-			visit(step.Search.Sort)
-		}
-		if step.Index != nil {
-			visit(step.Index.IndexName)
-			visit(step.Index.Doc)
-			visit(step.Index.DocID)
-		}
-		if step.Delete != nil {
-			visit(step.Delete.IndexName)
-			visit(step.Delete.Query)
-		}
-		if step.Embed != nil {
-			visit(step.Embed.Input)
-		}
-		if step.PluginCall != nil {
-			for _, v := range step.PluginCall.Args {
-				visit(v)
-			}
-		}
 		visit(step.CallInput)
 		for _, v := range step.CallSet {
 			visit(v)
@@ -85,10 +46,6 @@ func ExtractImplicitRefs(w *Workflow) (params []string, usesInput bool) {
 			return
 		}
 		visitStep(step)
-		for _, b := range step.Branches {
-			visit(b.Pred)
-			recurse(&b.Step)
-		}
 		if step.WhenBody != nil {
 			visit(step.WhenPred)
 			recurse(step.WhenBody)

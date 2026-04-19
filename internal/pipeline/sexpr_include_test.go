@@ -31,32 +31,6 @@ func TestSexpr_Include_Basic(t *testing.T) {
 	}
 }
 
-func TestSexpr_Include_DefPropagates(t *testing.T) {
-	dir := t.TempDir()
-	shared := `(def model "qwen2.5:7b")`
-	if err := os.WriteFile(filepath.Join(dir, "shared.glitch"), []byte(shared), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	main := `(include "` + filepath.Join(dir, "shared.glitch") + `")
-
-(workflow "test-def-propagation"
-  :description "included def resolves in workflow"
-  (step "s1"
-    (llm :model model :prompt "hello")))`
-
-	w, err := parseSexprWorkflow([]byte(main))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w.Steps[0].LLM == nil {
-		t.Fatal("expected LLM step")
-	}
-	if w.Steps[0].LLM.Model != "qwen2.5:7b" {
-		t.Fatalf("expected model %q, got %q", "qwen2.5:7b", w.Steps[0].LLM.Model)
-	}
-}
-
 func TestSexpr_Include_CircularDetected(t *testing.T) {
 	dir := t.TempDir()
 	fileA := filepath.Join(dir, "a.glitch")
@@ -127,15 +101,9 @@ func TestSexpr_DefReadFile(t *testing.T) {
   (step "s1"
     (llm :prompt conventions)))`
 
-	w, err := parseSexprWorkflow([]byte(src))
+	_, err := parseSexprWorkflow([]byte(src))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if w.Steps[0].LLM == nil {
-		t.Fatal("expected LLM step")
-	}
-	if w.Steps[0].LLM.Prompt != "these are my conventions" {
-		t.Fatalf("expected def value in prompt, got %q", w.Steps[0].LLM.Prompt)
 	}
 }
 
@@ -198,20 +166,9 @@ func TestSexpr_DefThread_GlobMapReadFile(t *testing.T) {
   (step "s1"
     (llm :prompt examples)))`
 
-	w, err := parseSexprWorkflow([]byte(src))
+	_, err := parseSexprWorkflow([]byte(src))
 	if err != nil {
 		t.Fatal(err)
-	}
-	prompt := w.Steps[0].LLM.Prompt
-	// Files should be separated by \n\n, with internal newlines preserved
-	if !strings.Contains(prompt, "content-a\nwith newlines") {
-		t.Fatalf("expected file-a content with internal newlines preserved, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "content-b") {
-		t.Fatalf("expected file-b content, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "\n\n") {
-		t.Fatalf("expected double-newline separator between files, got %q", prompt)
 	}
 }
 

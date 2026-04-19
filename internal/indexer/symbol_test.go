@@ -135,6 +135,12 @@ func TestEdgeID(t *testing.T) {
 	})
 }
 
+func TestEdgeReferencesConstant(t *testing.T) {
+	if EdgeReferences != "references" {
+		t.Errorf("expected EdgeReferences = %q, got %q", "references", EdgeReferences)
+	}
+}
+
 func TestEdgeDocFields(t *testing.T) {
 	edge := EdgeDoc{
 		SourceID: "src123",

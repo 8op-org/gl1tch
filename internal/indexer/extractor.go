@@ -40,6 +40,7 @@ type LanguageExtractor struct {
 	ImportQuery   string
 	ExportQuery   string
 	CallQuery     string
+	RefQuery      string
 	PathResolver  func(importPath, fromFile, repoRoot string) string
 }
 
@@ -255,6 +256,61 @@ func (le *LanguageExtractor) ExtractCalls(source []byte, file string) ([]CallSit
 	}
 
 	return calls, nil
+}
+
+// ExtractRefs runs the RefQuery against source and returns reference sites
+// (non-call symbol references like selector access and type identifiers).
+// If RefQuery is empty, returns nil.
+func (le *LanguageExtractor) ExtractRefs(source []byte, file string) ([]CallSite, error) {
+	if le.RefQuery == "" {
+		return nil, nil
+	}
+	if len(source) == 0 {
+		return nil, nil
+	}
+
+	parser := sitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(le.Grammar)
+
+	tree, err := parser.ParseCtx(context.Background(), nil, source)
+	if err != nil {
+		return nil, err
+	}
+	defer tree.Close()
+	root := tree.RootNode()
+
+	q, err := sitter.NewQuery([]byte(le.RefQuery), le.Grammar)
+	if err != nil {
+		return nil, err
+	}
+	defer q.Close()
+
+	cursor := sitter.NewQueryCursor()
+	defer cursor.Close()
+	cursor.Exec(q, root)
+
+	var refs []CallSite
+
+	for {
+		match, ok := cursor.NextMatch()
+		if !ok {
+			break
+		}
+
+		for _, cap := range match.Captures {
+			capName := q.CaptureNameForId(cap.Index)
+			if capName == "ref" {
+				refs = append(refs, CallSite{
+					CalleeName: cap.Node.Content(source),
+					File:       file,
+					Line:       int(cap.Node.StartPoint().Row) + 1,
+				})
+			}
+		}
+	}
+
+	return refs, nil
 }
 
 // trimQuotes strips surrounding quotes (double, single, or backtick) from s.
