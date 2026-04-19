@@ -1,0 +1,28 @@
+;; std/strings — string utility functions
+;; Arg order follows main evaluator builtins:
+;;   (replace text old new)
+;;   (split text sep)
+;;   (join list sep)
+;;   (slice text start end)
+
+(def kebab-case
+  (fn (s)
+    (replace (replace (lower s) " " "-") "_" "-")))
+
+(def snake-case
+  (fn (s)
+    (replace (replace (lower s) " " "_") "-" "_")))
+
+(def blank?
+  (fn (s) (= (trim s) "")))
+
+(def present?
+  (fn (s) (not (= (trim s) ""))))
+
+(def words
+  (fn (s) (split (trim s) " ")))
+
+(def unwords
+  (fn (lst) (join lst " ")))
+
+;; truncate deferred — slice needs eval fix for variable args
