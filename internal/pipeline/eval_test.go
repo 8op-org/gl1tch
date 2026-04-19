@@ -592,3 +592,24 @@ func TestEval_MapWithItemBinding(t *testing.T) {
 		t.Fatalf("want %q, got %q", "x!,y!", got)
 	}
 }
+
+func TestEval_RunSourceWithEnv(t *testing.T) {
+	ev := NewEvaluator()
+	env := NewEnv(nil)
+	ev.RegisterBuiltins(env)
+
+	// First eval defines a binding
+	_, err := ev.RunSourceWithEnv(env, []byte(`(def x "hello")`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Second eval sees it
+	val, err := ev.RunSourceWithEnv(env, []byte(`x`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val.String() != "hello" {
+		t.Fatalf("want %q, got %q", "hello", val.String())
+	}
+}

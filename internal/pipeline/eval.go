@@ -90,6 +90,30 @@ func (ev *Evaluator) RunSource(src []byte) (Value, error) {
 	return result, nil
 }
 
+// RunSourceWithEnv parses and evaluates source in an existing environment.
+// Callers are responsible for registering builtins in env before first use.
+func (ev *Evaluator) RunSourceWithEnv(env *Env, src []byte) (Value, error) {
+	nodes, err := sexpr.Parse(src)
+	if err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+
+	var result Value = NilVal{}
+	for _, n := range nodes {
+		result, err = ev.Eval(env, n)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// RegisterBuiltins installs all builtin functions into env.
+// Exported so callers (REPL, tests) can prepare an env for RunSourceWithEnv.
+func (ev *Evaluator) RegisterBuiltins(env *Env) {
+	ev.registerBuiltins(env)
+}
+
 // Eval is the main dispatch for evaluating a single AST node.
 func (ev *Evaluator) Eval(env *Env, node *sexpr.Node) (Value, error) {
 	if node.IsAtom() {
