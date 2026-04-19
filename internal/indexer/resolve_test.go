@@ -248,6 +248,110 @@ func TestResolveExportsJSOnly(t *testing.T) {
 	}
 }
 
+func TestResolveRefsLocalScope(t *testing.T) {
+	repo := "example/repo"
+	repoRoot := "/src/repo"
+
+	callerID := SymbolID("pkg/foo.go", KindFunction, "main", 1)
+	targetID := SymbolID("pkg/foo.go", KindMethod, "Start", 10)
+
+	symbols := []SymbolDoc{
+		{
+			ID:        callerID,
+			File:      "pkg/foo.go",
+			Kind:      KindFunction,
+			Name:      "main",
+			StartLine: 1,
+			EndLine:   8,
+			Repo:      repo,
+		},
+		{
+			ID:        targetID,
+			File:      "pkg/foo.go",
+			Kind:      KindMethod,
+			Name:      "Start",
+			StartLine: 10,
+			EndLine:   15,
+			Repo:      repo,
+		},
+	}
+
+	r := NewResolver(symbols, repo, repoRoot, nil)
+
+	refs := []CallSite{
+		{
+			CalleeName: "Start",
+			File:       "pkg/foo.go",
+			Line:       5,
+		},
+	}
+
+	edges := r.ResolveRefs(refs)
+
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 references edge, got %d", len(edges))
+	}
+
+	e := edges[0]
+	if e.SourceID != callerID {
+		t.Errorf("expected source %q, got %q", callerID, e.SourceID)
+	}
+	if e.TargetID != targetID {
+		t.Errorf("expected target %q, got %q", targetID, e.TargetID)
+	}
+	if e.Kind != EdgeReferences {
+		t.Errorf("expected kind %q, got %q", EdgeReferences, e.Kind)
+	}
+}
+
+func TestResolveRefsMatchesTypes(t *testing.T) {
+	repo := "example/repo"
+	repoRoot := "/src/repo"
+
+	callerID := SymbolID("pkg/foo.go", KindFunction, "main", 1)
+	typeID := SymbolID("pkg/foo.go", KindType, "Server", 10)
+
+	symbols := []SymbolDoc{
+		{
+			ID:        callerID,
+			File:      "pkg/foo.go",
+			Kind:      KindFunction,
+			Name:      "main",
+			StartLine: 1,
+			EndLine:   8,
+			Repo:      repo,
+		},
+		{
+			ID:        typeID,
+			File:      "pkg/foo.go",
+			Kind:      KindType,
+			Name:      "Server",
+			StartLine: 10,
+			EndLine:   20,
+			Repo:      repo,
+		},
+	}
+
+	r := NewResolver(symbols, repo, repoRoot, nil)
+
+	refs := []CallSite{
+		{
+			CalleeName: "Server",
+			File:       "pkg/foo.go",
+			Line:       5,
+		},
+	}
+
+	edges := r.ResolveRefs(refs)
+
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 references edge, got %d", len(edges))
+	}
+	if edges[0].TargetID != typeID {
+		t.Errorf("expected target %q, got %q", typeID, edges[0].TargetID)
+	}
+}
+
 func TestResolveExtendsImplementsStub(t *testing.T) {
 	r := NewResolver(nil, "repo", "/root", nil)
 	edges := r.ResolveExtendsImplements()
