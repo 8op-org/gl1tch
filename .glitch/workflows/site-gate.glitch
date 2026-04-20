@@ -82,8 +82,8 @@
 
   ;; Merge both gate results
   (step "merged"
-    (let [voice (json/decode (ref "gate-voice"))
-          accuracy (json/decode (ref "gate-accuracy"))
+    (let [voice (json/decode (json-extract (ref "gate-voice")))
+          accuracy (json/decode (json-extract (ref "gate-accuracy")))
           all-issues (into [] (concat (or (get voice "issues") [])
                                       (or (get accuracy "issues") [])))
           passed (and (get voice "pass") (get accuracy "pass"))]

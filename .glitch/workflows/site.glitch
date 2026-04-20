@@ -14,7 +14,7 @@
 
   (step "route"
     (llm
-      :format "json"
+      :provider "copilot"
       :prompt (str
         "You are a router for a documentation site workflow.\n\n"
         "The user said: " (input) "\n\n"
@@ -35,15 +35,7 @@
         "- Everything else → write-page")))
 
   (step "dispatch"
-    (let [raw (str/trim (ref "route"))
-          start (str/index-of raw "{")
-          json-str (if start
-                     (let [last-brace (last (keep-indexed
-                                              (fn [i c] (when (= c \}) i))
-                                              raw))]
-                       (subs raw start (inc last-brace)))
-                     raw)
-          parsed (json/decode json-str)
+    (let [parsed (json/decode (json-extract (ref "route")))
           action (get parsed "action")]
       (cond
         (= action "write-page")

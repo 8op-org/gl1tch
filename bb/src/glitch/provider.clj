@@ -75,9 +75,14 @@
    plus any explicitly passed dirs."
   [& dirs]
   (let [home        (System/getProperty "user.home")
+        ;; Also check classpath entries that look like provider dirs
+        cp-dirs     (when-let [cp (System/getProperty "java.class.path")]
+                      (->> (str/split cp #":")
+                           (filter #(str/ends-with? % "providers"))))
         search-dirs (concat
                       [(str home "/.config/glitch/providers")
                        "providers"]
+                      cp-dirs
                       dirs)]
     (doseq [dir search-dirs]
       (let [d (io/file dir)]

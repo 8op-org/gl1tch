@@ -61,7 +61,7 @@
 
   ;; Gate the content before saving
   (step "gate-result"
-    (let [written (json/decode (ref "write"))
+    (let [written (json/decode (json-extract (ref "write")))
           result (call-workflow "site-gate"
                    :set {"slug" (param "page")
                          "content" (get written "content")
@@ -70,7 +70,7 @@
 
   ;; Save if gate passed
   (step "save"
-    (let [gate-out (json/decode (ref "gate-result"))]
+    (let [gate-out (json/decode (json-extract (ref "gate-result")))]
       (when (not (get gate-out "pass"))
         (throw (ex-info (str "Gate failed:\n"
                              (str/join "\n"
@@ -78,7 +78,7 @@
                                       (str "[" (get issue "category") "] " (get issue "fix")))
                                     (get gate-out "issues"))))
                         {})))
-      (let [written (json/decode (ref "write"))
+      (let [written (json/decode (json-extract (ref "write")))
             title (get written "title")
             order (get written "order")
             desc (get written "description")

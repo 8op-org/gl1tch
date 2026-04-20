@@ -122,6 +122,7 @@
                  'llm            g/llm
                  'gate           g/gate
                  'call-workflow  sci-call-workflow
+                 'json-extract   g/json-extract
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
                  ;; state setters (rarely needed in workflows, but available)

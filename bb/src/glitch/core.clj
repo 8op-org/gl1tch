@@ -65,11 +65,10 @@
     val))
 
 (defn sh [& args]
-  (let [cmd (str/join " " args)
-        result (bp/shell {:out :string :err :string :continue true} cmd)]
+  (let [result (apply bp/shell {:out :string :err :string :continue true} args)]
     (when (not= 0 (:exit result))
       (throw (ex-info (str "sh: command failed (exit " (:exit result) "): " (:err result))
-                      {:cmd cmd :exit (:exit result) :err (:err result)})))
+                      {:cmd (str/join " " args) :exit (:exit result) :err (:err result)})))
     (str/trim (:out result))))
 
 (defn save [path content]
@@ -203,3 +202,36 @@
                  :tokens-in (or (:tokens-in result) 0)
                  :tokens-out (or (:tokens-out result) 0)}))
     (:response result)))
+
+;; --- JSON extraction helper ---
+
+(defn json-extract
+  "Extract the first JSON object or array from a string.
+   Handles markdown fences, thinking indicators, and other LLM noise."
+  [s]
+  (let [trimmed (str/trim (str s))
+        ;; Find first { or [
+        start (some #(str/index-of trimmed (str %)) [\{ \[])]
+    (if-not start
+      trimmed
+      (let [open-char (nth trimmed start)
+            close-char (if (= open-char \{) \} \])
+            ;; Walk forward tracking nesting depth
+            end (loop [i (inc start) depth 1]
+                  (cond
+                    (>= i (count trimmed)) i
+                    (zero? depth) i
+                    :else (let [c (nth trimmed i)]
+                            (cond
+                              (= c open-char) (recur (inc i) (inc depth))
+                              (= c close-char) (recur (inc i) (dec depth))
+                              (= c \") ;; skip string contents
+                              (recur (loop [j (inc i)]
+                                       (cond
+                                         (>= j (count trimmed)) j
+                                         (= (nth trimmed j) \\) (recur (+ j 2))
+                                         (= (nth trimmed j) \") (inc j)
+                                         :else (recur (inc j))))
+                                     depth)
+                              :else (recur (inc i) depth)))))]
+        (subs trimmed start end)))))
