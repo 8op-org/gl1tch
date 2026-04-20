@@ -6,7 +6,7 @@
                    (shell "bb uberscript build/glitch --main glitch.main")
                    (spit "build/glitch.tmp"
                      (str "#!/usr/bin/env bb\n" (slurp "build/glitch")))
-                   (babashka.fs/move "build/glitch.tmp" "build/glitch")
+                   (babashka.fs/move "build/glitch.tmp" "build/glitch" {:replace-existing true})
                    (shell "chmod +x build/glitch"))}
   install {:doc "Install glitch to /usr/local/bin"
            :depends [build]

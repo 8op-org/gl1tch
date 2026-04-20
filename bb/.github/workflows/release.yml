@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os: linux
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+          - runner: macos-latest
+            os: darwin
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Babashka
+        run: |
+          curl -sLO https://raw.githubusercontent.com/babashka/babashka/master/install
+          chmod +x install
+          sudo ./install --dir /usr/local/bin
+      - name: Build uberscript
+        working-directory: bb
+        run: bb run build
+      - name: Package archive
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="glitch_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
+          tar czf "${ARCHIVE}" -C bb/build glitch
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glitch-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.ARCHIVE }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum glitch_*.tar.gz > checksums.txt
+      - name: Generate changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" \
+              | grep -vE "^- (chore|docs|ci|test)" > changelog.md || true
+          else
+            echo "Initial release" > changelog.md
+          fi
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "glitch $GITHUB_REF_NAME" \
+            --notes-file changelog.md \
+            artifacts/*
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DARWIN_ARM64_SHA=$(grep "darwin_arm64" artifacts/checksums.txt | awk '{print $1}')
+          LINUX_ARM64_SHA=$(grep "linux_arm64" artifacts/checksums.txt | awk '{print $1}')
+          LINUX_AMD64_SHA=$(grep "linux_amd64" artifacts/checksums.txt | awk '{print $1}')
+          BASE_URL="https://github.com/8op-org/gl1tch/releases/download/v${VERSION}"
+
+          cat > formula.rb <<FORMULA
+class Glitch < Formula
+  desc "gl1tch workflow engine"
+  homepage "https://8op.org"
+  license "MIT"
+  version "${VERSION}"
+
+  depends_on "babashka"
+
+  on_macos do
+    url "${BASE_URL}/glitch_${VERSION}_darwin_arm64.tar.gz"
+    sha256 "${DARWIN_ARM64_SHA}"
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "${BASE_URL}/glitch_${VERSION}_linux_arm64.tar.gz"
+      sha256 "${LINUX_ARM64_SHA}"
+    else
+      url "${BASE_URL}/glitch_${VERSION}_linux_amd64.tar.gz"
+      sha256 "${LINUX_AMD64_SHA}"
+    end
+  end
+
+  def install
+    bin.install "glitch"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/glitch version")
+  end
+end
+FORMULA
+
+          cd "$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" tap
+          cd tap
+          mkdir -p Formula
+          cp "${OLDPWD}/formula.rb" Formula/glitch.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/glitch.rb
+          git commit -m "glitch ${VERSION}"
+          git push
