@@ -27,7 +27,7 @@
    :model     — embedding model name (required)
    :base-url  — LM Studio base URL, e.g. http://localhost:1234
    :http-fn   — injectable HTTP POST function for testing (defaults to http/http-post)"
-  (default model "text-embedding-nomic-embed-text-v1.5")
+  (default model "nomic-embed-text")
   (default base-url "http://localhost:1234")
   (default http-fn http/http-post)
   (def url (string base-url "/v1/embeddings"))

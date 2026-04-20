@@ -263,7 +263,7 @@
     (result :files-indexed)
     (result :chunks-created)
     (result :total-files))
-  (store/close db))
+  (idx/close-search-db db))
 
 # --- Main ---
 

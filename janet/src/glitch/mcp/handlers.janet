@@ -47,21 +47,35 @@
     (error (string "workflow failed (exit " exit-code "): " stderr))))
 
 (defn- handle-eval [arguments]
+  # The calling agent already has full system access (it spawns the MCP server),
+  # so eval does not expand the attack surface.
   (def expression (get arguments "expression"))
   (string (eval-string expression)))
 
 (defn- handle-check [arguments]
   (def file (get arguments "file"))
-  (def content (slurp file))
-  (try
-    (do (parse content) "ok")
-    ([err] (string "error: " err))))
+  (def content (string (slurp file)))
+  (def p (parser/new))
+  (parser/consume p content)
+  (if (parser/has-more p)
+    (do
+      (def errs @[])
+      (while (parser/has-more p)
+        (try
+          (parser/produce p)
+          ([err] (array/push errs (string err)))))
+      (if (> (length errs) 0)
+        (string "errors:\n" (string/join errs "\n"))
+        "ok"))
+    (if (parser/error p)
+      (string "error: " (parser/error p))
+      "ok")))
 
 (defn- handle-grep [context arguments]
   (def pattern (get arguments "pattern"))
   (def path (get arguments "path" (context :workspace-path)))
   (def glob-pat (get arguments "glob"))
-  (def cmd @["grep" "-rn" "--color=never" pattern path])
+  (def cmd @["grep" "-rn" "--color=never" "--" pattern path])
   (when glob-pat (array/push cmd "--include" glob-pat))
   (def proc (os/spawn cmd :p {:out :pipe :err :pipe}))
   (def stdout (:read (proc :out) :all))
@@ -72,7 +86,6 @@
   (def db (context :search-db))
   (def query (get arguments "query"))
   (def repo (get arguments "repo"))
-  (def kind (get arguments "kind"))
   # Use FTS5 keyword search on chunks_fts, then filter by symbols
   (def kw-results (search/keyword-search db query :repo repo :limit 50))
   (def filtered @[])

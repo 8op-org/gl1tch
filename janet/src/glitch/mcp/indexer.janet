@@ -216,6 +216,10 @@
       (mkdir-p (string/slice dir 0 (last parts))))
     (os/mkdir dir)))
 
+(defn close-search-db [db]
+  "Close a search database."
+  (sql/close db))
+
 (defn open-search-db [workspace-path]
   "Open SQLite search database at <workspace>/.glitch/search.db.
    Creates schema if needed."
@@ -367,11 +371,23 @@
         `DELETE FROM chunks WHERE repo = :repo AND path = :path`
         {:repo repo-path :path (row :path)})))
 
+  # Determine embedding dimensions from first embedded chunk
+  (def dims
+    (if (and embed-fn (> (length pending-embeds) 0))
+      (do
+        (def first-emb (sql/eval db
+          `SELECT embedding FROM chunks WHERE repo = :repo AND embedding IS NOT NULL LIMIT 1`
+          {:repo repo-path}))
+        (if (> (length first-emb) 0)
+          (length (emb/unpack-f32 ((first first-emb) :embedding)))
+          0))
+      0))
+
   # Update index_meta
   (sql/eval db
-    `INSERT OR REPLACE INTO index_meta (repo, model, indexed_at)
-     VALUES (:repo, :model, :at)`
-    {:repo repo-path :model model :at (os/time)})
+    `INSERT OR REPLACE INTO index_meta (repo, model, dimensions, indexed_at)
+     VALUES (:repo, :model, :dims, :at)`
+    {:repo repo-path :model model :dims dims :at (os/time)})
 
   {:files-indexed files-indexed
    :chunks-created chunks-created

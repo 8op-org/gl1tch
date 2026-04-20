@@ -2,7 +2,6 @@
 # Reads JSON-RPC messages from stdin, dispatches via protocol, writes to stdout.
 # All logging goes to stderr — stdout is the JSON-RPC channel.
 
-(import sqlite3 :as sql)
 (import glitch/mcp/protocol :as proto)
 (import glitch/mcp/tools :as tools)
 (import glitch/mcp/handlers :as handlers)
@@ -42,7 +41,7 @@
 
   # Stdio loop
   (defer (do
-           (sql/close search-db)
+           (idx/close-search-db search-db)
            (eprint "[glitch-mcp] server stopped"))
     (while true
       (def line (file/read stdin :line))

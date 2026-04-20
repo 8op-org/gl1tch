@@ -72,8 +72,7 @@
       @{"type" "object"
         "properties"
         @{"query" @{"type" "string" "description" "Symbol name or pattern to search for"}
-          "repo" @{"type" "string" "description" "Repository path to search within"}
-          "kind" @{"type" "string" "description" "Symbol kind filter (e.g. function, type)"}}
+          "repo" @{"type" "string" "description" "Repository path to search within"}}
         "required" @["query"]}}
 
     # 8. glitch_read_file — read a file (first 200 lines)
