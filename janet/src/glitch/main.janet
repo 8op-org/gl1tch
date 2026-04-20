@@ -7,7 +7,6 @@
 (import glitch/workspace :as ws)
 (import glitch/provider :as prov)
 (import glitch/gui :as gui)
-(import sqlite3 :as sql)
 (import glitch/mcp :as mcp)
 (import glitch/mcp/indexer :as idx)
 (import glitch/mcp/embeddings :as emb)
@@ -264,7 +263,7 @@
     (result :files-indexed)
     (result :chunks-created)
     (result :total-files))
-  (sql/close db))
+  (store/close db))
 
 # --- Main ---
 
