@@ -20,21 +20,18 @@ import Base from '../layouts/Base.astro';
     </div>
   </div>
   <div class="hero-right">
-    <pre class="code hero-demo"><span class="r">;; this is a workflow</span>
+    <pre class="code hero-demo"><span class="r">;; agentic mode — LLM pulls its own context</span>
 
 (<span class="k">workflow</span> <span class="s">"pr-review"</span>
 
   (<span class="k">step</span> <span class="s">"fetch"</span>
-    (<span class="k">run</span> <span class="s">"gh pr view ~input --json title,body"</span>))
-
-  (<span class="k">step</span> <span class="s">"diff"</span>
-    (<span class="k">run</span> <span class="s">"gh pr diff ~input"</span>))
+    (<span class="k">sh</span> <span class="s">"gh pr view ~input --json title,body,files"</span>))
 
   (<span class="k">step</span> <span class="s">"review"</span>
-    (<span class="k">llm</span>
+    (<span class="k">llm</span> <span class="r">:agentic</span> <span class="s">true</span> <span class="r">:max-rounds</span> <span class="s">10</span>
       <span class="r">:prompt</span> <span class="s">```
-        PR: ~(step fetch)
-        Diff: ~(step diff)
+        PR: ~(ref "fetch")
+        Read the changed files.
         Review as a senior engineer.
         ```</span>)))</pre>
   </div>
@@ -50,21 +47,21 @@ import Base from '../layouts/Base.astro';
 
     <div class="feature-card feature-hero-card">
       <div class="feature-number">01</div>
-      <h3>S-expressions, not YAML</h3>
-      <p>Workflows are parenthesized lists. Every construct composes — retry wraps timeout wraps step. No indentation wars. No anchor hacks.</p>
-      <pre class="code feature-code">(<span class="k">retry</span> <span class="s">2</span>
-  (<span class="k">timeout</span> <span class="s">"30s"</span>
-    (<span class="k">step</span> <span class="s">"fetch"</span>
-      (<span class="k">run</span> <span class="s">"curl -sf ..."</span>))))</pre>
+      <h3>Agentic LLM steps</h3>
+      <p>Set <code>:agentic true</code> and the LLM loops — calling tools, reading files, grepping code — until it has everything it needs. No more pre-stuffing prompts with context.</p>
+      <pre class="code feature-code">(<span class="k">llm</span> <span class="r">:agentic</span> <span class="s">true</span> <span class="r">:max-rounds</span> <span class="s">10</span>
+  <span class="r">:prompt</span> <span class="s">"Rewrite the homepage
+  features section..."</span>)</pre>
     </div>
 
     <div class="feature-card">
       <div class="feature-number">02</div>
-      <h3>Phase gates</h3>
-      <p>Verification built into the language. Gates must pass before the phase completes. If they fail, the phase retries.</p>
-      <pre class="code feature-code">(<span class="k">phase</span> <span class="s">"verify"</span> <span class="r">:retries</span> <span class="s">1</span>
-  (<span class="k">gate</span> <span class="s">"check"</span>
-    (<span class="k">run</span> <span class="s">"python3 verify.py"</span>)))</pre>
+      <h3>8 built-in tools</h3>
+      <p>Every LLM step gets read_file, grep, search, symbols, run, eval, check, and index by default. Restrict to a subset or pass an empty list for legacy behavior.</p>
+      <pre class="code feature-code"><span class="r">;; restrict to specific tools</span>
+(<span class="k">llm</span> <span class="r">:tools</span> [<span class="s">"glitch_read_file"</span>
+             <span class="s">"glitch_grep"</span>]
+  <span class="r">:prompt</span> <span class="s">"Check what commands exist..."</span>)</pre>
     </div>
 
     <div class="feature-card">
@@ -74,22 +71,27 @@ import Base from '../layouts/Base.astro';
       <pre class="code feature-code"><span class="r">;; tier 0: lm-studio (free)</span>
 <span class="r">;; tier 1: copilot</span>
 <span class="r">;; tier 2: claude</span>
-(<span class="k">llm</span> <span class="r">:tier</span> <span class="s">0</span> <span class="r">:format</span> <span class="s">"json"</span> <span class="r">:prompt</span> <span class="s">"..."</span>)</pre>
+(<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"lmstudio"</span> <span class="r">:prompt</span> <span class="s">"..."</span>)</pre>
     </div>
 
     <div class="feature-card">
       <div class="feature-number">04</div>
-      <h3>Plugins are directories</h3>
-      <p>A plugin is a folder of <code>.glitch</code> files. Each file is a subcommand. Args become flags. No compilation. No release pipeline.</p>
-      <pre class="code feature-code"><span class="p">$</span> glitch plugin github prs --since week
-<span class="r">["Fix flaky test", "Add retry logic"]</span></pre>
+      <h3>S-expressions, not YAML</h3>
+      <p>Workflows are parenthesized lists. Every construct composes — retry wraps timeout wraps step. No indentation wars. No anchor hacks.</p>
+      <pre class="code feature-code">(<span class="k">retry</span> <span class="s">2</span>
+  (<span class="k">with-timeout</span> <span class="s">30</span>
+    (<span class="k">step</span> <span class="s">"fetch"</span>
+      (<span class="k">sh</span> <span class="s">"curl -sf ..."</span>))))</pre>
     </div>
 
     <div class="feature-card">
       <div class="feature-number">05</div>
-      <h3>Knowledge index</h3>
-      <p><code>glitch index</code> ingests your repos into Elasticsearch. <code>glitch observe</code> queries them in natural language. Workflows use it as memory.</p>
-      <pre class="code feature-code"><span class="p">$</span> glitch observe "PRs that failed CI this week"</pre>
+      <h3>Phase gates</h3>
+      <p>Verification built into the language. Gates must pass before the workflow continues. LLM-powered gates can use tools to verify claims against the codebase.</p>
+      <pre class="code feature-code">(<span class="k">step</span> <span class="s">"gate"</span>
+  (<span class="k">llm</span> <span class="r">:agentic</span> <span class="s">true</span>
+    <span class="r">:prompt</span> <span class="s">"Verify no hallucinated
+    commands. Return JSON..."</span>))</pre>
     </div>
 
     <div class="feature-card">
@@ -98,20 +100,18 @@ import Base from '../layouts/Base.astro';
       <p>Run the same prompt through different models or strategies. A neutral judge scores each branch. One form, automatic winner selection.</p>
       <pre class="code feature-code">(<span class="k">compare</span>
   (<span class="k">branch</span> <span class="s">"local"</span>
-    (<span class="k">llm</span> <span class="r">:model</span> <span class="s">"qwen2.5:7b"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"lmstudio"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
   (<span class="k">branch</span> <span class="s">"cloud"</span>
-    (<span class="k">llm</span> <span class="r">:model</span> <span class="s">"claude"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"claude"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
   (<span class="k">review</span> <span class="r">:criteria</span> (<span class="s">"accuracy"</span> <span class="s">"clarity"</span>)))</pre>
     </div>
 
     <div class="feature-card">
       <div class="feature-number">07</div>
-      <h3>Composable transforms</h3>
-      <p>Thread data through steps, filter collections, fold results. Lisp-inspired forms that compose without glue scripts.</p>
-      <pre class="code feature-code">(<span class="k">-></span> <span class="s">"raw-data"</span>
-  (<span class="k">filter</span> <span class="s">"jq '.severity > 3'"</span>)
-  (<span class="k">reduce</span> <span class="s">"summarize"</span>
-    (<span class="k">llm</span> <span class="r">:prompt</span> <span class="s">"..."</span>)))</pre>
+      <h3>Plugins are directories</h3>
+      <p>A plugin is a folder of <code>.glitch</code> files. Each file is a subcommand. Args become flags. No compilation. No release pipeline.</p>
+      <pre class="code feature-code"><span class="p">$</span> glitch plugin github prs --since week
+<span class="r">["Fix flaky test", "Add retry logic"]</span></pre>
     </div>
 
   </div>
@@ -122,46 +122,44 @@ import Base from '../layouts/Base.astro';
 <section id="how">
 <div class="wrap-wide">
   <div class="section-label">how it works</div>
-  <h2>Write a workflow. Or let AI write it for you.</h2>
+  <h2>The LLM pulls its own context. You write the intent.</h2>
 
   <div class="how-grid">
     <div class="how-step">
-      <div class="how-num">01 shell gathers context</div>
-      <pre class="code">(<span class="k">step</span> <span class="s">"examples"</span>
-  (<span class="k">run</span> <span class="s">"cat examples/*.glitch"</span>))
-(<span class="k">step</span> <span class="s">"structure"</span>
-  (<span class="k">run</span> <span class="s">"find internal/ cmd/ -name '*.go'"</span>))</pre>
-      <p>Shell steps gather your repo context — code, docs, git history. Free and deterministic.</p>
+      <div class="how-num">01 shell gathers the seed</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"pr"</span>
+  (<span class="k">sh</span> <span class="s">"gh pr view ~input --json title,body,files"</span>))</pre>
+      <p>Shell steps fetch what you already know you need — a PR number, a commit SHA, a file list. Fast and deterministic.</p>
     </div>
     <div class="how-step">
-      <div class="how-num">02 LLM generates or reasons</div>
-      <pre class="code">(<span class="k">step</span> <span class="s">"generate"</span>
-  (<span class="k">llm</span> <span class="r">:tier</span> <span class="s">0</span>
-    <span class="r">:prompt</span> <span class="s">"Write docs using:
-    ~(step examples)..."</span>))</pre>
-      <p>Tiered routing tries local LLM first. Escalates to cloud only if quality demands it.</p>
+      <div class="how-num">02 LLM explores on demand</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"review"</span>
+  (<span class="k">llm</span> <span class="r">:agentic</span> <span class="s">true</span> <span class="r">:max-rounds</span> <span class="s">10</span>
+    <span class="r">:prompt</span> <span class="s">"PR: ~(ref \"pr\")
+    Read the changed files.
+    Review as a senior engineer."</span>))</pre>
+      <p>The LLM reads files, greps for usages, and checks symbols — looping until it has enough context. No pre-stuffing required.</p>
     </div>
     <div class="how-step">
-      <div class="how-num">03 C.L.E.A.R. gates verify before shipping</div>
-      <pre class="code">(<span class="k">step</span> <span class="s">"gate-voice"</span>
-  (<span class="k">llm</span> <span class="r">:format</span> <span class="s">"json"</span>
-    <span class="r">:prompt</span> <span class="s">"Review for Clarity,
-    Logic, Relevance..."</span>))
-(<span class="k">step</span> <span class="s">"gate-accuracy"</span>
-  (<span class="k">llm</span> <span class="r">:format</span> <span class="s">"json"</span>
-    <span class="r">:prompt</span> <span class="s">"Verify against repo
-    context..."</span>))</pre>
-      <p>LLM-powered gates using the C.L.E.A.R. method — Clarity, Logic, Empathy, Actionability, Relevance. Every issue comes with a specific fix.</p>
+      <div class="how-num">03 C.L.E.A.R. gates verify</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"gate"</span>
+  (<span class="k">llm</span> <span class="r">:agentic</span> <span class="s">true</span>
+    <span class="r">:tools</span> [<span class="s">"glitch_read_file"</span> <span class="s">"glitch_grep"</span>]
+    <span class="r">:prompt</span> <span class="s">"Verify against codebase.
+    Return JSON: {pass: bool, issues: [...]}"</span>))</pre>
+      <p>LLM-powered gates using C.L.E.A.R. — Clarity, Logic, Empathy, Actionability, Relevance. Agentic gates read the repo to verify claims.</p>
     </div>
     <div class="how-step">
       <div class="how-num">04 compare and pick the best</div>
       <pre class="code">(<span class="k">compare</span>
   (<span class="k">branch</span> <span class="s">"local"</span>
-    (<span class="k">llm</span> <span class="r">:model</span> <span class="s">"qwen2.5:7b"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"lmstudio"</span> <span class="r">:agentic</span> <span class="s">true</span>
+      <span class="r">:prompt</span> <span class="s">"..."</span>))
   (<span class="k">branch</span> <span class="s">"cloud"</span>
-    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"claude"</span> <span class="r">:prompt</span> <span class="s">"..."</span>))
+    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"claude"</span> <span class="r">:agentic</span> <span class="s">true</span>
+      <span class="r">:prompt</span> <span class="s">"..."</span>))
   (<span class="k">review</span> <span class="r">:criteria</span> (<span class="s">"accuracy"</span> <span class="s">"depth"</span>)))</pre>
-      <p>Run branches in parallel, let a neutral judge score them. Pick the winner automatically — or review the comparison yourself.</p>
+      <p>Run agentic branches in parallel, let a neutral judge score them. Pick the winner automatically.</p>
     </div>
   </div>
 </div>
@@ -172,35 +170,39 @@ import Base from '../layouts/Base.astro';
 <div class="wrap">
   <div class="section-label">proof it works</div>
   <h2>This site builds itself.</h2>
-  <p class="section-copy">Every page on this site was written by a gl1tch workflow. You say what you want in plain English. The router picks the right operation. C.L.E.A.R. gates verify every page before it hits disk.</p>
+  <p class="section-copy">Every page on this site was written by a gl1tch workflow. The LLM reads existing pages, greps the codebase for examples, and writes copy that matches what's actually true. C.L.E.A.R. gates verify every page before it hits disk.</p>
 
-  <pre class="code meta-trace"><span class="p">$</span> glitch run site "add a page about the par form"
+  <pre class="code meta-trace"><span class="p">$</span> glitch run site "update homepage"
 
 <span class="term-header">&gt;&gt; site</span> <span class="term-anno">router</span>
   <span class="term-dim">&gt;</span> <span class="term-dim">pages</span>
-  <span class="term-llm">&gt;</span> <span class="term-llm">route</span>                  <span class="term-anno">lm-studio/gemma4</span>
-  <span class="term-anno">&rarr; write-page slug=par</span>
+  <span class="term-llm">&gt;</span> <span class="term-llm">route</span>                  <span class="term-anno">lmstudio/gemma4</span>
+  <span class="term-anno">&rarr; homepage</span>
 
-<span class="term-header">&gt;&gt; site-write</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">check-existing</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">gather-context</span>
-  <span class="term-llm">&gt;</span> <span class="term-llm">write</span>                  <span class="term-anno">copilot/sonnet</span>
-  <span class="term-llm">&check;</span> <span class="term-llm">write</span>                  <span class="term-anno">4120 tok &middot; 8.3s</span>
+<span class="term-header">&gt;&gt; site-homepage</span> <span class="term-anno">:agentic true</span>
+  <span class="term-llm">&gt;</span> <span class="term-llm">rewrite</span>                <span class="term-anno">copilot</span>
+  <span class="term-anno">  &rarr; glitch_read_file site/src/pages/index.astro</span>
+  <span class="term-anno">  &rarr; glitch_read_file bb/src/glitch/core.clj</span>
+  <span class="term-anno">  &rarr; glitch_read_file bb/src/glitch/mcp/tools.clj</span>
+  <span class="term-anno">  &rarr; glitch_grep ":agentic" bb/providers/</span>
+  <span class="term-llm">&check;</span> <span class="term-llm">rewrite</span>                <span class="term-anno">11586 chars &middot; 4 rounds</span>
 
-<span class="term-header">&gt;&gt; site-gate</span> <span class="term-anno">C.L.E.A.R.</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate-voice</span>             <span class="term-pass">PASS</span> <span class="term-anno">clarity &middot; logic &middot; relevance</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate-accuracy</span>          <span class="term-pass">PASS</span> <span class="term-anno">logic &middot; actionability &middot; relevance</span>
+<span class="term-header">&gt;&gt; site-homepage</span> <span class="term-anno">gate</span>
+  <span class="term-llm">&gt;</span> <span class="term-llm">gate</span>                   <span class="term-anno">copilot :agentic true</span>
+  <span class="term-anno">  &rarr; glitch_grep ":tools" bb/src/glitch/core.clj</span>
+  <span class="term-anno">  &rarr; glitch_read_file bb/providers/copilot.clj</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate</span>                   <span class="term-pass">PASS</span> <span class="term-anno">no hallucinated features</span>
 
-  <span class="term-dim">&gt;</span> <span class="term-dim">save</span>                   <span class="term-anno">site/src/content/docs/par.md</span></pre>
+  <span class="term-dim">&gt;</span> <span class="term-dim">save</span>                   <span class="term-anno">site/src/pages/index.astro</span></pre>
 
   <div class="meta-suite">
     <div class="meta-cmd">
-      <code>glitch run site "add a page about plugins"</code>
-      <span>AI writes the page, C.L.E.A.R. gates verify, saves to disk</span>
+      <code>glitch run site "add a page about agentic steps"</code>
+      <span>LLM reads the codebase, writes the page, C.L.E.A.R. gates verify, saves to disk</span>
     </div>
     <div class="meta-cmd">
-      <code>glitch run site "update getting-started for janet syntax"</code>
-      <span>AI rewrites an existing page with your instructions</span>
+      <code>glitch run site "update homepage"</code>
+      <span>Agentic rewrite — LLM reads current page + source files, updates with verified content</span>
     </div>
     <div class="meta-cmd">
       <code>glitch run site "refresh all doc pages"</code>
@@ -214,7 +216,7 @@ import Base from '../layouts/Base.astro';
 </div>
 </section>
 
-<!-- ── Agent integration ───────────────────── -->
+<!-- ── Agent integration ────────────────────��� -->
 <section id="agents">
 <div class="wrap">
   <div class="section-label">integrations</div>
@@ -223,11 +225,11 @@ import Base from '../layouts/Base.astro';
   <div class="agent-cards">
     <div class="agent-card">
       <div class="agent-card-label">Claude Code</div>
-      <pre class="code copyable" data-copy="npx @anthropic-ai/superpower install gl1tch"><span class="p">$</span> npx @anthropic-ai/superpower install gl1tch</pre>
+      <pre class="code copyable" data-copy="claude mcp add glitch -- glitch mcp"><span class="p">$</span> claude mcp add glitch -- glitch mcp</pre>
     </div>
     <div class="agent-card">
-      <div class="agent-card-label">Cursor / Copilot</div>
-      <pre class="code copyable" data-copy="curl -sLo .cursorrules https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules"><span class="p">$</span> curl -sLo .cursorrules <span class="s">https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/cursor/.cursorrules</span></pre>
+      <div class="agent-card-label">Copilot CLI</div>
+      <pre class="code copyable" data-copy="copilot --additional-mcp-config mcp.json"><span class="p">$</span> copilot --additional-mcp-config mcp.json</pre>
     </div>
     <div class="agent-card">
       <div class="agent-card-label">Any agent</div>

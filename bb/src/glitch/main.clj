@@ -236,5 +236,3 @@
             (println (str "  " c)))
           (when-not cmd (System/exit 1))))))
 
-(when (= *file* (System/getProperty "babashka.file"))
-  (apply -main *command-line-args*))

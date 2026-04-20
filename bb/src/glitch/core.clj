@@ -188,7 +188,7 @@
 
 ;; --- LLM invocation ---
 
-(defn llm [& {:keys [prompt model provider skill step-id] :as opts}]
+(defn llm [& {:keys [prompt model provider skill step-id tools agentic max-rounds] :as opts}]
   (when-not @*provider-fn*
     (throw (ex-info "llm: no provider function set — call set-provider-fn! first" {})))
   (let [full-prompt (if skill

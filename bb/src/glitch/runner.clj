@@ -4,6 +4,8 @@
   (:require [glitch.core :as g]
             [glitch.store :as store]
             [glitch.provider :as prov]
+            [glitch.mcp.tools :as mcp-tools]
+            [glitch.mcp.handlers :as mcp-handlers]
             [sci.core :as sci]
             [cheshire.core :as json]
             [clojure.string :as str]
@@ -214,53 +216,74 @@
     (g/set-params! params)
     (g/set-workflows-dir! wf-dir)
 
-    ;; Wire provider dispatch
-    (g/set-provider-fn!
-      (fn [opts]
-        (let [pname  (or (:provider opts) "lmstudio")
-              merged (assoc opts :model (or (:model opts) model))]
-          (if tiers
-            (prov/call-tiered merged tiers)
-            (try
-              (prov/call-provider pname merged)
-              (catch Exception _
-                (prov/call-tiered merged prov/default-tiers)))))))
+    ;; Build tool handler for this workspace
+    (let [workspace-path (System/getProperty "user.dir")
+          tool-context {:workspace-path workspace-path
+                        :search-db nil
+                        :embed-fn nil}
+          tool-handler (mcp-handlers/make-handler tool-context)
+          ;; Tools that require search-db — exclude from defaults when unavailable
+          search-tools #{"glitch_search" "glitch_index" "glitch_symbols"}
+          available-defs (filterv #(not (contains? search-tools (get % "name")))
+                                  mcp-tools/tool-definitions)]
 
-    ;; Pre-seed steps
-    (when seed-steps
-      (doseq [[k v] seed-steps]
-        (g/step k v)))
+      ;; Wire provider dispatch
+      (g/set-provider-fn!
+        (fn [opts]
+          (let [pname  (or (:provider opts) "lmstudio")
+                ;; Inject tool-handler and default tool definitions unless :tools []
+                tools-requested (get opts :tools :all)
+                tool-defs (when-not (and (coll? tools-requested) (empty? tools-requested))
+                            (if (= tools-requested :all)
+                              available-defs
+                              (filterv #(contains? (set tools-requested) (get % "name"))
+                                       available-defs)))
+                merged (assoc opts
+                         :model (or (:model opts) model)
+                         :tool-defs tool-defs
+                         :tool-handler tool-handler)]
+            (if tiers
+              (prov/call-tiered merged tiers)
+              (try
+                (prov/call-provider pname merged)
+                (catch Exception _
+                  (prov/call-tiered merged prov/default-tiers)))))))
 
-    ;; Record run in store (when db is provided)
-    (let [run-id (when db
-                   (let [rid (store/record-run db
-                               {:name          ""
-                                :input         input
-                                :workflow-file workflow-path
-                                :model         model
-                                :workspace     (or project "")
-                                :parent-run-id parent-run-id})]
-                     ;; Wire step recorder to persist every step
-                     (g/set-step-recorder!
-                       (fn [rec]
-                         (store/record-step db (assoc rec :run-id rid))))
-                     rid))
-          ;; Build SCI context and evaluate the workflow
-          ctx (make-sci-ctx)]
-      (binding [*sci-ctx* ctx]
-        (try
-          (sci/eval-string* ctx (slurp workflow-path))
-          (let [result {:name    ""
-                        :output  (g/last-output)
-                        :steps   (g/get-steps)
-                        :run-id  (or run-id 0)}]
-            (when db
-              (store/finish-run db run-id (:output result) 0))
-            result)
-          (catch Exception e
-            (when db
-              (store/finish-run db run-id (str "ERROR: " (.getMessage e)) 1))
-            (throw e)))))))
+      ;; Pre-seed steps
+      (when seed-steps
+        (doseq [[k v] seed-steps]
+          (g/step k v)))
+
+      ;; Record run in store (when db is provided)
+      (let [run-id (when db
+                     (let [rid (store/record-run db
+                                 {:name          ""
+                                  :input         input
+                                  :workflow-file workflow-path
+                                  :model         model
+                                  :workspace     (or project "")
+                                  :parent-run-id parent-run-id})]
+                       ;; Wire step recorder to persist every step
+                       (g/set-step-recorder!
+                         (fn [rec]
+                           (store/record-step db (assoc rec :run-id rid))))
+                       rid))
+            ;; Build SCI context and evaluate the workflow
+            ctx (make-sci-ctx)]
+        (binding [*sci-ctx* ctx]
+          (try
+            (sci/eval-string* ctx (slurp workflow-path))
+            (let [result {:name    ""
+                          :output  (g/last-output)
+                          :steps   (g/get-steps)
+                          :run-id  (or run-id 0)}]
+              (when db
+                (store/finish-run db run-id (:output result) 0))
+              result)
+            (catch Exception e
+              (when db
+                (store/finish-run db run-id (str "ERROR: " (.getMessage e)) 1))
+              (throw e))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; list-workflows — discover workflow files in a directory

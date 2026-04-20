@@ -1,0 +1,55 @@
+;; site-homepage.glitch — update the landing page using agentic tool-use
+;;
+;; Usage:
+;;   glitch run site-homepage "update features to reflect tool-use providers"
+;;
+;; The LLM uses tools to read the codebase and verify accuracy.
+
+(workflow "site-homepage"
+  :description "Update the gl1tch homepage (index.astro) using agentic tool-use"
+
+  (step "rewrite"
+    (llm
+      :provider "copilot"
+      :agentic true
+      :max-rounds 8
+      :prompt (str
+        "You are updating the gl1tch homepage at site/src/pages/index.astro.\n\n"
+        "INSTRUCTIONS: " (input) "\n\n"
+        "RULES:\n"
+        "- Use glitch_read_file to read the current homepage first\n"
+        "- Use glitch_grep to verify any commands/features/parameters you reference actually exist in the codebase\n"
+        "- Use glitch_read_file on bb/providers/*.clj to understand what providers do\n"
+        "- Use glitch_read_file on bb/src/glitch/tool_loop.clj to understand the tool loop\n"
+        "- Never mention: Ollama, tmux, BubbleTea, OTel, SQLite, 'glitch ask', 'glitch observe'\n"
+        "- Voice: user-first, 'your' framing, examples before explanation\n"
+        "- Every code example must use real DSL syntax from the codebase\n"
+        "- Keep all existing CSS class names exactly as they are\n"
+        "- Keep the Astro frontmatter exactly as-is\n"
+        "- Install command: brew install 8op-org/tap/glitch\n"
+        "- Tagline: Shell does the work. LLM does the thinking. You own the workflow.\n\n"
+        "Return the complete updated file content for site/src/pages/index.astro.")))
+
+  (step "gate"
+    (llm
+      :provider "copilot"
+      :agentic true
+      :tools ["glitch_read_file" "glitch_grep"]
+      :prompt (str
+        "Review this homepage content for accuracy.\n"
+        "Use glitch_read_file and glitch_grep to verify:\n"
+        "- Every command/parameter referenced exists in the codebase\n"
+        "- No hallucinated features or flags\n"
+        "- No banned terms (Ollama, glitch ask, BubbleTea, tmux, OTel, SQLite)\n"
+        "- DSL syntax matches what's actually in core.clj and the providers\n\n"
+        "Content to review:\n" (ref "rewrite") "\n\n"
+        "Return JSON (no markdown fence): {\"pass\": true/false, \"issues\": [...]}")))
+
+  (step "save"
+    (let [gate-out (json/decode (json-extract (ref "gate")))]
+      (when (not (get gate-out "pass"))
+        (throw (ex-info (str "Gate failed: "
+                             (json/encode (get gate-out "issues")))
+                        {})))
+      (save "site/src/pages/index.astro" (ref "rewrite"))
+      "Updated homepage")))

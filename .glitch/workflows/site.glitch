@@ -14,20 +14,24 @@
 
   (step "route"
     (llm
-      :provider "copilot"
+      :provider "lmstudio"
+      :tools []
       :prompt (str
         "You are a router for a documentation site workflow.\n\n"
         "The user said: " (input) "\n\n"
         "Existing doc page slugs:\n" (ref "pages") "\n\n"
         "Classify the user's intent into exactly one action.\n"
         "Return a JSON object (no markdown fence, no preamble):\n\n"
-        "For creating or updating a single page:\n"
+        "For updating the homepage (index.astro landing page):\n"
+        "{\"action\": \"homepage\", \"instructions\": \"what to do\"}\n\n"
+        "For creating or updating a single doc page:\n"
         "{\"action\": \"write-page\", \"slug\": \"the-page-slug\", \"instructions\": \"what to do\"}\n\n"
         "For regenerating all pages:\n"
         "{\"action\": \"write-all\", \"instructions\": \"what to do\"}\n\n"
         "For starting the dev server:\n"
         "{\"action\": \"dev\"}\n\n"
         "Rules:\n"
+        "- \"homepage\", \"landing page\", \"index\" → homepage\n"
         "- If the user mentions a specific page, use its slug\n"
         "- If the page doesn't exist yet, invent a kebab-case slug from the topic\n"
         "- \"refresh\", \"regenerate\", \"update all\" → write-all\n"
@@ -55,6 +59,11 @@
                         (get result :output))))
                   ""
                   slugs))
+
+        (= action "homepage")
+        (let [result (call-workflow "site-homepage"
+                       :input (get parsed "instructions"))]
+          (get result :output))
 
         (= action "dev")
         (let [result (call-workflow "site-dev")]
