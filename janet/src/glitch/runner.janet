@@ -88,12 +88,16 @@
   (merge result {:run-id run-id}))
 
 (defn list-workflows [dir]
-  "List all .janet workflow files in a directory."
+  "List all .glitch and .janet workflow files in a directory."
   (def results @[])
   (when (os/stat dir)
     (each f (os/dir dir)
-      (when (string/has-suffix? ".janet" f)
+      (var ext-len nil)
+      (cond
+        (string/has-suffix? ".glitch" f) (set ext-len 7)
+        (string/has-suffix? ".janet" f) (set ext-len 6))
+      (when ext-len
         (array/push results
-          {:name (string/slice f 0 (- (length f) 6))
+          {:name (string/slice f 0 (- (length f) ext-len))
            :path (string dir "/" f)}))))
   (sort-by |($ :name) results))

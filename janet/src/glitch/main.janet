@@ -77,9 +77,10 @@
               (string project-root "/workflows")))
           (var found nil)
           (each dir dirs
-            (def p (string dir "/" wf-name ".janet"))
-            (when (and (os/stat p) (nil? found))
-              (set found p)))
+            (each ext [".glitch" ".janet"]
+              (def p (string dir "/" wf-name ext))
+              (when (and (os/stat p) (nil? found))
+                (set found p))))
           (or found
               (do (eprintf "workflow not found: %s" wf-name)
                   (os/exit 1))))))

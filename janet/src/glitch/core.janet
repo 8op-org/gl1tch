@@ -195,15 +195,22 @@
             name (string/join *call-stack* " -> ")))
   (array/push *call-stack* name)
   (defer (array/pop *call-stack*)
-    (def path (string *workflows-dir* "/" name ".janet"))
-    (unless (os/stat path)
-      (errorf "call-workflow: %s not found" path))
+    # Resolve path: prefer .glitch, fall back to .janet
+    (var path nil)
+    (each ext [".glitch" ".janet"]
+      (def p (string *workflows-dir* "/" name ext))
+      (when (and (os/stat p) (nil? path))
+        (set path p)))
+    (unless path
+      (errorf "call-workflow: %s not found in %s" name *workflows-dir*))
     (def saved-input *input*)
     (def saved-steps *steps*)
     (def saved-order *step-order*)
+    (def saved-params *params*)
     (set *input* (or input ""))
     (set *steps* @{})
     (set *step-order* @[])
+    (set *params* (table/clone *params*))
     (when set
       (eachp [k v] set
         (put *params* k v)))
@@ -214,6 +221,7 @@
     (set *input* saved-input)
     (set *steps* saved-steps)
     (set *step-order* saved-order)
+    (set *params* saved-params)
     result))
 
 # --- LLM invocation ---
