@@ -7,6 +7,9 @@
 (import glitch/project :as project)
 (import glitch/provider :as prov)
 (import glitch/gui :as gui)
+(import glitch/mcp :as mcp)
+(import glitch/mcp/indexer :as idx)
+(import glitch/mcp/embeddings :as emb)
 
 (defn resolve-command [argv]
   "Return the command name from argv, or nil."
@@ -158,6 +161,63 @@
       (printf "  %s ok" tool)
       (printf "  %s missing" tool))))
 
+(defn cmd-mcp [argv]
+  (def res
+    (argparse
+      "Start the MCP stdio server"
+      "workspace" {:kind :option :short "w"
+                   :help "Workspace path"}
+      "model"     {:kind :option :short "m"
+                   :help "Embedding model name"}
+      "base-url"  {:kind :option
+                   :help "LM Studio base URL"}))
+  (unless res (os/exit 1))
+  (def workspace-path
+    (or (res "workspace")
+        (project/resolve)
+        (os/cwd)))
+  (mcp/start @{:workspace-path workspace-path
+               :model (res "model")
+               :base-url (res "base-url")}))
+
+(defn cmd-index [argv]
+  (def res
+    (argparse
+      "Index a repository for semantic search"
+      "workspace" {:kind :option :short "w"
+                   :help "Workspace path"}
+      "repo"      {:kind :option :short "r"
+                   :help "Repository path to index"}
+      "reindex"   {:kind :flag
+                   :help "Force full reindex"}
+      "model"     {:kind :option :short "m"
+                   :help "Embedding model name"}
+      "base-url"  {:kind :option
+                   :help "LM Studio base URL"}))
+  (unless res (os/exit 1))
+  (def workspace-path
+    (or (res "workspace")
+        (project/resolve)
+        (os/cwd)))
+  (def repo-path (or (res "repo") (os/cwd)))
+  (def model (res "model"))
+  (def base-url (res "base-url"))
+  (def db (idx/open-search-db workspace-path))
+  (def embed-fn
+    (when model
+      (fn [texts]
+        (emb/embed texts :model model :base-url base-url))))
+  (def result
+    (idx/index-repo db repo-path
+      :embed-fn embed-fn
+      :model model
+      :reindex (truthy? (res "reindex"))))
+  (printf "indexed %d files, %d new chunks (of %d total files)"
+    (result :files-indexed)
+    (result :chunks-created)
+    (result :total-files))
+  (idx/close-search-db db))
+
 # --- Main ---
 
 (def commands
@@ -166,6 +226,8 @@
    "check"   cmd-check
    "eval"    cmd-eval
    "gui"     cmd-gui
+   "mcp"     cmd-mcp
+   "index"   cmd-index
    "plugin"  cmd-plugin
    "up"      (fn [_] (cmd-up))
    "version" (fn [_] (cmd-version))})
