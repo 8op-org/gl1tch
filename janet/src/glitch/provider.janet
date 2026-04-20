@@ -45,8 +45,10 @@
     (errorf "all tiers exhausted: %s" (string last-err))))
 
 (def default-tiers
-  [{:providers ["lmstudio"] :model "gemma4"}
-   {:providers ["copilot" "claude"]}])
+  [{:providers ["copilot"]}
+   {:providers ["claude"]}
+   {:providers ["openrouter"]}
+   {:providers ["lmstudio"]}])
 
 (defn load-providers [& dirs]
   "Load .janet provider files from directories."
@@ -54,7 +56,8 @@
     (if (> (length dirs) 0)
       dirs
       [(string (os/getenv "HOME") "/.config/glitch/providers")
-       "providers"]))
+       "providers"
+       (string (dyn *syspath*) "/glitch/providers")]))
   (each dir search-dirs
     (when (os/stat dir)
       (each f (os/dir dir)
