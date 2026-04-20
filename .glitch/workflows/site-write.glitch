@@ -4,6 +4,7 @@
 # Params: page (slug), instructions (freeform)
 
 (import glitch/core :as g)
+(import spork/json)
 
 (g/workflow "site-write"
   :description "Write or update a documentation page"

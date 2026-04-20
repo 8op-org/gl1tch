@@ -11,7 +11,7 @@
     ["curl" "-sS" "-X" "POST"
      "http://localhost:1234/v1/chat/completions"
      "-H" "Content-Type: application/json"
-     "-d" body]
+     "-d" (string body)]
     :p {:out :pipe :err :pipe}))
   (def out (ev/read (proc :out) :all))
   (def err-out (ev/read (proc :err) :all))

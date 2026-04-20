@@ -6,6 +6,7 @@
 # C.L.E.A.R. = Clarity, Logic, Empathy, Actionability, Relevance
 
 (import glitch/core :as g)
+(import spork/json)
 
 (g/workflow "site-gate"
   :description "C.L.E.A.R. content quality gate"

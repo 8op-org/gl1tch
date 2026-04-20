@@ -142,11 +142,16 @@ import Base from '../layouts/Base.astro';
       <p>Tiered routing tries local LLM first. Escalates to cloud only if quality demands it.</p>
     </div>
     <div class="how-step">
-      <div class="how-num">03 gates verify before shipping</div>
-      <pre class="code">(<span class="k">phase</span> <span class="s">"verify"</span> <span class="r">:retries</span> <span class="s">1</span>
-  (<span class="k">gate</span> <span class="s">"no-hallucinations"</span>
-    (<span class="k">run</span> <span class="s">"python3 scripts/gate.py"</span>)))</pre>
-      <p>Shell-based gates catch hallucinated features, leaked internals, and missing coverage. Retries on failure.</p>
+      <div class="how-num">03 C.L.E.A.R. gates verify before shipping</div>
+      <pre class="code">(<span class="k">step</span> <span class="s">"gate-voice"</span>
+  (<span class="k">llm</span> <span class="r">:format</span> <span class="s">"json"</span>
+    <span class="r">:prompt</span> <span class="s">"Review for Clarity,
+    Logic, Relevance..."</span>))
+(<span class="k">step</span> <span class="s">"gate-accuracy"</span>
+  (<span class="k">llm</span> <span class="r">:format</span> <span class="s">"json"</span>
+    <span class="r">:prompt</span> <span class="s">"Verify against repo
+    context..."</span>))</pre>
+      <p>LLM-powered gates using the C.L.E.A.R. method — Clarity, Logic, Empathy, Actionability, Relevance. Every issue comes with a specific fix.</p>
     </div>
     <div class="how-step">
       <div class="how-num">04 compare and pick the best</div>
@@ -167,45 +172,43 @@ import Base from '../layouts/Base.astro';
 <div class="wrap">
   <div class="section-label">proof it works</div>
   <h2>This site builds itself.</h2>
-  <p class="section-copy">Every page was created by a gl1tch workflow. AI writes the content from real repo context. Shell gates verify no hallucinations before anything ships.</p>
+  <p class="section-copy">Every page on this site was written by a gl1tch workflow. You say what you want in plain English. The router picks the right operation. C.L.E.A.R. gates verify every page before it hits disk.</p>
 
-  <pre class="code meta-trace"><span class="p">$</span> glitch workflow run site-create-page --set topic="batch comparison runs"
+  <pre class="code meta-trace"><span class="p">$</span> glitch run site "add a page about the par form"
 
-<span class="term-header">&gt;&gt; site-create-page</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">existing-docs</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">examples</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">repo-structure</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">existing-pages</span>
-  <span class="term-llm">&gt;</span> <span class="term-llm">generate</span>               <span class="term-anno">lm-studio</span>
-    <span class="term-anno">tier 0: lm-studio accepted</span>
-  <span class="term-llm">&check;</span> <span class="term-llm">generate</span>               <span class="term-anno">3965 tok &middot; 52.6s</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">save-stub</span>
-  <span class="term-dim">&gt;</span> <span class="term-dim">rebuild-json</span>
+<span class="term-header">&gt;&gt; site</span> <span class="term-anno">router</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">pages</span>
+  <span class="term-llm">&gt;</span> <span class="term-llm">route</span>                  <span class="term-anno">lm-studio/gemma4</span>
+  <span class="term-anno">&rarr; write-page slug=par</span>
 
-<span class="term-header">&gt;&gt;&gt; Phase "content-verify"</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate no-hallucinations</span>  <span class="term-pass">PASS</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate stub-coverage</span>      <span class="term-pass">PASS</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate structure-and-tone</span> <span class="term-pass">PASS</span>
+<span class="term-header">&gt;&gt; site-write</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">check-existing</span>
+  <span class="term-dim">&gt;</span> <span class="term-dim">gather-context</span>
+  <span class="term-llm">&gt;</span> <span class="term-llm">write</span>                  <span class="term-anno">copilot/sonnet</span>
+  <span class="term-llm">&check;</span> <span class="term-llm">write</span>                  <span class="term-anno">4120 tok &middot; 8.3s</span>
 
-<span class="term-header">&gt;&gt;&gt; Phase "page-tests"</span>
-  <span class="term-pass">&check;</span> <span class="term-gate">gate playwright</span>         <span class="term-pass">PASS</span> <span class="term-anno">14 tests &middot; 8.7s</span></pre>
+<span class="term-header">&gt;&gt; site-gate</span> <span class="term-anno">C.L.E.A.R.</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate-voice</span>             <span class="term-pass">PASS</span> <span class="term-anno">clarity &middot; logic &middot; relevance</span>
+  <span class="term-pass">&check;</span> <span class="term-gate">gate-accuracy</span>          <span class="term-pass">PASS</span> <span class="term-anno">logic &middot; actionability &middot; relevance</span>
+
+  <span class="term-dim">&gt;</span> <span class="term-dim">save</span>                   <span class="term-anno">site/src/content/docs/par.md</span></pre>
 
   <div class="meta-suite">
     <div class="meta-cmd">
-      <code>site-create-page --set topic="..."</code>
-      <span>AI generates a page from repo context, gates verify</span>
+      <code>glitch run site "add a page about plugins"</code>
+      <span>AI writes the page, C.L.E.A.R. gates verify, saves to disk</span>
     </div>
     <div class="meta-cmd">
-      <code>site-update-page --set page=plugins</code>
-      <span>AI rewrites a page with your instructions</span>
+      <code>glitch run site "update getting-started for janet syntax"</code>
+      <span>AI rewrites an existing page with your instructions</span>
     </div>
     <div class="meta-cmd">
-      <code>site-update</code>
-      <span>Regenerate all pages, verify, build</span>
+      <code>glitch run site "refresh all doc pages"</code>
+      <span>Regenerate every page sequentially, each gated</span>
     </div>
     <div class="meta-cmd">
-      <code>site-dev</code>
-      <span>Dev server with hot reload</span>
+      <code>glitch run site "start dev server"</code>
+      <span>Astro dev server with hot reload on port 4322</span>
     </div>
   </div>
 </div>

@@ -49,7 +49,8 @@
                    :help "Set param key=value"}
       "model"     {:kind :option :short "m"
                    :help "Default model"}
-      :default    {:kind :accumulate}))
+      :default    {:kind :accumulate}
+      :args (array/concat @["run"] argv)))
   (unless res (os/exit 1))
 
   (def positional (or (res :default) @[]))
@@ -74,7 +75,7 @@
           (def dirs @[".glitch/workflows" "workflows"])
           (when project-root
             (array/insert dirs 0
-              (string project-root "/workflows")))
+              (string project-root "/.glitch/workflows")))
           (var found nil)
           (each dir dirs
             (each ext [".glitch" ".janet"]

@@ -57,14 +57,17 @@
         (s/record-step db
           (merge rec {:run-id run-id})))))
 
-  # Ensure module paths include src directory for workflow imports
-  (def src-path "src/:all:.janet")
-  (var has-src false)
-  (each p module/paths
-    (when (and (indexed? p) (> (length p) 0) (= (first p) src-path))
-      (set has-src true)))
-  (unless has-src
-    (array/push module/paths [src-path :source]))
+  # Ensure module paths include directories for workflow imports
+  (defn- add-module-path [path-pattern kind]
+    (var found false)
+    (each p module/paths
+      (when (and (indexed? p) (> (length p) 0) (= (first p) path-pattern))
+        (set found true)))
+    (unless found
+      (array/push module/paths [path-pattern kind])))
+  (add-module-path "src/:all:.janet" :source)
+  # Support installed modules at {syspath}/glitch/:all:.janet
+  (add-module-path (string (dyn *syspath*) "/glitch/:all:.janet") :source)
 
   # Execute the workflow
   (var result nil)

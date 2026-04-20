@@ -7,12 +7,14 @@
 #   glitch run site "start dev server"
 
 (import glitch/core :as g)
+(import spork/json)
 
 (g/workflow "site"
   :description "Unified site workflow — routes freeform input to the right operation"
 
   (g/step "pages"
-    (g/sh "bash" "-c" "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null || echo '(none)'"))
+    (g/sh "bash" "-c" "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null || echo none"))
+
 
   (g/step "route"
     (g/llm
@@ -47,7 +49,7 @@
 
   (g/step "dispatch"
     (do
-      (def parsed (json/decode (g/ref "route")))
+      (def parsed (json/decode (string/trim (g/ref "route"))))
       (def action (parsed "action"))
       (cond
         (= action "write-page")
@@ -62,7 +64,7 @@
           (def slugs (string/split "\n" (string/trim (g/ref "pages"))))
           (var last-out "")
           (each slug slugs
-            (when (and (not= slug "") (not= slug "(none)"))
+            (when (and (not= slug "") (not= slug "none"))
               (def result (g/call-workflow "site-write"
                             :set {"page" slug
                                   "instructions" (or (parsed "instructions") "refresh and improve")}))

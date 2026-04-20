@@ -8,7 +8,7 @@
     ["curl" "-sS" "-X" "POST"
      "http://localhost:11434/api/generate"
      "-H" "Content-Type: application/json"
-     "-d" body]
+     "-d" (string body)]
     :p {:out :pipe :err :pipe}))
   (def out (ev/read (proc :out) :all))
   (def err-out (ev/read (proc :err) :all))

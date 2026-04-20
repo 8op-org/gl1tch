@@ -45,8 +45,7 @@
     (errorf "all tiers exhausted: %s" (string last-err))))
 
 (def default-tiers
-  [{:providers ["ollama"] :model "qwen2.5:7b"}
-   {:providers ["codex" "gemini"]}
+  [{:providers ["lmstudio"] :model "gemma4"}
    {:providers ["copilot" "claude"]}])
 
 (defn load-providers [& dirs]
@@ -64,7 +63,9 @@
           (try
             (do
               (def mod (dofile (string dir "/" f)))
-              (when (mod :call)
-                (register name (mod :call))))
+              (def call-entry (or (get mod 'call) (mod :call)))
+              (def call-fn (if (dictionary? call-entry) (call-entry :value) call-entry))
+              (when call-fn
+                (register name call-fn)))
             ([err]
               (eprintf "warn: failed to load provider %s: %s" name (string err)))))))))
