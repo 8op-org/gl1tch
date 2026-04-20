@@ -214,9 +214,25 @@
       "up"      (cmd-up)
       "version" (println "glitch 0.2.0-bb")
       "plugin"  (cmd-plugin rest-args)
+      "mcp"     (do
+                  (require '[glitch.mcp :as mcp])
+                  ((resolve 'glitch.mcp/start)
+                   {:workspace-path (System/getProperty "user.dir")}))
+      "gui"     (let [{:keys [opts]} (parse-args rest-args
+                                        {:port      {:short "p" :kind :option}
+                                         :workspace {:short "w" :kind :option}
+                                         :dist      {:short "d" :kind :option}})
+                      port (or (some-> (:port opts) parse-long) 3000)
+                      workspace (or (:workspace opts)
+                                    (project/resolve))
+                      dist-dir (or (:dist opts) "gui/dist")]
+                  (require '[glitch.gui :as gui])
+                  ((resolve 'glitch.gui/start)
+                   {:port port :workspace workspace :dist-dir dist-dir})
+                  @(promise))
       (do (println "glitch - workflow engine (babashka)")
           (println)
-          (doseq [c (sort ["check" "eval" "init" "plugin" "run" "up" "version"])]
+          (doseq [c (sort ["check" "eval" "gui" "init" "mcp" "plugin" "run" "up" "version"])]
             (println (str "  " c)))
           (when-not cmd (System/exit 1))))))
 
