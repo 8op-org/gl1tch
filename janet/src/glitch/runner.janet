@@ -5,7 +5,7 @@
 (import glitch/store :as s)
 (import glitch/provider :as p)
 
-(defn run [workflow-path input &named db workspace model
+(defn run [workflow-path input &named db project model
            params seed-steps workflows-dir parent-run-id tiers]
   "Execute a workflow file. Returns {:name :output :steps :run-id}."
   (default input "")
@@ -49,7 +49,7 @@
       {:name "" :input input
        :workflow-file workflow-path
        :model model
-       :workspace (or workspace "")
+       :workspace (or project "")
        :parent-run-id parent-run-id}))
     # Wire step recorder to store
     (g/set-step-recorder!

@@ -75,9 +75,9 @@
     (sql/eval db stmt))
   db)
 
-(defn open-for-workspace [ws-path]
-  "Open a workspace-scoped database."
-  (open (string ws-path "/.glitch/glitch.db")))
+(defn open-for-project [project-root]
+  "Open a project-scoped database."
+  (open (string project-root "/.glitch/glitch.db")))
 
 (defn close [db]
   (sql/close db))

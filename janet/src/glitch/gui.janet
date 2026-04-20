@@ -4,7 +4,6 @@
 (import spork/json)
 (import glitch/store :as s)
 (import glitch/runner :as runner)
-(import glitch/workspace :as ws)
 (import glitch/provider :as prov)
 
 # --- Helpers ---
@@ -53,7 +52,7 @@
 
 # --- Route builders ---
 
-(defn build-routes [db workspace]
+(defn build-routes [db project-root]
   "Build the route table."
   @[[:get "/api/workflows"
      (fn [req params]
@@ -82,13 +81,9 @@
            (json-response (merge run {:steps steps})))
          (json-response {:error "not found"} 404)))]
 
-    [:get "/api/workspace"
+    [:get "/api/project"
      (fn [req params]
-       (json-response (or workspace {})))]
-
-    [:get "/api/workspace/resources"
-     (fn [req params]
-       (json-response (get workspace :resources @[])))]
+       (json-response (if project-root {:root project-root} {})))]
 
     [:get "/api/providers"
      (fn [req params]
@@ -96,17 +91,16 @@
 
 (defn start [opts]
   "Start the GUI HTTP server."
-  (def {:addr addr :workspace ws-path :static-dir static-dir} opts)
+  (def {:addr addr :project-root project-root :static-dir static-dir} opts)
   (default addr "localhost:3000")
   (default static-dir "gui/dist")
 
-  (def db (if ws-path
-            (s/open-for-workspace ws-path)
+  (def db (if project-root
+            (s/open-for-project project-root)
             (s/open)))
-  (def workspace (when ws-path (ws/load ws-path)))
   (prov/load-providers)
 
-  (def routes (build-routes db workspace))
+  (def routes (build-routes db project-root))
 
   (defn handler [req]
     (def method (keyword (string/ascii-lower (or (req :method) "get"))))

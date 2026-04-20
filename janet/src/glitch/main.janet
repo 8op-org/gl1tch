@@ -4,7 +4,7 @@
 (import glitch/core :as g)
 (import glitch/runner :as runner)
 (import glitch/store :as store)
-(import glitch/workspace :as ws)
+(import glitch/project :as project)
 (import glitch/provider :as prov)
 (import glitch/gui :as gui)
 
@@ -41,8 +41,8 @@
   (def res
     (argparse
       "Execute a workflow"
-      "workspace" {:kind :option :short "w"
-                   :help "Workspace path"}
+      "project"   {:kind :option :short "P"
+                   :help "Project root path"}
       "path"      {:kind :option :short "p"
                    :help "Explicit workflow file path"}
       "set"       {:kind :accumulate :short "s"
@@ -60,9 +60,9 @@
     (eprint "usage: glitch run <workflow> [input]")
     (os/exit 1))
 
-  # Resolve workspace
-  (def workspace (ws/resolve
-    :workspace-flag (res "workspace")))
+  # Resolve project root
+  (def project-root (project/resolve
+    :flag (res "project")))
 
   # Load providers
   (prov/load-providers)
@@ -72,9 +72,9 @@
     (or (res "path")
         (do
           (def dirs @[".glitch/workflows" "workflows"])
-          (when workspace
+          (when project-root
             (array/insert dirs 0
-              (string (workspace :path) "/workflows")))
+              (string project-root "/workflows")))
           (var found nil)
           (each dir dirs
             (def p (string dir "/" wf-name ".janet"))
@@ -95,65 +95,29 @@
           (string/slice kv (+ eq 1))))))
 
   # Model
-  (def model (or (res "model")
-                 (when workspace (get-in workspace [:defaults :model]))
-                 "qwen2.5:7b"))
+  (def model (or (res "model") "gemma4"))
 
   # Open store
   (def db
-    (if workspace
-      (store/open-for-workspace (workspace :path))
+    (if project-root
+      (store/open-for-project project-root)
       (store/open)))
 
   # Run
   (def result
     (runner/run wf-path input
       :db db
-      :workspace (when workspace (workspace :name))
+      :project (or project-root "")
       :model model
       :params params))
 
   (print (result :output))
   (store/close db))
 
-(defn- ws-init [argv]
-  (def name (or (first argv) (last (string/split "/" (os/cwd)))))
+(defn cmd-init [argv]
   (def dir (string (os/cwd) "/.glitch"))
   (g/mkdir-p dir)
-  (spit (string dir "/workspace.janet")
-    (string "(import glitch/workspace :as ws)\n"
-            "(ws/workspace " (string/format "%q" name) "\n"
-            "  :description \"\")\n"))
-  (printf "workspace %s initialized at %s" name dir))
-
-(defn- ws-status []
-  (def w (ws/resolve))
-  (if w
-    (do
-      (printf "workspace: %s" (w :name))
-      (printf "path: %s" (or (w :path) ""))
-      (printf "model: %s" (get-in w [:defaults :model] ""))
-      (printf "resources: %d" (length (or (w :resources) @[]))))
-    (print "no active workspace")))
-
-(defn- ws-resources []
-  (def w (ws/resolve))
-  (if w
-    (each r (or (w :resources) @[])
-      (printf "%s (%s) — %s" (r :name) (r :type)
-              (or (r :url) (r :path) "")))
-    (print "no active workspace")))
-
-(defn cmd-workspace [argv]
-  (when (= (length argv) 0)
-    (eprint "usage: glitch workspace <init|status|resources>")
-    (os/exit 1))
-  (match (first argv)
-    "init"      (ws-init (tuple/slice argv 1))
-    "status"    (ws-status)
-    "resources" (ws-resources)
-    sub         (do (eprintf "workspace subcommand %s: not yet implemented" sub)
-                    (os/exit 1))))
+  (printf "project initialized at %s" dir))
 
 (defn cmd-plugin [argv]
   (when (= (length argv) 0)
@@ -174,14 +138,14 @@
   (def res
     (argparse
       "Start the GUI server"
-      "addr"      {:kind :option :short "a"
-                   :help "Listen address (default localhost:3000)"}
-      "workspace" {:kind :option :short "w"
-                   :help "Workspace path"}))
+      "addr"    {:kind :option :short "a"
+                 :help "Listen address (default localhost:3000)"}
+      "project" {:kind :option :short "P"
+                 :help "Project root path"}))
   (unless res (os/exit 1))
-  (def workspace (ws/resolve :workspace-flag (res "workspace")))
+  (def project-root (project/resolve :flag (res "project")))
   (gui/start {:addr (or (res "addr") "localhost:3000")
-              :workspace (when workspace (workspace :path))}))
+              :project-root project-root}))
 
 (defn cmd-up []
   (each tool ["janet" "curl"]
@@ -195,14 +159,14 @@
 # --- Main ---
 
 (def commands
-  {"run"       cmd-run
-   "check"     cmd-check
-   "eval"      cmd-eval
-   "gui"       cmd-gui
-   "workspace" cmd-workspace
-   "plugin"    cmd-plugin
-   "up"        (fn [_] (cmd-up))
-   "version"   (fn [_] (cmd-version))})
+  {"run"     cmd-run
+   "init"    cmd-init
+   "check"   cmd-check
+   "eval"    cmd-eval
+   "gui"     cmd-gui
+   "plugin"  cmd-plugin
+   "up"      (fn [_] (cmd-up))
+   "version" (fn [_] (cmd-version))})
 
 (defn main [& argv]
   (def args (tuple/slice argv 1))
