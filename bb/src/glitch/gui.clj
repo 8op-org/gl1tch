@@ -32,8 +32,11 @@
 
 (defn- serve-static [dist-dir uri]
   (let [path (if (= uri "/") "index.html" (subs uri 1))
-        file (io/file dist-dir path)]
-    (if (and (.exists file) (.isFile file))
+        file (io/file dist-dir path)
+        base-canonical (.getCanonicalPath (io/file dist-dir))
+        file-canonical (.getCanonicalPath file)]
+    (if (and (.exists file) (.isFile file)
+             (str/starts-with? file-canonical base-canonical))
       {:status 200
        :headers {"Content-Type" (content-type-for path)}
        :body file}

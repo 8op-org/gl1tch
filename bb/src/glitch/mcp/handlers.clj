@@ -6,6 +6,15 @@
             [clojure.string :as str]
             [sci.core :as sci]))
 
+(defn- confined-path
+  "Resolve path and verify it's under workspace-path. Throws if not."
+  [path workspace-path]
+  (let [resolved (.getCanonicalPath (java.io.File. path))
+        base (.getCanonicalPath (java.io.File. workspace-path))]
+    (when-not (str/starts-with? resolved base)
+      (throw (ex-info (str "path outside workspace: " path) {})))
+    resolved))
+
 (defn- handle-search [context arguments]
   (let [db (:search-db context)
         query (get arguments "query")
@@ -41,8 +50,9 @@
         result (sci/eval-string* ctx expression)]
     (str result)))
 
-(defn- handle-check [arguments]
+(defn- handle-check [context arguments]
   (let [file (get arguments "file")
+        _ (confined-path file (:workspace-path context))
         content (slurp file)]
     (try
       (read-string (str "[" content "]"))
@@ -53,6 +63,7 @@
 (defn- handle-grep [context arguments]
   (let [pattern (get arguments "pattern")
         path (get arguments "path" (:workspace-path context))
+        _ (confined-path path (:workspace-path context))
         glob-pat (get arguments "glob")
         cmd (cond-> ["grep" "-rn" "--color=never" "--" pattern path]
               glob-pat (conj "--include" glob-pat))
@@ -68,8 +79,9 @@
     (json/generate-string
       (mapv #(select-keys % [:path :symbols :score]) filtered))))
 
-(defn- handle-read-file [arguments]
+(defn- handle-read-file [context arguments]
   (let [path (get arguments "path")
+        _ (confined-path path (:workspace-path context))
         f (java.io.File. path)]
     (when-not (.exists f)
       (throw (ex-info (str "file not found: " path) {})))
@@ -84,8 +96,8 @@
       "glitch_index"     (handle-index context arguments)
       "glitch_run"       (handle-run arguments)
       "glitch_eval"      (handle-eval arguments)
-      "glitch_check"     (handle-check arguments)
+      "glitch_check"     (handle-check context arguments)
       "glitch_grep"      (handle-grep context arguments)
       "glitch_symbols"   (handle-symbols context arguments)
-      "glitch_read_file" (handle-read-file arguments)
+      "glitch_read_file" (handle-read-file context arguments)
       (throw (ex-info (str "unknown tool: " tool-name) {})))))

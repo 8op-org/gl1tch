@@ -1,11 +1,10 @@
 (ns glitch.mcp.indexer
   (:require [babashka.pods :as pods]
-            [babashka.process :as bp]
             [babashka.fs :as fs]
             [glitch.mcp.embeddings :as emb]
             [clojure.string :as str]))
 
-(pods/load-pod 'org.babashka/go-sqlite3 "0.2.8")
+(try (pods/load-pod 'org.babashka/go-sqlite3 "0.2.8") (catch Exception _))
 (require '[pod.babashka.go-sqlite3 :as sql])
 
 ;; --- Extension -> language map ---
@@ -62,8 +61,9 @@
 ;; --- Content hashing ---
 
 (defn content-hash [content]
-  (let [result (bp/shell {:in content :out :string} "shasum" "-a" "256")]
-    (first (str/split (str/trim (:out result)) #"\s+"))))
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")
+        bytes (.digest md (.getBytes ^String content "UTF-8"))]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) bytes))))
 
 ;; --- Skip list ---
 
