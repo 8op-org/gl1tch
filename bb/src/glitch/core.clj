@@ -157,7 +157,12 @@
 
 ;; --- Call-workflow ---
 
-(defn call-workflow [name & {:keys [input set]}]
+(defn call-workflow
+  "Execute a child workflow. NOTE: This default implementation uses load-file
+   (unsandboxed). The runner overrides this in the SCI context with
+   sci-call-workflow which uses sci/eval-string* (sandboxed). Do not call
+   this directly outside of tests."
+  [name & {:keys [input set]}]
   (when (some #{name} @*call-stack*)
     (throw (ex-info (str "call-workflow cycle: " name " already on stack "
                          (str/join " -> " @*call-stack*))

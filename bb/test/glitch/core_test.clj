@@ -238,3 +238,28 @@
       (is (= "question" (:prompt @recorded)))
       (is (= "answer" (:output @recorded)))
       (is (= "test-model" (:model @recorded))))))
+
+;; --- json-extract ---
+
+(deftest json-extract-plain-test
+  (is (= "{\"a\":1}" (core/json-extract "{\"a\":1}"))))
+
+(deftest json-extract-with-prefix-test
+  (is (= "{\"action\":\"dev\"}"
+         (core/json-extract "Here is the result:\n{\"action\":\"dev\"}"))))
+
+(deftest json-extract-with-markdown-fence-test
+  (is (= "{\"x\":1}"
+         (core/json-extract "```json\n{\"x\":1}\n```"))))
+
+(deftest json-extract-nested-test
+  (is (= "{\"a\":{\"b\":2}}"
+         (core/json-extract "thinking...\n{\"a\":{\"b\":2}}\ndone"))))
+
+(deftest json-extract-with-braces-in-strings-test
+  (is (= "{\"msg\":\"{hello}\"}"
+         (core/json-extract "prefix {\"msg\":\"{hello}\"} suffix"))))
+
+(deftest json-extract-array-test
+  (is (= "[1,2,3]"
+         (core/json-extract "result: [1,2,3]"))))

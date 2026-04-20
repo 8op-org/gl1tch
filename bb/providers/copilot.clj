@@ -5,8 +5,10 @@
 
 (provider/register "copilot"
   (fn [{:keys [prompt]}]
-    (let [tmp (str "/tmp/glitch-copilot-" (System/currentTimeMillis) ".txt")]
+    (let [tmp (str (System/getProperty "java.io.tmpdir")
+                    "/glitch-copilot-" (System/currentTimeMillis) "-" (rand-int 100000) ".txt")]
       (spit tmp prompt)
+      (.setReadable (java.io.File. tmp) false true)
       (try
         (let [result (bp/shell {:out :string :err :string :continue true}
                        "bash" "-c" (str "cat '" tmp "' | gh copilot 2>&1"))
