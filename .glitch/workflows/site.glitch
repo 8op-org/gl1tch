@@ -1,79 +1,72 @@
-# site.glitch — unified site workflow router
-#
-# Usage:
-#   glitch run site "update getting-started to use janet syntax"
-#   glitch run site "add a page about the par form"
-#   glitch run site "refresh all doc pages"
-#   glitch run site "start dev server"
+;; site.glitch — unified site workflow router
+;;
+;; Usage:
+;;   glitch run site "update getting-started to use janet syntax"
+;;   glitch run site "add a page about the par form"
+;;   glitch run site "refresh all doc pages"
+;;   glitch run site "start dev server"
 
-(import glitch/core :as g)
-(import spork/json)
-
-(g/workflow "site"
+(workflow "site"
   :description "Unified site workflow — routes freeform input to the right operation"
 
-  (g/step "pages"
-    (g/sh "bash" "-c" "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null || echo none"))
+  (step "pages"
+    (sh "bash" "-c" "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null || echo none"))
 
-
-  (g/step "route"
-    (g/llm
+  (step "route"
+    (llm
       :format "json"
-      :prompt (string ```
-        You are a router for a documentation site workflow.
+      :prompt (str
+        "You are a router for a documentation site workflow.\n\n"
+        "The user said: " (input) "\n\n"
+        "Existing doc page slugs:\n" (ref "pages") "\n\n"
+        "Classify the user's intent into exactly one action.\n"
+        "Return a JSON object (no markdown fence, no preamble):\n\n"
+        "For creating or updating a single page:\n"
+        "{\"action\": \"write-page\", \"slug\": \"the-page-slug\", \"instructions\": \"what to do\"}\n\n"
+        "For regenerating all pages:\n"
+        "{\"action\": \"write-all\", \"instructions\": \"what to do\"}\n\n"
+        "For starting the dev server:\n"
+        "{\"action\": \"dev\"}\n\n"
+        "Rules:\n"
+        "- If the user mentions a specific page, use its slug\n"
+        "- If the page doesn't exist yet, invent a kebab-case slug from the topic\n"
+        "- \"refresh\", \"regenerate\", \"update all\" → write-all\n"
+        "- \"dev\", \"preview\", \"server\", \"start\" → dev\n"
+        "- Everything else → write-page")))
 
-        The user said: ``` (g/input) ```
-
-        Existing doc page slugs:
-        ``` (g/ref "pages") ```
-
-        Classify the user's intent into exactly one action.
-        Return a JSON object (no markdown fence, no preamble):
-
-        For creating or updating a single page:
-        {"action": "write-page", "slug": "the-page-slug", "instructions": "what to do"}
-
-        For regenerating all pages:
-        {"action": "write-all", "instructions": "what to do"}
-
-        For starting the dev server:
-        {"action": "dev"}
-
-        Rules:
-        - If the user mentions a specific page, use its slug
-        - If the page doesn't exist yet, invent a kebab-case slug from the topic
-        - "refresh", "regenerate", "update all" → write-all
-        - "dev", "preview", "server", "start" → dev
-        - Everything else → write-page
-        ```)))
-
-  (g/step "dispatch"
-    (do
-      (def parsed (json/decode (string/trim (g/ref "route"))))
-      (def action (parsed "action"))
+  (step "dispatch"
+    (let [raw (str/trim (ref "route"))
+          start (str/index-of raw "{")
+          json-str (if start
+                     (let [last-brace (last (keep-indexed
+                                              (fn [i c] (when (= c \}) i))
+                                              raw))]
+                       (subs raw start (inc last-brace)))
+                     raw)
+          parsed (json/decode json-str)
+          action (get parsed "action")]
       (cond
         (= action "write-page")
-        (do
-          (def result (g/call-workflow "site-write"
-                        :set {"page" (parsed "slug")
-                              "instructions" (parsed "instructions")}))
-          (result :output))
+        (let [result (call-workflow "site-write"
+                       :set {"page" (get parsed "slug")
+                             "instructions" (get parsed "instructions")})]
+          (get result :output))
 
         (= action "write-all")
-        (do
-          (def slugs (string/split "\n" (string/trim (g/ref "pages"))))
-          (var last-out "")
-          (each slug slugs
-            (when (and (not= slug "") (not= slug "none"))
-              (def result (g/call-workflow "site-write"
-                            :set {"page" slug
-                                  "instructions" (or (parsed "instructions") "refresh and improve")}))
-              (set last-out (result :output))))
-          last-out)
+        (let [slugs (str/split (str/trim (ref "pages")) #"\n")]
+          (reduce (fn [_ slug]
+                    (when (and (not= slug "") (not= slug "none"))
+                      (let [result (call-workflow "site-write"
+                                     :set {"page" slug
+                                           "instructions" (or (get parsed "instructions")
+                                                              "refresh and improve")})]
+                        (get result :output))))
+                  ""
+                  slugs))
 
         (= action "dev")
-        (do
-          (def result (g/call-workflow "site-dev"))
-          (result :output))
+        (let [result (call-workflow "site-dev")]
+          (get result :output))
 
-        (string "unknown action: " action)))))
+        :else
+        (str "unknown action: " action)))))
