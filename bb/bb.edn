@@ -1,0 +1,21 @@
+{:paths ["src" "providers"]
+ :pods {org.babashka/go-sqlite3 {:version "0.2.8"}}
+ :tasks
+ {build {:doc "Build the glitch uberscript"
+         :task (do (babashka.fs/create-dirs "build")
+                   (shell "bb uberscript build/glitch --main glitch.main")
+                   (spit "build/glitch.tmp"
+                     (str "#!/usr/bin/env bb\n" (slurp "build/glitch")))
+                   (babashka.fs/move "build/glitch.tmp" "build/glitch" {:replace-existing true})
+                   (shell "chmod +x build/glitch"))}
+  install {:doc "Install glitch to /usr/local/bin"
+           :depends [build]
+           :task (shell "cp build/glitch /usr/local/bin/glitch")}
+  test {:doc "Run tests"
+        :task (shell "bb -cp src:test:providers -m glitch.test-runner")}
+  clean {:doc "Clean build artifacts"
+         :task (babashka.fs/delete-tree "build")}
+  site:dev {:doc "Run Astro dev server"
+            :task (shell {:dir "../site"} "npm run dev")}
+  site:build {:doc "Build the 8op.org site"
+              :task (shell {:dir "../site"} "npm run build")}}}

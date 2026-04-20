@@ -1,0 +1,285 @@
+(ns glitch.runner
+  "Workflow runner — wires core + provider + store together and evaluates
+   .glitch workflow files via SCI."
+  (:require [glitch.core :as g]
+            [glitch.store :as store]
+            [glitch.provider :as prov]
+            [sci.core :as sci]
+            [cheshire.core :as json]
+            [clojure.string :as str]
+            [clojure.java.io :as io]))
+
+;; ---------------------------------------------------------------------------
+;; SCI macro source — evaled into SCI context before each workflow run.
+;; These mirror the macros in core.clj but are written as SCI-evaluable
+;; source strings because host Clojure macros cannot be directly registered
+;; as SCI macros in babashka.
+;; ---------------------------------------------------------------------------
+
+(def ^:private sci-macros
+  "(defmacro workflow [name & body]
+     (let [forms (loop [b (seq body) acc []]
+                   (if (nil? b) acc
+                     (if (keyword? (first b))
+                       (recur (nnext b) acc)
+                       (recur (next b) (conj acc (first b))))))]
+       `(let [result# (do ~@forms)]
+          {:name ~name
+           :output (str result#)
+           :steps (get-steps)})))
+
+   (defmacro par [& forms]
+     (let [futs (mapv (fn [f] `(future-call (fn [] ~f))) forms)]
+       `(mapv deref ~futs)))
+
+   (defmacro retry [n & body]
+     `(loop [attempts# ~n
+             last-err# nil]
+        (if (<= attempts# 0)
+          (throw (ex-info (str \"retry exhausted after \" ~n \" attempts: \" last-err#) {}))
+          (let [result# (try
+                          {:ok (do ~@body)}
+                          (catch Exception e#
+                            {:err (.getMessage e#)}))]
+            (if (:ok result#)
+              (:ok result#)
+              (recur (dec attempts#) (:err result#)))))))
+
+   (defmacro with-timeout [seconds & body]
+     `(let [f# (future-call (fn [] ~@body))
+            result# (deref f# (* ~seconds 1000) ::timeout)]
+        (when (= result# ::timeout)
+          (future-cancel f#)
+          (throw (ex-info (str \"timeout after \" ~seconds \"s\") {})))
+        result#))
+
+   (defmacro phase [name & body]
+     `(do
+        (when-let [rec# @~(symbol \"glitch.core/*step-recorder*\")]
+          (rec# {:step-id ~name :kind \"phase\" :output \"started\"}))
+        (let [result# (do ~@body)]
+          (when-let [rec# @~(symbol \"glitch.core/*step-recorder*\")]
+            (rec# {:step-id ~name :kind \"phase\" :output (str result#)}))
+          result#)))")
+
+;; ---------------------------------------------------------------------------
+;; SCI context — pre-binds all core symbols so .glitch workflows can use
+;; bare (step ...), (llm ...), etc.  SCI evaluates in the 'user namespace
+;; by default, so bindings in 'user are available as bare symbols.
+;; ---------------------------------------------------------------------------
+
+;; Atom holding the current SCI ctx — needed so call-workflow can reuse it.
+(def ^:private ^:dynamic *sci-ctx* nil)
+
+(defn- sci-call-workflow
+  "SCI-compatible call-workflow: resolves the child workflow file and evals
+   it with sci/eval-string* using the current SCI context.  Provides
+   binding isolation identical to core/call-workflow."
+  [name & {:keys [input set]}]
+  (when (some #{name} @g/*call-stack*)
+    (throw (ex-info (str "call-workflow cycle: " name " already on stack "
+                         (str/join " -> " @g/*call-stack*))
+                    {:name name :stack @g/*call-stack*})))
+  (swap! g/*call-stack* conj name)
+  (try
+    (let [wf-dir      @g/*workflows-dir*
+          path        (or (some #(when (.exists (io/file %)) %)
+                            [(str wf-dir "/" name ".glitch")
+                             (str wf-dir "/" name ".clj")])
+                          (throw (ex-info (str "call-workflow: " name " not found in " wf-dir)
+                                         {:name name :dir wf-dir})))
+          saved-rec   @g/*step-recorder*
+          saved-prov  @g/*provider-fn*]
+      (binding [g/*steps*          (atom {})
+                g/*step-order*     (atom [])
+                g/*input*          (atom (or input ""))
+                g/*params*         (atom (merge @g/*params* (or set {})))
+                g/*step-recorder*  (atom saved-rec)
+                g/*provider-fn*    (atom saved-prov)]
+        (sci/eval-string* *sci-ctx* (slurp path))
+        {:output (g/last-output) :steps @g/*steps*}))
+    (finally
+      (swap! g/*call-stack* (comp vec pop)))))
+
+(defn make-sci-ctx
+  "Build a SCI evaluation context with all glitch primitives pre-bound.
+   The returned ctx is ready for sci/eval-string*."
+  []
+  (let [str-ns  (into {} (map (fn [[k v]] [(symbol (name k)) @v]))
+                       (ns-publics 'clojure.string))
+        user-ns {;; core primitives
+                 'step           g/step
+                 'ref            g/ref
+                 'input          g/input
+                 'params         g/params
+                 'param          g/param
+                 'sh             g/sh
+                 'save           g/save
+                 'read-file      g/read-file
+                 'write-file     g/write-file
+                 'get-steps      g/get-steps
+                 'last-output    g/last-output
+                 'llm            g/llm
+                 'gate           g/gate
+                 'call-workflow  sci-call-workflow
+                 'json-extract   g/json-extract
+                 'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
+
+                 ;; state setters (rarely needed in workflows, but available)
+                 'set-input!        g/set-input!
+                 'set-params!       g/set-params!
+                 'set-provider-fn!  g/set-provider-fn!
+                 'set-step-recorder! g/set-step-recorder!
+                 'set-workflows-dir! g/set-workflows-dir!
+                 'reset-steps!      g/reset!
+
+                 ;; concurrency primitives (SCI doesn't expose these by default)
+                 'future-call    future-call
+                 'future-cancel  future-cancel
+                 'deref          deref
+                 'atom           atom
+                 'swap!          swap!
+                 'reset!         reset!
+
+                 ;; common utils
+                 'slurp          slurp
+                 'spit           spit
+                 'println        println
+                 'prn            prn
+                 'str            str
+                 'pr-str         pr-str
+                 'read-string    read-string
+                 'ex-info        ex-info
+                 'ex-message     ex-message
+                 'ex-data        ex-data}
+        ctx     (sci/init
+                  {:namespaces
+                   {'user user-ns
+                    'str  str-ns
+                    'json {'decode         json/parse-string
+                           'encode         json/generate-string
+                           'parse-string   json/parse-string
+                           'generate-string json/generate-string}
+                    'glitch.core
+                    {'*step-recorder* g/*step-recorder*
+                     '*provider-fn*   g/*provider-fn*
+                     '*steps*         g/*steps*
+                     '*step-order*    g/*step-order*
+                     '*input*         g/*input*
+                     '*params*        g/*params*
+                     '*call-stack*    g/*call-stack*
+                     '*workflows-dir* g/*workflows-dir*}}
+                   :classes
+                   {'System  System
+                    'Math    Math
+                    'Thread  Thread
+                    'Exception Exception}})]
+    ;; Eval macro definitions into the context
+    (sci/eval-string* ctx sci-macros)
+    ctx))
+
+;; ---------------------------------------------------------------------------
+;; run — the main entry point
+;; ---------------------------------------------------------------------------
+
+(defn run
+  "Evaluate a .glitch workflow file.
+
+   Required:
+     workflow-path — path to the .glitch or .clj file
+
+   Options (keyword args):
+     :input          — string input available via (input)
+     :db             — SQLite db path (from store/open); nil to skip recording
+     :project        — project/workspace name for run record
+     :model          — default model name for LLM calls
+     :params         — map of parameters available via (params)/(param k)
+     :seed-steps     — map of step-id->value to pre-populate before eval
+     :workflows-dir  — directory for call-workflow resolution
+     :parent-run-id  — parent run ID for sub-workflow recording
+     :tiers          — provider tier list (overrides default-tiers)"
+  [workflow-path & {:keys [input db project model params seed-steps
+                           workflows-dir parent-run-id tiers]}]
+  (let [input  (or input "")
+        model  (or model "default")
+        params (or params {})
+        wf-dir (or workflows-dir
+                   (let [f (io/file workflow-path)]
+                     (if-let [parent (.getParent f)]
+                       parent
+                       ".")))]
+    ;; Reset core state
+    (g/reset!)
+    (g/set-input! input)
+    (g/set-params! params)
+    (g/set-workflows-dir! wf-dir)
+
+    ;; Wire provider dispatch
+    (g/set-provider-fn!
+      (fn [opts]
+        (let [pname  (or (:provider opts) "lmstudio")
+              merged (assoc opts :model (or (:model opts) model))]
+          (if tiers
+            (prov/call-tiered merged tiers)
+            (try
+              (prov/call-provider pname merged)
+              (catch Exception _
+                (prov/call-tiered merged prov/default-tiers)))))))
+
+    ;; Pre-seed steps
+    (when seed-steps
+      (doseq [[k v] seed-steps]
+        (g/step k v)))
+
+    ;; Record run in store (when db is provided)
+    (let [run-id (when db
+                   (let [rid (store/record-run db
+                               {:name          ""
+                                :input         input
+                                :workflow-file workflow-path
+                                :model         model
+                                :workspace     (or project "")
+                                :parent-run-id parent-run-id})]
+                     ;; Wire step recorder to persist every step
+                     (g/set-step-recorder!
+                       (fn [rec]
+                         (store/record-step db (assoc rec :run-id rid))))
+                     rid))
+          ;; Build SCI context and evaluate the workflow
+          ctx (make-sci-ctx)]
+      (binding [*sci-ctx* ctx]
+        (try
+          (sci/eval-string* ctx (slurp workflow-path))
+          (let [result {:name    ""
+                        :output  (g/last-output)
+                        :steps   (g/get-steps)
+                        :run-id  (or run-id 0)}]
+            (when db
+              (store/finish-run db run-id (:output result) 0))
+            result)
+          (catch Exception e
+            (when db
+              (store/finish-run db run-id (str "ERROR: " (.getMessage e)) 1))
+            (throw e)))))))
+
+;; ---------------------------------------------------------------------------
+;; list-workflows — discover workflow files in a directory
+;; ---------------------------------------------------------------------------
+
+(defn list-workflows
+  "Return a sorted vec of {:name :path} maps for .glitch and .clj files
+   found in `dir`."
+  [dir]
+  (let [d (io/file dir)]
+    (when (.exists d)
+      (->> (.listFiles d)
+           (filter #(let [n (.getName %)]
+                      (or (str/ends-with? n ".glitch")
+                          (str/ends-with? n ".clj"))))
+           (map (fn [f]
+                  (let [n       (.getName f)
+                        ext-len (if (str/ends-with? n ".glitch") 7 4)]
+                    {:name (subs n 0 (- (count n) ext-len))
+                     :path (.getPath f)})))
+           (sort-by :name)
+           vec))))

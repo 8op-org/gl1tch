@@ -1,119 +1,90 @@
-# site-gate.glitch — C.L.E.A.R. content gate
-#
-# Called by site-write.glitch. Validates generated doc content.
-# Params: slug, content, context
-#
-# C.L.E.A.R. = Clarity, Logic, Empathy, Actionability, Relevance
+;; site-gate.glitch — C.L.E.A.R. content gate
+;;
+;; Called by site-write.glitch. Validates generated doc content.
+;; Params: slug, content, context
+;;
+;; C.L.E.A.R. = Clarity, Logic, Empathy, Actionability, Relevance
 
-(import glitch/core :as g)
-(import spork/json)
-
-(g/workflow "site-gate"
+(workflow "site-gate"
   :description "C.L.E.A.R. content quality gate"
 
-  (g/step "gate-voice"
-    (g/llm
+  (step "gate-voice"
+    (llm
       :provider "copilot"
       :format "json"
-      :prompt (string ```
-        You are a documentation reviewer using the C.L.E.A.R. method.
-        Review the content below for VOICE and STRUCTURE quality.
+      :prompt (str
+        "You are a documentation reviewer using the C.L.E.A.R. method.\n"
+        "Review the content below for VOICE and STRUCTURE quality.\n\n"
+        "Evaluate these dimensions:\n\n"
+        "**C - Clarity**: Is the writing explicit and easy to follow?\n"
+        "Are examples shown before explanation? No vague hand-waving?\n\n"
+        "**L - Logic**: Does the structure make sense? Are headings\n"
+        "properly nested (## then ###)? Do cross-links use valid slugs\n"
+        "from the page list? Is there a logical flow from intro to details?\n\n"
+        "**R - Relevance**: Does the content stay on-topic for the page slug?\n"
+        "No scope creep into other pages? No internal implementation details\n"
+        "leaking through (BubbleTea, tmux, SQLite, Go types, OTel)?\n\n"
+        "**E - Empathy**: Review the content, not the writer. Frame any\n"
+        "issues as \"the content does X\" not \"you did X\".\n\n"
+        "PAGE SLUG: " (param "slug") "\n\n"
+        "CONTENT TO REVIEW:\n" (param "content") "\n\n"
+        "OUTPUT: A single JSON object, no markdown fence:\n"
+        "{\n"
+        "  \"pass\": true,\n"
+        "  \"issues\": []\n"
+        "}\n\n"
+        "If there are problems:\n"
+        "{\n"
+        "  \"pass\": false,\n"
+        "  \"issues\": [\n"
+        "    {\"category\": \"C\", \"line\": \"the problematic text\", \"fix\": \"specific actionable fix\"}\n"
+        "  ]\n"
+        "}\n\n"
+        "Only fail for real problems. Minor style preferences are not failures.")))
 
-        Evaluate these dimensions:
-
-        **C - Clarity**: Is the writing explicit and easy to follow?
-        Are examples shown before explanation? No vague hand-waving?
-
-        **L - Logic**: Does the structure make sense? Are headings
-        properly nested (## then ###)? Do cross-links use valid slugs
-        from the page list? Is there a logical flow from intro to details?
-
-        **R - Relevance**: Does the content stay on-topic for the page slug?
-        No scope creep into other pages? No internal implementation details
-        leaking through (BubbleTea, tmux, SQLite, Go types, OTel)?
-
-        **E - Empathy**: Review the content, not the writer. Frame any
-        issues as "the content does X" not "you did X".
-
-        PAGE SLUG: ``` (g/param "slug") ```
-
-        CONTENT TO REVIEW:
-        ``` (g/param "content") ```
-
-        OUTPUT: A single JSON object, no markdown fence:
-        {
-          "pass": true,
-          "issues": []
-        }
-
-        If there are problems:
-        {
-          "pass": false,
-          "issues": [
-            {"category": "C", "line": "the problematic text", "fix": "specific actionable fix"}
-          ]
-        }
-
-        Only fail for real problems. Minor style preferences are not failures.
-        ```)))
-
-  (g/step "gate-accuracy"
-    (g/llm
+  (step "gate-accuracy"
+    (llm
       :provider "copilot"
       :format "json"
-      :prompt (string ```
-        You are a documentation accuracy reviewer using the C.L.E.A.R. method.
-        Verify the content below against the real repo context.
+      :prompt (str
+        "You are a documentation accuracy reviewer using the C.L.E.A.R. method.\n"
+        "Verify the content below against the real repo context.\n\n"
+        "Evaluate these dimensions:\n\n"
+        "**L - Logic**: Does every command, flag, and code example\n"
+        "actually exist in the repo context below? Are there any\n"
+        "hallucinated features, invented flags, or made-up commands?\n\n"
+        "**A - Actionability**: For each issue found, provide a specific\n"
+        "fix with enough detail to act on immediately. Include what to\n"
+        "replace the problematic text with.\n\n"
+        "**R - Relevance**: No references to:\n"
+        "- Ollama (dropped — LM Studio is the runtime)\n"
+        "- glitch ask (decommissioned)\n"
+        "- Internal Go types or package names\n"
+        "- tmux, BubbleTea, SQLite, OTel\n\n"
+        "PAGE SLUG: " (param "slug") "\n\n"
+        "CONTENT TO REVIEW:\n" (param "content") "\n\n"
+        "REPO CONTEXT (ground truth — only features shown here are real):\n"
+        (param "context") "\n\n"
+        "OUTPUT: A single JSON object, no markdown fence:\n"
+        "{\n"
+        "  \"pass\": true,\n"
+        "  \"issues\": []\n"
+        "}\n\n"
+        "If there are problems:\n"
+        "{\n"
+        "  \"pass\": false,\n"
+        "  \"issues\": [\n"
+        "    {\"category\": \"L\", \"line\": \"glitch ask --query\", \"fix\": \"glitch ask is decommissioned -- remove this example\"}\n"
+        "  ]\n"
+        "}\n\n"
+        "Only fail for factual errors — things that are wrong, not things\n"
+        "that could be better. Style is handled by the voice gate.")))
 
-        Evaluate these dimensions:
-
-        **L - Logic**: Does every command, flag, and code example
-        actually exist in the repo context below? Are there any
-        hallucinated features, invented flags, or made-up commands?
-
-        **A - Actionability**: For each issue found, provide a specific
-        fix with enough detail to act on immediately. Include what to
-        replace the problematic text with.
-
-        **R - Relevance**: No references to:
-        - Ollama (dropped — LM Studio is the runtime)
-        - glitch ask (decommissioned)
-        - Internal Go types or package names
-        - tmux, BubbleTea, SQLite, OTel
-
-        PAGE SLUG: ``` (g/param "slug") ```
-
-        CONTENT TO REVIEW:
-        ``` (g/param "content") ```
-
-        REPO CONTEXT (ground truth — only features shown here are real):
-        ``` (g/param "context") ```
-
-        OUTPUT: A single JSON object, no markdown fence:
-        {
-          "pass": true,
-          "issues": []
-        }
-
-        If there are problems:
-        {
-          "pass": false,
-          "issues": [
-            {"category": "L", "line": "glitch ask --query", "fix": "glitch ask is decommissioned -- remove this example"}
-          ]
-        }
-
-        Only fail for factual errors — things that are wrong, not things
-        that could be better. Style is handled by the voice gate.
-        ```)))
-
-  # Merge both gate results
-  (g/step "merged"
-    (do
-      (def voice (json/decode (g/ref "gate-voice")))
-      (def accuracy (json/decode (g/ref "gate-accuracy")))
-      (def all-issues (array/concat @[]
-                        (or (voice "issues") @[])
-                        (or (accuracy "issues") @[])))
-      (def passed (and (voice "pass") (accuracy "pass")))
+  ;; Merge both gate results
+  (step "merged"
+    (let [voice (json/decode (json-extract (ref "gate-voice")))
+          accuracy (json/decode (json-extract (ref "gate-accuracy")))
+          all-issues (into [] (concat (or (get voice "issues") [])
+                                      (or (get accuracy "issues") [])))
+          passed (and (get voice "pass") (get accuracy "pass"))]
       (json/encode {"pass" passed "issues" all-issues}))))

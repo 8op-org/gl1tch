@@ -1,3 +1,0 @@
-(workflow "hello"
-  :description "A simple test workflow"
-  (step "greet" (run "echo Hello ~param.name")))

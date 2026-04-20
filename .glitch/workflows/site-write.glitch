@@ -1,22 +1,19 @@
-# site-write.glitch — create or update a doc page
-#
-# Called by site.glitch router. Not typically run directly.
-# Params: page (slug), instructions (freeform)
+;; site-write.glitch — create or update a doc page
+;;
+;; Called by site.glitch router. Not typically run directly.
+;; Params: page (slug), instructions (freeform)
 
-(import glitch/core :as g)
-(import spork/json)
-
-(g/workflow "site-write"
+(workflow "site-write"
   :description "Write or update a documentation page"
 
-  (g/step "check-existing"
-    (g/sh "bash" "-c"
-      (string "f='site/src/content/docs/" (g/param "page") ".md'; "
-              "if [ -f \"$f\" ]; then cat \"$f\"; else echo '__NEW_PAGE__'; fi")))
+  (step "check-existing"
+    (sh "bash" "-c"
+      (str "f='site/src/content/docs/" (param "page") ".md'; "
+           "if [ -f \"$f\" ]; then cat \"$f\"; else echo '__NEW_PAGE__'; fi")))
 
-  (g/step "gather-context"
-    (g/sh "bash" "-c"
-      (string
+  (step "gather-context"
+    (sh "bash" "-c"
+      (str
         "echo '=== DOC STUBS ==='; "
         "for f in docs/site/*.md; do echo \"--- $f ---\"; cat \"$f\"; echo; done 2>/dev/null; "
         "echo '=== EXAMPLES ==='; "
@@ -26,84 +23,71 @@
         "echo '=== ALL PAGE SLUGS ==='; "
         "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null")))
 
-  (g/step "existing-frontmatter"
-    (g/sh "bash" "-c"
-      (string "f='site/src/content/docs/" (g/param "page") ".md'; "
-              "if [ -f \"$f\" ]; then sed -n '/^---$/,/^---$/p' \"$f\"; else echo '__NONE__'; fi")))
+  (step "existing-frontmatter"
+    (sh "bash" "-c"
+      (str "f='site/src/content/docs/" (param "page") ".md'; "
+           "if [ -f \"$f\" ]; then sed -n '/^---$/,/^---$/p' \"$f\"; else echo '__NONE__'; fi")))
 
-  (g/step "write"
-    (g/llm
+  (step "write"
+    (llm
       :provider "copilot"
       :format "json"
-      :prompt (string ```
-        You are a technical writer for gl1tch (8op.org).
+      :prompt (str
+        "You are a technical writer for gl1tch (8op.org).\n\n"
+        "VOICE RULES:\n"
+        "- \"your\" framing throughout, never \"the user\"\n"
+        "- examples before explanation — show real code first, explain second\n"
+        "- no internal implementation details: never mention BubbleTea, tmux,\n"
+        "  SQLite, Go types, OTel, or any internal package names\n"
+        "- every code example must be real — drawn from the CONTEXT below\n"
+        "- do NOT invent commands, flags, or features\n"
+        "- no glitch ask — it has been decommissioned\n"
+        "- no Ollama — LM Studio is the local LLM runtime\n\n"
+        "TASK: " (param "instructions") "\n\n"
+        "PAGE SLUG: " (param "page") "\n\n"
+        "EXISTING CONTENT (if updating — __NEW_PAGE__ means create from scratch):\n"
+        (ref "check-existing") "\n\n"
+        "REPO CONTEXT:\n" (ref "gather-context") "\n\n"
+        "OUTPUT: A single JSON object, no markdown fence:\n"
+        "{\n"
+        "  \"title\": \"Page Title\",\n"
+        "  \"order\": 5,\n"
+        "  \"description\": \"one-line description for frontmatter\",\n"
+        "  \"content\": \"full markdown body starting with ## heading, no frontmatter\"\n"
+        "}\n\n"
+        "If updating an existing page, preserve the current title/order/description\n"
+        "from the existing frontmatter unless the instructions say otherwise.\n\n"
+        "EXISTING FRONTMATTER:\n" (ref "existing-frontmatter"))))
 
-        VOICE RULES:
-        - "your" framing throughout, never "the user"
-        - examples before explanation — show real code first, explain second
-        - no internal implementation details: never mention BubbleTea, tmux,
-          SQLite, Go types, OTel, or any internal package names
-        - every code example must be real — drawn from the CONTEXT below
-        - do NOT invent commands, flags, or features
-        - no glitch ask — it has been decommissioned
-        - no Ollama — LM Studio is the local LLM runtime
+  ;; Gate the content before saving
+  (step "gate-result"
+    (let [written (json/decode (json-extract (ref "write")))
+          result (call-workflow "site-gate"
+                   :set {"slug" (param "page")
+                         "content" (get written "content")
+                         "context" (ref "gather-context")})]
+      (get result :output)))
 
-        TASK: ``` (g/param "instructions") ```
-
-        PAGE SLUG: ``` (g/param "page") ```
-
-        EXISTING CONTENT (if updating — __NEW_PAGE__ means create from scratch):
-        ``` (g/ref "check-existing") ```
-
-        REPO CONTEXT:
-        ``` (g/ref "gather-context") ```
-
-        OUTPUT: A single JSON object, no markdown fence:
-        {
-          "title": "Page Title",
-          "order": 5,
-          "description": "one-line description for frontmatter",
-          "content": "full markdown body starting with ## heading, no frontmatter"
-        }
-
-        If updating an existing page, preserve the current title/order/description
-        from the existing frontmatter unless the instructions say otherwise.
-
-        EXISTING FRONTMATTER:
-        ``` (g/ref "existing-frontmatter") ```
-        ```)))
-
-  # Gate the content before saving
-  (g/step "gate-result"
-    (do
-      (def written (json/decode (g/ref "write")))
-      (def result (g/call-workflow "site-gate"
-                    :set {"slug" (g/param "page")
-                          "content" (written "content")
-                          "context" (g/ref "gather-context")}))
-      (result :output)))
-
-  # Save if gate passed
-  (g/step "save"
-    (do
-      (def gate-out (json/decode (g/ref "gate-result")))
-      (when (not (gate-out "pass"))
-        (error (string "Gate failed:\n"
-                       (string/join
-                         (map |(string "[" ($ "category") "] " ($ "fix"))
-                              (gate-out "issues"))
-                         "\n"))))
-      (def written (json/decode (g/ref "write")))
-      (def title (written "title"))
-      (def order (written "order"))
-      (def desc (written "description"))
-      (def content (written "content"))
-      (def frontmatter
-        (string "---\n"
-                "title: \"" title "\"\n"
-                "order: " order "\n"
-                "description: \"" desc "\"\n"
-                "---\n\n"))
-      (g/save (string "site/src/content/docs/" (g/param "page") ".md")
-              (string frontmatter content))
-      (string "Wrote " (g/param "page") ".md"))))
+  ;; Save if gate passed
+  (step "save"
+    (let [gate-out (json/decode (json-extract (ref "gate-result")))]
+      (when (not (get gate-out "pass"))
+        (throw (ex-info (str "Gate failed:\n"
+                             (str/join "\n"
+                               (map (fn [issue]
+                                      (str "[" (get issue "category") "] " (get issue "fix")))
+                                    (get gate-out "issues"))))
+                        {})))
+      (let [written (json/decode (json-extract (ref "write")))
+            title (get written "title")
+            order (get written "order")
+            desc (get written "description")
+            content (get written "content")
+            frontmatter (str "---\n"
+                             "title: \"" title "\"\n"
+                             "order: " order "\n"
+                             "description: \"" desc "\"\n"
+                             "---\n\n")]
+        (save (str "site/src/content/docs/" (param "page") ".md")
+              (str frontmatter content))
+        (str "Wrote " (param "page") ".md")))))

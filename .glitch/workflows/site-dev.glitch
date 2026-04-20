@@ -1,15 +1,13 @@
-# site-dev.glitch — start astro dev server
-#
-# Called by site.glitch router or run directly:
-#   glitch run site-dev
+;; site-dev.glitch — start astro dev server
+;;
+;; Called by site.glitch router or run directly:
+;;   glitch run site-dev
 
-(import glitch/core :as g)
-
-(g/workflow "site-dev"
+(workflow "site-dev"
   :description "Start the astro dev server"
 
-  (g/step "ensure-dirs"
-    (g/sh "bash" "-c" "mkdir -p site/generated"))
+  (step "ensure-dirs"
+    (sh "bash" "-c" "mkdir -p site/generated"))
 
-  (g/step "dev"
-    (g/sh "bash" "-c" "cd site && npx astro dev --port 4322")))
+  (step "dev"
+    (sh "bash" "-c" "cd site && npx astro dev --port 4322")))
