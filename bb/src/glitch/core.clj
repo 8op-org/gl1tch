@@ -126,10 +126,12 @@
 (def step _step)
 
 (defn sh [& args]
-  (let [result (apply bp/shell {:out :string :err :string :continue true} args)]
+  (let [cmd    (str/join " " args)
+        result (bp/shell {:out :string :err :string :continue true}
+                         "bash" "-c" cmd)]
     (when (not= 0 (:exit result))
       (throw (ex-info (str "sh: command failed (exit " (:exit result) "): " (:err result))
-                      {:cmd (str/join " " args) :exit (:exit result) :err (:err result)})))
+                      {:cmd cmd :exit (:exit result) :err (:err result)})))
     (str/trim (:out result))))
 
 (defn save [path content]

@@ -8,9 +8,12 @@
                      (str "#!/usr/bin/env bb\n" (slurp "build/glitch")))
                    (babashka.fs/move "build/glitch.tmp" "build/glitch" {:replace-existing true})
                    (shell "chmod +x build/glitch"))}
-  install {:doc "Install glitch to /usr/local/bin"
+  install {:doc "Install glitch to ~/.local/bin"
            :depends [build]
-           :task (do (shell "cp build/glitch /usr/local/bin/glitch")
+           :task (do (let [bin-dir (str (System/getProperty "user.home") "/.local/bin")]
+                       (babashka.fs/create-dirs bin-dir)
+                       (babashka.fs/copy "build/glitch" (str bin-dir "/glitch")
+                         {:replace-existing true}))
                      (babashka.fs/create-dirs
                        (str (System/getProperty "user.home") "/.config/glitch/providers"))
                      (doseq [f (babashka.fs/glob "providers" "*.clj")]

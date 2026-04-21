@@ -4,7 +4,9 @@
   (:require [babashka.nrepl.server :as nrepl]
             [clojure.java.io :as io]
             [glitch.core :as g]
-            [glitch.provider :as prov]))
+            [glitch.provider :as prov]
+            [glitch.plugin :as plugin]
+            [glitch.plugin-loader :as plugin-loader]))
 
 (defn port-file-path
   "Return the .nrepl-port file path for a directory."
@@ -19,6 +21,15 @@
   [{:keys [port dir] :or {port 1667
                            dir (System/getProperty "user.dir")}}]
   (prov/load-providers)
+  (plugin-loader/load-plugins)
+
+  ;; Inject plugin commands as real namespaces for nREPL use
+  (doseq [[pname pmap] (plugin/all-plugins)]
+    (let [ns-sym (symbol pname)]
+      (create-ns ns-sym)
+      (doseq [[cmd-name cmd] (:commands pmap)]
+        (intern ns-sym (symbol cmd-name)
+                (fn [& {:as opts}] ((:fn cmd) opts))))))
 
   (g/set-provider-fn!
     (fn [opts]

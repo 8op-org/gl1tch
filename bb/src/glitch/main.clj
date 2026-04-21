@@ -2,6 +2,8 @@
   (:require [glitch.runner :as runner]
             [glitch.store :as store]
             [glitch.provider :as prov]
+            [glitch.plugin :as plugin]
+            [glitch.plugin-loader :as plugin-loader]
             [clojure.string :as str]
             [clojure.java.io :as io]))
 
@@ -151,18 +153,85 @@
       (System/exit 1))
     (println "all tools available")))
 
+(defn- args-meta->valid-opts
+  "Convert a command's :args metadata into the valid-opts format for parse-args.
+   {:name \"repo\" :required true} -> {:repo {:kind :option}}
+   {:name \"verbose\" :type :flag} -> {:verbose {:kind :flag}}"
+  [args-meta]
+  (reduce (fn [m arg]
+            (let [k    (keyword (:name arg))
+                  kind (if (= :flag (:type arg)) :flag :option)]
+              (assoc m k {:kind kind})))
+          {} (or args-meta [])))
+
+(defn- run-plugin-command
+  "Look up and run a plugin command. plugin-name is the plugin, cmd-name is the
+   command within it, and cmd-args are the remaining CLI args to parse."
+  [plugin-name cmd-name cmd-args]
+  (let [cmd-map (plugin/lookup plugin-name cmd-name)]
+    (when-not cmd-map
+      (let [cmds (plugin/commands plugin-name)]
+        (if cmds
+          (do (println (str "error: unknown command '" cmd-name
+                            "' for plugin '" plugin-name "'"))
+              (println "available commands:")
+              (doseq [c (sort (keys cmds))]
+                (let [desc (get-in cmds [c :description] "")]
+                  (println (str "  " c (when-not (str/blank? desc)
+                                         (str "  - " desc))))))
+              (System/exit 1))
+          (do (println (str "error: plugin '" plugin-name "' not found"))
+              (System/exit 1)))))
+    (let [valid-opts  (args-meta->valid-opts (:args cmd-map))
+          {:keys [opts]} (parse-args cmd-args valid-opts)
+          result      ((:fn cmd-map) opts)]
+      (when result
+        (if (string? result)
+          (println result)
+          (prn result))))))
+
 (defn- cmd-plugin [args]
-  (let [name (first args)]
-    (when-not name
-      (println "Usage: glitch plugin <name> [args...]")
-      (System/exit 1))
-    (let [home (System/getProperty "user.home")
-          path (str home "/.config/glitch/plugins/" name "/main.clj")
-          f    (io/file path)]
-      (if (.exists f)
-        (load-file path)
-        (do (println (str "error: plugin not found: " path))
-            (System/exit 1))))))
+  (plugin-loader/load-plugins)
+  (let [sub (first args)]
+    (cond
+      ;; glitch plugin list
+      (= sub "list")
+      (let [plugins (plugin/all-plugins)]
+        (if (empty? plugins)
+          (println "no plugins registered")
+          (doseq [[pname pmap] (sort-by key plugins)]
+            (println (str "  " pname))
+            (doseq [[cname cmap] (sort-by key (:commands pmap))]
+              (let [desc (:description cmap "")]
+                (println (str "    " cname
+                              (when-not (str/blank? desc)
+                                (str "  - " desc)))))))))
+
+      ;; glitch plugin <name> <cmd> [args...]
+      sub
+      (let [plugin-name sub
+            cmd-name    (second args)
+            cmd-args    (drop 2 args)]
+        (when-not cmd-name
+          (let [cmds (plugin/commands plugin-name)]
+            (if cmds
+              (do (println (str "plugin: " plugin-name))
+                  (println "commands:")
+                  (doseq [[cname cmap] (sort-by key cmds)]
+                    (let [desc (:description cmap "")]
+                      (println (str "  " cname
+                                    (when-not (str/blank? desc)
+                                      (str "  - " desc))))))
+                  (System/exit 0))
+              (do (println (str "error: plugin '" plugin-name "' not found"))
+                  (System/exit 1)))))
+        (run-plugin-command plugin-name cmd-name (vec cmd-args)))
+
+      ;; glitch plugin (no args)
+      :else
+      (do (println "Usage: glitch plugin <name> <command> [args...]")
+          (println "       glitch plugin list")
+          (System/exit 1)))))
 
 (defn- cmd-repl [args]
   (let [{:keys [opts]} (parse-args args {:port {:short "p" :kind :option}})
@@ -175,21 +244,52 @@
 ;; ---------------------------------------------------------------------------
 
 (defn -main [& args]
-  (let [cmd       (first args)
-        rest-args (rest args)]
-    (case cmd
-      "run"     (cmd-run rest-args)
-      "check"   (cmd-check rest-args)
-      "eval"    (cmd-eval rest-args)
-      "up"      (cmd-up)
-      "version" (println "glitch 0.3.0-bb")
-      "plugin"  (cmd-plugin rest-args)
-      "repl"    (cmd-repl rest-args)
-      "mcp"     (do
-                  (require '[glitch.mcp :as mcp])
-                  ((resolve 'glitch.mcp/start) {}))
+  ;; Load plugins once before dispatch so plugin names are available
+  (plugin-loader/load-plugins)
+  (let [cmd          (first args)
+        rest-args    (rest args)
+        plugin-names (set (plugin-loader/plugin-names))]
+    (cond
+      ;; Built-in commands
+      (= cmd "run")     (cmd-run rest-args)
+      (= cmd "check")   (cmd-check rest-args)
+      (= cmd "eval")    (cmd-eval rest-args)
+      (= cmd "up")      (cmd-up)
+      (= cmd "version") (println "glitch 0.3.0")
+      (= cmd "plugin")  (cmd-plugin rest-args)
+      (= cmd "repl")    (cmd-repl rest-args)
+      (= cmd "mcp")     (do
+                           (require '[glitch.mcp :as mcp])
+                           ((resolve 'glitch.mcp/start) {}))
+
+      ;; Plugin name as top-level command: glitch github fetch-issue ...
+      (and cmd (contains? plugin-names cmd))
+      (let [plugin-name cmd
+            cmd-name    (first rest-args)
+            cmd-args    (vec (rest rest-args))]
+        (if cmd-name
+          (run-plugin-command plugin-name cmd-name cmd-args)
+          ;; Just the plugin name — show its commands
+          (let [cmds (plugin/commands plugin-name)]
+            (println (str "plugin: " plugin-name))
+            (println "commands:")
+            (doseq [[cname cmap] (sort-by key cmds)]
+              (let [desc (:description cmap "")]
+                (println (str "  " cname
+                              (when-not (str/blank? desc)
+                                (str "  - " desc))))))
+            (System/exit 0))))
+
+      ;; Help / unknown command
+      :else
       (do (println "glitch - workflow engine (babashka)")
           (println)
+          (println "built-in commands:")
           (doseq [c (sort ["check" "eval" "mcp" "plugin" "repl" "run" "up" "version"])]
             (println (str "  " c)))
+          (when (seq plugin-names)
+            (println)
+            (println "plugins:")
+            (doseq [p (sort plugin-names)]
+              (println (str "  " p))))
           (when-not cmd (System/exit 1))))))

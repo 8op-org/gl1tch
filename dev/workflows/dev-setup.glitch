@@ -15,9 +15,9 @@
 
   (step "check-openrouter"
     (run ```
-      source ~/.env 2>/dev/null
+      source $HOME/.env 2>/dev/null
       if [ -z "$OPENROUTER_API_KEY" ]; then
-        echo "FAIL: OPENROUTER_API_KEY not set in ~/.env"
+        echo "FAIL: OPENROUTER_API_KEY not set"
       else
         echo "OK: OPENROUTER_API_KEY set (${#OPENROUTER_API_KEY} chars)"
       fi
@@ -38,7 +38,7 @@
       ```))
 
   (step "check-glitch"
-    (run "glitch --version 2>&1 | head -1 || echo 'FAIL: glitch not installed'"))
+    (run "glitch version 2>&1 | head -1 || echo 'FAIL: glitch not installed'"))
 
   (step "summary"
     (run ```

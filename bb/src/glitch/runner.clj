@@ -5,12 +5,50 @@
             [glitch.graph :as graph]
             [glitch.store :as store]
             [glitch.provider :as prov]
+            [glitch.plugin :as plugin]
             [glitch.tool_loop]
             [babashka.process :as bp]
             [sci.core :as sci]
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.java.io :as io]))
+
+;; ---------------------------------------------------------------------------
+;; Preprocessor — converts triple-backtick blocks into (str ...) forms
+;; so that arbitrary shell/prompt text is treated as strings, not code.
+;; ~(ref "name") inside a block becomes string interpolation.
+;; ---------------------------------------------------------------------------
+
+(defn- escape-for-str
+  "Escape a raw text fragment so it is valid inside a Clojure string literal."
+  [s]
+  (-> s
+      (str/replace "\\" "\\\\")
+      (str/replace "\"" "\\\"")))
+
+(defn- preprocess-backtick-strings
+  "Replace ```...``` blocks with (str ...) forms.  Splits on ~(ref \"...\")
+   and ~(param \"...\") so those become live interpolation calls."
+  [source]
+  (let [pattern #"```([\s\S]*?)```"]
+    (str/replace source pattern
+      (fn [[_ body]]
+        (let [body (if (str/starts-with? body "\n")
+                     (subs body 1) body)
+              parts (str/split body #"~(?=\()")
+              exprs (mapv (fn [part]
+                            (if (str/starts-with? part "(")
+                              (let [idx (str/index-of part ")")]
+                                (if idx
+                                  (let [call (subs part 0 (inc idx))
+                                        rest-s (subs part (inc idx))]
+                                    (if (str/blank? rest-s)
+                                      call
+                                      (str call " \"" (escape-for-str rest-s) "\"")))
+                                  (str "\"" (escape-for-str part) "\"")))
+                              (str "\"" (escape-for-str part) "\"")))
+                          parts)]
+          (str "(str " (str/join " " exprs) ")"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; SCI macro source — evaled into SCI context before each workflow run.
@@ -129,7 +167,7 @@
                 g/*params*         (atom (merge @g/*params* (or set {})))
                 g/*step-recorder*  (atom saved-rec)
                 g/*provider-fn*    (atom saved-prov)]
-        (sci/eval-string* *sci-ctx* (slurp path))
+        (sci/eval-string* *sci-ctx* (preprocess-backtick-strings (slurp path)))
         {:output (g/last-output) :steps @g/*steps*}))
     (finally
       (swap! g/*call-stack* (comp vec pop)))))
@@ -146,6 +184,7 @@
                  'params         g/params
                  'param          g/param
                  'sh             g/sh
+                 'run            g/sh
                  'save           g/save
                  'read-file      g/read-file
                  'write-file     g/write-file
@@ -198,6 +237,13 @@
                  'swap!          swap!
                  'reset!         reset!
 
+                 ;; plugin lookup (legacy form)
+                 'plugin         (fn [pname cmd & {:as opts}]
+                                   (if-let [c (plugin/lookup pname cmd)]
+                                     ((:fn c) opts)
+                                     (throw (ex-info (str "plugin command not found: "
+                                                          pname "/" cmd) {}))))
+
                  ;; common utils
                  'slurp          slurp
                  'spit           spit
@@ -209,41 +255,58 @@
                  'ex-info        ex-info
                  'ex-message     ex-message
                  'ex-data        ex-data}
+        ;; Build SCI namespaces for each registered plugin
+        plugin-nss (reduce-kv
+                     (fn [acc pname pmap]
+                       (let [sym-ns (symbol pname)
+                             cmds   (:commands pmap)
+                             ns-map (reduce-kv
+                                      (fn [m cmd-name cmd]
+                                        (assoc m (symbol cmd-name)
+                                               (fn [& {:as opts}]
+                                                 ((:fn cmd) opts))))
+                                      {}
+                                      cmds)]
+                         (assoc acc sym-ns ns-map)))
+                     {}
+                     (plugin/all-plugins))
         ctx     (sci/init
                   {:namespaces
-                   {'user user-ns
-                    'str  str-ns
-                    'json {'decode         json/parse-string
-                           'encode         json/generate-string
-                           'parse-string   json/parse-string
-                           'generate-string json/generate-string}
-                    'glitch.core
-                    {'_step           g/_step
-                     'step            g/_step
-                     'trace           g/trace
-                     '*step-recorder* g/*step-recorder*
-                     '*provider-fn*   g/*provider-fn*
-                     '*steps*         g/*steps*
-                     '*step-order*    g/*step-order*
-                     '*input*         g/*input*
-                     '*params*        g/*params*
-                     '*call-stack*    g/*call-stack*
-                     '*workflows-dir* g/*workflows-dir*
-                     '*graph*         g/*graph*}
-                    'glitch.graph
-                    {'make-graph         graph/make-graph
-                     'set-goal!          graph/set-goal!
-                     'add-fact!          graph/add-fact!
-                     'add-edge!          graph/add-edge!
-                     'contradict!        graph/contradict!
-                     'corroborate!       graph/corroborate!
-                     'approve!           graph/approve!
-                     'shortest-path      graph/shortest-path
-                     'confidence-gap     graph/confidence-gap
-                     'reachable?         graph/reachable?
-                     'suggest-next       graph/suggest-next
-                     'graph-stats        graph/graph-stats
-                     'efficiency-metrics graph/efficiency-metrics}}
+                   (merge
+                    {'user user-ns
+                     'str  str-ns
+                     'json {'decode         json/parse-string
+                            'encode         json/generate-string
+                            'parse-string   json/parse-string
+                            'generate-string json/generate-string}
+                     'glitch.core
+                     {'_step           g/_step
+                      'step            g/_step
+                      'trace           g/trace
+                      '*step-recorder* g/*step-recorder*
+                      '*provider-fn*   g/*provider-fn*
+                      '*steps*         g/*steps*
+                      '*step-order*    g/*step-order*
+                      '*input*         g/*input*
+                      '*params*        g/*params*
+                      '*call-stack*    g/*call-stack*
+                      '*workflows-dir* g/*workflows-dir*
+                      '*graph*         g/*graph*}
+                     'glitch.graph
+                     {'make-graph         graph/make-graph
+                      'set-goal!          graph/set-goal!
+                      'add-fact!          graph/add-fact!
+                      'add-edge!          graph/add-edge!
+                      'contradict!        graph/contradict!
+                      'corroborate!       graph/corroborate!
+                      'approve!           graph/approve!
+                      'shortest-path      graph/shortest-path
+                      'confidence-gap     graph/confidence-gap
+                      'reachable?         graph/reachable?
+                      'suggest-next       graph/suggest-next
+                      'graph-stats        graph/graph-stats
+                      'efficiency-metrics graph/efficiency-metrics}}
+                    plugin-nss)
                    :classes
                    {'System  System
                     'Math    Math
@@ -340,7 +403,7 @@
           ctx (make-sci-ctx)]
       (binding [*sci-ctx* ctx]
         (try
-          (sci/eval-string* ctx (slurp workflow-path))
+          (sci/eval-string* ctx (preprocess-backtick-strings (slurp workflow-path)))
           (let [result {:name    ""
                         :output  (g/last-output)
                         :steps   (g/get-steps)
