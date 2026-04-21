@@ -351,18 +351,50 @@
                              (validate-schema parsed schema))
                 valid?     (nil? violations)]
             (if valid?
-              ;; Schema valid — record and return
-              (do
-                (when-let [recorder @*step-recorder*]
-                  (recorder {:step-id sid :prompt current-prompt
-                             :output response :model (or model "")
-                             :duration (Math/round elapsed) :kind "llm"
-                             :tokens-in (or (:tokens-in result) 0)
-                             :tokens-out (or (:tokens-out result) 0)
-                             :artifacts (json/generate-string {:schema_valid true})
-                             :confidence (when (contains? parsed "confidence")
-                                           (get parsed "confidence"))}))
-                response)
+              ;; Schema passed — check confidence
+              (let [conf-val    (when (contains? parsed "confidence")
+                                  (get parsed "confidence"))
+                    threshold   (cond
+                                  min-confidence min-confidence
+                                  (and (some #{"confidence"} (:required schema))
+                                       (nil? min-confidence))
+                                  0.7
+                                  :else nil)
+                    conf-ok?    (or (nil? threshold)
+                                   (nil? conf-val)
+                                   (>= conf-val threshold))]
+                (if conf-ok?
+                  ;; All good — record and return
+                  (do
+                    (when-let [recorder @*step-recorder*]
+                      (recorder {:step-id sid :prompt current-prompt
+                                 :output response :model (or model "")
+                                 :duration (Math/round elapsed) :kind "llm"
+                                 :tokens-in (or (:tokens-in result) 0)
+                                 :tokens-out (or (:tokens-out result) 0)
+                                 :artifacts (json/generate-string {:schema_valid true})
+                                 :confidence conf-val}))
+                    response)
+                  ;; Confidence too low — retry or throw
+                  (if (< attempt max-retries)
+                    (recur (inc attempt)
+                           (str current-prompt "\n\nYour confidence was " conf-val
+                                ", which is below the required " threshold
+                                ". Think harder and be more specific."))
+                    (do
+                      (when-let [recorder @*step-recorder*]
+                        (recorder {:step-id sid :prompt current-prompt
+                                   :output response :model (or model "")
+                                   :duration (Math/round elapsed) :kind "llm"
+                                   :tokens-in (or (:tokens-in result) 0)
+                                   :tokens-out (or (:tokens-out result) 0)
+                                   :artifacts (json/generate-string
+                                                {:schema_valid true :low_confidence true})
+                                   :confidence conf-val}))
+                      (throw (ex-info (str "low-confidence: " conf-val " < " threshold)
+                                      {:kind :low-confidence
+                                       :confidence conf-val
+                                       :min threshold}))))))
               ;; Schema invalid — retry or throw
               (if (< attempt max-retries)
                 (recur (inc attempt)

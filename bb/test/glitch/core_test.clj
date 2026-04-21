@@ -439,3 +439,74 @@
       (core/llm :prompt "pick" :schema {:required ["action"]} :step-id "test-llm")
       (let [last-rec (last @recorded)]
         (is (re-find #"schema_valid" (or (:artifacts last-rec) "")))))))
+
+;; --- llm confidence scoring ---
+
+(deftest llm-confidence-passes-test
+  (testing "llm with confidence above threshold passes"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"label\": \"bug\", \"confidence\": 0.9}"
+         :tokens-in 1 :tokens-out 1}))
+    (let [result (core/llm :prompt "classify"
+                           :schema {:required ["label" "confidence"]
+                                    :types {"label" :string "confidence" :number}}
+                           :min-confidence 0.7)]
+      (is (re-find #"bug" result)))))
+
+(deftest llm-confidence-retries-test
+  (testing "llm retries when confidence is below threshold"
+    (let [calls (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! calls inc)
+          (if (= 1 @calls)
+            {:response "{\"label\": \"bug\", \"confidence\": 0.3}" :tokens-in 1 :tokens-out 1}
+            {:response "{\"label\": \"bug\", \"confidence\": 0.9}" :tokens-in 1 :tokens-out 1})))
+      (core/llm :prompt "classify"
+                :schema {:required ["label" "confidence"]
+                         :types {"label" :string "confidence" :number}}
+                :min-confidence 0.7
+                :retries 2)
+      (is (= 2 @calls)))))
+
+(deftest llm-confidence-exhausted-test
+  (testing "llm throws when confidence stays low after retries"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"label\": \"bug\", \"confidence\": 0.2}"
+         :tokens-in 1 :tokens-out 1}))
+    (is (thrown-with-msg? Exception #"low-confidence"
+           (core/llm :prompt "classify"
+                     :schema {:required ["label" "confidence"]
+                              :types {"label" :string "confidence" :number}}
+                     :min-confidence 0.7
+                     :retries 1)))))
+
+(deftest llm-confidence-default-threshold-test
+  (testing "default 0.7 threshold when schema requires confidence"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"label\": \"bug\", \"confidence\": 0.4}"
+         :tokens-in 1 :tokens-out 1}))
+    (is (thrown-with-msg? Exception #"low-confidence"
+           (core/llm :prompt "classify"
+                     :schema {:required ["label" "confidence"]
+                              :types {"label" :string "confidence" :number}}
+                     :retries 0)))))
+
+(deftest llm-confidence-records-value-test
+  (testing "llm records confidence in step-recorder"
+    (let [recorded (atom [])]
+      (core/set-provider-fn!
+        (fn [opts]
+          {:response "{\"label\": \"bug\", \"confidence\": 0.85}"
+           :tokens-in 1 :tokens-out 1}))
+      (core/set-step-recorder! (fn [m] (swap! recorded conj m)))
+      (core/llm :prompt "classify"
+                :schema {:required ["label" "confidence"]
+                         :types {"label" :string "confidence" :number}}
+                :min-confidence 0.5
+                :step-id "conf-test")
+      (let [last-rec (last @recorded)]
+        (is (= 0.85 (:confidence last-rec)))))))
