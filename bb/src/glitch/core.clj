@@ -2,7 +2,8 @@
   (:require [babashka.process :as bp]
             [clojure.string :as str]
             [clojure.java.io :as io]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [glitch.confidence :as conf]))
 
 ;; --- Workflow state — dynamic vars holding atoms ---
 ;; Atoms inside dynamic vars give us both rebindable scope (for call-workflow)
@@ -329,7 +330,7 @@
 ;; --- LLM invocation ---
 
 (defn llm [& {:keys [prompt model provider skill step-id schema retries
-                      min-confidence tools agentic max-rounds] :as opts}]
+                      min-confidence tools agentic max-rounds domain-check] :as opts}]
   (when-not @*provider-fn*
     (throw (ex-info "llm: no provider function set — call set-provider-fn! first" {})))
   (let [full-prompt (if skill
@@ -352,8 +353,14 @@
                 valid?     (nil? violations)]
             (if valid?
               ;; Schema passed — check confidence
-              (let [conf-val    (when (contains? parsed "confidence")
+              (let [raw-conf    (when (contains? parsed "confidence")
                                   (get parsed "confidence"))
+                    ;; Apply domain-relevance adjustment when domain-check is on
+                    conf-val    (if (and domain-check raw-conf)
+                                  (conf/domain-relevance raw-conf
+                                                         current-prompt
+                                                         (str response))
+                                  raw-conf)
                     threshold   (cond
                                   min-confidence min-confidence
                                   (and (some #{"confidence"} (:required schema))
@@ -479,15 +486,26 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
 
 (defn consensus
   "Run the same prompt through multiple providers and compare responses.
-   Returns a JSON string with {agreed, value, votes}.
-   Options: :prompt (required), :schema, :compare-key, :model, :min-confidence"
-  [providers & {:keys [prompt schema compare-key model min-confidence]}]
+   Returns a JSON string with {agreed, value, votes, confidence, winner}.
+   Options: :prompt (required), :schema, :compare-key, :model, :min-confidence,
+            :authority (map of provider->weight override),
+            :compare-mode (:exact or :semantic — auto-detects TEI when nil)"
+  [providers & {:keys [prompt schema compare-key model min-confidence
+                        authority compare-mode]}]
   (when (< (count providers) 2)
     (throw (ex-info "consensus requires minimum 2 providers" {:providers providers})))
   (let [cmp-key  (or compare-key (first (:required schema)))
         _        (when-not cmp-key
                    (throw (ex-info "consensus requires :compare-key or :schema with :required"
                                    {:providers providers})))
+        ;; Merge user authority overrides with defaults
+        auth-map (merge conf/default-authority authority)
+        ;; Determine compare mode — auto-probe TEI when not specified
+        use-semantic (cond
+                       (= compare-mode :semantic) true
+                       (= compare-mode :exact)    false
+                       :else (some? (conf/embed "probe")))
+        ;; Collect votes from providers
         votes    (reduce
                    (fn [acc pname]
                      (try
@@ -497,31 +515,58 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                              extracted (json-extract (:response response))
                              parsed    (try (json/parse-string extracted) (catch Exception _ nil))
                              violations (when (and schema parsed)
-                                          (validate-schema parsed schema))]
+                                          (validate-schema parsed schema))
+                             auth     (get auth-map pname (conf/provider-authority pname))]
                          (if (and parsed (nil? violations))
-                           (conj acc {:provider pname :response parsed})
+                           (conj acc {:provider pname
+                                      :response parsed
+                                      :authority auth
+                                      :quality (conf/quality-score auth (str (get parsed cmp-key)))})
                            acc))
                        (catch Exception _
                          acc)))
                    []
                    providers)
-        values   (when cmp-key
-                   (map #(-> % :response (get cmp-key)
-                             str str/lower-case str/trim)
-                        votes))
-        agreed   (and (>= (count votes) 2)
-                      (apply = values))
-        result   {"agreed" agreed
-                  "value"  (when agreed (:response (first votes)))
-                  "votes"  (mapv (fn [v] {"provider" (:provider v)
-                                          "response" (:response v)})
-                                 votes)}
-        confidence (if (empty? votes) 0.0
-                     (/ (count (filter #(= (first values)
-                                           (-> % :response (get cmp-key)
-                                               str str/lower-case str/trim))
-                                       votes))
-                        (double (count votes))))]
+        ;; Compare values — either exact string or semantic cosine
+        cmp-vals (mapv #(-> % :response (get cmp-key) str str/lower-case str/trim) votes)
+        ;; For semantic mode, embed compare-key values
+        embeddings (when (and use-semantic (>= (count votes) 2))
+                     (mapv #(conf/embed (-> % :response (get cmp-key) str)) votes))
+        ;; Compute pairwise similarity (use first vote as reference)
+        similarities (when (and embeddings (every? some? embeddings))
+                       (mapv #(conf/cosine-similarity (first embeddings) %) embeddings))
+        ;; Agreement check
+        agreed   (if (and similarities (>= (count similarities) 2))
+                   ;; Semantic: all similarities >= 0.85
+                   (every? #(>= % 0.85) similarities)
+                   ;; Exact: all string values equal
+                   (and (>= (count votes) 2)
+                        (apply = cmp-vals)))
+        ;; Bayesian confidence using per-provider authorities
+        authorities (mapv :authority votes)
+        ;; Base confidence is the fraction of agreeing votes (for Bayesian input)
+        majority-val (when (seq cmp-vals) (first cmp-vals))
+        agree-count  (count (filter #(= majority-val %) cmp-vals))
+        base-conf    (if (empty? votes) 0.0
+                       (/ (double agree-count) (count votes)))
+        confidence   (if (empty? votes) 0.0
+                       (conf/bayesian-combine authorities base-conf))
+        ;; Pick winner by highest quality-score
+        winner   (when (seq votes)
+                   (apply max-key :quality votes))
+        result   {"agreed"     agreed
+                  "value"      (when agreed (:response (first votes)))
+                  "confidence" confidence
+                  "similarity" (when similarities (apply min similarities))
+                  "winner"     (when (and (not agreed) winner)
+                                 {"provider" (:provider winner)
+                                  "response" (:response winner)})
+                  "votes"      (mapv (fn [v]
+                                       {"provider"  (:provider v)
+                                        "response"  (:response v)
+                                        "authority" (:authority v)
+                                        "quality"   (:quality v)})
+                                     votes)}]
     (when-let [recorder @*step-recorder*]
       (recorder {:step-id "consensus"
                  :kind "consensus"
@@ -530,3 +575,44 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                  :confidence confidence
                  :artifacts (json/generate-string {:votes (get result "votes")})}))
     (json/generate-string result)))
+
+;; --- Composite score ---
+
+(defn composite-score
+  "Compute a weighted harmonic mean over a step's recorded gate results.
+   Reads from *steps* and step-recorder state. Looks for gates named
+   'confidence:<id>', 'grounded:<id>', 'validate:<id>', 'contract:<id>'.
+   Options:
+     :weights — map of gate-kind to weight (default all 1.0)
+   Returns the score as a string."
+  [step-id & {:keys [weights]}]
+  (let [default-weights {"confidence" 1.0
+                         "grounded"   1.0
+                         "validate"   1.0
+                         "contract"   1.0}
+        w          (merge default-weights weights)
+        steps      @*steps*
+        ;; Look for gate results in steps map
+        conf-key   (str "confidence:" step-id)
+        ground-key (str "grounded:" step-id)
+        valid-key  (str "validate:" step-id)
+        contract-key (str "contract:" step-id)
+        ;; Parse gate values — "true"=1.0, "false"=0.0, numeric string, or nil
+        parse-gate (fn [k]
+                     (when-let [v (get steps k)]
+                       (cond
+                         (= v "true")  1.0
+                         (= v "false") 0.0
+                         :else (try (Double/parseDouble v)
+                                    (catch Exception _ nil)))))
+        pairs    (filterv some?
+                   [(when-let [v (parse-gate conf-key)]
+                      [(get w "confidence" 1.0) v])
+                    (when-let [v (parse-gate ground-key)]
+                      [(get w "grounded" 1.0) v])
+                    (when-let [v (parse-gate valid-key)]
+                      [(get w "validate" 1.0) v])
+                    (when-let [v (parse-gate contract-key)]
+                      [(get w "contract" 1.0) v])])
+        score    (conf/harmonic-mean pairs)]
+    (str score)))

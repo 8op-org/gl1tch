@@ -2,6 +2,7 @@
   "Entry point for `bb test` — discovers and runs all test namespaces."
   (:require [clojure.test :as t]
             [glitch.core-test]
+            [glitch.confidence-test]
             [glitch.provider-test]
             [glitch.store-test]
             [glitch.runner-test]
@@ -10,6 +11,7 @@
 (defn -main [& _]
   (let [results (mapv #(t/run-tests %)
                   ['glitch.core-test
+                   'glitch.confidence-test
                    'glitch.provider-test
                    'glitch.store-test
                    'glitch.runner-test

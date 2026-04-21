@@ -1,6 +1,7 @@
 (ns glitch.core-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [glitch.core :as core]
+            [glitch.confidence :as conf]
             [cheshire.core :as json]))
 
 ;; Reset state before each test
@@ -664,3 +665,114 @@
     (core/set-provider-fn! (fn [_] {:response "{}" :tokens-in 0 :tokens-out 0}))
     (is (thrown-with-msg? Exception #"requires :compare-key"
            (core/consensus ["p1" "p2"] :prompt "test")))))
+
+;; --- consensus with authority weighting ---
+
+(deftest consensus-authority-weighting-test
+  (testing "Bayesian confidence is higher than simple ratio when providers agree"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          {:response "{\"decision\": \"deploy\"}" :tokens-in 1 :tokens-out 1}))
+      (let [result-str (core/consensus ["copilot" "openrouter"]
+                         :prompt "deploy?"
+                         :schema {:required ["decision"]}
+                         :compare-key "decision"
+                         :compare-mode :exact)
+            result (json/parse-string result-str)]
+        (is (true? (get result "agreed")))
+        ;; Bayesian combine with high-authority providers and base-conf=1.0
+        ;; should be > simple 2/2 = 1.0 ... well it'll be close to 1.0
+        ;; Both agree so base-conf = 1.0, bayesian = 1 - (1-0.9)(1-0.85) = 0.985
+        (is (> (get result "confidence") 0.9))
+        ;; Each vote should have authority and quality fields
+        (let [votes (get result "votes")]
+          (is (number? (get (first votes) "authority")))
+          (is (number? (get (first votes) "quality"))))))))
+
+(deftest consensus-quality-tiebreaker-test
+  (testing "disagreeing providers — winner picked by highest quality"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          (if (= 1 @call-count)
+            ;; copilot: high authority, short response
+            {:response "{\"decision\": \"deploy\"}" :tokens-in 1 :tokens-out 1}
+            ;; lmstudio: lower authority, also short
+            {:response "{\"decision\": \"hold\"}" :tokens-in 1 :tokens-out 1})))
+      (let [result-str (core/consensus ["copilot" "lmstudio"]
+                         :prompt "deploy?"
+                         :schema {:required ["decision"]}
+                         :compare-key "decision"
+                         :compare-mode :exact)
+            result (json/parse-string result-str)]
+        (is (false? (get result "agreed")))
+        ;; Winner should be copilot (higher authority -> higher quality)
+        (is (some? (get result "winner")))
+        (is (= "copilot" (get-in result ["winner" "provider"])))))))
+
+;; --- composite-score ---
+
+(deftest composite-score-test
+  (testing "composite score computes harmonic mean over gate results"
+    ;; Simulate gate results in steps
+    (core/step "confidence:my-step" "0.9")
+    (core/step "grounded:my-step" "true")   ;; -> 1.0
+    (core/step "validate:my-step" "true")   ;; -> 1.0
+    (let [result (core/composite-score "my-step")
+          score  (Double/parseDouble result)]
+      ;; harmonic-mean of [[1.0 0.9] [1.0 1.0] [1.0 1.0]] ≈ 0.966
+      (is (> score 0.9))
+      (is (<= score 1.0)))))
+
+(deftest composite-score-empty-test
+  (testing "composite score with no gates returns 0.0"
+    (let [result (core/composite-score "nonexistent")]
+      (is (= "0.0" result)))))
+
+(deftest composite-score-custom-weights-test
+  (testing "composite score respects custom weights"
+    (core/step "confidence:weighted" "0.5")
+    (core/step "grounded:weighted" "true")
+    (let [default-result (Double/parseDouble (core/composite-score "weighted"))
+          heavy-conf     (Double/parseDouble
+                           (core/composite-score "weighted"
+                             :weights {"confidence" 3.0 "grounded" 1.0}))]
+      ;; With heavy weight on confidence (0.5), the score should be pulled down
+      (is (< heavy-conf default-result)))))
+
+;; --- domain-check in llm ---
+
+(deftest llm-domain-check-on-topic-test
+  (testing "domain-check preserves confidence when response is on-topic"
+    (core/set-provider-fn!
+      (fn [opts]
+        ;; Response uses same keywords as prompt
+        {:response "{\"label\": \"deploy\", \"confidence\": 0.8}"
+         :tokens-in 1 :tokens-out 1}))
+    ;; prompt says "deploy" and response says "deploy" — on topic
+    (let [result (core/llm :prompt "classify deploy action"
+                           :schema {:required ["label" "confidence"]
+                                    :types {"label" :string "confidence" :number}}
+                           :min-confidence 0.5
+                           :domain-check true)]
+      ;; Should pass — domain relevance shouldn't drop it below 0.5
+      (is (some? result)))))
+
+(deftest llm-domain-check-off-topic-test
+  (testing "domain-check penalizes confidence when response is off-topic"
+    (core/set-provider-fn!
+      (fn [opts]
+        ;; Response has zero keyword overlap with prompt
+        {:response "{\"label\": \"banana\", \"confidence\": 0.75}"
+         :tokens-in 1 :tokens-out 1}))
+    ;; prompt is about "deploy kubernetes cluster" but response says "banana"
+    (is (thrown-with-msg? Exception #"low-confidence"
+           (core/llm :prompt "deploy kubernetes cluster"
+                     :schema {:required ["label" "confidence"]
+                              :types {"label" :string "confidence" :number}}
+                     :min-confidence 0.5
+                     :domain-check true
+                     :retries 0)))))

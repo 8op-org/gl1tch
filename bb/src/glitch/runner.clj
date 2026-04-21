@@ -133,6 +133,7 @@
                  'check-contract  g/check-contract
                  'grounded?       g/grounded?
                  'consensus       g/consensus
+                 'composite-score g/composite-score
 
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
