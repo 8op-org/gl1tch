@@ -51,11 +51,6 @@
     (let [state (atom (or (load-state path) (empty-state)))]
       {:state state :conn state :path path})))
 
-(defn open-for-project
-  "Open a project-scoped store at <project-root>/.glitch/glitch.edn."
-  [project-root]
-  (open (str project-root "/.glitch/glitch.edn")))
-
 (defn close
   "Flush the store to disk."
   [store]
