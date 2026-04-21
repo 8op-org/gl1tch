@@ -57,12 +57,59 @@
 (defn ref [step-id]
   (get @*steps* step-id))
 
-(defn step [id body]
+(declare json-extract)
+
+(defn check-contract
+  "Check a step output against a contract map.
+   Returns nil on success, or a vector of violation strings on failure."
+  [output expects]
+  (let [violations (atom [])]
+    (when (and (:non-empty expects) (str/blank? output))
+      (swap! violations conj "output is empty"))
+    (when-let [min-len (:min-length expects)]
+      (when (< (count output) min-len)
+        (swap! violations conj (str "output length " (count output) " < min " min-len))))
+    (when-let [max-len (:max-length expects)]
+      (when (> (count output) max-len)
+        (swap! violations conj (str "output length " (count output) " > max " max-len))))
+    (when (:json expects)
+      (let [extracted (json-extract output)]
+        (when-not (try (json/parse-string extracted) true (catch Exception _ false))
+          (swap! violations conj "output is not valid JSON"))))
+    (when-let [required-keys (:keys expects)]
+      (let [extracted (json-extract output)
+            parsed (try (json/parse-string extracted) (catch Exception _ nil))]
+        (if (nil? parsed)
+          (swap! violations conj "output is not valid JSON (keys check)")
+          (doseq [k required-keys]
+            (when-not (contains? parsed k)
+              (swap! violations conj (str "missing key: " k)))))))
+    (when-let [pattern (:matches expects)]
+      (when-not (re-find pattern output)
+        (swap! violations conj (str "output does not match pattern: " pattern))))
+    (when-let [pred-fn (:pred expects)]
+      (when-not (pred-fn output)
+        (swap! violations conj "custom predicate failed")))
+    (let [v @violations]
+      (when (seq v) v))))
+
+(defn step [id body & {:keys [expects]}]
   (let [val (str body)]
+    (when expects
+      (let [violations (check-contract val expects)]
+        (when violations
+          (throw (ex-info (str "contract-violation: " (str/join "; " violations))
+                          {:kind :contract-violation
+                           :step-id id
+                           :expected expects
+                           :got val
+                           :violations violations})))))
     (swap! *steps* assoc id val)
     (swap! *step-order* conj id)
     (when-let [recorder @*step-recorder*]
-      (recorder {:step-id id :output val :kind "step"}))
+      (recorder {:step-id id :output val :kind "step"
+                 :artifacts (when expects
+                              (json/generate-string {:contract "pass"}))}))
     val))
 
 (defn sh [& args]

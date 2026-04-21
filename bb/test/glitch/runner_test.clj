@@ -285,6 +285,23 @@
     (is (nil? (runner/list-workflows "/tmp/nonexistent-glitch-dir")))))
 
 ;; ---------------------------------------------------------------------------
+;; step :expects contracts in SCI
+;; ---------------------------------------------------------------------------
+
+(deftest step-expects-in-sci-test
+  (testing "step with :expects works in SCI context"
+    (let [path (write-temp-workflow "expects-pass.glitch"
+                 "(step \"good\" \"hello world\" :expects {:non-empty true :min-length 5})")
+          result (runner/run path)]
+      (is (= "hello world" (:output result)))))
+
+  (testing "step with :expects throws in SCI on violation"
+    (let [path (write-temp-workflow "expects-fail.glitch"
+                 "(step \"bad\" \"\" :expects {:non-empty true})")]
+      (is (thrown-with-msg? Exception #"contract-violation"
+            (runner/run path))))))
+
+;; ---------------------------------------------------------------------------
 ;; Error handling
 ;; ---------------------------------------------------------------------------
 

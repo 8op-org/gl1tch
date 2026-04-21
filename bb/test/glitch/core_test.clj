@@ -14,6 +14,66 @@
     (core/set-workflows-dir! ".")
     (f)))
 
+;; --- check-contract ---
+
+(deftest check-contract-non-empty-test
+  (testing "non-empty passes for non-blank"
+    (is (nil? (core/check-contract "hello" {:non-empty true}))))
+  (testing "non-empty fails for blank"
+    (is (some? (core/check-contract "" {:non-empty true}))))
+  (testing "non-empty fails for whitespace-only"
+    (is (some? (core/check-contract "   " {:non-empty true})))))
+
+(deftest check-contract-min-length-test
+  (testing "min-length passes"
+    (is (nil? (core/check-contract "abcdef" {:min-length 5}))))
+  (testing "min-length fails"
+    (is (some? (core/check-contract "abc" {:min-length 5})))))
+
+(deftest check-contract-max-length-test
+  (testing "max-length passes"
+    (is (nil? (core/check-contract "abc" {:max-length 5}))))
+  (testing "max-length fails"
+    (is (some? (core/check-contract "abcdef" {:max-length 5})))))
+
+(deftest check-contract-json-test
+  (testing "json passes for valid JSON"
+    (is (nil? (core/check-contract "{\"a\":1}" {:json true}))))
+  (testing "json fails for non-JSON"
+    (is (some? (core/check-contract "not json" {:json true})))))
+
+(deftest check-contract-keys-test
+  (testing "keys passes when all present"
+    (is (nil? (core/check-contract "{\"title\":\"x\",\"content\":\"y\"}"
+                                    {:keys ["title" "content"]}))))
+  (testing "keys fails when missing"
+    (is (some? (core/check-contract "{\"title\":\"x\"}"
+                                     {:keys ["title" "content"]})))))
+
+(deftest check-contract-matches-test
+  (testing "matches passes on regex match"
+    (is (nil? (core/check-contract "error: 404" {:matches #"error: \d+"}))))
+  (testing "matches fails on no match"
+    (is (some? (core/check-contract "all good" {:matches #"error: \d+"})))))
+
+(deftest check-contract-pred-test
+  (testing "pred passes when fn returns truthy"
+    (is (nil? (core/check-contract "abc" {:pred (fn [s] (= 3 (count s)))}))))
+  (testing "pred fails when fn returns falsy"
+    (is (some? (core/check-contract "ab" {:pred (fn [s] (= 3 (count s)))})))))
+
+;; --- step with :expects ---
+
+(deftest step-with-expects-passes-test
+  (testing "step with valid expects passes"
+    (let [result (core/step "good" "hello world" :expects {:non-empty true :min-length 5})]
+      (is (= "hello world" result)))))
+
+(deftest step-with-expects-fails-test
+  (testing "step with failed expects throws"
+    (is (thrown-with-msg? Exception #"contract-violation"
+           (core/step "bad" "" :expects {:non-empty true})))))
+
 ;; --- step / ref ---
 
 (deftest step-and-ref-test
