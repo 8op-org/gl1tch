@@ -263,3 +263,70 @@
 (deftest json-extract-array-test
   (is (= "[1,2,3]"
          (core/json-extract "result: [1,2,3]"))))
+
+;; --- validate-schema ---
+
+(deftest validate-schema-valid-test
+  (testing "valid JSON passes schema"
+    (is (nil? (core/validate-schema
+                {"action" "write" "reason" "because"}
+                {:required ["action" "reason"]
+                 :types {"action" :string "reason" :string}})))))
+
+(deftest validate-schema-missing-key-test
+  (testing "missing required key returns violation"
+    (let [v (core/validate-schema {"action" "write"} {:required ["action" "reason"]})]
+      (is (some? v))
+      (is (re-find #"reason" (first v))))))
+
+(deftest validate-schema-wrong-type-test
+  (testing "wrong type returns violation"
+    (let [v (core/validate-schema {"count" "not-a-number"} {:types {"count" :number}})]
+      (is (some? v)))))
+
+(deftest validate-schema-enum-test
+  (testing "value not in enum returns violation"
+    (let [v (core/validate-schema
+              {"action" "delete"}
+              {:enum {"action" ["write" "edit" "skip"]}})]
+      (is (some? v))))
+
+  (testing "value in enum passes"
+    (is (nil? (core/validate-schema
+                {"action" "write"}
+                {:enum {"action" ["write" "edit" "skip"]}})))))
+
+(deftest validate-schema-bool-type-test
+  (testing "bool type check"
+    (is (nil? (core/validate-schema {"pass" true} {:types {"pass" :bool}})))
+    (is (some? (core/validate-schema {"pass" "yes"} {:types {"pass" :bool}})))))
+
+(deftest validate-schema-array-type-test
+  (testing "array type check"
+    (is (nil? (core/validate-schema {"items" [1 2 3]} {:types {"items" :array}})))
+    (is (some? (core/validate-schema {"items" "nope"} {:types {"items" :array}})))))
+
+(deftest validate-schema-object-type-test
+  (testing "object type check"
+    (is (nil? (core/validate-schema {"meta" {"a" 1}} {:types {"meta" :object}})))
+    (is (some? (core/validate-schema {"meta" 42} {:types {"meta" :object}})))))
+
+;; --- validate (standalone) ---
+
+(deftest validate-fn-passes-test
+  (testing "validate returns true when step output matches schema"
+    (core/step "data" "{\"pass\": true, \"issues\": []}")
+    (is (true? (core/validate "data" {:required ["pass" "issues"]
+                                       :types {"pass" :bool "issues" :array}})))))
+
+(deftest validate-fn-throws-test
+  (testing "validate throws when step output fails schema"
+    (core/step "data" "{\"pass\": true}")
+    (is (thrown-with-msg? Exception #"schema-violation"
+           (core/validate "data" {:required ["pass" "issues"]})))))
+
+(deftest validate-fn-non-json-test
+  (testing "validate throws when step output is not JSON"
+    (core/step "plain" "just text")
+    (is (thrown-with-msg? Exception #"schema-violation"
+           (core/validate "plain" {:required ["key"]})))))

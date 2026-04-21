@@ -1,7 +1,8 @@
 (ns glitch.core
   (:require [babashka.process :as bp]
             [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [cheshire.core :as json]))
 
 ;; --- Workflow state — dynamic vars holding atoms ---
 ;; Atoms inside dynamic vars give us both rebindable scope (for call-workflow)
@@ -240,3 +241,62 @@
                                      depth)
                               :else (recur (inc i) depth)))))]
         (subs trimmed start end)))))
+
+(defn validate-schema
+  "Validate a parsed JSON map against a schema.
+   Returns nil on success, or a vector of violation strings on failure."
+  [parsed schema]
+  (let [violations (atom [])]
+    (doseq [k (:required schema)]
+      (when-not (contains? parsed k)
+        (swap! violations conj (str "missing required key: " k))))
+    (doseq [[k expected-type] (:types schema)]
+      (when (contains? parsed k)
+        (let [v (get parsed k)
+              ok (case expected-type
+                   :string  (string? v)
+                   :number  (number? v)
+                   :bool    (boolean? v)
+                   :array   (vector? v)
+                   :object  (map? v)
+                   true)]
+          (when-not ok
+            (swap! violations conj (str "key '" k "' expected " (name expected-type)
+                                        ", got " (type v)))))))
+    (doseq [[k allowed] (:enum schema)]
+      (when (contains? parsed k)
+        (let [v (get parsed k)]
+          (when-not (some #{v} allowed)
+            (swap! violations conj (str "key '" k "' value '" v
+                                        "' not in " (pr-str allowed)))))))
+    (let [v @violations]
+      (when (seq v) v))))
+
+(defn validate
+  "Validate a step's output against a schema. Returns true on success, throws on failure."
+  [step-id schema]
+  (let [output (ref step-id)
+        extracted (json-extract (str output))
+        parsed (try
+                 (json/parse-string extracted)
+                 (catch Exception _
+                   nil))
+        violations (if (nil? parsed)
+                     [(str "failed to parse JSON from step '" step-id "'")]
+                     (validate-schema parsed schema))
+        passed (nil? violations)]
+    (when-let [recorder @*step-recorder*]
+      (recorder {:step-id (str "validate:" step-id)
+                 :kind "validate"
+                 :output (str passed)
+                 :gate-passed (if passed 1 0)
+                 :artifacts (when violations
+                              (json/generate-string {:violations violations}))}))
+    (if passed
+      true
+      (throw (ex-info (str "schema-violation: " (str/join "; " violations))
+                      {:kind :schema-violation
+                       :step-id step-id
+                       :expected schema
+                       :got extracted
+                       :violations violations})))))
