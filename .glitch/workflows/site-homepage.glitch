@@ -1,57 +1,49 @@
-;; site-homepage.glitch — update the landing page using agentic tool-use
+;; site-homepage.glitch — update the landing page
 ;;
 ;; Usage:
 ;;   glitch run site-homepage "update features to reflect tool-use providers"
 ;;
-;; The LLM uses tools to read the codebase and verify accuracy.
+;; Uses the search index for context, openrouter for fast rewrite,
+;; grounded? for verification, Playwright for integration tests.
 
 (workflow "site-homepage"
-  :description "Update the gl1tch homepage (index.astro) using agentic tool-use"
+  :description "Update the gl1tch homepage (index.astro)"
+
+  (step "context"
+    (str
+      (search "providers tool-use workflow DSL" :limit 5)
+      "\n\n"
+      (read-file "site/src/pages/index.astro")))
 
   (step "rewrite"
     (llm
       :provider "copilot"
-      :agentic true
-      :max-rounds 8
+      :tools []
       :prompt (str
-        "You are updating the gl1tch homepage at site/src/pages/index.astro.\n\n"
+        "You are updating the gl1tch homepage.\n\n"
+        "CURRENT PAGE + CODEBASE CONTEXT:\n" (ref "context") "\n\n"
         "INSTRUCTIONS: " (input) "\n\n"
         "RULES:\n"
-        "- Use glitch_read_file to read the current homepage first\n"
-        "- Use glitch_grep to verify any commands/features/parameters you reference actually exist in the codebase\n"
-        "- Use glitch_read_file on bb/providers/*.clj to understand what providers do\n"
-        "- Use glitch_read_file on bb/src/glitch/tool_loop.clj to understand the tool loop\n"
         "- Never mention: Ollama, tmux, BubbleTea, OTel, SQLite, 'glitch ask', 'glitch observe'\n"
         "- Voice: user-first, 'your' framing, examples before explanation\n"
-        "- Every code example must use real DSL syntax from the codebase\n"
+        "- Every code example must use real DSL syntax from the context above\n"
         "- Keep all existing CSS class names exactly as they are\n"
         "- Keep the Astro frontmatter exactly as-is\n"
         "- Install command: brew install 8op-org/tap/glitch\n"
         "- Tagline: Shell does the work. LLM does the thinking. You own the workflow.\n\n"
         "Return the complete updated file content for site/src/pages/index.astro.")))
 
-  (step "gate"
-    (llm
+  (step "verify"
+    (grounded? "rewrite" (ref "context")
       :provider "openrouter"
-      :tools []
-      :prompt (str
-        "Review this homepage content for accuracy.\n"
-        "Check for:\n"
-        "- Banned terms: Ollama, glitch ask, BubbleTea, tmux, OTel, SQLite\n"
-        "- Hallucinated commands or flags\n"
-        "- Internal implementation details leaking\n\n"
-        "Content to review:\n" (ref "rewrite") "\n\n"
-        "Return JSON only: {\"pass\": true, \"issues\": []} or\n"
-        "{\"pass\": false, \"issues\": [{\"category\": \"L\", \"fix\": \"description\"}]}\n"
-        "Only fail for factual errors, not style preferences.")))
+      :strict false))
 
   (step "save"
-    (let [gate-out (try (json/decode (json-extract (ref "gate")))
-                        (catch Exception _ {"pass" true}))]
-      (when (not (get gate-out "pass"))
-        (binding [*out* *err*]
-          (println (str "gate issues: "
-                             (json/encode (get gate-out "issues")))
-                        {})))
-      (save "site/src/pages/index.astro" (ref "rewrite"))
-      "Updated homepage")))
+    (save "site/src/pages/index.astro" (ref "rewrite"))
+    "Saved homepage")
+
+  (step "playwright"
+    (sh "bash" "-c" "cd site && npx playwright test --reporter=line"))
+
+  (step "dev"
+    (sh "bash" "-c" "cd site && npx astro dev --port 4322")))

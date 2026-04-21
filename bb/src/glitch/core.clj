@@ -14,6 +14,15 @@
 (def ^:dynamic *input* (atom ""))
 (def ^:dynamic *params* (atom {}))
 (def ^:dynamic *step-recorder* (atom nil))
+
+;; --- Stderr trace logging ---
+
+(defn trace
+  "Log a message to stderr for realtime progress visibility."
+  [& parts]
+  (binding [*out* *err*]
+    (println (str/join " " parts))
+    (flush)))
 (def ^:dynamic *provider-fn* (atom nil))
 (def ^:dynamic *call-stack* (atom []))
 (def ^:dynamic *workflows-dir* (atom "."))
@@ -95,7 +104,7 @@
     (let [v @violations]
       (when (seq v) v))))
 
-(defn step [id body & {:keys [expects]}]
+(defn _step [id body & {:keys [expects]}]
   (let [val (str body)]
     (when expects
       (let [violations (check-contract val expects)]
@@ -113,6 +122,8 @@
                  :artifacts (when expects
                               (json/generate-string {:contract "pass"}))}))
     val))
+
+(def step _step)
 
 (defn sh [& args]
   (let [result (apply bp/shell {:out :string :err :string :continue true} args)]
@@ -461,7 +472,7 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                        :or {strict true max-unsupported 0}}]
   (let [output   (ref step-id)
         prompt   (format grounding-prompt context output)
-        response (@*provider-fn* {:prompt prompt :provider provider})
+        response (@*provider-fn* {:prompt prompt :provider provider :tools []})
         extracted (json-extract (:response response))
         parsed   (try (json/parse-string extracted) (catch Exception _ nil))
         grounded (get parsed "grounded")
@@ -516,7 +527,7 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                    (fn [acc pname]
                      (try
                        (let [response (@*provider-fn*
-                                        (cond-> {:prompt prompt :provider pname}
+                                        (cond-> {:prompt prompt :provider pname :tools []}
                                           model (assoc :model model)))
                              extracted (json-extract (:response response))
                              parsed    (try (json/parse-string extracted) (catch Exception _ nil))
