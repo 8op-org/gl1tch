@@ -7,11 +7,7 @@
             [clojure.string :as str]))
 
 (defn start [_opts]
-  (let [workspace-path (System/getProperty "user.dir")
-        context {:workspace-path workspace-path
-                 :search-db nil
-                 :embed-fn nil}
-        handler (handlers/make-handler context)
+  (let [handler (handlers/make-handler {})
         dispatch-ctx {:tools tools/tool-definitions
                       :tool-handler handler}]
     (binding [*out* *err*]
