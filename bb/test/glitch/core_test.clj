@@ -565,6 +565,26 @@
         (is (= "grounded" (:kind grounding-rec)))
         (is (= 1 (:gate-passed grounding-rec)))))))
 
+(deftest grounded-false-empty-unsupported-test
+  (testing "grounded=false with 0 unsupported claims passes (within tolerance)"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"grounded\": false, \"unsupported\": []}"
+         :tokens-in 1 :tokens-out 1}))
+    (core/step "doc" "text")
+    ;; max-unsupported defaults to 0, and there are 0 unsupported claims
+    (is (true? (core/grounded? "doc" "context")))))
+
+(deftest grounded-unparseable-response-test
+  (testing "grounded? throws when LLM returns unparseable JSON"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "I cannot verify this."
+         :tokens-in 1 :tokens-out 1}))
+    (core/step "doc" "text")
+    (is (thrown-with-msg? Exception #"grounding-failure"
+           (core/grounded? "doc" "context")))))
+
 ;; --- consensus ---
 
 (deftest consensus-agreement-test
@@ -638,3 +658,9 @@
       (let [cons-rec (last @recorded)]
         (is (= "consensus" (:kind cons-rec)))
         (is (= 1 (:gate-passed cons-rec)))))))
+
+(deftest consensus-requires-compare-key-test
+  (testing "consensus throws without compare-key or schema required"
+    (core/set-provider-fn! (fn [_] {:response "{}" :tokens-in 0 :tokens-out 0}))
+    (is (thrown-with-msg? Exception #"requires :compare-key"
+           (core/consensus ["p1" "p2"] :prompt "test")))))

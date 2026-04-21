@@ -454,7 +454,13 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
         grounded (get parsed "grounded")
         unsupported (or (get parsed "unsupported") [])
         num-unsupported (count unsupported)
-        passed   (or grounded (<= num-unsupported max-unsupported))]
+        passed   (cond
+                   ;; Unparseable response — fail
+                   (nil? grounded) false
+                   ;; LLM says grounded — pass
+                   grounded true
+                   ;; LLM says not grounded — check tolerance
+                   :else (<= num-unsupported max-unsupported))]
     (when-let [recorder @*step-recorder*]
       (recorder {:step-id (str "grounded:" step-id)
                  :kind "grounded"
@@ -479,6 +485,9 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
   (when (< (count providers) 2)
     (throw (ex-info "consensus requires minimum 2 providers" {:providers providers})))
   (let [cmp-key  (or compare-key (first (:required schema)))
+        _        (when-not cmp-key
+                   (throw (ex-info "consensus requires :compare-key or :schema with :required"
+                                   {:providers providers})))
         votes    (reduce
                    (fn [acc pname]
                      (try
