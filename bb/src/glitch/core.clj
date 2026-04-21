@@ -187,28 +187,6 @@
     (finally
       (swap! *call-stack* (comp vec pop)))))
 
-;; --- LLM invocation ---
-
-(defn llm [& {:keys [prompt model provider skill step-id tools agentic max-rounds] :as opts}]
-  (when-not @*provider-fn*
-    (throw (ex-info "llm: no provider function set — call set-provider-fn! first" {})))
-  (let [full-prompt (if skill
-                      (str (slurp skill) "\n\n" prompt)
-                      prompt)
-        start (System/nanoTime)
-        result (@*provider-fn* (assoc opts :prompt full-prompt))
-        elapsed-ms (/ (- (System/nanoTime) start) 1e6)]
-    (when-let [recorder @*step-recorder*]
-      (recorder {:step-id (or step-id "llm")
-                 :prompt full-prompt
-                 :output (:response result)
-                 :model (or model "")
-                 :duration (Math/round elapsed-ms)
-                 :kind "llm"
-                 :tokens-in (or (:tokens-in result) 0)
-                 :tokens-out (or (:tokens-out result) 0)}))
-    (:response result)))
-
 ;; --- JSON extraction helper ---
 
 (defn json-extract
@@ -300,3 +278,69 @@
                        :expected schema
                        :got extracted
                        :violations violations})))))
+
+;; --- LLM invocation ---
+
+(defn llm [& {:keys [prompt model provider skill step-id schema retries
+                      min-confidence tools agentic max-rounds] :as opts}]
+  (when-not @*provider-fn*
+    (throw (ex-info "llm: no provider function set — call set-provider-fn! first" {})))
+  (let [full-prompt (if skill
+                      (str (slurp skill) "\n\n" prompt)
+                      prompt)
+        max-retries (or retries 0)
+        sid         (or step-id "llm")]
+    (loop [attempt 0
+           current-prompt full-prompt]
+      (let [start    (System/nanoTime)
+            result   (@*provider-fn* (assoc opts :prompt current-prompt))
+            elapsed  (/ (- (System/nanoTime) start) 1e6)
+            response (:response result)]
+        (if schema
+          (let [extracted  (json-extract (str response))
+                parsed     (try (json/parse-string extracted) (catch Exception _ nil))
+                violations (if (nil? parsed)
+                             ["response is not valid JSON"]
+                             (validate-schema parsed schema))
+                valid?     (nil? violations)]
+            (if valid?
+              ;; Schema valid — record and return
+              (do
+                (when-let [recorder @*step-recorder*]
+                  (recorder {:step-id sid :prompt current-prompt
+                             :output response :model (or model "")
+                             :duration (Math/round elapsed) :kind "llm"
+                             :tokens-in (or (:tokens-in result) 0)
+                             :tokens-out (or (:tokens-out result) 0)
+                             :artifacts (json/generate-string {:schema_valid true})
+                             :confidence (when (contains? parsed "confidence")
+                                           (get parsed "confidence"))}))
+                response)
+              ;; Schema invalid — retry or throw
+              (if (< attempt max-retries)
+                (recur (inc attempt)
+                       (str current-prompt "\n\nYour response didn't match the required schema: "
+                            (str/join "; " violations) ". Please try again."))
+                (do
+                  (when-let [recorder @*step-recorder*]
+                    (recorder {:step-id sid :prompt current-prompt
+                               :output response :model (or model "")
+                               :duration (Math/round elapsed) :kind "llm"
+                               :tokens-in (or (:tokens-in result) 0)
+                               :tokens-out (or (:tokens-out result) 0)
+                               :artifacts (json/generate-string
+                                            {:schema_valid false :violations violations})}))
+                  (throw (ex-info (str "schema-violation: " (str/join "; " violations))
+                                  {:kind :schema-violation
+                                   :expected schema
+                                   :got extracted
+                                   :violations violations}))))))
+          ;; No schema — pass through (original behavior)
+          (do
+            (when-let [recorder @*step-recorder*]
+              (recorder {:step-id sid :prompt full-prompt
+                         :output response :model (or model "")
+                         :duration (Math/round elapsed) :kind "llm"
+                         :tokens-in (or (:tokens-in result) 0)
+                         :tokens-out (or (:tokens-out result) 0)}))
+            response))))))

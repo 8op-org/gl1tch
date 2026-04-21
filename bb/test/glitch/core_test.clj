@@ -330,3 +330,52 @@
     (core/step "plain" "just text")
     (is (thrown-with-msg? Exception #"schema-violation"
            (core/validate "plain" {:required ["key"]})))))
+
+;; --- llm with :schema ---
+
+(deftest llm-schema-valid-test
+  (testing "llm with valid schema passes through"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"action\": \"write\", \"reason\": \"needed\"}"
+         :tokens-in 5 :tokens-out 10}))
+    (let [result (core/llm :prompt "pick action"
+                           :schema {:required ["action" "reason"]
+                                    :types {"action" :string "reason" :string}})]
+      (is (= "{\"action\": \"write\", \"reason\": \"needed\"}" result)))))
+
+(deftest llm-schema-retries-on-invalid-test
+  (testing "llm with schema retries on invalid, then succeeds"
+    (let [calls (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! calls inc)
+          (if (= 1 @calls)
+            {:response "{\"wrong\": \"shape\"}" :tokens-in 1 :tokens-out 1}
+            {:response "{\"action\": \"write\", \"reason\": \"fixed\"}" :tokens-in 1 :tokens-out 1})))
+      (let [result (core/llm :prompt "pick"
+                             :schema {:required ["action" "reason"]}
+                             :retries 2)]
+        (is (= 2 @calls))
+        (is (re-find #"action" result))))))
+
+(deftest llm-schema-exhausted-test
+  (testing "llm throws after schema retries exhausted"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"bad\": true}" :tokens-in 1 :tokens-out 1}))
+    (is (thrown-with-msg? Exception #"schema-violation"
+           (core/llm :prompt "pick"
+                     :schema {:required ["action"]}
+                     :retries 1)))))
+
+(deftest llm-schema-records-artifacts-test
+  (testing "llm records schema validation result in recorder"
+    (let [recorded (atom [])]
+      (core/set-provider-fn!
+        (fn [opts]
+          {:response "{\"action\": \"write\"}" :tokens-in 1 :tokens-out 1}))
+      (core/set-step-recorder! (fn [m] (swap! recorded conj m)))
+      (core/llm :prompt "pick" :schema {:required ["action"]} :step-id "test-llm")
+      (let [last-rec (last @recorded)]
+        (is (re-find #"schema_valid" (or (:artifacts last-rec) "")))))))
