@@ -4,6 +4,7 @@
             [glitch.provider :as prov]
             [glitch.plugin :as plugin]
             [glitch.plugin-loader :as plugin-loader]
+            [glitch.repl :as repl]
             [clojure.string :as str]
             [clojure.java.io :as io]))
 
@@ -236,8 +237,7 @@
 (defn- cmd-repl [args]
   (let [{:keys [opts]} (parse-args args {:port {:short "p" :kind :option}})
         port (or (some-> (:port opts) parse-long) 1667)]
-    (require '[glitch.repl :as repl])
-    ((resolve 'glitch.repl/start) {:port port})))
+    (repl/start {:port port})))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry point
