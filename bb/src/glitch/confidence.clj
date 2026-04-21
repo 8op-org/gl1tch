@@ -3,7 +3,8 @@
    (except `embed` which calls TEI)."
   (:require [babashka.http-client :as http]
             [cheshire.core :as json]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.set :as cset]))
 
 ;; --- Provider authority ---
 
@@ -72,7 +73,7 @@
         r-kw (extract response-text)]
     (if (empty? p-kw)
       1.0
-      (/ (double (count (clojure.set/intersection p-kw r-kw)))
+      (/ (double (count (cset/intersection p-kw r-kw)))
          (count p-kw)))))
 
 ;; --- Domain relevance ---
@@ -112,7 +113,8 @@
           resp     (http/post url
                      {:headers {"content-type" "application/json"}
                       :body    (json/generate-string {:inputs text})
-                      :throw   false})]
+                      :throw   false
+                      :timeout 5000})]
       (when (= 200 (:status resp))
         (let [parsed (json/parse-string (:body resp))]
           ;; TEI returns [[...]] for single input

@@ -10,7 +10,15 @@
                    (shell "chmod +x build/glitch"))}
   install {:doc "Install glitch to /usr/local/bin"
            :depends [build]
-           :task (shell "cp build/glitch /usr/local/bin/glitch")}
+           :task (do (shell "cp build/glitch /usr/local/bin/glitch")
+                     (babashka.fs/create-dirs
+                       (str (System/getProperty "user.home") "/.config/glitch/providers"))
+                     (doseq [f (babashka.fs/glob "providers" "*.clj")]
+                       (babashka.fs/copy f
+                         (str (System/getProperty "user.home") "/.config/glitch/providers/"
+                              (babashka.fs/file-name f))
+                         {:replace-existing true}))
+                     (println "installed providers to ~/.config/glitch/providers/"))}
   test {:doc "Run tests"
         :task (shell "bb -cp src:test:providers -m glitch.test-runner")}
   clean {:doc "Clean build artifacts"

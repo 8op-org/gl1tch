@@ -3,6 +3,7 @@
    investigation workflows. Tracks facts, contradictions, corroboration,
    and computes shortest paths to investigation goals."
   (:require [clojure.string :as str]
+            [clojure.set :as cset]
             [glitch.core :as core]))
 
 ;; ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@
                "on" "at" "to" "for" "with" "by" "from" "as"}
         ta (set (remove stop (tokenize a)))
         tb (set (remove stop (tokenize b)))]
-    (clojure.set/intersection ta tb)))
+    (cset/intersection ta tb)))
 
 (defn- has-negation?
   "Check if a string contains negation words."

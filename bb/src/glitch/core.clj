@@ -517,11 +517,11 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                                    {:providers providers})))
         ;; Merge user authority overrides with defaults
         auth-map (merge conf/default-authority authority)
-        ;; Determine compare mode — auto-probe TEI when not specified
+        ;; Determine compare mode — default :exact, :semantic requires explicit opt-in
         use-semantic (cond
                        (= compare-mode :semantic) true
                        (= compare-mode :exact)    false
-                       :else (some? (conf/embed "probe")))
+                       :else false)
         ;; Collect votes from providers
         votes    (reduce
                    (fn [acc pname]

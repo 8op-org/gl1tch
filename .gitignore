@@ -13,3 +13,4 @@ janet/build/
 janet/jpm_tree/
 bb/build/
 bb/.glitch/
+dev/output/
