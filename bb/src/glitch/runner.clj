@@ -8,8 +8,6 @@
             [glitch.tool_loop]
             [glitch.mcp.tools :as mcp-tools]
             [glitch.mcp.handlers :as mcp-handlers]
-            [glitch.mcp.indexer :as indexer]
-            [glitch.mcp.search :as search]
             [sci.core :as sci]
             [cheshire.core :as json]
             [clojure.string :as str]
@@ -276,7 +274,7 @@
      :workflows-dir  — directory for call-workflow resolution
      :parent-run-id  — parent run ID for sub-workflow recording
      :tiers          — provider tier list (overrides default-tiers)"
-  [workflow-path & {:keys [input db project model params seed-steps
+  [workflow-path & {:keys [input db project model provider params seed-steps
                            workflows-dir parent-run-id tiers]}]
   (let [input  (or input "")
         model  (or model "default")
@@ -295,33 +293,18 @@
 
     ;; Build tool handler for this workspace
     (let [workspace-path (System/getProperty "user.dir")
-          _  (g/trace "  indexing" workspace-path)
-          t0 (System/currentTimeMillis)
-          search-db (try (indexer/open-search-db workspace-path) (catch Exception _ nil))
-          _         (when search-db
-                      (try (indexer/index-repo search-db workspace-path) (catch Exception _ nil))
-                      (g/trace "  ✓ indexed" (str "(" (- (System/currentTimeMillis) t0) "ms)"))
-                      (reset! *search-fn*
-                        (fn [query limit]
-                          (let [results (search/hybrid-search search-db query workspace-path :limit limit)]
-                            (str/join "\n\n"
-                              (map (fn [{:keys [path content score]}]
-                                     (str "--- " path " (score: " (format "%.2f" (double score)) ") ---\n" content))
-                                   results))))))
           tool-context {:workspace-path workspace-path
-                        :search-db search-db
+                        :search-db nil
                         :embed-fn nil}
           tool-handler (mcp-handlers/make-handler tool-context)
-          available-defs (if search-db
-                           mcp-tools/tool-definitions
-                           (let [search-tools #{"glitch_search" "glitch_index" "glitch_symbols"}]
-                             (filterv #(not (contains? search-tools (get % "name")))
-                                      mcp-tools/tool-definitions)))]
+          search-tools #{"glitch_search" "glitch_index" "glitch_symbols"}
+          available-defs (filterv #(not (contains? search-tools (get % "name")))
+                                  mcp-tools/tool-definitions)]
 
       ;; Wire provider dispatch
       (g/set-provider-fn!
         (fn [opts]
-          (let [pname  (or (:provider opts) "lmstudio")
+          (let [pname  (or (:provider opts) provider "lmstudio")
                 ;; Inject tool-handler and default tool definitions unless :tools []
                 tools-requested (get opts :tools :all)
                 tool-defs (when-not (and (coll? tools-requested) (empty? tools-requested))

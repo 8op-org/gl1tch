@@ -1,7 +1,5 @@
 (ns glitch.mcp.handlers
-  (:require [glitch.mcp.search :as search]
-            [glitch.mcp.indexer :as idx]
-            [babashka.process :as bp]
+  (:require [babashka.process :as bp]
             [cheshire.core :as json]
             [clojure.string :as str]
             [sci.core :as sci]))
@@ -15,22 +13,13 @@
       (throw (ex-info (str "path outside workspace: " path) {})))
     resolved))
 
-(defn- handle-search [context arguments]
-  (let [db (:search-db context)
-        query (get arguments "query")
-        repo (get arguments "repo")
-        embed-fn (:embed-fn context)
-        limit (get arguments "limit" 10)]
-    (json/generate-string
-      (search/hybrid-search db query repo :embed-fn embed-fn :limit limit))))
+(defn- handle-search [_context arguments]
+  ;; Search via ripgrep — full impl in Task 6
+  (let [query (get arguments "query")]
+    (json/generate-string {:error (str "search not yet available; query was: " query)})))
 
-(defn- handle-index [context arguments]
-  (let [db (:search-db context)
-        repo (get arguments "repo")
-        embed-fn (:embed-fn context)
-        reindex (get arguments "reindex" false)]
-    (json/generate-string
-      (idx/index-repo db repo :embed-fn embed-fn :reindex reindex))))
+(defn- handle-index [_context _arguments]
+  (json/generate-string {:error "index not yet available"}))
 
 (defn- handle-run [arguments]
   (let [workflow (get arguments "workflow")
@@ -70,14 +59,9 @@
         result (apply bp/shell {:out :string :err :string :continue true} cmd)]
     (or (:out result) "")))
 
-(defn- handle-symbols [context arguments]
-  (let [db (:search-db context)
-        query (get arguments "query")
-        repo (get arguments "repo")
-        kw-results (search/keyword-search db query :repo repo :limit 50)
-        filtered (filter #(str/includes? (or (:symbols %) "") query) kw-results)]
-    (json/generate-string
-      (mapv #(select-keys % [:path :symbols :score]) filtered))))
+(defn- handle-symbols [_context arguments]
+  (let [query (get arguments "query")]
+    (json/generate-string {:error (str "symbols not yet available; query was: " query)})))
 
 (defn- handle-read-file [context arguments]
   (let [path (get arguments "path")
