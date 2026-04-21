@@ -8,13 +8,15 @@
 
 (def registry (atom {}))
 
-(defn reset! []
+(defn reset!
   "Clear all registered plugins."
+  []
   (clojure.core/reset! registry {}))
 
-(defn register [name plugin-map]
+(defn register
   "Register a plugin map under `name`.
    plugin-map should be {:name :description :commands {cmd-name -> {:fn :args :description}}}."
+  [name plugin-map]
   (swap! registry assoc name plugin-map))
 
 (defmacro defcommand

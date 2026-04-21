@@ -128,6 +128,14 @@
                   (when has-glitch?
                     (load-glitch-plugin plugin-name subdir)))))))))))
 
+(defn reload-plugins!
+  "Force reload all plugins, clearing the registry first."
+  [& dirs]
+  (plugin/reset!)
+  (clojure.core/reset! loaded? false)
+  (do-load-plugins dirs)
+  (clojure.core/reset! loaded? true))
+
 (defn load-plugins
   "Scan plugin directories and load all discovered plugins.
    No-ops if plugins have already been loaded.
@@ -139,7 +147,7 @@
   [& dirs]
   (when-not @loaded?
     (do-load-plugins dirs)
-    (reset! loaded? true)))
+    (clojure.core/reset! loaded? true)))
 
 (defn plugin-names
   "Return a sorted seq of registered plugin names. Loads plugins first."
