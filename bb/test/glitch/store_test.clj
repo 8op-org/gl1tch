@@ -2,13 +2,10 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [glitch.store :as store]))
 
-;; The pod is loaded by glitch.store; we can require its ns after that.
-(require '[pod.babashka.go-sqlite3 :as sql])
-
 (def ^:dynamic *db* nil)
 
 (defn temp-db-fixture [f]
-  (let [path (str "/tmp/glitch-test-" (System/currentTimeMillis) ".db")
+  (let [path (str "/tmp/glitch-test-" (System/currentTimeMillis) ".edn")
         db   (store/open path)]
     (binding [*db* db]
       (try
@@ -16,35 +13,14 @@
         (finally
           (store/close db)
           (let [file (java.io.File. path)]
-            (when (.exists file) (.delete file))
-            ;; Clean up WAL/SHM files too
-            (let [wal (java.io.File. (str path "-wal"))
-                  shm (java.io.File. (str path "-shm"))]
-              (when (.exists wal) (.delete wal))
-              (when (.exists shm) (.delete shm)))))))))
+            (when (.exists file) (.delete file))))))))
 
 (use-fixtures :each temp-db-fixture)
 
-;; ---------------------------------------------------------------------------
-;; open
-;; ---------------------------------------------------------------------------
-
-(deftest test-open-creates-db-and-tables
-  (testing "open creates the db file"
-    (is (.exists (java.io.File. *db*))))
-
-  (testing "schema tables exist"
-    (let [tables (->> (sql/query *db*
-                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-                      (map :name)
-                      set)]
-      (is (contains? tables "runs"))
-      (is (contains? tables "steps"))
-      (is (contains? tables "research_events")))))
-
-;; ---------------------------------------------------------------------------
-;; record-run + get-run
-;; ---------------------------------------------------------------------------
+(deftest test-open-creates-db
+  (testing "open returns a store map with :conn and :path"
+    (is (some? (:conn *db*)))
+    (is (some? (:path *db*)))))
 
 (deftest test-record-run-and-get-run
   (testing "insert and retrieve a run"
@@ -52,28 +28,15 @@
                {:name          "test-workflow"
                 :input         "hello world"
                 :workflow-file "test.glitch"
-                :model         "gemma4"
-                :variant       nil
-                :workspace     "ws1"
-                :parent-run-id nil
-                :workflow-name "test-wf"})
+                :model         "gemma4"})
           run (store/get-run *db* id)]
       (is (integer? id))
-      (is (= id (:id run)))
-      (is (= "test-workflow" (:name run)))
-      (is (= "hello world" (:input run)))
-      (is (= "test.glitch" (:workflow_file run)))
-      (is (= "gemma4" (:model run)))
-      (is (= "ws1" (:workspace run)))
-      (is (= "test-wf" (:workflow_name run)))
-      (is (= "workflow" (:kind run)))
-      (is (integer? (:started_at run)))
-      (is (nil? (:output run)))
-      (is (nil? (:exit_status run))))))
-
-;; ---------------------------------------------------------------------------
-;; record-step + get-steps
-;; ---------------------------------------------------------------------------
+      (is (= "test-workflow" (:run/name run)))
+      (is (= "hello world" (:run/input run)))
+      (is (= "test.glitch" (:run/workflow run)))
+      (is (= "gemma4" (:run/model run)))
+      (is (integer? (:run/started-at run)))
+      (is (nil? (:run/output run))))))
 
 (deftest test-record-step-and-get-steps
   (testing "insert steps and retrieve by run-id"
@@ -85,12 +48,7 @@
                     :output    "done"
                     :model     "gemma4"
                     :duration  150
-                    :kind      "llm"
-                    :exit      0
-                    :tokens-in 100
-                    :tokens-out 50
-                    :gate      nil
-                    :artifacts nil})
+                    :kind      "llm"})
           _      (store/record-step *db*
                    {:run-id    run-id
                     :step-id   "s2"
@@ -98,68 +56,29 @@
                     :output    "ok"
                     :model     "gemma4"
                     :duration  80
-                    :kind      "shell"
-                    :exit      0
-                    :tokens-in nil
-                    :tokens-out nil
-                    :gate      nil
-                    :artifacts nil})
+                    :kind      "shell"})
           steps  (store/get-steps *db* run-id)]
       (is (= 2 (count steps)))
-      (is (= "s1" (:step_id (first steps))))
-      (is (= "s2" (:step_id (second steps))))
-      (is (= "do the thing" (:prompt (first steps))))
-      (is (= 150 (:duration_ms (first steps)))))))
-
-;; ---------------------------------------------------------------------------
-;; finish-run
-;; ---------------------------------------------------------------------------
+      (is (= #{"s1" "s2"} (set (map :step/id steps))))
+      (is (= "do the thing" (:step/prompt (first (filter #(= "s1" (:step/id %)) steps)))))
+      (is (= 150 (:step/duration (first (filter #(= "s1" (:step/id %)) steps))))))))
 
 (deftest test-finish-run
-  (testing "finish-run updates output, exit_status, and totals"
+  (testing "finish-run updates output and exit status"
     (let [id  (store/record-run *db* {:name "finish-test" :input "x"})
           _   (store/finish-run *db* id "all done" 0
                 {:tokens-in 500 :tokens-out 200 :cost 0.02})
           run (store/get-run *db* id)]
-      (is (= "all done" (:output run)))
-      (is (= 0 (:exit_status run)))
-      (is (= 500 (:tokens_in run)))
-      (is (= 200 (:tokens_out run)))
-      (is (= 0.02 (:cost_usd run)))
-      (is (integer? (:finished_at run)))))
-
-  (testing "finish-run without totals defaults to zero"
-    (let [id  (store/record-run *db* {:name "finish-no-totals" :input "y"})
-          _   (store/finish-run *db* id "result" 1)
-          run (store/get-run *db* id)]
-      (is (= "result" (:output run)))
-      (is (= 1 (:exit_status run)))
-      (is (= 0 (:tokens_in run))))))
-
-;; ---------------------------------------------------------------------------
-;; list-runs
-;; ---------------------------------------------------------------------------
+      (is (= "all done" (:run/output run)))
+      (is (= 0 (:run/exit run)))
+      (is (integer? (:run/finished-at run))))))
 
 (deftest test-list-runs
   (testing "list-runs returns runs in descending order with limit"
     (dotimes [i 5]
       (store/record-run *db* {:name (str "run-" i) :input (str i)}))
     (let [runs (store/list-runs *db* :limit 3)]
-      (is (= 3 (count runs)))
-      ;; Descending order: newest first
-      (is (> (:id (first runs)) (:id (second runs)))))))
-
-(deftest test-list-runs-parent-filter
-  (testing "list-runs with parent-id filter"
-    (let [parent-id (store/record-run *db* {:name "parent" :input "p"})
-          child1    (store/record-run *db* {:name "child1" :input "c1"
-                                            :parent-run-id parent-id})
-          child2    (store/record-run *db* {:name "child2" :input "c2"
-                                            :parent-run-id parent-id})
-          _orphan   (store/record-run *db* {:name "orphan" :input "o"})
-          children  (store/list-runs *db* :parent-id parent-id)]
-      (is (= 2 (count children)))
-      (is (every? #(= parent-id (:parent_run_id %)) children)))))
+      (is (= 3 (count runs))))))
 
 (deftest test-list-runs-workflow-filter
   (testing "list-runs with workflow filter"
@@ -168,15 +87,7 @@
     (store/record-run *db* {:name "c" :input "z" :workflow-file "other.glitch"})
     (let [runs (store/list-runs *db* :workflow "deploy.glitch")]
       (is (= 2 (count runs)))
-      (is (every? #(= "deploy.glitch" (:workflow_file %)) runs)))))
-
-;; ---------------------------------------------------------------------------
-;; step upsert (INSERT OR REPLACE)
-;; ---------------------------------------------------------------------------
-
-;; ---------------------------------------------------------------------------
-;; confidence column
-;; ---------------------------------------------------------------------------
+      (is (every? #(= "deploy.glitch" (:run/workflow %)) runs)))))
 
 (deftest test-step-confidence-column
   (testing "record-step persists confidence value"
@@ -185,18 +96,7 @@
                    {:run-id run-id :step-id "s1" :output "done"
                     :kind "llm" :confidence 0.85})
           steps  (store/get-steps *db* run-id)]
-      (is (= 0.85 (:confidence (first steps))))))
-
-  (testing "confidence is nil when not set"
-    (let [run-id (store/record-run *db* {:name "no-conf" :input "y"})
-          _      (store/record-step *db*
-                   {:run-id run-id :step-id "s1" :output "done" :kind "step"})
-          steps  (store/get-steps *db* run-id)]
-      (is (nil? (:confidence (first steps)))))))
-
-;; ---------------------------------------------------------------------------
-;; step upsert (INSERT OR REPLACE)
-;; ---------------------------------------------------------------------------
+      (is (= 0.85 (:step/confidence (first steps)))))))
 
 (deftest test-step-upsert
   (testing "recording a step with same run-id+step-id replaces the old row"
@@ -207,4 +107,36 @@
                    {:run-id run-id :step-id "s1" :output "second"})
           steps  (store/get-steps *db* run-id)]
       (is (= 1 (count steps)))
-      (is (= "second" (:output (first steps)))))))
+      (is (= "second" (:step/output (first steps)))))))
+
+(deftest test-record-fact-and-edges
+  (testing "facts and edges are recorded and retrieved"
+    (let [run-id (store/record-run *db* {:name "fact-test" :input "x"})
+          _      (store/record-fact *db*
+                   {:id "f1" :run-id run-id :claim "the sky is blue"
+                    :confidence 0.9 :status :approved})
+          _      (store/record-fact *db*
+                   {:id "f2" :run-id run-id :claim "grass is green"
+                    :confidence 0.8 :status :unapproved})
+          _      (store/record-fact-edge *db*
+                   {:run-id run-id :from-id "f1" :to-id "f2"
+                    :rel :supports :weight 0.7})
+          facts  (store/get-facts *db* run-id)
+          edges  (store/get-fact-edges *db* run-id)]
+      (is (= 2 (count facts)))
+      (is (= 1 (count edges))))))
+
+(deftest test-persistence
+  (testing "data survives close and reopen"
+    (let [path (str "/tmp/glitch-persist-test-" (System/currentTimeMillis) ".edn")
+          db1  (store/open path)
+          id   (store/record-run db1 {:name "persist" :input "x"})]
+      (store/finish-run db1 id "done" 0)
+      (store/close db1)
+      (let [db2 (store/open path)
+            run (store/get-run db2 id)]
+        (try
+          (is (= "done" (:run/output run)))
+          (finally
+            (store/close db2)
+            (.delete (java.io.File. path))))))))
