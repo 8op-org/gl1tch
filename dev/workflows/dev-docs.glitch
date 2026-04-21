@@ -1,0 +1,63 @@
+(def model "sonnet")
+(def provider "copilot")
+
+(workflow "dev-docs"
+  :description "Extract source metadata and generate documentation"
+
+  (step "extract-namespaces"
+    (run ```
+      cd bb/src
+      for f in $(find glitch -name '*.clj' | sort); do
+        echo "--- $f ---"
+        rg '^\(def[n]?\s' "$f" -A 5 || true
+      done
+      ```))
+
+  (step "extract-cli"
+    (run "rg '\"(workflow|run|observe|config|up|down|index)\"' bb/src/glitch/main.clj -C 2 || true"))
+
+  (step "extract-providers"
+    (run ```
+      echo "=== Registered providers ==="
+      for f in bb/providers/*.clj; do
+        rg 'register\s' "$f" || true
+      done
+      echo "=== Config shape ==="
+      cat ~/.config/glitch/config.yaml 2>/dev/null || echo "no config found"
+      ```))
+
+  (step "existing-docs"
+    (run "ls site/src/content/docs/ 2>/dev/null || echo 'no docs dir'"))
+
+  (step "generate"
+    (llm
+      :provider provider
+      :model model
+      :prompt ```
+        You are a technical writer for gl1tch, a CLI that orchestrates
+        shell commands and LLM calls into automated workflows.
+
+        Generate documentation from this source extraction. Write for
+        users, not developers. Use "your" framing. Examples before
+        explanation. No internal implementation details (no BubbleTea,
+        OTel, SQLite references).
+
+        Namespaces and public API:
+        ~(ref "extract-namespaces")
+
+        CLI commands:
+        ~(ref "extract-cli")
+
+        Providers:
+        ~(ref "extract-providers")
+
+        Existing doc pages (avoid duplication):
+        ~(ref "existing-docs")
+
+        Output format: one markdown section per logical topic, with
+        frontmatter title and description suitable for Astro content
+        collections.
+        ```))
+
+  (step "save"
+    (save "dev/output/docs-draft.md" :from "generate")))

@@ -1,0 +1,54 @@
+(def model "sonnet")
+(def provider "copilot")
+
+(workflow "dev-release"
+  :description "Build, test, and generate release changelog"
+
+  (phase "quality" :retries 0
+    (gate "tests" (run "bb test 2>&1"))
+    (gate "build" (run "bb build 2>&1")))
+
+  (step "last-tag"
+    (run "git describe --tags --abbrev=0 2>/dev/null || echo 'none'"))
+
+  (step "changelog-raw"
+    (run ```
+      tag="~(ref "last-tag")"
+      if [ "$tag" = "none" ]; then
+        git log --oneline --no-merges -50
+      else
+        git log --oneline --no-merges "$tag"..HEAD
+      fi
+      ```))
+
+  (step "diff-stat"
+    (run ```
+      tag="~(ref "last-tag")"
+      if [ "$tag" = "none" ]; then
+        git diff --stat HEAD~10
+      else
+        git diff --stat "$tag"..HEAD
+      fi
+      ```))
+
+  (step "changelog"
+    (llm
+      :provider provider
+      :model model
+      :prompt ```
+        Write a release changelog for gl1tch from these commits.
+        Group by: Added, Changed, Fixed, Removed.
+        Skip merge commits and chore commits unless significant.
+        Be concise — one line per change, no fluff.
+
+        Previous tag: ~(ref "last-tag")
+
+        Commits:
+        ~(ref "changelog-raw")
+
+        Files changed:
+        ~(ref "diff-stat")
+        ```))
+
+  (step "save"
+    (save "dev/output/changelog-draft.md" :from "changelog")))

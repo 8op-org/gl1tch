@@ -1,0 +1,42 @@
+(def model "sonnet")
+(def provider "copilot")
+
+(workflow "dev-review"
+  :description "LLM review of uncommitted changes"
+
+  (step "staged"
+    (run "git diff --cached 2>&1 || echo 'nothing staged'"))
+
+  (step "unstaged"
+    (run "git diff 2>&1 || echo 'nothing unstaged'"))
+
+  (step "untracked"
+    (run "git ls-files --others --exclude-standard 2>&1 || echo 'none'"))
+
+  (step "review"
+    (llm
+      :provider provider
+      :model model
+      :prompt ```
+        Review these uncommitted changes to the gl1tch project.
+        Focus on:
+        - Bugs or logic errors
+        - API compatibility breaks
+        - Missing error handling at system boundaries
+        - Test coverage gaps
+        - Anything that looks accidentally committed (secrets, debug code, TODOs)
+
+        Be direct. If it looks fine, say so briefly.
+
+        Staged:
+        ~(ref "staged")
+
+        Unstaged:
+        ~(ref "unstaged")
+
+        Untracked files:
+        ~(ref "untracked")
+        ```))
+
+  (step "save"
+    (save "dev/output/review-draft.md" :from "review")))

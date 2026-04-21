@@ -1,0 +1,21 @@
+{:tasks
+ {build   {:doc "Build the glitch uberscript"
+           :task (shell {:dir "bb"} "bb build")}
+  test    {:doc "Run tests"
+           :task (shell {:dir "bb"} "bb test")}
+  install {:doc "Build and install glitch to /usr/local/bin"
+           :task (shell {:dir "bb"} "bb install")}
+  clean   {:doc "Clean build artifacts"
+           :task (shell {:dir "bb"} "bb clean")}
+  site:dev   {:doc "Run Astro dev server"
+              :task (shell {:dir "site"} "npm run dev")}
+  site:build {:doc "Build the 8op.org site"
+              :task (shell {:dir "site"} "npm run build")}
+  dev:setup   {:doc "Verify dev environment dependencies"
+               :task (shell "glitch workflow run dev-setup --path dev/workflows")}
+  dev:docs    {:doc "Generate documentation from source"
+               :task (shell "glitch workflow run dev-docs --path dev/workflows")}
+  dev:release {:doc "Build, test, and generate release changelog"
+               :task (shell "glitch workflow run dev-release --path dev/workflows")}
+  dev:review  {:doc "LLM review of uncommitted changes"
+               :task (shell "glitch workflow run dev-review --path dev/workflows")}}}

@@ -1,0 +1,53 @@
+(workflow "dev-setup"
+  :description "Verify dev environment dependencies"
+
+  (step "check-bb"
+    (run "bb --version 2>&1 | head -1 || echo 'FAIL: babashka not installed'"))
+
+  (step "check-rg"
+    (run "rg --version 2>&1 | head -1 || echo 'FAIL: ripgrep not installed'"))
+
+  (step "check-gh"
+    (run "gh auth status 2>&1 | head -1 || echo 'FAIL: gh not authenticated'"))
+
+  (step "check-lmstudio"
+    (run "curl -sf http://localhost:1234/v1/models | jq -r '.data[0].id // \"FAIL: no models loaded\"' 2>&1 || echo 'FAIL: LM Studio not running on :1234'"))
+
+  (step "check-openrouter"
+    (run ```
+      source ~/.env 2>/dev/null
+      if [ -z "$OPENROUTER_API_KEY" ]; then
+        echo "FAIL: OPENROUTER_API_KEY not set in ~/.env"
+      else
+        echo "OK: OPENROUTER_API_KEY set (${#OPENROUTER_API_KEY} chars)"
+      fi
+      ```))
+
+  (step "check-providers"
+    (run ```
+      dir="$HOME/.config/glitch/providers"
+      missing=""
+      for p in lmstudio claude copilot openrouter; do
+        [ -f "$dir/$p.clj" ] || missing="$missing $p"
+      done
+      if [ -z "$missing" ]; then
+        echo "OK: all providers installed"
+      else
+        echo "FAIL: missing providers:$missing"
+      fi
+      ```))
+
+  (step "check-glitch"
+    (run "glitch --version 2>&1 | head -1 || echo 'FAIL: glitch not installed'"))
+
+  (step "summary"
+    (run ```
+      echo "=== Dev Environment ==="
+      echo "bb:         ~(ref "check-bb")"
+      echo "rg:         ~(ref "check-rg")"
+      echo "gh:         ~(ref "check-gh")"
+      echo "lmstudio:   ~(ref "check-lmstudio")"
+      echo "openrouter: ~(ref "check-openrouter")"
+      echo "providers:  ~(ref "check-providers")"
+      echo "glitch:     ~(ref "check-glitch")"
+      ```)))
