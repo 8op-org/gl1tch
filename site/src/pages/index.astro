@@ -176,7 +176,7 @@ import Base from '../layouts/Base.astro';
 
 <span class="term-header">&gt;&gt; site</span> <span class="term-anno">router</span>
   <span class="term-dim">&gt;</span> <span class="term-dim">pages</span>
-  <span class="term-llm">&gt;</span> <span class="term-llm">route</span>                  <span class="term-anno">lmstudio/gemma4</span>
+  <span class="term-llm">&gt;</span> <span class="term-llm">route</span>                  <span class="term-anno">openrouter/gemma4</span>
   <span class="term-anno">&rarr; homepage</span>
 
 <span class="term-header">&gt;&gt; site-homepage</span> <span class="term-anno">:agentic true</span>
@@ -221,19 +221,23 @@ import Base from '../layouts/Base.astro';
 <div class="wrap">
   <div class="section-label">integrations</div>
   <h2>Give your agents gl1tch.</h2>
+  <p class="section-copy">gl1tch runs an MCP server that exposes 8 tools — read files, grep, search, run workflows, and more. Any MCP-compatible agent gets full access to your codebase through glitch.</p>
 
   <div class="agent-cards">
     <div class="agent-card">
       <div class="agent-card-label">Claude Code</div>
       <pre class="code copyable" data-copy="claude mcp add glitch -- glitch mcp"><span class="p">$</span> claude mcp add glitch -- glitch mcp</pre>
+      <p>Adds glitch as an MCP server. Claude can read files, grep code, run workflows, and search your indexed repos — all from within a conversation.</p>
     </div>
     <div class="agent-card">
       <div class="agent-card-label">Copilot CLI</div>
-      <pre class="code copyable" data-copy="copilot --additional-mcp-config mcp.json"><span class="p">$</span> copilot --additional-mcp-config mcp.json</pre>
+      <pre class="code copyable" data-copy="copilot --additional-mcp-config mcp.json"><span class="p">$</span> copilot --additional-mcp-config <span class="s">mcp.json</span></pre>
+      <p>Point copilot at glitch's MCP config. It calls tools automatically — reads files, verifies facts, runs workflows mid-conversation.</p>
     </div>
     <div class="agent-card">
-      <div class="agent-card-label">Any agent</div>
-      <pre class="code copyable" data-copy="curl -sLo AGENTS.md https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md"><span class="p">$</span> curl -sLo AGENTS.md <span class="s">https://raw.githubusercontent.com/8op-org/gl1tch/main/skills/generic/AGENTS.md</span></pre>
+      <div class="agent-card-label">Any MCP client</div>
+      <pre class="code copyable" data-copy="glitch mcp"><span class="p">$</span> glitch mcp</pre>
+      <p>Starts a stdio MCP server. Pipe it into any MCP-compatible client — Cursor, Windsurf, custom agents. 8 tools: <code>read_file</code>, <code>grep</code>, <code>search</code>, <code>run</code>, <code>eval</code>, <code>check</code>, <code>symbols</code>, <code>index</code>.</p>
     </div>
   </div>
 </div>
