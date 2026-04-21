@@ -265,7 +265,7 @@
 
    Options (keyword args):
      :input          — string input available via (input)
-     :db             — SQLite db path (from store/open); nil to skip recording
+     :db             — store map (from store/open); nil to skip recording
      :model          — default model name for LLM calls
      :provider       — default provider name for LLM calls
      :params         — map of parameters available via (params)/(param k)

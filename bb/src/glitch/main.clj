@@ -168,7 +168,7 @@
   (let [{:keys [opts]} (parse-args args {:port {:short "p" :kind :option}})
         port (or (some-> (:port opts) parse-long) 1667)]
     (require '[glitch.repl :as repl])
-    ((resolve 'glitch.repl/start) port)))
+    ((resolve 'glitch.repl/start) {:port port})))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry point
