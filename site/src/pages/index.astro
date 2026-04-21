@@ -56,12 +56,13 @@ import Base from '../layouts/Base.astro';
 
     <div class="feature-card">
       <div class="feature-number">02</div>
-      <h3>8 built-in tools</h3>
-      <p>Every LLM step gets read_file, grep, search, symbols, run, eval, check, and index by default. Restrict to a subset or pass an empty list for legacy behavior.</p>
-      <pre class="code feature-code"><span class="r">;; restrict to specific tools</span>
-(<span class="k">llm</span> <span class="r">:tools</span> [<span class="s">"glitch_read_file"</span>
-             <span class="s">"glitch_grep"</span>]
-  <span class="r">:prompt</span> <span class="s">"Check what commands exist..."</span>)</pre>
+      <h3>4 providers, one interface</h3>
+      <p>Switch between LM Studio, Copilot, OpenRouter, and Claude with a keyword. Each provider gets the same tool-use interface — your workflows don't change when you swap models.</p>
+      <pre class="code feature-code"><span class="r">;; same tools, different provider</span>
+(<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"copilot"</span>
+  <span class="r">:prompt</span> <span class="s">"Review this PR..."</span>)
+(<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"openrouter"</span>
+  <span class="r">:prompt</span> <span class="s">"Summarize the diff..."</span>)</pre>
     </div>
 
     <div class="feature-card">
@@ -86,12 +87,14 @@ import Base from '../layouts/Base.astro';
 
     <div class="feature-card">
       <div class="feature-number">05</div>
-      <h3>Phase gates</h3>
-      <p>Verification built into the language. Gates must pass before the workflow continues. LLM-powered gates can use tools to verify claims against the codebase.</p>
-      <pre class="code feature-code">(<span class="k">step</span> <span class="s">"gate"</span>
-  (<span class="k">llm</span> <span class="r">:agentic</span> <span class="s">true</span>
-    <span class="r">:prompt</span> <span class="s">"Verify no hallucinated
-    commands. Return JSON..."</span>))</pre>
+      <h3>Confidence framework</h3>
+      <p>Verify LLM output is grounded in your codebase. Schema validation, confidence scoring with retries, and multi-provider consensus — all as workflow primitives.</p>
+      <pre class="code feature-code"><span class="r">;; verify output against source</span>
+(<span class="k">grounded?</span> <span class="s">"rewrite"</span> (<span class="k">ref</span> <span class="s">"context"</span>)
+  <span class="r">:provider</span> <span class="s">"openrouter"</span>)
+<span class="r">;; multi-provider voting</span>
+(<span class="k">consensus</span> [<span class="s">"copilot"</span> <span class="s">"openrouter"</span>]
+  <span class="r">:prompt</span> <span class="s">"Classify severity..."</span>)</pre>
     </div>
 
     <div class="feature-card">
@@ -216,28 +219,58 @@ import Base from '../layouts/Base.astro';
 </div>
 </section>
 
-<!-- ── Agent integration ────────────────────��� -->
+<!-- ── Get started ─────────────────────────── -->
 <section id="agents">
 <div class="wrap">
-  <div class="section-label">integrations</div>
-  <h2>Give your agents gl1tch.</h2>
-  <p class="section-copy">gl1tch runs an MCP server that exposes 8 tools — read files, grep, search, run workflows, and more. Any MCP-compatible agent gets full access to your codebase through glitch.</p>
+  <div class="section-label">get started</div>
+  <h2>Three steps. Your first workflow runs in under a minute.</h2>
+
+  <div class="agent-cards">
+    <div class="agent-card">
+      <div class="agent-card-label">1. Install</div>
+      <pre class="code copyable" data-copy="brew install 8op-org/tap/glitch"><span class="p">$</span> brew install 8op-org/tap/glitch</pre>
+      <p>Single binary via Homebrew. No runtime dependencies, no Docker, no config files.</p>
+    </div>
+    <div class="agent-card">
+      <div class="agent-card-label">2. Write your first workflow</div>
+      <pre class="code copyable" data-copy="mkdir -p .glitch/workflows"><span class="p">$</span> mkdir -p .glitch/workflows</pre>
+      <p>Create <code>.glitch/workflows/hello.glitch</code>:</p>
+      <pre class="code feature-code">(<span class="k">workflow</span> <span class="s">"hello"</span>
+  (<span class="k">step</span> <span class="s">"greet"</span>
+    (<span class="k">llm</span> <span class="r">:provider</span> <span class="s">"copilot"</span>
+      <span class="r">:prompt</span> (<span class="k">str</span> <span class="s">"Summarize this repo: "</span>
+        (<span class="k">sh</span> <span class="s">"git log --oneline -10"</span>)))))</pre>
+    </div>
+    <div class="agent-card">
+      <div class="agent-card-label">3. Run it</div>
+      <pre class="code copyable" data-copy="glitch run hello"><span class="p">$</span> glitch run hello</pre>
+      <p>That's it. Shell fetches the git log, your LLM summarizes it. Add more steps, swap providers, add gates — your workflow grows with you.</p>
+    </div>
+  </div>
+
+  <div class="section-label" style="margin-top: 3rem;">give your agents glitch</div>
+  <h2>Connect glitch as an MCP server to any AI agent.</h2>
+  <p class="section-copy">Your agent gets 8 tools: read files, grep, search, run workflows, eval expressions, check syntax, search symbols, and index repos.</p>
 
   <div class="agent-cards">
     <div class="agent-card">
       <div class="agent-card-label">Claude Code</div>
       <pre class="code copyable" data-copy="claude mcp add glitch -- glitch mcp"><span class="p">$</span> claude mcp add glitch -- glitch mcp</pre>
-      <p>Adds glitch as an MCP server. Claude can read files, grep code, run workflows, and search your indexed repos — all from within a conversation.</p>
     </div>
     <div class="agent-card">
       <div class="agent-card-label">Copilot CLI</div>
-      <pre class="code copyable" data-copy="copilot --additional-mcp-config mcp.json"><span class="p">$</span> copilot --additional-mcp-config <span class="s">mcp.json</span></pre>
-      <p>Point copilot at glitch's MCP config. It calls tools automatically — reads files, verifies facts, runs workflows mid-conversation.</p>
+      <pre class="code copyable" data-copy="copilot --additional-mcp-config mcp.json"><span class="r">// mcp.json</span>
+&#123;"mcpServers":&#123;"glitch":&#123;
+  "type":"stdio",
+  "command":"glitch",
+  "args":["mcp"]&#125;&#125;&#125;
+
+<span class="p">$</span> copilot --additional-mcp-config mcp.json</pre>
     </div>
     <div class="agent-card">
       <div class="agent-card-label">Any MCP client</div>
       <pre class="code copyable" data-copy="glitch mcp"><span class="p">$</span> glitch mcp</pre>
-      <p>Starts a stdio MCP server. Pipe it into any MCP-compatible client — Cursor, Windsurf, custom agents. 8 tools: <code>read_file</code>, <code>grep</code>, <code>search</code>, <code>run</code>, <code>eval</code>, <code>check</code>, <code>symbols</code>, <code>index</code>.</p>
+      <p>Stdio server. Works with Cursor, Windsurf, or any MCP-compatible agent.</p>
     </div>
   </div>
 </div>
