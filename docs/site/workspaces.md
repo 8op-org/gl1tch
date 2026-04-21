@@ -43,8 +43,8 @@ The format is s-expressions, same as workflows. A full example with all resource
   :owner "your-name"
 
   (defaults
-    :model "qwen2.5:7b"
-    :provider "ollama"
+    :model "qwen3-8b"
+    :provider "lmstudio"
     :elasticsearch "http://localhost:9200"
     (params
       :repo "acme/backend"
@@ -346,8 +346,8 @@ No hardcoded repo list. Add or remove resources in `workspace.glitch` and the br
 
 ```glitch
 (config
-  :default-model "qwen2.5:7b"
-  :default-provider "ollama"
+  :default-model "qwen3-8b"
+  :default-provider "lmstudio"
   :eval-threshold 4
 
   (providers
@@ -355,14 +355,15 @@ No hardcoded repo list. Add or remove resources in `workspace.glitch` and the br
       :type "openai-compatible"
       :base-url "https://openrouter.ai/api/v1"
       :api-key-env "OPENROUTER_API_KEY"
-      :default-model "google/gemma-3-12b-it:free")
+      :default-model "google/gemma-3-12b-it")
 
     (provider "claude" :type "cli"))
 
   (tiers
-    (tier :providers ("ollama") :model "qwen2.5:7b")
-    (tier :providers ("openrouter") :model "google/gemma-3-12b-it:free")
-    (tier :providers ("copilot" "claude"))))
+    (tier :providers ("copilot"))
+    (tier :providers ("claude"))
+    (tier :providers ("openrouter"))
+    (tier :providers ("lmstudio"))))
 ```
 
 One format across global config, workspace config, and workflows.
@@ -371,5 +372,5 @@ One format across global config, workspace config, and workflows.
 
 - [Workflow Syntax](/docs/workflow-syntax) — the step forms and templates your workspace workflows use
 - [Plugins](/docs/plugins) — reusable data-gathering subcommands that compose with workflows
-- [Local Models](/docs/local-models) — setting up Ollama for your workspace's default model
+- [Local Models](/docs/local-models) — setting up LM Studio for your workspace's default model
 - [Batch Comparison Runs](/docs/batch-comparison-runs) — parent/child runs across multiple providers

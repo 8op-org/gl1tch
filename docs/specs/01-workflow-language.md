@@ -52,7 +52,7 @@ The discard reader `#_` causes the parser to skip the next form:
 `(def name value)` creates a parse-time string binding. Defs are resolved top-to-bottom; a def MAY reference an earlier def.
 
 ```glitch
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 (def prefix "review")
 ```
 

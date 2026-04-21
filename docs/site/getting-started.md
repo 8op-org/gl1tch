@@ -6,12 +6,11 @@
 brew install 8op-org/tap/glitch
 ```
 
-gl1tch routes LLM steps through Ollama by default. Install it and pull a model:
+gl1tch routes LLM steps through LM Studio by default. Install it and load a model:
 
-```bash
-brew install ollama
-ollama pull qwen2.5:7b
-```
+1. Download [LM Studio](https://lmstudio.ai) and launch it
+2. Go to **Settings → Server** and enable the local server (port 1234)
+3. Pull a model — **qwen3-8b** is a good default
 
 You also need GitHub CLI authenticated:
 
@@ -40,8 +39,8 @@ That runs `examples/hello.glitch`:
 ;;
 ;; Run with: glitch workflow run hello-sexpr
 
-(def model "qwen2.5:7b")
-(def provider "ollama")
+(def model "qwen3-8b")
+(def provider "lmstudio")
 
 (workflow "hello-sexpr"
   :description "Demo s-expression workflow format"
@@ -63,7 +62,7 @@ That runs `examples/hello.glitch`:
 
 What each part does:
 
-- `(def model "qwen2.5:7b")` — binds a constant you reference by name anywhere in the file
+- `(def model "qwen3-8b")` — binds a constant you reference by name anywhere in the file
 - `(workflow "hello-sexpr" ...)` — declares the workflow. The string is the name you pass to `glitch workflow run`
 - `(step "gather" (run "..."))` — runs a shell command and captures stdout
 - `(step "respond" (llm ...))` — sends a prompt to your local model
@@ -77,7 +76,7 @@ Here's a more practical example — reviewing staged git changes:
 ````glitch
 ;; code-review.glitch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "code-review"
   :description "Review staged git changes and flag issues"
@@ -116,7 +115,7 @@ Shell steps fetch the data (free, deterministic). LLM steps make sense of it (ex
 Create `workflows/my-workflow.glitch`:
 
 ````glitch
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "my-workflow"
   :description "What it does"
@@ -156,7 +155,7 @@ Every step's output is available to later steps via `~(step id)`. Chain as many 
 ````glitch
 ;; multi-step-chain.glitch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "multi-step-chain"
   :description "Gather system info, analyze it, then produce recommendations"
@@ -198,7 +197,7 @@ Write any step's output to a file with `(save ...)`:
 ````glitch
 ;; git-changelog.glitch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "git-changelog"
   :description "Summarize recent git commits into a human-readable changelog"

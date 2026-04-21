@@ -38,7 +38,7 @@ The manifest file MUST be named `plugin.glitch` and reside in the plugin's root 
 ```glitch
 (plugin "name" :description "what this plugin does" :version "1.0")
 (def api_url "https://api.example.com")
-(def default_model "qwen2.5:7b")
+(def default_model "qwen3-8b")
 ```
 
 ### Requirements

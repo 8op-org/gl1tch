@@ -329,8 +329,8 @@ Compare variant outputs across multiple LLM providers. Uses `glob` to find revie
 ````glitch
 ;; cross-review.glitch — neutral grader for batch comparison runs
 
-(def provider "ollama")
-(def model "qwen3:8b")
+(def provider "lmstudio")
+(def model "qwen3-8b")
 
 (workflow "cross-review"
   :description "Compare variant outputs and pick the best one"

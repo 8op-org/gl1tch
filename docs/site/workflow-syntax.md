@@ -32,7 +32,7 @@ A workflow wraps named steps. Here is a complete real-world example:
 ;;
 ;; Run with: glitch workflow run code-review
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "code-review"
   :description "Review staged git changes and flag issues"
@@ -71,8 +71,8 @@ The string passed to `(workflow ...)` is the name you use with `glitch workflow 
 `(def name value)` binds a constant for the whole file. Define your model once, reference it everywhere:
 
 ````glitch
-(def model "qwen2.5:7b")
-(def provider "ollama")
+(def model "qwen3-8b")
+(def provider "lmstudio")
 
 (workflow "hello-sexpr"
   :description "Demo s-expression workflow format"
@@ -202,7 +202,7 @@ Full example with `--set` parameters:
 ;;
 ;; Run with: glitch workflow run parameterized --set repo=gl1tch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "parameterized"
   :description "Show how to pass runtime parameters into a workflow"
@@ -236,8 +236,8 @@ All keyword arguments for `(llm ...)`:
 | Option | Values | What it does |
 |--------|--------|-------------|
 | `:prompt` | string (required) | The prompt text |
-| `:provider` | `"ollama"`, `"claude"`, `"copilot"`, `"gemini"`, custom | Which LLM backend |
-| `:model` | model identifier | e.g. `"qwen2.5:7b"`, `"sonnet"` |
+| `:provider` | `"lmstudio"`, `"copilot"`, `"claude"`, `"openrouter"`, custom | Which LLM backend |
+| `:model` | model identifier | e.g. `"qwen3-8b"`, `"sonnet"` |
 | `:skill` | skill name | Prepends skill context to your prompt |
 | `:format` | `"json"` or `"yaml"` | Validates that output parses correctly |
 | `:tier` | `0`, `1`, `2` | Pin to a specific cost tier |
@@ -263,13 +263,14 @@ Using `:skill` to inject context — the skill content is prepended to your prom
 
 ## Tiered cost routing
 
-When you omit both `:provider` and `:tier`, gl1tch routes automatically through tiers:
+When you omit both `:provider` and `:tier`, gl1tch tries your default provider (LM Studio) first. If that fails, it escalates through tiers:
 
-- **Tier 0** — local (ollama), free
-- **Tier 1** — cheap cloud (openrouter free tier, copilot)
-- **Tier 2** — premium (claude)
+- **Tier 0** — copilot (free CLI)
+- **Tier 1** — claude (premium CLI)
+- **Tier 2** — openrouter (cloud API)
+- **Tier 3** — lmstudio (local fallback)
 
-After each non-final tier, gl1tch self-evaluates the response quality. If it passes, routing stops. If not, it escalates. You pay for quality only when the local model can't handle it.
+Escalation is based on availability — if a provider returns an empty response or errors, gl1tch moves to the next tier. You pay for cloud only when local can't handle it.
 
 Pin a step to a tier when you know what you need:
 
@@ -543,7 +544,7 @@ Index a single document, with optional auto-embedding:
   (index :index "my-index"
          :doc "~(step generate)"
          :id "doc-1"
-         :embed :field "content" :provider "ollama" :model "nomic-embed-text"))
+         :embed :field "content" :provider "lmstudio" :model "nomic-embed-text"))
 ```
 
 | Keyword | Required | Description |
@@ -577,14 +578,14 @@ Generate an embedding vector from text:
 ```glitch
 (step "vec"
   (embed :input "~(step content)"
-         :provider "ollama"
+         :provider "lmstudio"
          :model "nomic-embed-text"))
 ```
 
 | Keyword | Required | Description |
 |---------|----------|-------------|
 | `:input` | yes | Text to embed |
-| `:provider` | yes | Embedding provider (e.g. `"ollama"`) |
+| `:provider` | yes | Embedding provider (e.g. `"lmstudio"`) |
 | `:model` | yes | Embedding model (e.g. `"nomic-embed-text"`) |
 
 Returns a JSON array of floats.
