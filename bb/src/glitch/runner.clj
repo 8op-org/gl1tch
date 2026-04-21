@@ -125,6 +125,14 @@
                  'gate           g/gate
                  'call-workflow  sci-call-workflow
                  'json-extract   g/json-extract
+
+                 ;; confidence framework
+                 'validate        g/validate
+                 'validate-schema g/validate-schema
+                 'check-contract  g/check-contract
+                 'grounded?       g/grounded?
+                 'consensus       g/consensus
+
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
                  ;; state setters (rarely needed in workflows, but available)
