@@ -1,0 +1,64 @@
+name: Update glitch-dev formula
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bb/**'
+      - 'bb.edn'
+
+permissions:
+  contents: read
+
+jobs:
+  update-dev-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          cat > formula.rb <<'FORMULA'
+          class GlitchDev < Formula
+            desc "gl1tch workflow engine (HEAD — latest from main)"
+            homepage "https://8op.org"
+            license "MIT"
+            head "https://github.com/8op-org/gl1tch.git", branch: "main"
+
+            depends_on "babashka"
+
+            def install
+              cd "bb" do
+                system "bb", "build"
+                bin.install "build/glitch"
+              end
+              (share/"glitch/providers").install Dir["bb/providers/*.clj"]
+            end
+
+            def post_install
+              provider_dir = etc/"glitch/providers"
+              provider_dir.mkpath
+              (share/"glitch/providers").each_child do |f|
+                provider_dir.install_symlink f unless (provider_dir/f.basename).exist?
+              end
+            end
+
+            test do
+              assert_match "glitch", shell_output("#{bin}/glitch version")
+            end
+          end
+          FORMULA
+
+          cd "$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" tap
+          cd tap
+          mkdir -p Formula
+          cp "${OLDPWD}/formula.rb" Formula/glitch-dev.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/glitch-dev.rb
+          git diff --cached --quiet && echo "no changes" && exit 0
+          git commit -m "glitch-dev ${COMMIT_SHA:0:7}"
+          git push
