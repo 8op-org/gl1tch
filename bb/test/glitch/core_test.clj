@@ -510,3 +510,56 @@
                 :step-id "conf-test")
       (let [last-rec (last @recorded)]
         (is (= 0.85 (:confidence last-rec)))))))
+
+;; --- grounded? ---
+
+(deftest grounded-passes-test
+  (testing "grounded? returns true when LLM says grounded"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"grounded\": true, \"unsupported\": []}"
+         :tokens-in 1 :tokens-out 1}))
+    (core/step "doc" "The CLI supports --verbose flag.")
+    (is (true? (core/grounded? "doc" "CLI reference: --verbose enables debug output")))))
+
+(deftest grounded-fails-test
+  (testing "grounded? throws when LLM says not grounded"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"grounded\": false, \"unsupported\": [{\"claim\": \"--quiet flag\", \"reason\": \"not in context\"}]}"
+         :tokens-in 1 :tokens-out 1}))
+    (core/step "doc" "The CLI supports --quiet flag.")
+    (is (thrown-with-msg? Exception #"grounding-failure"
+           (core/grounded? "doc" "CLI reference: --verbose enables debug output")))))
+
+(deftest grounded-soft-mode-test
+  (testing "grounded? with :strict false records but doesn't throw"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"grounded\": false, \"unsupported\": [{\"claim\": \"x\", \"reason\": \"y\"}]}"
+         :tokens-in 1 :tokens-out 1}))
+    (core/step "doc" "some text")
+    (is (false? (core/grounded? "doc" "context" :strict false)))))
+
+(deftest grounded-max-unsupported-test
+  (testing "grounded? with :max-unsupported allows N unsupported claims"
+    (core/set-provider-fn!
+      (fn [opts]
+        {:response "{\"grounded\": false, \"unsupported\": [{\"claim\": \"x\", \"reason\": \"y\"}]}"
+         :tokens-in 1 :tokens-out 1}))
+    (core/step "doc" "text")
+    (is (true? (core/grounded? "doc" "ctx" :max-unsupported 1)))))
+
+(deftest grounded-records-via-recorder-test
+  (testing "grounded? records result via step-recorder"
+    (let [recorded (atom [])]
+      (core/set-provider-fn!
+        (fn [opts]
+          {:response "{\"grounded\": true, \"unsupported\": []}"
+           :tokens-in 1 :tokens-out 1}))
+      (core/set-step-recorder! (fn [m] (swap! recorded conj m)))
+      (core/step "doc" "valid text")
+      (core/grounded? "doc" "context")
+      (let [grounding-rec (last @recorded)]
+        (is (= "grounded" (:kind grounding-rec)))
+        (is (= 1 (:gate-passed grounding-rec)))))))

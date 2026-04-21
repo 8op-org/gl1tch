@@ -423,3 +423,48 @@
                          :tokens-in (or (:tokens-in result) 0)
                          :tokens-out (or (:tokens-out result) 0)}))
             response))))))
+
+;; --- Grounding ---
+
+(def ^:private grounding-prompt
+  "You are a factual verification system. Compare the OUTPUT against the CONTEXT (ground truth).
+
+Identify any claims, commands, features, or examples in the OUTPUT that are NOT directly supported by the CONTEXT.
+
+Do not flag style issues, opinions, or reasonable inferences. Only flag factual claims that contradict or have no basis in the context.
+
+CONTEXT:
+%s
+
+OUTPUT:
+%s
+
+Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact text\", \"reason\": \"why unsupported\"}]}")
+
+(defn grounded?
+  "Verify that a step's output is factually supported by provided context.
+   Options: :provider, :strict (default true), :max-unsupported (default 0)"
+  [step-id context & {:keys [provider strict max-unsupported]
+                       :or {strict true max-unsupported 0}}]
+  (let [output   (ref step-id)
+        prompt   (format grounding-prompt context output)
+        response (@*provider-fn* {:prompt prompt :provider provider})
+        extracted (json-extract (:response response))
+        parsed   (try (json/parse-string extracted) (catch Exception _ nil))
+        grounded (get parsed "grounded")
+        unsupported (or (get parsed "unsupported") [])
+        num-unsupported (count unsupported)
+        passed   (or grounded (<= num-unsupported max-unsupported))]
+    (when-let [recorder @*step-recorder*]
+      (recorder {:step-id (str "grounded:" step-id)
+                 :kind "grounded"
+                 :output (str passed)
+                 :gate-passed (if passed 1 0)
+                 :artifacts (json/generate-string
+                              {:grounded grounded :unsupported unsupported})}))
+    (if (or passed (not strict))
+      passed
+      (throw (ex-info (str "grounding-failure: " num-unsupported " unsupported claims")
+                      {:kind :grounding-failure
+                       :step-id step-id
+                       :unsupported unsupported})))))
