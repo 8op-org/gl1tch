@@ -60,15 +60,18 @@
       (is (= 0.50 (get-in @g [:facts "f1" :confidence]))))))
 
 (deftest add-fact-contradiction-test
-  (testing "add-fact! detects contradiction and reduces both facts"
+  (testing "add-fact! detects contradiction with 3+ keyword overlap and reduces both facts"
     (let [g (graph/make-graph)]
-      (graph/add-fact! g {:id "f1" :claim "Service X is running normally"
+      ;; Need 3+ non-stopword overlap tokens + polarity flip
+      (graph/add-fact! g {:id "f1" :claim "service database query response healthy"
                           :confidence 0.65})
-      (graph/add-fact! g {:id "f2" :claim "Service X is not running normally"
+      (graph/add-fact! g {:id "f2" :claim "service database query response not healthy"
                           :confidence 0.65})
-      ;; Both should have reduced confidence (0.65 * 0.7 = 0.455)
+      ;; f2 decayed before insertion: 0.65 * 0.7^1 = 0.455, then contradict! hits both
       (is (< (get-in @g [:facts "f1" :confidence]) 0.65))
-      (is (< (get-in @g [:facts "f2" :confidence]) 0.65))
+      (is (< (get-in @g [:facts "f2" :confidence]) 0.455))
+      (is (= :contradicted (get-in @g [:facts "f1" :status])))
+      (is (= :contradicted (get-in @g [:facts "f2" :status])))
       (is (= 1 (get-in @g [:stats :contradictions-found]))))))
 
 ;; ---------------------------------------------------------------------------
@@ -76,9 +79,9 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest detect-contradictions-polarity-flip-test
-  (testing "detects polarity flip with keyword overlap"
-    (let [facts {"f1" {:claim "The database is responding to queries"}}
-          new-fact {:claim "The database is not responding to queries"}]
+  (testing "detects polarity flip with 3+ keyword overlap"
+    (let [facts {"f1" {:claim "database responding queries slowly today"}}
+          new-fact {:claim "database responding queries not slowly today"}]
       (is (seq (graph/detect-contradictions new-fact facts))))))
 
 (deftest detect-contradictions-no-false-positive-test
@@ -98,13 +101,15 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest contradict-test
-  (testing "contradict! adds edge and reduces confidence on both"
+  (testing "contradict! adds edge, reduces confidence, and sets :contradicted status"
     (let [g (graph/make-graph)]
       (swap! g assoc-in [:facts "f1"] {:id "f1" :claim "A" :confidence 0.60 :status :unapproved})
       (swap! g assoc-in [:facts "f2"] {:id "f2" :claim "B" :confidence 0.60 :status :unapproved})
       (graph/contradict! g "f1" "f2")
       (is (== 0.42 (get-in @g [:facts "f1" :confidence])))
       (is (== 0.42 (get-in @g [:facts "f2" :confidence])))
+      (is (= :contradicted (get-in @g [:facts "f1" :status])))
+      (is (= :contradicted (get-in @g [:facts "f2" :status])))
       (is (= 1 (count (:edges @g))))
       (is (= :contradicts (:rel (first (:edges @g))))))))
 
@@ -113,24 +118,27 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest corroborate-breaks-cap-test
-  (testing "corroborate! uses Bayesian accumulation to break 0.70 cap"
+  (testing "corroborate! uses spec formula: 1 - (1-old)(1-auth*0.85)"
     (let [g (graph/make-graph)]
       (swap! g assoc-in [:facts "f1"] {:id "f1" :claim "Logs confirm OOM"
                                         :confidence 0.65 :status :unapproved})
-      (graph/corroborate! g "f1" "provider-b" :authority 0.90 :base-conf 0.65)
+      (graph/corroborate! g "f1" {:authority 0.90 :step "provider-b"})
       (let [new-conf (get-in @g [:facts "f1" :confidence])]
-        ;; 1 - (1-0.65)(1-0.90*0.65) = 1 - 0.35 * 0.415 = 1 - 0.14525 = 0.85475
-        (is (> new-conf 0.70) "Should break the 0.70 single-source cap")
-        (is (< new-conf 1.0))))))
+        ;; 1 - (1-0.65)(1-0.90*0.85) = 1 - 0.35 * 0.235 = 1 - 0.08225 = 0.91775
+        (is (> new-conf 0.91) "Should be ~0.918")
+        (is (< new-conf 0.92))
+        (is (> new-conf 0.70) "Should break the 0.70 single-source cap")))))
 
-(deftest corroborate-tracks-sources-test
-  (testing "corroborate! tracks the new source"
+(deftest corroborate-adds-edge-test
+  (testing "corroborate! adds a :corroborates edge"
     (let [g (graph/make-graph)]
       (swap! g assoc-in [:facts "f1"] {:id "f1" :claim "test" :confidence 0.5
                                         :status :unapproved})
-      (graph/corroborate! g "f1" "source-a")
-      (graph/corroborate! g "f1" "source-b")
-      (is (= ["source-a" "source-b"] (get-in @g [:facts "f1" :sources]))))))
+      (graph/corroborate! g "f1" {:authority 0.85 :step "source-a"})
+      (let [edges (:edges @g)]
+        (is (= 1 (count edges)))
+        (is (= :corroborates (:rel (first edges))))
+        (is (= "source-a" (:source (first edges))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; approve!
@@ -150,7 +158,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest shortest-path-test
-  (testing "finds shortest path through known graph"
+  (testing "finds shortest path using edge weights (not node confidence)"
     (let [g (graph/make-graph)]
       ;; Build: approved -> f1 -> f2 -> goal
       (swap! g assoc-in [:facts "start"] {:id "start" :status :approved :confidence 1.0
@@ -161,13 +169,31 @@
                                         :claim "Near goal"})
       (swap! g assoc-in [:facts "goal"] {:id "goal" :status :goal :confidence 0.0
                                           :claim "Investigation goal"})
-      (graph/add-edge! g {:from "start" :to "f1" :rel :supports :weight 1.0})
-      (graph/add-edge! g {:from "f1" :to "f2" :rel :supports :weight 1.0})
-      (graph/add-edge! g {:from "f2" :to "goal" :rel :supports :weight 1.0})
-      (let [path (graph/shortest-path g "goal")]
-        (is (some? path))
-        (is (= ["start" "f1" "f2" "goal"] (:path path)))
-        (is (number? (:cost path)))))))
+      (graph/add-edge! g {:from "start" :to "f1" :rel :supports :weight 0.9})
+      (graph/add-edge! g {:from "f1" :to "f2" :rel :supports :weight 0.7})
+      (graph/add-edge! g {:from "f2" :to "goal" :rel :supports :weight 0.5})
+      (let [result (graph/shortest-path g "goal")]
+        (is (some? result))
+        (is (= ["start" "f1" "f2" "goal"] (:path result)))
+        ;; Cost = (1-0.9) + (1-0.7) + (1-0.5) = 0.1 + 0.3 + 0.5 = 0.9
+        (is (< (Math/abs (- (:cost result) 0.9)) 0.001))
+        ;; min-edge = min(0.9, 0.7, 0.5) = 0.5
+        (is (= 0.5 (:min-edge result)))))))
+
+(deftest shortest-path-directional-test
+  (testing "edges are directional — reverse direction not traversable"
+    (let [g (graph/make-graph)]
+      (swap! g assoc-in [:facts "start"] {:id "start" :status :approved :confidence 1.0
+                                           :claim "Known"})
+      (swap! g assoc-in [:facts "mid"] {:id "mid" :status :unapproved :confidence 0.5
+                                         :claim "Mid"})
+      (swap! g assoc-in [:facts "goal"] {:id "goal" :status :goal :confidence 0.0
+                                          :claim "Goal"})
+      ;; Edge goes goal -> mid -> start (wrong direction)
+      (graph/add-edge! g {:from "goal" :to "mid" :rel :supports :weight 0.8})
+      (graph/add-edge! g {:from "mid" :to "start" :rel :supports :weight 0.8})
+      ;; Should NOT find a path since edges point the wrong way
+      (is (nil? (graph/shortest-path g "goal"))))))
 
 (deftest shortest-path-unreachable-test
   (testing "returns nil for disconnected graph"
@@ -194,7 +220,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest confidence-gap-test
-  (testing "finds weakest node on critical path"
+  (testing "finds weakest node on critical path and includes :path-cost"
     (let [g (graph/make-graph)]
       (swap! g assoc-in [:facts "start"] {:id "start" :status :approved :confidence 1.0
                                            :claim "Known"})
@@ -204,13 +230,14 @@
                                           :claim "Weak fact"})
       (swap! g assoc-in [:facts "goal"] {:id "goal" :status :goal :confidence 0.0
                                           :claim "Goal"})
-      (graph/add-edge! g {:from "start" :to "strong" :rel :supports})
-      (graph/add-edge! g {:from "strong" :to "weak" :rel :supports})
-      (graph/add-edge! g {:from "weak" :to "goal" :rel :supports})
+      (graph/add-edge! g {:from "start" :to "strong" :rel :supports :weight 0.8})
+      (graph/add-edge! g {:from "strong" :to "weak" :rel :supports :weight 0.6})
+      (graph/add-edge! g {:from "weak" :to "goal" :rel :supports :weight 0.4})
       (let [gap (graph/confidence-gap g "goal")]
         (is (some? gap))
         (is (= "weak" (:fact-id gap)))
-        (is (= 0.3 (:confidence gap)))))))
+        (is (= 0.3 (:confidence gap)))
+        (is (number? (:path-cost gap)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; suggest-next
@@ -219,14 +246,18 @@
 (deftest suggest-next-contradiction-priority-test
   (testing "contradictions are prioritized over weak links"
     (let [g (graph/make-graph)]
-      ;; Add contradiction edge
-      (swap! g assoc-in [:facts "f1"] {:id "f1" :status :unapproved :confidence 0.5
+      ;; Set facts with :contradicted status (as contradict! would)
+      (swap! g assoc-in [:facts "f1"] {:id "f1" :status :contradicted :confidence 0.35
                                         :claim "A"})
-      (swap! g assoc-in [:facts "f2"] {:id "f2" :status :unapproved :confidence 0.5
+      (swap! g assoc-in [:facts "f2"] {:id "f2" :status :contradicted :confidence 0.35
                                         :claim "B"})
       (swap! g update :edges conj {:from "f1" :to "f2" :rel :contradicts :weight 0.0})
       (let [suggestion (graph/suggest-next g "goal")]
-        (is (= :resolve-contradiction (:action suggestion)))))))
+        (is (= :resolve-contradiction (:action suggestion)))
+        (is (vector? (:facts suggestion)))
+        (is (= 2 (count (:facts suggestion))))
+        ;; Each fact in the vector should have :id :claim :confidence
+        (is (every? #(contains? % :id) (:facts suggestion)))))))
 
 (deftest suggest-next-weakest-link-test
   (testing "suggests strengthening weakest link when no contradictions"
@@ -237,11 +268,14 @@
                                           :claim "Weak claim"})
       (swap! g assoc-in [:facts "goal"] {:id "goal" :status :goal :confidence 0.0
                                           :claim "Goal"})
-      (graph/add-edge! g {:from "start" :to "weak" :rel :supports})
-      (graph/add-edge! g {:from "weak" :to "goal" :rel :supports})
+      (graph/add-edge! g {:from "start" :to "weak" :rel :supports :weight 0.8})
+      (graph/add-edge! g {:from "weak" :to "goal" :rel :supports :weight 0.5})
       (let [suggestion (graph/suggest-next g "goal")]
         (is (= :strengthen (:action suggestion)))
-        (is (= "weak" (:fact-id suggestion)))))))
+        (is (map? (:fact suggestion)))
+        (is (= "weak" (get-in suggestion [:fact :fact-id])))
+        (is (string? (:suggestion suggestion)))
+        (is (str/includes? (:suggestion suggestion) "Corroborate"))))))
 
 (deftest suggest-next-explore-test
   (testing "suggests exploration when no path exists"
@@ -249,32 +283,37 @@
       (swap! g assoc-in [:facts "orphan"] {:id "orphan" :status :unapproved :confidence 0.4
                                             :claim "Isolated claim"})
       (let [suggestion (graph/suggest-next g "goal")]
-        (is (= :explore (:action suggestion)))))))
+        (is (= :explore (:action suggestion)))
+        (is (= "No path to goal exists. Discover connecting facts." (:suggestion suggestion)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; efficiency-metrics
 ;; ---------------------------------------------------------------------------
 
 (deftest efficiency-metrics-test
-  (testing "computes correct ratios"
+  (testing "computes correct ratios with spec key names"
     (let [g (graph/make-graph)]
       (swap! g assoc-in [:stats :tokens-spent] 1000)
       (swap! g assoc-in [:stats :time-spent-ms] 500)
       (swap! g assoc-in [:facts "f1"] {:id "f1" :confidence 0.8 :claim "A"})
       (swap! g assoc-in [:facts "f2"] {:id "f2" :confidence 0.6 :claim "B"})
       (let [m (graph/efficiency-metrics g)]
+        (is (= 2 (:total-facts m)))
+        (is (= 0.7 (:avg-confidence m)))
         (is (= 1000 (:tokens-spent m)))
         (is (= 500 (:time-spent-ms m)))
-        (is (= 1.4 (:total-confidence m)))
-        (is (> (:confidence-per-token m) 0))
-        (is (> (:confidence-per-ms m) 0))))))
+        (is (> (:conf-per-token m) 0))
+        (is (> (:conf-per-time-ms m) 0))
+        (is (= 2.0 (:facts-per-1k-tok m)))))))
 
 (deftest efficiency-metrics-zero-tokens-test
   (testing "handles zero tokens gracefully"
     (let [g (graph/make-graph)]
       (let [m (graph/efficiency-metrics g)]
-        (is (= 0.0 (:confidence-per-token m)))
-        (is (= 0.0 (:confidence-per-ms m)))))))
+        (is (= 0.0 (:conf-per-token m)))
+        (is (= 0.0 (:conf-per-time-ms m)))
+        (is (= 0 (:total-facts m)))
+        (is (= 0.0 (:avg-confidence m)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; graph-stats

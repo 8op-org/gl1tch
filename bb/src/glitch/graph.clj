@@ -13,7 +13,8 @@
   #{"not" "no" "never" "neither" "nor" "none" "nothing"
     "isn't" "aren't" "wasn't" "weren't" "won't" "don't"
     "doesn't" "didn't" "can't" "cannot" "shouldn't" "wouldn't"
-    "couldn't" "hasn't" "haven't" "hadn't" "mustn't"})
+    "couldn't" "hasn't" "haven't" "hadn't" "mustn't"
+    "false" "unsafe" "fail" "wrong" "incorrect" "missing" "absent" "broken"})
 
 (defn- tokenize
   "Simple whitespace + punctuation tokenizer."
@@ -55,7 +56,7 @@
                    (let [existing-claim (:claim existing)
                          overlap (keyword-overlap new-claim existing-claim)]
                      ;; Need significant overlap (same topic) + polarity flip
-                     (and (>= (count overlap) 2)
+                     (and (>= (count overlap) 3)
                           (not= (boolean (has-negation? new-claim))
                                 (boolean (has-negation? existing-claim)))))))
          (map first))))
@@ -98,23 +99,27 @@
 
 (defn add-fact!
   "Insert a fact into the graph. Checks for contradictions and enforces
-   the 0.70 single-source confidence cap.
+   the 0.70 single-source confidence cap. Applies geometric decay (0.7^n)
+   BEFORE insertion when contradictions are detected.
    fact map: {:id :claim :confidence :source-step :source-prov :tokens-cost}"
   [graph fact]
   (let [capped-conf (min (:confidence fact 0.5) 0.70)
-        fact (assoc fact
-               :confidence capped-conf
-               :status (or (:status fact) :unapproved)
-               :created-at (or (:created-at fact) (System/currentTimeMillis)))
         existing (:facts @graph)
-        contradicting (detect-contradictions fact existing)]
-    ;; Add fact
-    (swap! graph assoc-in [:facts (:id fact)] fact)
+        base-fact (assoc fact
+                    :confidence capped-conf
+                    :status (or (:status fact) :unapproved)
+                    :created-at (or (:created-at fact) (System/currentTimeMillis)))
+        contradicting (detect-contradictions base-fact existing)
+        ;; Apply geometric decay BEFORE insertion
+        decayed-conf (* capped-conf (Math/pow 0.7 (count contradicting)))
+        final-fact (assoc base-fact :confidence decayed-conf)]
+    ;; Add fact with already-decayed confidence
+    (swap! graph assoc-in [:facts (:id final-fact)] final-fact)
     (swap! graph update-in [:stats :facts-added] inc)
-    ;; Handle contradictions
+    ;; Handle contradictions (reduces existing facts + adds edges + sets status)
     (doseq [contra-id contradicting]
-      (contradict! graph (:id fact) contra-id))
-    fact))
+      (contradict! graph (:id final-fact) contra-id))
+    final-fact))
 
 (defn add-edge!
   "Link two facts with a relationship edge.
@@ -126,12 +131,14 @@
 
 (defn contradict!
   "Mark a contradiction between two facts. Reduces confidence on both by 0.7x.
-   Adds a :contradicts edge."
+   Sets status to :contradicted. Adds a :contradicts edge."
   [graph id-a id-b]
   (swap! graph (fn [g]
                  (-> g
                      (update-in [:facts id-a :confidence] * 0.7)
                      (update-in [:facts id-b :confidence] * 0.7)
+                     (assoc-in [:facts id-a :status] :contradicted)
+                     (assoc-in [:facts id-b :status] :contradicted)
                      (update :edges conj {:from id-a :to id-b
                                           :rel :contradicts :weight 0.0
                                           :source "contradiction-detector"})
@@ -140,20 +147,17 @@
 (defn corroborate!
   "Corroborate a fact with evidence from a new source.
    Uses Bayesian accumulation to break the 0.70 single-source cap.
-   If glitch.confidence is available, uses bayesian-combine; otherwise
-   uses a simple formula: 1 - (1-current)(1-authority*base)."
-  [graph fact-id new-source & {:keys [authority base-conf]
-                                :or {authority 0.85 base-conf 0.65}}]
-  (swap! graph (fn [g]
-                 (let [current-conf (get-in g [:facts fact-id :confidence] 0.5)
-                       ;; Simple Bayesian accumulation: 1 - (1-a)(1-b)
-                       new-conf (- 1.0 (* (- 1.0 current-conf)
-                                          (- 1.0 (* authority base-conf))))]
-                     (-> g
-                         (assoc-in [:facts fact-id :confidence] (min 1.0 new-conf))
-                         (assoc-in [:facts fact-id :sources]
-                                   (conj (get-in g [:facts fact-id :sources] []) new-source))
-                         (update-in [:stats :corroborations] inc))))))
+   Formula: new-conf = 1 - (1 - old-conf) * (1 - src-auth * 0.85)"
+  [graph fact-id new-source]
+  (let [fact (get-in @graph [:facts fact-id])
+        old-conf (:confidence fact)
+        src-auth (or (:authority new-source) 0.85)
+        new-conf (- 1.0 (* (- 1.0 old-conf) (- 1.0 (* src-auth 0.85))))]
+    (swap! graph assoc-in [:facts fact-id :confidence] new-conf)
+    (swap! graph update :edges conj
+           {:from fact-id :to fact-id :rel :corroborates
+            :weight new-conf :source (:step new-source)})
+    (swap! graph update-in [:stats :corroborations] inc)))
 
 (defn approve!
   "Mark a fact as :approved with confidence 1.0."
@@ -173,9 +177,7 @@
   (reduce (fn [adj {:keys [from to rel] :as edge}]
             (if (= rel :contradicts)
               adj
-              (-> adj
-                  (update from (fnil conj []) edge)
-                  (update to (fnil conj []) (assoc edge :from to :to from)))))
+              (update adj from (fnil conj []) edge)))
           {}
           edges))
 
@@ -194,9 +196,10 @@
                        (map first)
                        set)]
     (when (and (seq start-ids) (contains? facts goal-id))
-      ;; Dijkstra
+      ;; Dijkstra — also track the edge used to reach each node
       (loop [dist (into {} (map (fn [id] [id 0.0]) start-ids))
              prev (into {} (map (fn [id] [id nil]) start-ids))
+             prev-edge (into {} (map (fn [id] [id nil]) start-ids))
              queue (into (sorted-set-by
                            (fn [a b]
                              (let [c (compare (first a) (first b))]
@@ -209,36 +212,48 @@
             (let [path (loop [id goal-id acc []]
                          (if (nil? id)
                            (reverse acc)
-                           (recur (get prev id) (conj acc id))))]
-              {:path (vec path) :cost (get dist goal-id)}))
+                           (recur (get prev id) (conj acc id))))
+                  path-vec (vec path)
+                  ;; Collect edge weights along the path
+                  edge-weights (loop [id goal-id ws []]
+                                 (if-let [ew (get prev-edge id)]
+                                   (recur (get prev id) (conj ws ew))
+                                   ws))
+                  min-weight (if (seq edge-weights)
+                               (apply min edge-weights)
+                               nil)]
+              {:path path-vec
+               :cost (get dist goal-id)
+               :min-edge min-weight}))
           (let [[cost-u u] (first queue)
                 queue (disj queue (first queue))]
             (if (contains? visited u)
-              (recur dist prev queue visited)
+              (recur dist prev prev-edge queue visited)
               (let [visited (conj visited u)
                     neighbors (get adj u [])
-                    [dist' prev' queue']
+                    [dist' prev' prev-edge' queue']
                     (reduce
-                      (fn [[d p q] {:keys [to]}]
+                      (fn [[d p pe q] {:keys [to weight] :as edge}]
                         (if (contains? visited to)
-                          [d p q]
-                          (let [target-conf (get-in facts [to :confidence] 0.0)
-                                edge-cost (- 1.0 target-conf)
+                          [d p pe q]
+                          (let [w (max (or weight 0.01) 0.01)
+                                edge-cost (- 1.0 w)
                                 alt (+ cost-u edge-cost)]
                             (if (< alt (get d to Double/MAX_VALUE))
                               [(assoc d to alt)
                                (assoc p to u)
+                               (assoc pe to w)
                                (conj q [alt to])]
-                              [d p q]))))
-                      [dist prev queue]
+                              [d p pe q]))))
+                      [dist prev prev-edge queue]
                       neighbors)]
-                (recur dist' prev' queue' visited)))))))))
+                (recur dist' prev' prev-edge' queue' visited)))))))))
 
 (defn confidence-gap
   "Find the weakest link on the best path from approved facts to goal.
-   Returns {:fact-id :confidence :claim} or nil if no path."
+   Returns {:fact-id :confidence :claim :path-cost} or nil if no path."
   [graph goal-id]
-  (when-let [{:keys [path]} (shortest-path graph goal-id)]
+  (when-let [{:keys [path cost]} (shortest-path graph goal-id)]
     (let [facts (:facts @graph)
           path-facts (->> path
                           (map (fn [id] (assoc (get facts id) :id id)))
@@ -248,7 +263,8 @@
         (let [weakest (apply min-key :confidence path-facts)]
           {:fact-id (:id weakest)
            :confidence (:confidence weakest)
-           :claim (:claim weakest)})))))
+           :claim (:claim weakest)
+           :path-cost cost})))))
 
 (defn reachable?
   "Boolean: can the goal be reached from any approved fact?"
@@ -264,33 +280,23 @@
   (let [g @graph
         facts (:facts g)
         edges (:edges g)
-        ;; 1. Find contradictions
-        contradictions (->> edges
-                           (filter #(= :contradicts (:rel %)))
-                           (mapv (fn [e]
-                                   {:action :resolve-contradiction
-                                    :fact-a (:from e)
-                                    :fact-b (:to e)
-                                    :claim-a (get-in facts [(:from e) :claim])
-                                    :claim-b (get-in facts [(:to e) :claim])})))]
-    (if (seq contradictions)
-      (first contradictions)
+        ;; 1. Find contradicted facts
+        contradicted-facts (->> (vals facts)
+                                (filter #(= :contradicted (:status %)))
+                                vec)]
+    (if (seq contradicted-facts)
+      {:action :resolve-contradiction
+       :facts (mapv #(select-keys % [:id :claim :confidence]) contradicted-facts)}
       ;; 2. Weakest link
       (if-let [gap (confidence-gap graph goal-id)]
-        {:action :strengthen
-         :fact-id (:fact-id gap)
-         :confidence (:confidence gap)
-         :claim (:claim gap)}
-        ;; 3. Explore — find unapproved facts not on any path
-        (let [unapproved (->> facts
-                              (filter (fn [[_ f]] (= :unapproved (:status f))))
-                              (sort-by (fn [[_ f]] (:confidence f)))
-                              first)]
-          (when unapproved
-            {:action :explore
-             :fact-id (first unapproved)
-             :confidence (:confidence (second unapproved))
-             :claim (:claim (second unapproved))}))))))
+        (let [weakest gap]
+          {:action :strengthen
+           :fact (select-keys weakest [:fact-id :claim :confidence])
+           :suggestion (str "Corroborate: \"" (:claim weakest) "\" — current confidence "
+                            (format "%.2f" (double (:confidence weakest))))})
+        ;; 3. Explore — no path to goal
+        {:action :explore
+         :suggestion "No path to goal exists. Discover connecting facts."}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Stats and metrics
@@ -320,15 +326,13 @@
         total-conf (reduce + 0.0 (map :confidence (vals facts)))
         tokens (:tokens-spent stats 0)
         time-ms (:time-spent-ms stats 0)]
-    {:total-confidence total-conf
-     :tokens-spent tokens
-     :time-spent-ms time-ms
-     :confidence-per-token (if (pos? tokens)
-                             (/ total-conf tokens)
-                             0.0)
-     :confidence-per-ms (if (pos? time-ms)
-                          (/ total-conf time-ms)
-                          0.0)}))
+    {:total-facts       (count facts)
+     :avg-confidence    (if (pos? (count facts)) (/ total-conf (count facts)) 0.0)
+     :tokens-spent      tokens
+     :time-spent-ms     time-ms
+     :conf-per-token    (if (pos? tokens) (/ total-conf tokens) 0.0)
+     :conf-per-time-ms  (if (pos? time-ms) (/ total-conf time-ms) 0.0)
+     :facts-per-1k-tok  (if (pos? tokens) (* 1000.0 (/ (double (count facts)) tokens)) 0.0)}))
 
 ;; ---------------------------------------------------------------------------
 ;; SCI helper functions — operate on bound *graph* from core
@@ -381,7 +385,7 @@
   [step-id & {:keys [fact-id authority]
               :or {authority 0.85}}]
   (when-let [g (current-graph)]
-    (corroborate! g fact-id step-id :authority authority)))
+    (corroborate! g fact-id {:step step-id :authority authority})))
 
 (defn sci-reachable?
   "Check if the goal is reachable in the current graph."
