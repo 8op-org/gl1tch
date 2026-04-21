@@ -9,10 +9,10 @@
 
 (def default-authority
   "Map of provider name to trust weight (0.0-1.0)."
-  {"copilot"   0.90
+  {"copilot"    0.90
+   "claude"     0.95
    "openrouter" 0.85
-   "lmstudio"  0.60
-   "ollama"    0.55})
+   "lmstudio"   0.65})
 
 (defn provider-authority
   "Look up the trust weight for a provider. Unknown providers get 0.50."
@@ -55,38 +55,25 @@
 
 ;; --- Keyword overlap ---
 
-(def ^:private stopwords
-  #{"the" "a" "an" "is" "are" "was" "were" "be" "been" "being"
-    "have" "has" "had" "do" "does" "did" "will" "would" "could"
-    "should" "may" "might" "shall" "can" "need" "dare" "ought"
-    "used" "to" "of" "in" "for" "on" "with" "at" "by" "from"
-    "as" "into" "through" "during" "before" "after" "above"
-    "below" "between" "out" "off" "over" "under" "again"
-    "further" "then" "once" "here" "there" "when" "where"
-    "why" "how" "all" "each" "every" "both" "few" "more"
-    "most" "other" "some" "such" "no" "nor" "not" "only"
-    "own" "same" "so" "than" "too" "very" "just" "because"
-    "but" "and" "or" "if" "while" "although" "though" "that"
-    "this" "these" "those" "it" "its" "i" "me" "my" "we"
-    "our" "you" "your" "he" "him" "his" "she" "her" "they"
-    "them" "their" "what" "which" "who" "whom"})
-
-(defn- tokenize [text]
-  (when (and text (not (str/blank? text)))
-    (->> (str/split (str/lower-case (str text)) #"[^a-z0-9]+")
-         (remove str/blank?)
-         (remove stopwords))))
-
 (defn keyword-overlap
   "Fraction of prompt keywords that appear in the response.
+   Extracts words of 4+ chars, removes stopwords.
    Returns 1.0 when prompt is empty (nothing to miss)."
   [prompt-text response-text]
-  (let [prompt-kws (set (tokenize prompt-text))]
-    (if (empty? prompt-kws)
+  (let [stopwords #{"that" "this" "with" "from" "have" "been"
+                     "will" "would" "could" "should" "their" "there"
+                     "which" "when" "what" "were" "they" "also" "than"
+                     "into" "your" "does" "more" "only" "just" "some"}
+        extract (fn [text]
+                  (->> (re-seq #"\w{4,}" (str/lower-case (str text)))
+                       (remove stopwords)
+                       set))
+        p-kw (extract prompt-text)
+        r-kw (extract response-text)]
+    (if (empty? p-kw)
       1.0
-      (let [response-kws (set (tokenize response-text))
-            hits (count (clojure.set/intersection prompt-kws response-kws))]
-        (/ (double hits) (count prompt-kws))))))
+      (/ (double (count (clojure.set/intersection p-kw r-kw)))
+         (count p-kw)))))
 
 ;; --- Domain relevance ---
 

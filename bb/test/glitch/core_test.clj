@@ -776,3 +776,48 @@
                      :min-confidence 0.5
                      :domain-check true
                      :retries 0)))))
+
+;; --- consensus semantic mode ---
+
+(deftest consensus-semantic-agreement-test
+  (testing "consensus with semantic mode detects agreement on similar text"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          (if (odd? @call-count)
+            {:response "{\"decision\": \"deploy now\"}" :tokens-in 1 :tokens-out 1}
+            {:response "{\"decision\": \"we should deploy\"}" :tokens-in 1 :tokens-out 1})))
+      ;; Mock embed to return similar vectors for deploy-related text
+      (with-redefs [conf/embed
+                    (fn [text]
+                      (if (re-find #"deploy" (str text))
+                        [0.9 0.1 0.0]
+                        [0.0 0.0 1.0]))]
+        (let [result-str (core/consensus ["p1" "p2"]
+                           :prompt "should we deploy?"
+                           :schema {:required ["decision"]}
+                           :compare-key "decision"
+                           :compare-mode :semantic)
+              result (json/parse-string result-str)]
+          (is (true? (get result "agreed"))))))))
+
+(deftest consensus-semantic-fallback-on-nil-embed-test
+  (testing "consensus falls back to exact comparison when embed returns nil"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          (if (odd? @call-count)
+            {:response "{\"decision\": \"deploy now\"}" :tokens-in 1 :tokens-out 1}
+            {:response "{\"decision\": \"we should deploy\"}" :tokens-in 1 :tokens-out 1})))
+      ;; Mock embed to return nil (TEI unavailable)
+      (with-redefs [conf/embed (fn [_] nil)]
+        (let [result-str (core/consensus ["p1" "p2"]
+                           :prompt "should we deploy?"
+                           :schema {:required ["decision"]}
+                           :compare-key "decision"
+                           :compare-mode :semantic)
+              result (json/parse-string result-str)]
+          ;; Falls back to exact — "deploy now" != "we should deploy" → disagreement
+          (is (false? (get result "agreed"))))))))

@@ -586,10 +586,10 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
      :weights — map of gate-kind to weight (default all 1.0)
    Returns the score as a string."
   [step-id & {:keys [weights]}]
-  (let [default-weights {"confidence" 1.0
-                         "grounded"   1.0
-                         "validate"   1.0
-                         "contract"   1.0}
+  (let [default-weights {"confidence" 0.4
+                         "grounded"   0.3
+                         "validate"   0.2
+                         "contract"   0.1}
         w          (merge default-weights weights)
         steps      @*steps*
         ;; Look for gate results in steps map

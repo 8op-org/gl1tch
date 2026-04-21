@@ -36,10 +36,10 @@
 
 (deftest provider-authority-known-test
   (testing "known providers return their authority"
+    (is (= 0.95 (conf/provider-authority "claude")))
     (is (= 0.90 (conf/provider-authority "copilot")))
     (is (= 0.85 (conf/provider-authority "openrouter")))
-    (is (= 0.60 (conf/provider-authority "lmstudio")))
-    (is (= 0.55 (conf/provider-authority "ollama")))))
+    (is (= 0.65 (conf/provider-authority "lmstudio")))))
 
 (deftest provider-authority-unknown-test
   (testing "unknown provider returns 0.50 fallback"
@@ -103,8 +103,12 @@
 
 (deftest keyword-overlap-stopwords-test
   (testing "stopwords are excluded — only content words count"
-    ;; "the" and "is" and "a" are stopwords
-    (is (= 1.0 (conf/keyword-overlap "the big cat" "big cat sits")))))
+    ;; "should" and "from" are stopwords (4+ chars but in stopword set)
+    ;; prompt: "deploy should from cluster" -> extract 4+: "deploy", "should", "from", "cluster"
+    ;; after stopword removal: {"deploy", "cluster"}
+    ;; response has "deploy" and "cluster" -> 2/2 = 1.0
+    (is (= 1.0 (conf/keyword-overlap "deploy should from cluster"
+                                       "deploy the cluster now")))))
 
 (deftest keyword-overlap-empty-prompt-test
   (testing "empty prompt returns 1.0 (nothing to miss)"
