@@ -1,5 +1,5 @@
 {:paths ["src" "providers"]
- :pods {org.babashka/go-sqlite3 {:version "0.2.8"}}
+ :deps {datascript/datascript {:mvn/version "1.7.3"}}
  :tasks
  {build {:doc "Build the glitch uberscript"
          :task (do (babashka.fs/create-dirs "build")
