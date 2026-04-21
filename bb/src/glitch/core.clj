@@ -17,6 +17,7 @@
 (def ^:dynamic *provider-fn* (atom nil))
 (def ^:dynamic *call-stack* (atom []))
 (def ^:dynamic *workflows-dir* (atom "."))
+(def ^:dynamic *graph* (atom nil))
 
 ;; --- State management ---
 
@@ -343,7 +344,12 @@
       (let [start    (System/nanoTime)
             result   (@*provider-fn* (assoc opts :prompt current-prompt))
             elapsed  (/ (- (System/nanoTime) start) 1e6)
-            response (:response result)]
+            response (:response result)
+            _        (when-let [g @*graph*]
+                       (swap! g update-in [:stats :tokens-spent]
+                              + (or (:tokens-in result) 0) (or (:tokens-out result) 0))
+                       (swap! g update-in [:stats :time-spent-ms]
+                              + (Math/round elapsed)))]
         (if schema
           (let [extracted  (json-extract (str response))
                 parsed     (try (json/parse-string extracted) (catch Exception _ nil))

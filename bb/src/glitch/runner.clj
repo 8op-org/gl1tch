@@ -2,6 +2,7 @@
   "Workflow runner — wires core + provider + store together and evaluates
    .glitch workflow files via SCI."
   (:require [glitch.core :as g]
+            [glitch.graph :as graph]
             [glitch.store :as store]
             [glitch.provider :as prov]
             [glitch.tool_loop]
@@ -63,7 +64,23 @@
         (let [result# (do ~@body)]
           (when-let [rec# @~(symbol \"glitch.core/*step-recorder*\")]
             (rec# {:step-id ~name :kind \"phase\" :output (str result#)}))
-          result#)))")
+          result#)))
+
+   (defmacro investigate [goal-claim & body]
+     `(let [g# (glitch.graph/make-graph)]
+        (reset! ~(symbol \"glitch.core/*graph*\") g#)
+        (glitch.graph/set-goal! g# ~goal-claim)
+        (try
+          (do ~@body)
+          (finally
+            (reset! ~(symbol \"glitch.core/*graph*\") nil)))
+        (let [snapshot# (deref g#)]
+          {:graph snapshot#
+           :goal ~goal-claim
+           :reachable (glitch.graph/reachable? g# \"goal\")
+           :gap (glitch.graph/confidence-gap g# \"goal\")
+           :stats (glitch.graph/graph-stats g#)
+           :efficiency (glitch.graph/efficiency-metrics g#)})))")
 
 ;; ---------------------------------------------------------------------------
 ;; SCI context — pre-binds all core symbols so .glitch workflows can use
@@ -135,6 +152,16 @@
                  'consensus       g/consensus
                  'composite-score g/composite-score
 
+                 ;; investigation graph
+                 'fact              graph/sci-fact
+                 'fact-from         graph/sci-fact-from
+                 'approve!          graph/sci-approve!
+                 'corroborate-from  graph/sci-corroborate-from
+                 'reachable?        graph/sci-reachable?
+                 'graph-stats       graph/sci-graph-stats
+                 'confidence-gap    graph/sci-confidence-gap
+                 'suggest-next      graph/sci-suggest-next
+
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
                  ;; state setters (rarely needed in workflows, but available)
@@ -180,7 +207,22 @@
                      '*input*         g/*input*
                      '*params*        g/*params*
                      '*call-stack*    g/*call-stack*
-                     '*workflows-dir* g/*workflows-dir*}}
+                     '*workflows-dir* g/*workflows-dir*
+                     '*graph*         g/*graph*}
+                    'glitch.graph
+                    {'make-graph         graph/make-graph
+                     'set-goal!          graph/set-goal!
+                     'add-fact!          graph/add-fact!
+                     'add-edge!          graph/add-edge!
+                     'contradict!        graph/contradict!
+                     'corroborate!       graph/corroborate!
+                     'approve!           graph/approve!
+                     'shortest-path      graph/shortest-path
+                     'confidence-gap     graph/confidence-gap
+                     'reachable?         graph/reachable?
+                     'suggest-next       graph/suggest-next
+                     'graph-stats        graph/graph-stats
+                     'efficiency-metrics graph/efficiency-metrics}}
                    :classes
                    {'System  System
                     'Math    Math

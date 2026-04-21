@@ -80,7 +80,29 @@
       composite_score REAL,
       reason          TEXT,
       created_at      INTEGER NOT NULL
-    )"])
+    )"
+   "CREATE TABLE IF NOT EXISTS facts (
+      id          TEXT PRIMARY KEY,
+      run_id      INTEGER NOT NULL REFERENCES runs(id),
+      claim       TEXT NOT NULL,
+      confidence  REAL NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'unapproved',
+      source_step TEXT,
+      source_prov TEXT,
+      tokens_cost INTEGER DEFAULT 0,
+      created_at  INTEGER NOT NULL
+    )"
+   "CREATE TABLE IF NOT EXISTS fact_edges (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id   INTEGER NOT NULL REFERENCES runs(id),
+      from_id  TEXT NOT NULL,
+      to_id    TEXT NOT NULL,
+      rel      TEXT NOT NULL,
+      weight   REAL NOT NULL,
+      source   TEXT
+    )"
+   "CREATE INDEX IF NOT EXISTS idx_facts_run ON facts(run_id)"
+   "CREATE INDEX IF NOT EXISTS idx_fact_edges_run ON fact_edges(run_id)"])
 
 ;; ---------------------------------------------------------------------------
 ;; Open / Close
@@ -209,3 +231,51 @@
   "Fetch all steps for a run, ordered by id."
   [db run-id]
   (sql-query db ["SELECT * FROM steps WHERE run_id = ? ORDER BY id" run-id]))
+
+;; ---------------------------------------------------------------------------
+;; Facts (investigation graph)
+;; ---------------------------------------------------------------------------
+
+(defn record-fact
+  "Insert a fact record. `rec` is a map with keys:
+     :id :run-id :claim :confidence :status :source-step :source-prov :tokens-cost"
+  [db rec]
+  (let [now (quot (System/currentTimeMillis) 1000)]
+    (sql-execute! db
+      ["INSERT OR REPLACE INTO facts
+          (id, run_id, claim, confidence, status, source_step, source_prov,
+           tokens_cost, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+       (:id rec)
+       (:run-id rec)
+       (:claim rec)
+       (:confidence rec)
+       (or (some-> (:status rec) name) "unapproved")
+       (:source-step rec)
+       (:source-prov rec)
+       (or (:tokens-cost rec) 0)
+       now])))
+
+(defn record-fact-edge
+  "Insert a fact edge record. `rec` is a map with keys:
+     :run-id :from-id :to-id :rel :weight :source"
+  [db rec]
+  (sql-execute! db
+    ["INSERT INTO fact_edges (run_id, from_id, to_id, rel, weight, source)
+      VALUES (?, ?, ?, ?, ?, ?)"
+     (:run-id rec)
+     (:from-id rec)
+     (:to-id rec)
+     (or (some-> (:rel rec) name) (str (:rel rec)))
+     (or (:weight rec) 1.0)
+     (:source rec)]))
+
+(defn get-facts
+  "Fetch all facts for a run."
+  [db run-id]
+  (sql-query db ["SELECT * FROM facts WHERE run_id = ? ORDER BY created_at" run-id]))
+
+(defn get-fact-edges
+  "Fetch all fact edges for a run."
+  [db run-id]
+  (sql-query db ["SELECT * FROM fact_edges WHERE run_id = ? ORDER BY id" run-id]))
