@@ -311,3 +311,116 @@
                  "(throw (ex-info \"boom\" {:reason \"test\"}))" )]
       (is (thrown-with-msg? Exception #"boom"
             (runner/run path))))))
+
+;; ---------------------------------------------------------------------------
+;; Confidence framework SCI bindings
+;; ---------------------------------------------------------------------------
+
+(deftest validate-in-sci-test
+  (testing "validate works in SCI context"
+    (prov/register "mock"
+      (fn [opts] {:response "{\"action\": \"write\"}" :tokens-in 0 :tokens-out 0}))
+    (let [path (write-temp-workflow "validate-sci.glitch"
+                 "(step \"data\" (json/encode {\"pass\" true \"issues\" []}))
+                  (validate \"data\" {:required [\"pass\" \"issues\"]
+                                      :types {\"pass\" :bool \"issues\" :array}})
+                  (step \"ok\" \"validated\")")
+          result (runner/run path)]
+      (is (= "validated" (:output result))))))
+
+(deftest grounded-in-sci-test
+  (testing "grounded? works in SCI context"
+    (prov/register "mock"
+      (fn [opts]
+        {:response "{\"grounded\": true, \"unsupported\": []}"
+         :tokens-in 0 :tokens-out 0}))
+    (let [path (write-temp-workflow "grounded-sci.glitch"
+                 "(step \"doc\" \"The CLI has --verbose.\")
+                  (grounded? \"doc\" \"CLI ref: --verbose flag exists\")
+                  (step \"ok\" \"grounded\")")
+          result (runner/run path :tiers [{:providers ["mock"]}])]
+      (is (= "grounded" (:output result))))))
+
+(deftest consensus-in-sci-test
+  (testing "consensus works in SCI context"
+    (prov/register "mock"
+      (fn [opts]
+        {:response "{\"decision\": \"deploy\", \"reason\": \"looks good\"}"
+         :tokens-in 0 :tokens-out 0}))
+    (let [path (write-temp-workflow "consensus-sci.glitch"
+                 "(step \"verdict\"
+                    (consensus [\"mock\" \"mock\"]
+                      :prompt \"deploy?\"
+                      :schema {:required [\"decision\" \"reason\"]}
+                      :compare-key \"decision\"))")
+          result (runner/run path :tiers [{:providers ["mock"]}])]
+      (is (re-find #"agreed" (:output result))))))
+
+(deftest llm-schema-in-sci-test
+  (testing "llm with :schema works in SCI context"
+    (prov/register "mock"
+      (fn [opts]
+        {:response "{\"action\": \"write\", \"reason\": \"needed\"}"
+         :tokens-in 0 :tokens-out 0}))
+    (let [path (write-temp-workflow "schema-sci.glitch"
+                 "(step \"router\"
+                    (llm :prompt \"pick action\"
+                         :provider \"mock\"
+                         :schema {:required [\"action\" \"reason\"]
+                                  :types {\"action\" :string \"reason\" :string}}))")
+          result (runner/run path)]
+      (is (re-find #"action" (:output result))))))
+
+;; ---------------------------------------------------------------------------
+;; Full integration — all 5 confidence primitives in one workflow
+;; ---------------------------------------------------------------------------
+
+(deftest full-confidence-integration-test
+  (testing "workflow uses schema, contract, confidence, grounding, and consensus"
+    (let [call-count (atom 0)]
+      (prov/register "mock"
+        (fn [opts]
+          (swap! call-count inc)
+          (let [p (:prompt opts)]
+            (cond
+              ;; Grounding verification prompt
+              (re-find #"factual verification" (str p))
+              {:response "{\"grounded\": true, \"unsupported\": []}"
+               :tokens-in 5 :tokens-out 10}
+
+              ;; Default — schema-valid response with confidence
+              :else
+              {:response "{\"decision\": \"deploy\", \"confidence\": 0.9, \"reason\": \"all clear\"}"
+               :tokens-in 5 :tokens-out 10}))))
+      (let [path (write-temp-workflow "full-confidence.glitch"
+                   ";; 1. Schema + confidence on LLM
+                    (step \"analysis\"
+                      (llm :prompt \"Analyze this change\"
+                           :provider \"mock\"
+                           :schema {:required [\"decision\" \"confidence\" \"reason\"]
+                                    :types {\"decision\" :string \"confidence\" :number \"reason\" :string}
+                                    :enum {\"decision\" [\"deploy\" \"hold\" \"rollback\"]}}
+                           :min-confidence 0.7)
+                      :expects {:non-empty true :min-length 10})
+
+                    ;; 2. Validate the output schema standalone
+                    (validate \"analysis\" {:required [\"decision\"]})
+
+                    ;; 3. Ground the analysis against context
+                    (grounded? \"analysis\" \"Change log: all tests pass, no breaking changes\"
+                               :strict false)
+
+                    ;; 4. Consensus from two providers
+                    (step \"verdict\"
+                      (consensus [\"mock\" \"mock\"]
+                        :prompt \"Final call?\"
+                        :schema {:required [\"decision\"]}
+                        :compare-key \"decision\"))")
+            result (runner/run path :tiers [{:providers ["mock"]}])]
+        ;; Verify the workflow completed
+        (is (some? (:output result)))
+        ;; Verify steps were recorded
+        (is (some? (get (:steps result) "analysis")))
+        (is (some? (get (:steps result) "verdict")))
+        ;; Consensus result should show agreement
+        (is (re-find #"agreed" (get (:steps result) "verdict")))))))
