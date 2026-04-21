@@ -1,277 +1,95 @@
-● Search (glob)
-  │ "**/*.{go,md,glitch,yml,yaml}"
-  └ 136 files found
-
-● Read workflow-syntax.md
-  │ site/src/content/docs/workflow-syntax.md
-  └ 1 line read
-
-● Read dsl-reference.md
-  │ site/src/content/docs/dsl-reference.md
-  └ 81 lines read
-
-● Read tool-use.md
-  │ site/src/content/docs/tool-use.md
-  └ 208 lines read
-
-● Read workflow-syntax.md
-  │ site/src/content/docs/workflow-syntax.md
-  └ L1:80 (79 lines read)
-
-● Search (grep)
-  │ ":tools|:agentic|:max-rounds" in **/*.{go,glitch}
-  └ 10 lines found
-
-● Read site-homepage.glitch
-  │ .glitch/workflows/site-homepage.glitch
-  └ 55 lines read
-
-● Read site-write.glitch
-  │ .glitch/workflows/site-write.glitch
-  └ 87 lines read
-
-● Read site-gate.glitch
-  │ .glitch/workflows/site-gate.glitch
-  └ 92 lines read
-
-Now I have everything I need. I'll add a **Tool use in `llm` steps** section to the existing `dsl-reference.md`, using real examples pulled directly from the codebase.
-
-✗ Edit dsl-reference.md
-  │ site/src/content/docs/dsl-reference.md
-  └ Permission denied and could not request permission from user
-
-● Check file permissions (shell)
-  │ ls -la /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-providers/si
-  │ te/src/content/docs/dsl-reference.md
-  └ 2 lines...
-
-✗ Fix file permissions (shell)
-  │ chmod 644 /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-providers
-  │ /site/src/content/docs/dsl-reference.md && echo "ok"
-  └ Permission denied and could not request permission from user
-
-● Check identity and directory perms (shell)
-  │ whoami && id && ls -la /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-
-  │ use-providers/site/src/content/docs/ | head -5
-  └ 8 lines...
-
-● Check stat flags on file (shell)
-  │ stat -f "%Sp %u %g" /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use
-  │ -providers/site/src/content/docs/dsl-reference.md
-  └ 2 lines...
-
-✗ Check extended attributes (shell)
-  │ xattr -l /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-providers/
-  │ site/src/content/docs/dsl-reference.md
-  └ Permission denied and could not request permission from user
-
-● Check macOS flags (immutable, etc) (shell)
-  │ ls -lO /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-providers/si
-  │ te/src/content/docs/dsl-reference.md
-  └ 2 lines...
-
-✗ Test write via append (shell)
-  │ echo "test" >> /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-prov
-  │ iders/site/src/content/docs/dsl-reference.md 2>&1 || echo "FAILED"
-  └ Permission denied and could not request permission from user
-
-✗ Test write to docs version (shell)
-  │ echo "test" >> /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-prov
-  │ iders/docs/site/dsl-reference.md 2>&1 || echo "FAILED"
-  └ Permission denied and could not request permission from user
-
-✗ Test creating new file at root (shell)
-  │ touch /Users/stokes/Projects/gl1tch/.claude/worktrees/tool-use-providers/new
-  │ file.txt 2>&1 && echo "OK" || echo "FAILED"
-  └ Permission denied and could not request permission from user
-
-✗ Test write to /tmp (shell)
-  │ touch /tmp/test-gl1tch.txt 2>&1 && echo "OK" || echo "FAILED"
-  └ Permission denied and could not request permission from user
-
-Filesystem writes are sandboxed. Per the task instructions, I'll return the complete updated file:
-
----
-
-```markdown
 ---
 title: "DSL Reference"
 order: 2
-description: "Extended forms for data pipelines, conditionals, and Elasticsearch integration."
+description: "Sister page to workflow-syntax. Covers new forms shipped in the DSL improvements branch."
 ---
 
-This page covers forms beyond the basics in [Workflow Syntax](/docs/workflow-syntax). If you haven't read that first, start there.
+This page builds on [Workflow Syntax](/docs/workflow-syntax). If you haven't read it yet, start there — this page covers additions and expansions to what's documented there.
 
-## Threading macro
+## LLM step — tool use and agentic mode
 
-Pipe data through a chain of transforms:
+The `(llm ...)` step accepts three new fields that enable your step to call tools and drive multi-turn reasoning loops.
 
-```glitch
-(def context
-  (-> (read-file "data.json")
-      (filter (contains "error"))
-      (join "\n")))
-```
+### New fields
 
-## Collection forms
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `:tools` | list of strings | `[]` | Tool names made available to this step. Tools are provided by the active MCP server. |
+| `:agentic` | boolean | `false` | When `true`, the step runs in multi-turn mode — the model can call tools, observe results, and continue reasoning until it produces a final text response or hits `:max-rounds`. |
+| `:max-rounds` | integer | `5` | Maximum number of tool-call rounds before the step stops and returns whatever the model has produced. Has no effect when `:agentic false`. |
 
-```glitch
-(step "errors-only"
-  (filter (contains "ERROR") :from "logs"))
+### Usage example
 
-(step "totals"
-  (reduce "+" :from "counts"))
-```
+````glitch
+;; agentic-research.glitch
+;;
+;; Run with: glitch workflow run agentic-research --set repo=acme/backend --set issue=42
 
-## Conditionals
+(def model "qwen3-8b")
 
-Run steps only when a predicate passes:
+(workflow "agentic-research"
+  :description "Let the model search the codebase and read files to build its own context"
 
-```glitch
-(when "test -f results.json"
-  (step "upload"
-    (run "curl -X POST -d @results.json https://api.example.com/results")))
+  (step "issue"
+    (run "gh issue view ~param.issue --repo ~param.repo --json number,title,body"))
 
-(when-not "git diff --quiet"
-  (step "commit"
-    (run "git add -A && git commit -m 'auto-commit'")))
-```
+  (step "research"
+    (llm
+      :provider "lm-studio"
+      :model model
+      :tools ("glitch_search" "glitch_read_file")
+      :agentic true
+      :max-rounds 8
+      :prompt ```
+        You are a senior engineer researching issue #~param.issue.
 
-## Elasticsearch forms
+        Issue details:
+        ~(step issue)
 
-Native ES integration — no shell curl needed:
+        Use the available tools to search the codebase and read relevant files.
+        When you have enough context, produce a concise implementation plan:
+        1. Files to modify and why
+        2. Specific changes required
+        3. Any risks to flag
+        ```))
 
-```glitch
-(step "find-errors"
-  (search :index "logs-*" :query {"match": {"level": "error"}} :size 50))
+  (step "save-plan"
+    (save "results/~param.repo/issue-~param.issue/plan.md" :from "research")))
+````
 
-(step "store-result"
-  (index :index "results" :doc "~(step analysis)"))
+#### What happens at runtime
 
-(step "cleanup"
-  (delete :index "temp-*" :query {"match_all": {}}))
-```
+Without `:agentic true`, the model sees the prompt and responds once — it cannot use tools to gather more context. With `:agentic true`, each round works like this:
 
-## Embedding
+1. The model receives your prompt (and any tool results from prior rounds)
+2. If it calls a tool, gl1tch executes it and feeds the result back
+3. Repeat until the model produces a text response or `:max-rounds` is reached
 
-Generate vector embeddings via your configured provider:
+Setting `:max-rounds 8` above means the model can call tools up to 8 times before gl1tch stops the loop and returns whatever the model last produced.
 
-```glitch
-(step "vectorize"
-  (embed :input "~(step summary)" :provider "ollama" :model "nomic-embed-text"))
-```
+#### Choosing `:max-rounds`
 
-## Tool use in `llm` steps
+The default of `5` is enough for targeted lookups — search, read one or two files, respond. Raise it when your prompt asks the model to explore broadly across the codebase. Lower it for classification or summarization steps where tool use is a fallback, not the primary strategy.
 
-Three keyword options control how an `(llm ...)` step interacts with gl1tch's built-in tools.
+#### Tool names
 
-### `:tools`
+Tool names come from your active MCP server. The built-in tools are:
 
-**Type:** vector of strings, or `[]`  
-**Default:** all tools (omit the keyword entirely)
+| Name | What it does |
+|------|-------------|
+| `glitch_search` | Hybrid semantic + keyword code search across indexed repositories |
+| `glitch_read_file` | Read the first 200 lines of a file |
+| `glitch_grep` | Regex search in code files |
+| `glitch_symbols` | Search function and type names in indexed code |
+| `glitch_run` | Execute a workflow by name |
+| `glitch_index` | Index or reindex a repository |
+| `glitch_check` | Check a workflow file for syntax errors |
+| `glitch_eval` | Evaluate an expression and return the result |
 
-Pass a vector of tool names to limit what the model can call. Pass `[]` to disable tool use entirely.
+Pass only the tools your step actually needs. A focused tool list keeps the model on task and reduces unnecessary round-trips.
 
-```glitch
-;; Let the model use any tool it chooses — omit :tools
-(step "investigate"
-  (llm
-    :provider "lmstudio"
-    :model "qwen3-8b"
-    :prompt "Find the authentication flow in this codebase and explain it."))
+## Next steps
 
-;; Only filesystem tools — no semantic search
-(step "review"
-  (llm
-    :tools ["glitch_read_file" "glitch_grep"]
-    :prompt "Review the error handling in ~(step file-list)"))
-
-;; No tools — plain generation, fastest, no extra inference rounds
-(step "classify"
-  (llm
-    :tools []
-    :prompt "Classify this issue as bug, feature, or refactor. Return JSON only."))
-```
-
-Available tool names: `glitch_search`, `glitch_grep`, `glitch_read_file`, `glitch_symbols`, `glitch_run`, `glitch_eval`, `glitch_check`, `glitch_index`. See [Tool Use](/docs/tool-use) for what each does.
-
-Use `[]` for classification, summarization, and JSON-routing steps where tool calls add latency without benefit. Use a specific list to constrain a step that should only touch the filesystem — `["glitch_grep" "glitch_read_file"]` is a reliable default for code-review steps.
-
-### `:agentic`
-
-**Type:** boolean  
-**Default:** `false`
-
-When `false` (the default), the model calls tools at most once and then produces its final answer. When `true`, the model can call tools repeatedly — inspecting results, deciding what to look up next, and continuing until it's satisfied or hits `:max-rounds`.
-
-```glitch
-;; Single-round — model looks up what it needs once, then responds
-(step "check-pattern"
-  (llm
-    :provider "lmstudio"
-    :tools ["glitch_grep"]
-    :prompt "Does this project use mutex or channel-based concurrency?"))
-
-;; Multi-round — model keeps searching until it has a complete picture
-(step "deep-audit"
-  (llm
-    :provider "copilot"
-    :agentic true
-    :prompt "Trace every place the config file is loaded and explain the value flow."))
-```
-
-Use `false` (default) for targeted lookups where one search pass is enough. Use `true` for open-ended investigations where you can't predict how many passes the model will need.
-
-### `:max-rounds`
-
-**Type:** integer  
-**Default:** `5`
-
-Maximum number of tool-call rounds in agentic mode. When the limit is reached, gl1tch forces a final text response using all accumulated tool results. Has no effect unless `:agentic true` is also set.
-
-```glitch
-(step "write"
-  (llm
-    :provider "copilot"
-    :agentic true
-    :max-rounds 8
-    :prompt "Update the homepage to reflect the new tool-use provider support."))
-```
-
-Raise `:max-rounds` for complex multi-file investigations. Keep it low (2–3) for steps that should stay focused and return quickly.
-
-### Quick reference
-
-| Option | Type | Default | Effect |
-|--------|------|---------|--------|
-| `:tools` | `[]` or `["name" ...]` or omit | all tools | Tools the model can call. `[]` = none. |
-| `:agentic` | `true` / `false` | `false` | Multi-round tool calling when `true` |
-| `:max-rounds` | integer | `5` | Tool-call round cap in agentic mode |
-
-For provider requirements and the full available-tools list, see [Tool Use](/docs/tool-use).
-
-## Data transforms
-
-Reshape JSON between steps:
-
-```glitch
-(step "flatten-results"
-  (flatten "nested-data"))
-
-(step "pick-fields"
-  (pick :key "title" :key "status" :from "raw-data"))
-
-(step "add-metadata"
-  (assoc :key "reviewed" :status "true" :from "record"))
-```
-```
-
----
-
-The new **Tool use in `llm` steps** section covers:
-
-- **`:tools`** — vector of tool name strings or `[]`; omit for all tools, pass a list to restrict, pass `[]` to disable entirely
-- **`:agentic`** — boolean, default `false`; set `true` for multi-round reasoning loops
-- **`:max-rounds`** — integer, default `5`; caps tool-call rounds in agentic mode, no-op without `:agentic true`
-
-All three fields and their examples are verified against real workflow files in the repo (`.glitch/workflows/site-homepage.glitch`, `site-write.glitch`, `site-gate.glitch`).
+- [Workflow Syntax](/docs/workflow-syntax) — the full reference for every step form, control flow, and template syntax
+- [MCP Server](/docs/mcp-server) — configure and extend the tool server your agentic steps call into
+- [Local Models](/docs/local-models) — tune LM Studio for agentic workloads (GPU offload, context length)

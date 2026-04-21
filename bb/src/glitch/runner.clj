@@ -4,6 +4,7 @@
   (:require [glitch.core :as g]
             [glitch.store :as store]
             [glitch.provider :as prov]
+            [glitch.tool_loop]
             [glitch.mcp.tools :as mcp-tools]
             [glitch.mcp.handlers :as mcp-handlers]
             [sci.core :as sci]
@@ -247,15 +248,20 @@
                               (filterv #(contains? (set tools-requested) (get % "name"))
                                        available-defs)))
                 merged (assoc opts
-                         :model (or (:model opts) model)
+                         :model (let [m (or (:model opts) model)]
+                                  (when-not (= m "default") m))
                          :tool-defs tool-defs
                          :tool-handler tool-handler)]
             (if tiers
               (prov/call-tiered merged tiers)
-              (try
+              (if (:provider opts)
+                ;; Explicit provider — fail loudly, no fallback
                 (prov/call-provider pname merged)
-                (catch Exception _
-                  (prov/call-tiered merged prov/default-tiers)))))))
+                ;; No provider specified — try default, then tier escalation
+                (try
+                  (prov/call-provider pname merged)
+                  (catch Exception _
+                    (prov/call-tiered merged prov/default-tiers))))))))
 
       ;; Pre-seed steps
       (when seed-steps

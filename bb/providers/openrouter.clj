@@ -10,7 +10,7 @@
       (when-not api-key
         (throw (ex-info "openrouter: OPENROUTER_API_KEY not set" {})))
       (let [base-url   (or (System/getenv "OPENROUTER_BASE_URL") "https://openrouter.ai/api/v1")
-            model      (or model "google/gemma-3-4b-it:free")
+            model      (or model (System/getenv "OPENROUTER_MODEL") "google/gemma-3-12b-it")
             headers    {"Content-Type"  "application/json"
                         "Authorization" (str "Bearer " api-key)
                         "HTTP-Referer"  "https://gl1tch.dev"

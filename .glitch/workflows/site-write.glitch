@@ -3,8 +3,8 @@
 ;; Called by site.glitch router. Not typically run directly.
 ;; Params: page (slug), instructions (freeform)
 ;;
-;; Write step uses copilot + MCP (agentic, reads codebase).
-;; Route + Gate use openrouter (reliable JSON).
+;; Route: openrouter (fast JSON). Write: openrouter (reliable structured output).
+;; Gate: openrouter (reliable JSON). Copilot reserved for agentic tool-use only.
 
 (workflow "site-write"
   :description "Write or update a documentation page"
@@ -14,6 +14,24 @@
       (str "f='site/src/content/docs/" (param "page") ".md'; "
            "if [ -f \"$f\" ]; then cat \"$f\"; else echo '__NEW_PAGE__'; fi")))
 
+  (step "gather-context"
+    (sh "bash" "-c"
+      (str
+        "echo '=== DOC STUBS ==='; "
+        "for f in docs/site/*.md; do echo \"--- $f ---\"; cat \"$f\"; echo; done 2>/dev/null; "
+        "echo '=== EXAMPLES ==='; "
+        "for f in examples/*.glitch; do echo \"--- $f ---\"; cat \"$f\"; echo; done 2>/dev/null; "
+        "echo '=== SOURCE FILES ==='; "
+        "head -30 bb/src/glitch/core.clj 2>/dev/null; echo; "
+        "head -30 bb/src/glitch/tool_loop.clj 2>/dev/null; echo; "
+        "cat bb/src/glitch/mcp/tools.clj 2>/dev/null; echo; "
+        "echo '=== PROVIDERS ==='; "
+        "for f in bb/providers/*.clj; do echo \"--- $f ---\"; head -20 \"$f\"; echo; done 2>/dev/null; "
+        "echo '=== RECENT COMMITS ==='; "
+        "git log --oneline -20 2>/dev/null; "
+        "echo '=== ALL PAGE SLUGS ==='; "
+        "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null")))
+
   (step "existing-frontmatter"
     (sh "bash" "-c"
       (str "f='site/src/content/docs/" (param "page") ".md'; "
@@ -21,9 +39,8 @@
 
   (step "write"
     (llm
-      :provider "copilot"
-      :agentic true
-      :max-rounds 8
+      :provider "openrouter"
+      :tools []
       :prompt (str
         "You are a technical writer for gl1tch (8op.org).\n\n"
         "VOICE RULES:\n"
@@ -31,8 +48,7 @@
         "- examples before explanation — show real code first, explain second\n"
         "- no internal implementation details: never mention BubbleTea, tmux,\n"
         "  SQLite, Go types, OTel, or any internal package names\n"
-        "- every code example must be real — use glitch_read_file and glitch_grep\n"
-        "  to verify commands and parameters exist before referencing them\n"
+        "- every code example must be real — drawn from the CONTEXT below\n"
         "- do NOT invent commands, flags, or features\n"
         "- no glitch ask — it has been decommissioned\n"
         "- no Ollama — LM Studio is the local LLM runtime\n\n"
@@ -40,9 +56,7 @@
         "PAGE SLUG: " (param "page") "\n\n"
         "EXISTING CONTENT (if updating — __NEW_PAGE__ means create from scratch):\n"
         (ref "check-existing") "\n\n"
-        "EXISTING FRONTMATTER:\n" (ref "existing-frontmatter") "\n\n"
-        "Use glitch_read_file to read source files for accurate examples.\n"
-        "Use glitch_grep to verify any commands or flags you reference.\n\n"
+        "REPO CONTEXT:\n" (ref "gather-context") "\n\n"
         "OUTPUT: Return the complete markdown file including frontmatter:\n"
         "---\n"
         "title: \"Page Title\"\n"
@@ -51,7 +65,8 @@
         "---\n\n"
         "## First heading\n\n"
         "Content here...\n\n"
-        "If updating, preserve existing title/order/description unless told otherwise.")))
+        "If updating, preserve existing title/order/description unless told otherwise.\n\n"
+        "EXISTING FRONTMATTER:\n" (ref "existing-frontmatter"))))
 
   ;; Gate the content (openrouter for reliable JSON)
   (step "gate-result"
