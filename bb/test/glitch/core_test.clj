@@ -1,6 +1,7 @@
 (ns glitch.core-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [glitch.core :as core]))
+            [glitch.core :as core]
+            [cheshire.core :as json]))
 
 ;; Reset state before each test
 (use-fixtures :each
@@ -563,3 +564,77 @@
       (let [grounding-rec (last @recorded)]
         (is (= "grounded" (:kind grounding-rec)))
         (is (= 1 (:gate-passed grounding-rec)))))))
+
+;; --- consensus ---
+
+(deftest consensus-agreement-test
+  (testing "consensus returns agreed=true when all providers agree"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          {:response (str "{\"decision\": \"deploy\", \"reason\": \"reason-" @call-count "\"}")
+           :tokens-in 1 :tokens-out 1}))
+      (let [result-str (core/consensus ["p1" "p2"]
+                         :prompt "should we deploy?"
+                         :schema {:required ["decision" "reason"]
+                                  :types {"decision" :string "reason" :string}}
+                         :compare-key "decision")
+            result (json/parse-string result-str)]
+        (is (true? (get result "agreed")))
+        (is (= "deploy" (get-in result ["value" "decision"])))
+        (is (= 2 (count (get result "votes"))))))))
+
+(deftest consensus-disagreement-test
+  (testing "consensus returns agreed=false when providers disagree"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          (if (odd? @call-count)
+            {:response "{\"decision\": \"deploy\"}" :tokens-in 1 :tokens-out 1}
+            {:response "{\"decision\": \"hold\"}" :tokens-in 1 :tokens-out 1})))
+      (let [result-str (core/consensus ["p1" "p2"]
+                         :prompt "deploy?"
+                         :schema {:required ["decision"]}
+                         :compare-key "decision")
+            result (json/parse-string result-str)]
+        (is (false? (get result "agreed")))
+        (is (nil? (get result "value")))))))
+
+(deftest consensus-min-providers-test
+  (testing "consensus throws with fewer than 2 providers"
+    (core/set-provider-fn! (fn [_] {:response "{}" :tokens-in 0 :tokens-out 0}))
+    (is (thrown-with-msg? Exception #"minimum 2 providers"
+           (core/consensus ["p1"] :prompt "test")))))
+
+(deftest consensus-provider-failure-test
+  (testing "consensus handles provider failure gracefully"
+    (let [call-count (atom 0)]
+      (core/set-provider-fn!
+        (fn [opts]
+          (swap! call-count inc)
+          (if (= 1 @call-count)
+            (throw (ex-info "provider down" {}))
+            {:response "{\"decision\": \"deploy\"}" :tokens-in 1 :tokens-out 1})))
+      (let [result-str (core/consensus ["p1" "p2"]
+                         :prompt "deploy?"
+                         :schema {:required ["decision"]}
+                         :compare-key "decision")
+            result (json/parse-string result-str)]
+        (is (false? (get result "agreed")))))))
+
+(deftest consensus-records-via-recorder-test
+  (testing "consensus records result via step-recorder"
+    (let [recorded (atom [])]
+      (core/set-provider-fn!
+        (fn [opts]
+          {:response "{\"decision\": \"deploy\"}" :tokens-in 1 :tokens-out 1}))
+      (core/set-step-recorder! (fn [m] (swap! recorded conj m)))
+      (core/consensus ["p1" "p2"]
+        :prompt "deploy?"
+        :schema {:required ["decision"]}
+        :compare-key "decision")
+      (let [cons-rec (last @recorded)]
+        (is (= "consensus" (:kind cons-rec)))
+        (is (= 1 (:gate-passed cons-rec)))))))

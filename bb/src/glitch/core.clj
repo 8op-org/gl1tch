@@ -468,3 +468,56 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                       {:kind :grounding-failure
                        :step-id step-id
                        :unsupported unsupported})))))
+
+;; --- Consensus ---
+
+(defn consensus
+  "Run the same prompt through multiple providers and compare responses.
+   Returns a JSON string with {agreed, value, votes}.
+   Options: :prompt (required), :schema, :compare-key, :model, :min-confidence"
+  [providers & {:keys [prompt schema compare-key model min-confidence]}]
+  (when (< (count providers) 2)
+    (throw (ex-info "consensus requires minimum 2 providers" {:providers providers})))
+  (let [cmp-key  (or compare-key (first (:required schema)))
+        votes    (reduce
+                   (fn [acc pname]
+                     (try
+                       (let [response (@*provider-fn*
+                                        (cond-> {:prompt prompt :provider pname}
+                                          model (assoc :model model)))
+                             extracted (json-extract (:response response))
+                             parsed    (try (json/parse-string extracted) (catch Exception _ nil))
+                             violations (when (and schema parsed)
+                                          (validate-schema parsed schema))]
+                         (if (and parsed (nil? violations))
+                           (conj acc {:provider pname :response parsed})
+                           acc))
+                       (catch Exception _
+                         acc)))
+                   []
+                   providers)
+        values   (when cmp-key
+                   (map #(-> % :response (get cmp-key)
+                             str str/lower-case str/trim)
+                        votes))
+        agreed   (and (>= (count votes) 2)
+                      (apply = values))
+        result   {"agreed" agreed
+                  "value"  (when agreed (:response (first votes)))
+                  "votes"  (mapv (fn [v] {"provider" (:provider v)
+                                          "response" (:response v)})
+                                 votes)}
+        confidence (if (empty? votes) 0.0
+                     (/ (count (filter #(= (first values)
+                                           (-> % :response (get cmp-key)
+                                               str str/lower-case str/trim))
+                                       votes))
+                        (double (count votes))))]
+    (when-let [recorder @*step-recorder*]
+      (recorder {:step-id "consensus"
+                 :kind "consensus"
+                 :output (json/generate-string result)
+                 :gate-passed (if agreed 1 0)
+                 :confidence confidence
+                 :artifacts (json/generate-string {:votes (get result "votes")})}))
+    (json/generate-string result)))
