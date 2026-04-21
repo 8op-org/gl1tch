@@ -99,8 +99,8 @@ First positional arg is always a file path. If it doesn't exist, error. No name-
 
 - Drop `workspace-path` local — no more `System/getProperty "user.dir"` for indexing
 - Drop `indexer/open-search-db` and `indexer/index-repo` calls
-- Drop `*search-fn*` binding and the `search` primitive from the SCI context
-- Simplify MCP tool-context wiring — no more `workspace-path` or `search-db` in context, but the runner still builds a tool-handler from surviving MCP tools (`glitch_run`, `glitch_eval`, `glitch_check`, `glitch_grep`, `glitch_read_file`, `glitch_search`, `glitch_symbols`) and injects it into `(llm ...)` calls for tool-use
+- Replace `*search-fn*` implementation — the `search` primitive stays in the SCI context but backed by ripgrep (`rg --json`) instead of SQLite FTS5. `(search "query")` uses cwd as default path. `(search "query" :path "/some/repo" :limit 10)` for explicit paths. No indexing step needed.
+- Simplify MCP tool-context wiring — no more `workspace-path` or `search-db` in context, but the runner still builds a tool-handler from surviving MCP tools (`glitch_run`, `glitch_eval`, `glitch_check`, `glitch_read_file`, `glitch_search`, `glitch_symbols`) and injects it into `(llm ...)` calls for tool-use
 - Drop the `:project` kwarg from the `run` signature
 - Add `:provider` kwarg — passed from CLI `-p` flag, used as default when workflow doesn't specify `:provider` in `(llm ...)`
 - `workflows-dir` stays — `call-workflow` resolves children relative to the parent workflow's directory, derived from `(.getParent (io/file workflow-path))`
