@@ -2,202 +2,274 @@
 
 ## Overview
 
-This document defines the provider abstraction — how LLM providers are registered, resolved, invoked, and how tier-based escalation works.
+This document defines the provider abstraction — how LLM providers are registered, resolved, invoked, and how tier-based escalation works. Providers are Clojure functions loaded at startup and stored in an atom-backed registry.
 
 ## Definitions
 
-- **Provider** — any callable that accepts `(model, prompt)` and returns `(LLMResult, error)`.
+- **Provider** — a Clojure function that accepts a single opts map and returns `{:response :tokens-in :tokens-out}`.
 - **Tier** — a group of providers at the same escalation level, tried in order.
-- **Escalation** — moving to the next tier after all providers in the current tier fail or are rejected.
-- **Resolver** — a function that maps a provider name to a `ProviderFunc`.
+- **Escalation** — moving to the next tier after all providers in the current tier fail or return blank.
+- **Registry** — an atom holding `{name -> provider-fn}` mappings.
+- **Tool loop** — the multi-round tool-calling protocol for OpenAI-compatible providers.
 
-## LLMResult Contract
+## Provider Contract
 
-Every provider MUST return an `LLMResult` on success:
+Every provider MUST be a function of one argument — an opts map:
 
-```go
-type LLMResult struct {
-    Provider  string        // provider name (e.g., "ollama", "openrouter")
-    Model     string        // model identifier used
-    Response  string        // response text, trimmed of whitespace
-    TokensIn  int           // prompt token count
-    TokensOut int           // completion token count
-    CostUSD   float64       // estimated cost in USD (0 for local providers)
-    Latency   time.Duration // wall-clock time for the call
-}
+```clojure
+(fn [{:keys [prompt model tool-defs tool-handler agentic max-rounds]}]
+  {:response   "..."       ;; string, trimmed, non-empty on success
+   :tokens-in  0           ;; integer, 0 when actuals unavailable
+   :tokens-out 0})         ;; integer, 0 when actuals unavailable
 ```
 
-### Requirements
+### Input keys
 
-- `Response` MUST be trimmed (no leading/trailing whitespace)
-- `Response` MUST be non-empty on success. An empty response from a provider is a valid signal for escalation
-- `TokensIn` and `TokensOut` SHOULD be actual counts when the provider reports them (e.g., Ollama returns `prompt_eval_count` and `eval_count`). They MUST be estimated when actuals are unavailable
-- `CostUSD` MUST be `0` for local providers (ollama, lm-studio)
-- `Latency` MUST measure wall-clock time from request start to response received
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:prompt` | string | yes | The prompt text |
+| `:model` | string or nil | no | Model identifier; `nil` means provider default |
+| `:tool-defs` | vector of maps or nil | no | MCP tool definitions in `{"name" "description" "inputSchema"}` format |
+| `:tool-handler` | fn or nil | no | `(fn [tool-name args-map] => string)` — executes a tool call |
+| `:agentic` | boolean | no | If true, tool loop re-sends with tools after each round |
+| `:max-rounds` | integer | no | Max tool-calling rounds (default 5) |
 
-## Provider Types
+### Output requirements
 
-### Built-in Providers
+- `:response` MUST be trimmed (no leading/trailing whitespace)
+- `:response` MUST be non-empty on success. An empty or blank response triggers escalation.
+- `:tokens-in` and `:tokens-out` SHOULD be actual counts when the provider reports them. They MUST be `0` when actuals are unavailable (CLI-based providers).
 
-Hardcoded in the tiered runner. These are always available without configuration.
+## Registered Providers
 
-**`ollama`** — local Ollama instance at `http://localhost:11434`. Uses the `/api/generate` endpoint. Default model: `qwen3:8b`. Token counts are actual (from response metadata). Cost is always 0.
+Four providers ship in `bb/providers/`:
 
-**`lm-studio`** — local LM Studio instance at `http://localhost:1234`. Uses OpenAI-compatible chat endpoint. Default model: `qwen3-8b`. Cost is always 0.
+### `lmstudio`
 
-### Config-based Providers
+Local LM Studio instance. OpenAI-compatible HTTP API.
 
-Defined in `~/.config/glitch/config.yaml` under the `providers` key:
+- **Base URL:** `LMSTUDIO_BASE_URL` env var, or `http://localhost:1234`
+- **Default model:** `"default"` (LM Studio serves whatever model is loaded)
+- **Tool support:** Yes — converts MCP tool defs to OpenAI function-calling format, uses `tool_loop/run-loop`
+- **Fallback behavior:** If tool loop fails or returns blank, retries without tools
+- **Token counts:** Actual from `/v1/chat/completions` usage when no tools; `0` after tool loop
 
-```yaml
-providers:
-  openrouter:
-    type: openai-compatible
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_KEY
-    default_model: x-ai/grok-4.20
+### `openrouter`
+
+Cloud provider via OpenRouter API.
+
+- **Base URL:** `OPENROUTER_BASE_URL` env var, or `https://openrouter.ai/api/v1`
+- **API key:** `OPENROUTER_API_KEY` env var (required, throws if missing)
+- **Default model:** `OPENROUTER_MODEL` env var, or `google/gemma-3-12b-it`
+- **Tool support:** Yes — same MCP-to-OpenAI conversion, uses `tool_loop/run-loop`
+- **Headers:** Sends `HTTP-Referer: https://gl1tch.dev` and `X-Title: glitch`
+- **Token counts:** Actual from usage response (tracked via atom across tool loop rounds)
+
+### `claude`
+
+Anthropic Claude via the `claude` CLI (`claude --print`).
+
+- **Tool support:** Yes — passes `--mcp-config` with the glitch MCP server when tool-defs present
+- **Model override:** `--model <model>` when model is specified
+- **Token counts:** Always `0` (CLI doesn't report usage)
+- **Output:** Raw stdout, trimmed
+
+### `copilot`
+
+GitHub Copilot CLI (`copilot -p -`).
+
+- **Tool support:** Yes — passes `--additional-mcp-config` with the glitch MCP server when tool-defs present. When no tools, passes `--available-tools=` to disable all tool use.
+- **Flags:** Always includes `--disable-builtin-mcps` to avoid token overhead
+- **Post-processing:** Strips agent trace lines (`●`, `✗`, `│`, `└`), trailing stats blocks (`Changes/Requests/Tokens`), and markdown fences
+- **Token counts:** Always `0` (CLI doesn't report usage)
+
+## Tool Loop Protocol
+
+The `glitch.tool_loop/run-loop` function implements multi-round tool calling for HTTP providers (lmstudio, openrouter).
+
+```
+run-loop(call-fn, messages, tools, tool-handler, opts)
+  → final text response string
 ```
 
-Config-based providers are resolved via `ResolverFunc`. Currently only `openai-compatible` type is supported.
+### Flow
 
-A config-based provider MUST specify:
-- `type` — provider type (currently only `"openai-compatible"`)
-- `base_url` — API base URL
+```
+if no tools:
+    single call → return text content
 
-A config-based provider SHOULD specify:
-- `api_key_env` — environment variable name containing the API key
-- `default_model` — fallback model if none specified in the workflow
+loop (max-rounds):
+    call LLM with messages + tools
+    choice = response.choices[0]
 
-### Command-template Providers
+    if no tool_calls in choice:
+        return choice.message.content   (done)
 
-YAML files in `~/.config/glitch/providers/`:
+    if round >= max-rounds:
+        append assistant msg + tool results
+        call without tools → return text  (forced completion)
 
-```yaml
-name: copilot
-command: "copilot:discuss {{.prompt}}"
+    execute each tool_call via tool-handler
+    append assistant msg + tool results to messages
+
+    if agentic:
+        recur with tools                 (another round)
+    else:
+        call without tools → return text (single-round mode)
 ```
 
-The command template supports `{{.prompt}}` and `{{.model}}` placeholders. Execution rules:
-- If command contains `{{.prompt}}`: both prompt and model are rendered inline, executed as shell command
-- If command contains `{{.model}}` but not `{{.prompt}}`: model is rendered inline, prompt is piped via stdin
-- If command contains neither: prompt is piped via stdin
+### Agentic vs single-round
 
-Command-template providers return the raw stdout as `Response`. Token counts are estimated.
+- **Single-round** (default): One tool pass, then force a text response. Good for structured retrieval.
+- **Agentic** (`agentic: true`): Re-sends with tools each round. The LLM decides when to stop calling tools. Capped at `max-rounds`.
+
+### MCP tool format conversion
+
+All providers convert MCP tool definitions to OpenAI function-calling format:
+
+```clojure
+;; MCP format (input)
+{"name"        "glitch_search"
+ "description" "Search indexed code"
+ "inputSchema" {"type" "object" "properties" {...}}}
+
+;; OpenAI format (output)
+{"type"     "function"
+ "function" {"name"        "glitch_search"
+             "description" "Search indexed code"
+             "parameters"  {"type" "object" "properties" {...}}}}
+```
+
+## Provider Registration
+
+Providers self-register by calling `glitch.provider/register` at load time:
+
+```clojure
+(require '[glitch.provider :as provider])
+
+(provider/register "my-provider"
+  (fn [{:keys [prompt model tool-defs tool-handler agentic max-rounds]}]
+    ;; ... implementation ...
+    {:response   "..."
+     :tokens-in  0
+     :tokens-out 0}))
+```
+
+### Loading
+
+`glitch.provider/load-providers` scans directories for `.clj` files and loads each one. Search order:
+
+1. `~/.config/glitch/providers/` — user-global
+2. `providers/` — relative to working directory
+3. Classpath entries ending in `providers`
+4. Any explicitly passed directories
+
+Each `.clj` file is loaded via `load-file`. Failed loads emit a warning to stderr and continue.
 
 ## Resolution Order
 
-When the tiered runner needs to call a provider by name, it resolves in this order:
+When the runner needs to call a provider:
 
-1. **Built-in check** — is it `"ollama"` or `"lm-studio"`? Call the hardcoded implementation.
-2. **Resolver check** — does `ResolverFunc(name)` return `(fn, true)`? Call `fn`.
-3. **Registry fallback** — call `ProviderRegistry.RunProvider(name, model, prompt)`.
-4. **Error** — provider not found.
+```
+if :provider is specified in opts:
+    call-provider(name, opts)           → fail loudly if not registered
 
-This means built-in providers cannot be overridden by config or command templates.
+else:
+    try call-provider("lmstudio", opts) → default provider
+    on failure:
+        call-tiered(opts, default-tiers) → escalate through tiers
+```
+
+The default provider is `lmstudio`. When it fails, the runner falls back to tier escalation.
 
 ## Tier Configuration
 
-```go
-type TierConfig struct {
-    Providers []string // provider names, tried left to right
-    Model     string   // model for this tier (overrides default)
-}
+```clojure
+;; Each tier is a map with :providers (tried left→right) and optional :model
+{:providers ["copilot"]  :model nil}
+{:providers ["claude"]   :model nil}
+{:providers ["openrouter"] :model nil}
+{:providers ["lmstudio"] :model nil}
 ```
 
-Tiers are ordered from cheapest/fastest (index 0) to most expensive/capable (highest index).
+### Default tiers
 
-Default tiers:
+```clojure
+(def default-tiers
+  [{:providers ["copilot"]}
+   {:providers ["claude"]}
+   {:providers ["openrouter"]}
+   {:providers ["lmstudio"]}])
 ```
-Tier 0: [ollama]           model: qwen3:8b       (local, free)
-Tier 1: [codex, gemini]    model: (default)       (free cloud)
-Tier 2: [copilot, claude]  model: (default)       (paid cloud)
-```
 
-## Escalation: `Run`
-
-`TieredRunner.Run(ctx, prompt, validate)` — basic escalation with a caller-supplied validation function.
+### Escalation: `call-tiered`
 
 ```
-for each tier (0, 1, 2, ...):
-    for each provider in tier.Providers:
-        if ctx is cancelled: return context error
-        result, err = callProvider(name, model, prompt)
-        if err:
-            lastReason = ReasonProviderError
-            continue to next provider in same tier
-        reason = validate(result.Response)
-        if reason is non-empty:
-            lastReason = reason
-            break to next tier (skip remaining providers)
-        return result (success)
-return error("all tiers exhausted")
+for each tier:
+    for each provider in tier.providers:
+        try call-provider(name, merged-opts)
+        if response is nil or blank:
+            continue to next provider
+        if exception:
+            log warning to stderr
+            continue to next provider
+        return result  (success)
+    (all providers in tier failed → continue to next tier)
+
+throw "all tiers exhausted"
 ```
 
 Key behaviors:
-- Provider error → try next provider in SAME tier
-- Validation rejection → skip to NEXT tier (remaining providers in current tier are skipped)
-- Context cancellation is checked before each provider attempt
+- Provider error → log to stderr, try next provider in SAME tier
+- Blank/nil response → try next provider in SAME tier
+- Model override from tier config merges into opts
+- No validation step — escalation is purely based on provider availability and non-empty response
 
-### Escalation Reasons
+## Runner Integration
 
-```go
-const (
-    ReasonMalformed     = "malformed_output"
-    ReasonEmpty         = "empty_response"
-    ReasonHallucinated  = "hallucinated_tool"
-    ReasonProviderError = "provider_error"
-    ReasonStructural    = "structural"
-    ReasonEval          = "eval"
-)
+The `glitch.runner/run` function wires providers to workflows:
+
+1. Calls `provider/load-providers` to populate the registry
+2. Builds a tool handler from the workspace's MCP tools (search, file read/write, symbols)
+3. Sets the provider dispatch function that:
+   - Injects `tool-defs` and `tool-handler` into every LLM call
+   - Routes explicit `:provider` directly (no fallback)
+   - Routes unspecified providers through `lmstudio` → tier escalation
+4. Custom tiers can be passed via `:tiers` to override `default-tiers`
+
+### Tool injection
+
+By default, all available MCP tools are injected into every LLM call. Workflows can control this:
+
+- Omit `:tools` → all tools injected
+- `:tools ["glitch_search"]` → only named tools
+- `:tools []` → no tools (plain LLM call)
+
+When the workspace has no search index, search-related tools (`glitch_search`, `glitch_index`, `glitch_symbols`) are automatically excluded.
+
+## Writing a Custom Provider
+
+Drop a `.clj` file in `~/.config/glitch/providers/` or your project's `providers/` directory:
+
+```clojure
+;; providers/my-api.clj
+(require '[babashka.http-client :as http])
+(require '[cheshire.core :as json])
+(require '[glitch.provider :as provider])
+
+(provider/register "my-api"
+  (fn [{:keys [prompt model]}]
+    (let [resp (http/post "https://my-api.example.com/v1/chat"
+                 {:headers {"Content-Type" "application/json"
+                            "Authorization" (str "Bearer " (System/getenv "MY_API_KEY"))}
+                  :body (json/generate-string
+                          {:model (or model "default")
+                           :messages [{:role "user" :content prompt}]})})
+          parsed (json/parse-string (:body resp) true)
+          usage  (get parsed :usage {})]
+      {:response   (get-in parsed [:choices 0 :message :content] "")
+       :tokens-in  (or (:prompt_tokens usage) 0)
+       :tokens-out (or (:completion_tokens usage) 0)})))
 ```
 
-## Escalation: `RunSmart`
-
-`TieredRunner.RunSmart(ctx, prompt, format, threshold, evalFn)` — escalation with structural validation and self-evaluation.
-
-```
-for each tier (0, 1, 2, ...):
-    for each provider in tier.Providers:
-        if ctx is cancelled: return context error
-        result, err = callProvider(name, model, prompt)
-        if err:
-            lastReason = ReasonProviderError
-            continue to next provider in same tier
-        chain.append(tierIdx)
-        if not CheckStructure(format, result.Response):
-            scores.append(0)
-            lastReason = ReasonStructural
-            break to next tier
-        if this is the final tier:
-            return result (accepted without eval)
-        evalScore = evalFn(model, BuildEvalPrompt(prompt, result))
-        scores.append(evalScore)
-        if evalScore >= threshold:
-            return result (accepted)
-        lastReason = ReasonEval
-        break to next tier
-return error("all tiers exhausted")
-```
-
-Key differences from `Run`:
-- Structural check happens before eval
-- Final tier is always accepted (prevents infinite escalation)
-- Self-eval score compared against threshold (default: 4 on a 1-5 scale)
-- `RunResult` includes `EscalationChain` and `EvalScores` for observability
-
-## RunResult
-
-```go
-type RunResult struct {
-    LLMResult                          // embedded
-    Tier             int               // tier index that produced the accepted result
-    Escalated        bool              // true if Tier > 0
-    EscalationReason EscalationReason  // reason for last escalation (empty if tier 0 accepted)
-    EscalationChain  []int             // tier indices attempted (RunSmart only)
-    EvalScores       []int             // self-eval scores per attempt (RunSmart only)
-}
-```
-
-## Conformance
-
-See [`spec/03-provider-protocol.glitch`](../../spec/03-provider-protocol.glitch) for the conformance workflow that exercises provider resolution and tier escalation.
+For tool support, use `glitch.tool_loop/run-loop` — see `lmstudio.clj` or `openrouter.clj` as templates.
