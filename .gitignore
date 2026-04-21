@@ -11,3 +11,5 @@ gui/dist/
 test-results/
 janet/build/
 janet/jpm_tree/
+bb/build/
+bb/.glitch/

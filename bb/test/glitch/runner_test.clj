@@ -268,23 +268,6 @@
       (is (= "hello world" (:output result))))))
 
 ;; ---------------------------------------------------------------------------
-;; list-workflows
-;; ---------------------------------------------------------------------------
-
-(deftest list-workflows-test
-  (testing "list-workflows finds .glitch and .clj files"
-    (write-temp-workflow "alpha.glitch" "(step \"a\" \"1\")")
-    (write-temp-workflow "beta.clj" "(step \"b\" \"2\")")
-    (write-temp-workflow "gamma.txt" "not a workflow")
-    (let [wfs (runner/list-workflows test-dir)]
-      (is (= 2 (count wfs)))
-      (is (= "alpha" (:name (first wfs))))
-      (is (= "beta" (:name (second wfs))))))
-
-  (testing "list-workflows returns nil for non-existent dir"
-    (is (nil? (runner/list-workflows "/tmp/nonexistent-glitch-dir")))))
-
-;; ---------------------------------------------------------------------------
 ;; step :expects contracts in SCI
 ;; ---------------------------------------------------------------------------
 

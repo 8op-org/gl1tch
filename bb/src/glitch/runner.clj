@@ -6,10 +6,7 @@
             [glitch.store :as store]
             [glitch.provider :as prov]
             [glitch.tool_loop]
-            [glitch.mcp.tools :as mcp-tools]
-            [glitch.mcp.handlers :as mcp-handlers]
-            [glitch.mcp.indexer :as indexer]
-            [glitch.mcp.search :as search]
+            [babashka.process :as bp]
             [sci.core :as sci]
             [cheshire.core :as json]
             [clojure.string :as str]
@@ -178,10 +175,10 @@
                  'suggest-next      graph/sci-suggest-next
 
                  ;; search (bound at run time via *search-fn*)
-                 'search          (fn [query & {:keys [limit] :or {limit 10}}]
+                 'search          (fn [query & {:keys [limit path] :or {limit 10}}]
                                    (if-let [f @*search-fn*]
-                                     (f query limit)
-                                     (throw (ex-info "search not available — no index" {}))))
+                                     (f query limit path)
+                                     (throw (ex-info "search not available" {}))))
 
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
@@ -268,15 +265,15 @@
 
    Options (keyword args):
      :input          — string input available via (input)
-     :db             — SQLite db path (from store/open); nil to skip recording
-     :project        — project/workspace name for run record
+     :db             — store map (from store/open); nil to skip recording
      :model          — default model name for LLM calls
+     :provider       — default provider name for LLM calls
      :params         — map of parameters available via (params)/(param k)
      :seed-steps     — map of step-id->value to pre-populate before eval
      :workflows-dir  — directory for call-workflow resolution
      :parent-run-id  — parent run ID for sub-workflow recording
      :tiers          — provider tier list (overrides default-tiers)"
-  [workflow-path & {:keys [input db project model params seed-steps
+  [workflow-path & {:keys [input db model provider params seed-steps
                            workflows-dir parent-run-id tiers]}]
   (let [input  (or input "")
         model  (or model "default")
@@ -293,112 +290,65 @@
     (g/set-params! params)
     (g/set-workflows-dir! wf-dir)
 
-    ;; Build tool handler for this workspace
-    (let [workspace-path (System/getProperty "user.dir")
-          _  (g/trace "  indexing" workspace-path)
-          t0 (System/currentTimeMillis)
-          search-db (try (indexer/open-search-db workspace-path) (catch Exception _ nil))
-          _         (when search-db
-                      (try (indexer/index-repo search-db workspace-path) (catch Exception _ nil))
-                      (g/trace "  ✓ indexed" (str "(" (- (System/currentTimeMillis) t0) "ms)"))
-                      (reset! *search-fn*
-                        (fn [query limit]
-                          (let [results (search/hybrid-search search-db query workspace-path :limit limit)]
-                            (str/join "\n\n"
-                              (map (fn [{:keys [path content score]}]
-                                     (str "--- " path " (score: " (format "%.2f" (double score)) ") ---\n" content))
-                                   results))))))
-          tool-context {:workspace-path workspace-path
-                        :search-db search-db
-                        :embed-fn nil}
-          tool-handler (mcp-handlers/make-handler tool-context)
-          available-defs (if search-db
-                           mcp-tools/tool-definitions
-                           (let [search-tools #{"glitch_search" "glitch_index" "glitch_symbols"}]
-                             (filterv #(not (contains? search-tools (get % "name")))
-                                      mcp-tools/tool-definitions)))]
+    ;; Bind search to ripgrep
+    (reset! *search-fn*
+      (fn [query limit path]
+        (let [search-path (or path (System/getProperty "user.dir"))
+              cmd ["rg" "-n" "-S" "-C" "2" "-m" (str limit) "--" query search-path]
+              result (bp/shell {:out :string :err :string :continue true} cmd)]
+          (if (<= (:exit result) 1)
+            (or (:out result) "")
+            (throw (ex-info (str "search failed: " (:err result)) {}))))))
 
-      ;; Wire provider dispatch
-      (g/set-provider-fn!
-        (fn [opts]
-          (let [pname  (or (:provider opts) "lmstudio")
-                ;; Inject tool-handler and default tool definitions unless :tools []
-                tools-requested (get opts :tools :all)
-                tool-defs (when-not (and (coll? tools-requested) (empty? tools-requested))
-                            (if (= tools-requested :all)
-                              available-defs
-                              (filterv #(contains? (set tools-requested) (get % "name"))
-                                       available-defs)))
-                merged (assoc opts
-                         :model (let [m (or (:model opts) model)]
-                                  (when-not (= m "default") m))
-                         :tool-defs tool-defs
-                         :tool-handler tool-handler)]
-            (if tiers
-              (prov/call-tiered merged tiers)
-              (if (:provider opts)
-                ;; Explicit provider — fail loudly, no fallback
+    ;; Wire provider dispatch
+    (g/set-provider-fn!
+      (fn [opts]
+        (let [pname  (or (:provider opts) provider "lmstudio")
+              merged (assoc opts
+                       :model (let [m (or (:model opts) model)]
+                                (when-not (= m "default") m)))]
+          (if tiers
+            (prov/call-tiered merged tiers)
+            (if (:provider opts)
+              ;; Explicit provider — fail loudly, no fallback
+              (prov/call-provider pname merged)
+              ;; No provider specified — try default, then tier escalation
+              (try
                 (prov/call-provider pname merged)
-                ;; No provider specified — try default, then tier escalation
-                (try
-                  (prov/call-provider pname merged)
-                  (catch Exception _
-                    (prov/call-tiered merged prov/default-tiers))))))))
+                (catch Exception _
+                  (prov/call-tiered merged prov/default-tiers))))))))
 
-      ;; Pre-seed steps
-      (when seed-steps
-        (doseq [[k v] seed-steps]
-          (g/step k v)))
+    ;; Pre-seed steps
+    (when seed-steps
+      (doseq [[k v] seed-steps]
+        (g/step k v)))
 
-      ;; Record run in store (when db is provided)
-      (let [run-id (when db
-                     (let [rid (store/record-run db
-                                 {:name          ""
-                                  :input         input
-                                  :workflow-file workflow-path
-                                  :model         model
-                                  :workspace     (or project "")
-                                  :parent-run-id parent-run-id})]
-                       ;; Wire step recorder to persist every step
-                       (g/set-step-recorder!
-                         (fn [rec]
-                           (store/record-step db (assoc rec :run-id rid))))
-                       rid))
-            ;; Build SCI context and evaluate the workflow
-            ctx (make-sci-ctx)]
-        (binding [*sci-ctx* ctx]
-          (try
-            (sci/eval-string* ctx (slurp workflow-path))
-            (let [result {:name    ""
-                          :output  (g/last-output)
-                          :steps   (g/get-steps)
-                          :run-id  (or run-id 0)}]
-              (when db
-                (store/finish-run db run-id (:output result) 0))
-              result)
-            (catch Exception e
-              (when db
-                (store/finish-run db run-id (str "ERROR: " (.getMessage e)) 1))
-              (throw e))))))))
-
-;; ---------------------------------------------------------------------------
-;; list-workflows — discover workflow files in a directory
-;; ---------------------------------------------------------------------------
-
-(defn list-workflows
-  "Return a sorted vec of {:name :path} maps for .glitch and .clj files
-   found in `dir`."
-  [dir]
-  (let [d (io/file dir)]
-    (when (.exists d)
-      (->> (.listFiles d)
-           (filter #(let [n (.getName %)]
-                      (or (str/ends-with? n ".glitch")
-                          (str/ends-with? n ".clj"))))
-           (map (fn [f]
-                  (let [n       (.getName f)
-                        ext-len (if (str/ends-with? n ".glitch") 7 4)]
-                    {:name (subs n 0 (- (count n) ext-len))
-                     :path (.getPath f)})))
-           (sort-by :name)
-           vec))))
+    ;; Record run in store (when db is provided)
+    (let [run-id (when db
+                   (let [rid (store/record-run db
+                               {:name          ""
+                                :input         input
+                                :workflow-file workflow-path
+                                :model         model
+                                :parent-run-id parent-run-id})]
+                     ;; Wire step recorder to persist every step
+                     (g/set-step-recorder!
+                       (fn [rec]
+                         (store/record-step db (assoc rec :run-id rid))))
+                     rid))
+          ;; Build SCI context and evaluate the workflow
+          ctx (make-sci-ctx)]
+      (binding [*sci-ctx* ctx]
+        (try
+          (sci/eval-string* ctx (slurp workflow-path))
+          (let [result {:name    ""
+                        :output  (g/last-output)
+                        :steps   (g/get-steps)
+                        :run-id  (or run-id 0)}]
+            (when db
+              (store/finish-run db run-id (:output result) 0))
+            result)
+          (catch Exception e
+            (when db
+              (store/finish-run db run-id (str "ERROR: " (.getMessage e)) 1))
+            (throw e)))))))

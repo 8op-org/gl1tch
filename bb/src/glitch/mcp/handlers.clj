@@ -1,44 +1,80 @@
 (ns glitch.mcp.handlers
-  (:require [glitch.mcp.search :as search]
-            [glitch.mcp.indexer :as idx]
-            [babashka.process :as bp]
+  (:require [babashka.process :as bp]
             [cheshire.core :as json]
             [clojure.string :as str]
             [sci.core :as sci]))
 
-(defn- confined-path
-  "Resolve path and verify it's under workspace-path. Throws if not."
-  [path workspace-path]
-  (let [resolved (.getCanonicalPath (java.io.File. path))
-        base (.getCanonicalPath (java.io.File. workspace-path))]
-    (when-not (str/starts-with? resolved base)
-      (throw (ex-info (str "path outside workspace: " path) {})))
-    resolved))
+(defn- handle-search [arguments]
+  (let [query      (get arguments "query")
+        path       (get arguments "path")
+        glob       (get arguments "glob")
+        fixed      (get arguments "fixed" false)
+        multiline  (get arguments "multiline" false)
+        pcre2      (get arguments "pcre2" false)
+        context    (get arguments "context")
+        limit      (get arguments "limit")
+        smart-case (get arguments "smart_case" true)
+        cmd (cond-> ["rg" "--json"]
+              smart-case (conj "-S")
+              fixed      (conj "-F")
+              multiline  (conj "-U")
+              pcre2      (conj "-P")
+              context    (conj "-C" (str context))
+              limit      (conj "-m" (str limit))
+              glob       (conj "-g" glob)
+              true       (conj "--" query path))
+        result (bp/shell {:out :string :err :string :continue true} cmd)]
+    (if (zero? (:exit result))
+      (:out result)
+      (if (= 1 (:exit result))
+        "[]"
+        (throw (ex-info (str "rg failed: " (:err result)) {}))))))
 
-(defn- handle-search [context arguments]
-  (let [db (:search-db context)
-        query (get arguments "query")
-        repo (get arguments "repo")
-        embed-fn (:embed-fn context)
-        limit (get arguments "limit" 10)]
-    (json/generate-string
-      (search/hybrid-search db query repo :embed-fn embed-fn :limit limit))))
+(def ^:private symbol-patterns
+  {"clojure"    "^\\(def[n\\-]?\\s+%s"
+   "go"         "^(func|type|var|const)\\s+.*%s"
+   "python"     "^(def|class)\\s+%s"
+   "javascript" "(function|const|let|var|class|export)\\s+%s"
+   "typescript" "(function|const|let|var|class|export|interface|type)\\s+%s"
+   "rust"       "^(fn|struct|enum|trait|type|const|static)\\s+%s"})
 
-(defn- handle-index [context arguments]
-  (let [db (:search-db context)
-        repo (get arguments "repo")
-        embed-fn (:embed-fn context)
-        reindex (get arguments "reindex" false)]
-    (json/generate-string
-      (idx/index-repo db repo :embed-fn embed-fn :reindex reindex))))
+(defn- detect-language [path]
+  (let [result (bp/shell {:out :string :err :string :continue true}
+                 "rg" "--files" "--max-depth" "2" path)
+        files (str/split-lines (or (:out result) ""))]
+    (cond
+      (some #(str/ends-with? % ".clj") files)  "clojure"
+      (some #(str/ends-with? % ".go") files)   "go"
+      (some #(str/ends-with? % ".py") files)   "python"
+      (some #(str/ends-with? % ".ts") files)   "typescript"
+      (some #(str/ends-with? % ".js") files)   "javascript"
+      (some #(str/ends-with? % ".rs") files)   "rust"
+      :else nil)))
+
+(defn- handle-symbols [arguments]
+  (let [query    (get arguments "query")
+        path     (get arguments "path")
+        language (or (get arguments "language")
+                     (detect-language path))
+        pattern  (if language
+                   (format (get symbol-patterns language
+                             "(def|fn|func|class|type|struct|const|let|var)\\s+%s")
+                           query)
+                   query)
+        cmd      ["rg" "-n" "-S" "--" pattern path]
+        result   (bp/shell {:out :string :err :string :continue true} cmd)]
+    (if (<= (:exit result) 1)
+      (or (:out result) "")
+      (throw (ex-info (str "rg failed: " (:err result)) {})))))
 
 (defn- handle-run [arguments]
-  (let [workflow (get arguments "workflow")
-        input (get arguments "input")
+  (let [file       (get arguments "file")
+        input      (get arguments "input")
         set-params (get arguments "set")
-        cmd (cond-> ["glitch" "run" workflow]
-              input (conj input)
-              set-params (into (mapcat (fn [[k v]] ["-s" (str k "=" v)]) set-params)))
+        cmd (cond-> ["glitch" "run"]
+              set-params (into (mapcat (fn [[k v]] ["-s" (str k "=" v)]) set-params))
+              true       (conj file)
+              input      (conj input))
         result (apply bp/shell {:out :string :err :string :continue true} cmd)]
     (if (zero? (:exit result))
       (:out result)
@@ -50,9 +86,8 @@
         result (sci/eval-string* ctx expression)]
     (str result)))
 
-(defn- handle-check [context arguments]
+(defn- handle-check [arguments]
   (let [file (get arguments "file")
-        _ (confined-path file (:workspace-path context))
         content (slurp file)]
     (try
       (read-string (str "[" content "]"))
@@ -60,44 +95,23 @@
       (catch Exception e
         (str "error: " (.getMessage e))))))
 
-(defn- handle-grep [context arguments]
-  (let [pattern (get arguments "pattern")
-        path (get arguments "path" (:workspace-path context))
-        _ (confined-path path (:workspace-path context))
-        glob-pat (get arguments "glob")
-        cmd (cond-> ["grep" "-rn" "--color=never" "--" pattern path]
-              glob-pat (conj "--include" glob-pat))
-        result (apply bp/shell {:out :string :err :string :continue true} cmd)]
-    (or (:out result) "")))
-
-(defn- handle-symbols [context arguments]
-  (let [db (:search-db context)
-        query (get arguments "query")
-        repo (get arguments "repo")
-        kw-results (search/keyword-search db query :repo repo :limit 50)
-        filtered (filter #(str/includes? (or (:symbols %) "") query) kw-results)]
-    (json/generate-string
-      (mapv #(select-keys % [:path :symbols :score]) filtered))))
-
-(defn- handle-read-file [context arguments]
+(defn- handle-read-file [arguments]
   (let [path (get arguments "path")
-        _ (confined-path path (:workspace-path context))
-        f (java.io.File. path)]
+        f    (java.io.File. path)]
     (when-not (.exists f)
       (throw (ex-info (str "file not found: " path) {})))
     (let [lines (str/split-lines (slurp f))
           selected (take 200 lines)]
       (str/join "\n" selected))))
 
-(defn make-handler [context]
+(defn make-handler
+  [_context]
   (fn [tool-name arguments]
     (case tool-name
-      "glitch_search"    (handle-search context arguments)
-      "glitch_index"     (handle-index context arguments)
+      "glitch_search"    (handle-search arguments)
+      "glitch_symbols"   (handle-symbols arguments)
       "glitch_run"       (handle-run arguments)
       "glitch_eval"      (handle-eval arguments)
-      "glitch_check"     (handle-check context arguments)
-      "glitch_grep"      (handle-grep context arguments)
-      "glitch_symbols"   (handle-symbols context arguments)
-      "glitch_read_file" (handle-read-file context arguments)
+      "glitch_check"     (handle-check arguments)
+      "glitch_read_file" (handle-read-file arguments)
       (throw (ex-info (str "unknown tool: " tool-name) {})))))
