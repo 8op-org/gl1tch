@@ -10,12 +10,11 @@ description: "brew install 8op-org/tap/glitch"
 brew install 8op-org/tap/glitch
 ```
 
-gl1tch routes LLM steps through Ollama by default. Install it and pull a model:
+gl1tch routes LLM steps through LM Studio by default. Install it and load a model:
 
-```bash
-brew install ollama
-ollama pull qwen2.5:7b
-```
+1. Download [LM Studio](https://lmstudio.ai) and launch it
+2. Go to **Settings > Server** and enable the local server (port 1234)
+3. Pull **qwen3-8b** — best general-purpose model at this size
 
 You also need GitHub CLI authenticated:
 
@@ -31,31 +30,28 @@ glitch --help
 
 ## Your first workflow
 
-gl1tch ships with example workflows. Run one:
+Create a project directory with `glitch init`:
 
 ```bash
-glitch workflow run hello-sexpr
+mkdir my-project && cd my-project
+glitch init
 ```
 
-That runs `examples/hello.glitch`:
+That creates `.glitch/workflows/`. Drop a workflow file in there:
 
 ````glitch
-;; hello.glitch — example gl1tch s-expression workflows
-;;
-;; Run with: glitch workflow run hello-sexpr
+;; .glitch/workflows/hello.glitch
 
-(def model "qwen2.5:7b")
-(def provider "ollama")
+(def model "qwen3-8b")
 
-(workflow "hello-sexpr"
-  :description "Demo s-expression workflow format"
+(workflow "hello"
+  :description "Demo s-expression workflow"
 
   (step "gather"
     (run "echo 'hello from a .glitch workflow'"))
 
   (step "respond"
     (llm
-      :provider provider
       :model model
       :prompt ```
         You received this message from a shell command:
@@ -65,10 +61,16 @@ That runs `examples/hello.glitch`:
         ```)))
 ````
 
+Run it:
+
+```bash
+glitch run hello
+```
+
 What each part does:
 
-- `(def model "qwen2.5:7b")` — binds a constant you reference by name anywhere in the file
-- `(workflow "hello-sexpr" ...)` — declares the workflow. The string is the name you pass to `glitch workflow run`
+- `(def model "qwen3-8b")` — binds a constant you reference by name anywhere in the file
+- `(workflow "hello" ...)` — declares the workflow. The string is the name you pass to `glitch run`
 - `(step "gather" (run "..."))` — runs a shell command and captures stdout
 - `(step "respond" (llm ...))` — sends a prompt to your local model
 - `~(step gather)` — injects the previous step's output into the prompt
@@ -79,9 +81,9 @@ What each part does:
 Here's a more practical example — reviewing staged git changes:
 
 ````glitch
-;; code-review.glitch
+;; .glitch/workflows/code-review.glitch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "code-review"
   :description "Review staged git changes and flag issues"
@@ -113,14 +115,14 @@ Here's a more practical example — reviewing staged git changes:
         ```)))
 ````
 
-Shell steps fetch the data (free, deterministic). LLM steps make sense of it (expensive, so feed pre-processed data). This is the core pattern. gl1tch workflows can now leverage the **MCP server** for tool-use in steps.
+Shell steps fetch the data (free, deterministic). LLM steps make sense of it (expensive, so feed pre-processed data). This is the core pattern.
 
 ## Writing your own workflow
 
-Create `workflows/my-workflow.glitch`:
+Create `.glitch/workflows/my-workflow.glitch`:
 
 ````glitch
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "my-workflow"
   :description "What it does"
@@ -142,13 +144,13 @@ Create `workflows/my-workflow.glitch`:
 Run it:
 
 ```bash
-glitch workflow run my-workflow
+glitch run my-workflow
 ```
 
 Pass runtime values with `--set`:
 
 ```bash
-glitch workflow run parameterized --set repo=my-project
+glitch run my-workflow --set repo=my-project
 ```
 
 Inside the workflow, `~param.repo` expands to `my-project`.
@@ -158,11 +160,11 @@ Inside the workflow, `~param.repo` expands to `my-project`.
 Every step's output is available to later steps via `~(step id)`. Chain as many as you need:
 
 ````glitch
-;; multi-step-chain.glitch
+;; .glitch/workflows/system-health.glitch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
-(workflow "multi-step-chain"
+(workflow "system-health"
   :description "Gather system info, analyze it, then produce recommendations"
 
   (step "disk"
@@ -197,12 +199,12 @@ Shell steps are free. Use as many as you need to shape the data before the LLM s
 
 ## Saving output
 
-Write any step’s output to a file with `(save ...)`:
+Write any step's output to a file with `(save ...)`:
 
 ````glitch
-;; git-changelog.glitch
+;; .glitch/workflows/git-changelog.glitch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "git-changelog"
   :description "Summarize recent git commits into a human-readable changelog"
@@ -225,14 +227,41 @@ Write any step’s output to a file with `(save ...)`:
     (save "results/changelog.md" :from "changelog")))
 ````
 
-## Workflow discovery
+## Project structure
 
-Workflows are discovered from these locations:
+gl1tch discovers workflows from the `.glitch/workflows/` directory in your project. Run `glitch init` to scaffold it, or create it by hand:
 
-- `workflows/` in your current project — project-local
-- `~/.config/glitch/workflows/` — user-global
+```
+my-project/
+  .glitch/
+    workflows/
+      hello.glitch
+      code-review.glitch
+    glitch.db          # run history (auto-created)
+  src/
+  ...
+```
 
-Project-local workflows override globals with the same name.
+gl1tch walks up from your current directory looking for `.glitch/`. You can also pass `--project <path>` to point at a specific project root.
+
+## CLI reference
 
 ```bash
-glitch workflow list
+glitch run <workflow> [input]     # run a workflow
+glitch run -p <file>              # run a specific file
+glitch run <wf> --set key=value   # pass parameters
+glitch check <file>               # validate syntax
+glitch init                       # create .glitch/workflows/
+glitch up                         # check required tools
+glitch plugin <name> [args]       # run a plugin
+glitch mcp                        # start MCP server
+glitch gui                        # launch web GUI
+glitch version                    # show version
+```
+
+## Next steps
+
+- [Workflow Syntax](/docs/workflow-syntax) — the complete reference for every form
+- [Providers](/docs/providers) — configure LM Studio, Copilot, Claude, OpenRouter
+- [Local Models](/docs/local-models) — model recommendations, GPU tuning, context length
+- [Tool Use](/docs/tool-use) — let your LLM steps search code and read files

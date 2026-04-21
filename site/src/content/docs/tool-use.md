@@ -117,8 +117,6 @@ Tool use requires a provider that supports the OpenAI tool-calling protocol or i
 | `copilot` | MCP | Requires `copilot` CLI installed and authenticated |
 | `claude` | MCP | Requires `claude` CLI installed and authenticated |
 
-`ollama` does not support tool use. Steps that explicitly set `:provider "ollama"` run without tool injection, regardless of `:tools` setting.
-
 For local tool use, `lmstudio` with `qwen3-8b` is the recommended setup — best tool-use quality at that size, runs fully offline. See [Local Models](/docs/local-models) for setup.
 
 ## Mixing tool use with classic steps
