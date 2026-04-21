@@ -23,7 +23,7 @@ The `(llm ...)` step accepts three new fields that enable your step to call tool
 ````glitch
 ;; agentic-research.glitch
 ;;
-;; Run with: glitch workflow run agentic-research --set repo=acme/backend --set issue=42
+;; Run with: glitch run agentic-research --set repo=acme/backend --set issue=42
 
 (def model "qwen3-8b")
 

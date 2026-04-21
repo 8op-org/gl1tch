@@ -1,28 +1,19 @@
 ---
 title: "Local Models"
 order: 4
-description: "gl1tch runs your LLM locally by default. Nothing leaves your machine unless you tell it to. This page covers how to set "
+description: "gl1tch runs your LLM locally by default. Nothing leaves your machine unless you tell it to."
 ---
 
-gl1tch runs your LLM locally by default. Nothing leaves your machine unless you tell it to. This page covers how to set up and tune local inference for the best experience — with emphasis on LM Studio, which gives you more control over model loading and GPU allocation.
+gl1tch runs your LLM locally by default. Nothing leaves your machine unless you tell it to. This page covers how to set up and tune LM Studio for the best experience.
 
 This page builds on [Getting Started](/docs/getting-started). If you haven't installed glitch yet, start there.
-
-## Two local providers
-
-| Provider | Port | Best for | Model management |
-|----------|------|----------|-----------------|
-| **LM Studio** | `localhost:1234` | Fine-tuned control, GPU allocation, model experimentation | GUI + API auto-download |
-| **Ollama** | `localhost:11434` | Quick setup, no GUI | CLI pull |
-
-Both are free. Both run on Apple Silicon. gl1tch supports both as first-class providers — you can mix them across steps in the same workflow.
 
 ## LM Studio setup
 
 ### Install and configure
 
 1. Download [LM Studio](https://lmstudio.ai) and launch it
-2. Go to **Settings → Server** and enable the local server (port 1234)
+2. Go to **Settings > Server** and enable the local server (port 1234)
 3. Pull a model — we recommend **qwen3-8b** for general use
 
 gl1tch auto-detects LM Studio at `localhost:1234`. If a model isn't loaded, gl1tch logs a warning and waits. If a model isn't downloaded at all, gl1tch triggers the download via LM Studio's API and polls until it's ready.
@@ -43,7 +34,7 @@ These are tested on an M2 Pro with 32GB. If you have 16GB, drop down one size in
 
 LM Studio lets you control how much of the model stays in GPU memory and how large the context window is. Both affect speed and quality.
 
-**In LM Studio → Model Settings:**
+**In LM Studio > Model Settings:**
 
 - **GPU Offload Layers**: Set to maximum (`-1` or "all"). On an M2 Pro with 32GB, you can fully offload an 8B model with room to spare. For 30B models, you'll partially offload — LM Studio handles the split automatically.
 - **Context Length**: Default is usually 4096. For gl1tch workflows that feed multiple step outputs into a single LLM prompt, set this to **8192** or **16384**. The issue-to-pr workflow can produce 6-10k tokens of context easily.
@@ -75,23 +66,21 @@ Explicit provider:
 ```glitch
 (step "classify"
   (llm
-    :provider "lm-studio"
+    :provider "lmstudio"
     :model "qwen3-8b"
     :format "json"
     :prompt "Classify this issue..."))
 ```
 
-Or use it as your default tier 0 in `~/.config/glitch/config.yaml`:
+LM Studio is the default provider — if you omit `:provider`, gl1tch routes to LM Studio automatically. Use tiered escalation to fall back to cloud providers when local quality isn't enough:
 
-```yaml
-tiers:
-  - providers: [lm-studio]
-    model: qwen3-8b
-  - providers: [copilot]
-  - providers: [claude]
+```glitch
+(tiers
+  (tier :providers ("lmstudio") :model "qwen3-8b")
+  (tier :providers ("copilot"))
+  (tier :providers ("claude"))
+  (tier :providers ("openrouter") :model "google/gemma-3-12b-it:free"))
 ```
-
-With tiers configured, omit `:provider` and gl1tch auto-routes. Tier 0 (LM Studio) runs first. If quality is too low, it escalates.
 
 ### Pin tiers by step complexity
 
@@ -114,59 +103,6 @@ In production workflows, pin cheap steps to local and reserve cloud for what nee
     :prompt "Review against acceptance criteria..."))
 ````
 
-## Ollama setup
-
-### Install and pull
-
-```bash
-brew install ollama
-ollama serve
-ollama pull qwen2.5:7b
-```
-
-gl1tch detects Ollama at `localhost:11434` automatically.
-
-### Recommended models
-
-| Task | Model | Size |
-|------|-------|------|
-| **General** | `qwen2.5:7b` | ~4.5GB |
-| **Fast** | `qwen2.5:3b` | ~2GB |
-| **Code** | `qwen2.5-coder:7b` | ~4.5GB |
-
-### Ollama-specific tuning
-
-Ollama reads `OLLAMA_NUM_GPU` and `OLLAMA_MAX_LOADED_MODELS` from your environment:
-
-```bash
-# Use all GPU layers (default on Apple Silicon)
-export OLLAMA_NUM_GPU=-1
-
-# Keep up to 2 models loaded simultaneously
-export OLLAMA_MAX_LOADED_MODELS=2
-```
-
-Context length is configured per-model in Ollama via `num_ctx`. The gl1tch workflow engine doesn't control this directly — set it when pulling or in your Modelfile:
-
-```bash
-ollama run qwen2.5:7b /set parameter num_ctx 8192
-```
-
-## Choosing between them
-
-**Use LM Studio when:**
-- You want visual model management and real-time metrics
-- You need fine-grained GPU layer control
-- You're experimenting with different models
-- You want auto-download when a workflow requests a model you don't have
-
-**Use Ollama when:**
-- You want zero-GUI setup
-- You're running in CI or on a headless server
-- You already have Ollama configured
-
-**Use both:** Put LM Studio as tier 0 and Ollama as a fallback, or use different providers per step. gl1tch doesn't care — they're just providers.
-
 ## Performance checklist
 
 Before running heavy workflows:
@@ -182,8 +118,8 @@ Before running heavy workflows:
 **First request is very slow (10-30s)**
 Normal — the model is loading into GPU memory. Subsequent requests are fast. Pre-warm by running a simple workflow first.
 
-**"Connection refused" on port 1234 or 11434**
-The provider isn't running. Start LM Studio's server or run `ollama serve`.
+**"Connection refused" on port 1234**
+LM Studio's server isn't running. Open LM Studio and enable the local server in Settings > Server.
 
 **Output quality is poor on local models**
 Try a larger model or add `:format "json"` for structured output. If that doesn't help, let the tiered router escalate — omit `:tier` and `:provider` and gl1tch will try local first, then cloud.

@@ -12,7 +12,7 @@ gl1tch workflows are `.glitch` files written in s-expression syntax — parenthe
 (form arg1 arg2 :keyword value)
 ```
 
-Drop your files in `workflows/` for automatic discovery. This page is the complete reference for every form available.
+Drop your files in `.glitch/workflows/` for automatic discovery. This page is the complete reference for every form available.
 
 ## Form Aliases
 
@@ -34,9 +34,9 @@ A workflow wraps named steps. Here is a complete real-world example:
 ````glitch
 ;; code-review.glitch — review staged changes before committing
 ;;
-;; Run with: glitch workflow run code-review
+;; Run with: glitch run code-review
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "code-review"
   :description "Review staged git changes and flag issues"
@@ -68,15 +68,15 @@ A workflow wraps named steps. Here is a complete real-world example:
         ```)))
 ````
 
-The string passed to `(workflow ...)` is the name you use with `glitch workflow run`.
+The string passed to `(workflow ...)` is the name you use with `glitch run`.
 
 ## Definitions
 
 `(def name value)` binds a constant for the whole file. Define your model once, reference it everywhere:
 
 ````glitch
-(def model "qwen2.5:7b")
-(def provider "ollama")
+(def model "qwen3-8b")
+(def provider "lmstudio")
 
 (workflow "hello-sexpr"
   :description "Demo s-expression workflow format"
@@ -204,9 +204,9 @@ Full example with `--set` parameters:
 ````glitch
 ;; parameterized.glitch
 ;;
-;; Run with: glitch workflow run parameterized --set repo=gl1tch
+;; Run with: glitch run parameterized --set repo=gl1tch
 
-(def model "qwen2.5:7b")
+(def model "qwen3-8b")
 
 (workflow "parameterized"
   :description "Show how to pass runtime parameters into a workflow"
@@ -240,8 +240,8 @@ All keyword arguments for `(llm ...)`:
 | Option | Values | What it does |
 |--------|--------|-------------|
 | `:prompt` | string (required) | The prompt text |
-| `:provider` | `"ollama"`, `"claude"`, `"copilot"`, `"gemini"`, custom | Which LLM backend |
-| `:model` | model identifier | e.g. `"qwen2.5:7b"`, `"sonnet"` |
+| `:provider` | `"lmstudio"`, `"claude"`, `"copilot"`, `"openrouter"`, custom | Which LLM backend |
+| `:model` | model identifier | e.g. `"qwen3-8b"`, `"sonnet"` |
 | `:skill` | skill name | Prepends skill context to your prompt |
 | `:format` | `"json"` or `"yaml"` | Validates that output parses correctly |
 | `:tier` | `0`, `1`, `2` | Pin to a specific cost tier |
@@ -269,7 +269,7 @@ Using `:skill` to inject context — the skill content is prepended to your prom
 
 When you omit both `:provider` and `:tier`, gl1tch routes automatically through tiers:
 
-- **Tier 0** — local (ollama), free
+- **Tier 0** — local (lmstudio), free
 - **Tier 1** — cheap cloud (openrouter free tier, copilot)
 - **Tier 2** — premium (claude)
 
@@ -547,7 +547,7 @@ Index a single document, with optional auto-embedding:
   (index :index "my-index"
          :doc "~(step generate)"
          :id "doc-1"
-         :embed :field "content" :provider "ollama" :model "nomic-embed-text"))
+         :embed :field "content" :provider "lmstudio" :model "nomic-embed-text"))
 ```
 
 | Keyword | Required | Description |
@@ -581,14 +581,14 @@ Generate an embedding vector from text:
 ```glitch
 (step "vec"
   (embed :input "~(step content)"
-         :provider "ollama"
+         :provider "lmstudio"
          :model "nomic-embed-text"))
 ```
 
 | Keyword | Required | Description |
 |---------|----------|-------------|
 | `:input` | yes | Text to embed |
-| `:provider` | yes | Embedding provider (e.g. `"ollama"`) |
+| `:provider` | yes | Embedding provider (e.g. `"lmstudio"`) |
 | `:model` | yes | Embedding model (e.g. `"nomic-embed-text"`) |
 
 Returns a JSON array of floats.
@@ -618,17 +618,16 @@ Output is a JSON array:
 [{"title": "...", "url": "...", "content": "...", "engine": "..."}]
 ```
 
-Requires `:websearch` in workspace defaults. See [workspaces](workspaces.md).
+Requires a SearXNG instance running locally.
 
 ## ES connection
 
 The Elasticsearch URL is resolved in this order:
 
 1. Per-step `:es` keyword override
-2. Workspace configuration
-3. Default: `http://localhost:9200`
+2. Default: `http://localhost:9200`
 
-Use the `:es` keyword when a step needs to talk to a different cluster than the workspace default.
+Use the `:es` keyword when a step needs to talk to a different cluster.
 
 ## Template functions
 
@@ -758,10 +757,9 @@ Triple backticks delimit multiline prompts. Content is auto-dedented, so indent 
 | `(each "step-id" (step ...))` | Iterate over step output (one item per line) |
 | `(let ((name val) ...) body...)` | Scoped variable bindings |
 | `(phase "id" [:retries N] steps... [gates...])` | Grouped steps with verification gates |
-| `(map-resources :type "type" (step ...))` | Iterate over resources of a given type |
 | `(call-workflow "name" [:set key=value] ...)` | Invoke another workflow as a child run |
 
 ## Next steps
 
 - [Plugins](/docs/plugins) — package reusable subcommands and compose them into workflows
-- [Workspaces](/docs/workspaces) — manage resources and workflow defaults
+- [Projects](/docs/workspaces) — scope workflows and run history to your codebase

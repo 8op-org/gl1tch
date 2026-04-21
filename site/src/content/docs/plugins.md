@@ -208,7 +208,7 @@ A real production workflow that turns a GitHub issue into a PR plan. Four plugin
 ````glitch
 ;; issue-to-pr.glitch
 ;;
-;; Run with: glitch workflow run issue-to-pr --set repo=acme/backend --set issue=42
+;; Run with: glitch run issue-to-pr --set repo=acme/backend --set issue=42
 
 (workflow "issue-to-pr"
   :description "Issue-to-PR with tiered escalation"
@@ -333,8 +333,8 @@ Compare variant outputs across multiple LLM providers. Uses `glob` to find revie
 ````glitch
 ;; cross-review.glitch — neutral grader for batch comparison runs
 
-(def provider "ollama")
-(def model "qwen3:8b")
+(def provider "lmstudio")
+(def model "qwen3-8b")
 
 (workflow "cross-review"
   :description "Compare variant outputs and pick the best one"

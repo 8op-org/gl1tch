@@ -203,4 +203,4 @@ Use `--available-tools` on the Copilot provider to limit which MCP tools are exp
 
 - [Local Models](/docs/local-models) — LM Studio model selection, GPU tuning, and context length
 - [Workflow Syntax](/docs/workflow-syntax) — `:provider`, `:tier`, and all LLM step options
-- [Workspaces](/docs/workspaces) — set a default provider and tier config for an entire project
+- [Projects](/docs/workspaces) — scope workflows and run history to your codebase
