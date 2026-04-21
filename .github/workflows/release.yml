@@ -76,55 +76,34 @@ jobs:
             --title "glitch $GITHUB_REF_NAME" \
             --notes-file changelog.md \
             artifacts/*
-      - name: Update Homebrew tap
+      - name: Generate Homebrew formula
         env:
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${REF_NAME#v}"
           DARWIN_ARM64_SHA=$(grep "darwin_arm64" artifacts/checksums.txt | awk '{print $1}')
           LINUX_ARM64_SHA=$(grep "linux_arm64" artifacts/checksums.txt | awk '{print $1}')
           LINUX_AMD64_SHA=$(grep "linux_amd64" artifacts/checksums.txt | awk '{print $1}')
           BASE_URL="https://github.com/8op-org/gl1tch/releases/download/v${VERSION}"
 
-          cat > formula.rb <<FORMULA
-class Glitch < Formula
-  desc "gl1tch workflow engine"
-  homepage "https://8op.org"
-  license "MIT"
-  version "${VERSION}"
-
-  depends_on "babashka"
-
-  on_macos do
-    url "${BASE_URL}/glitch_${VERSION}_darwin_arm64.tar.gz"
-    sha256 "${DARWIN_ARM64_SHA}"
-  end
-
-  on_linux do
-    if Hardware::CPU.arm?
-      url "${BASE_URL}/glitch_${VERSION}_linux_arm64.tar.gz"
-      sha256 "${LINUX_ARM64_SHA}"
-    else
-      url "${BASE_URL}/glitch_${VERSION}_linux_amd64.tar.gz"
-      sha256 "${LINUX_AMD64_SHA}"
-    end
-  end
-
-  def install
-    bin.install "glitch"
-  end
-
-  test do
-    assert_match version.to_s, shell_output("#{bin}/glitch version")
-  end
-end
-FORMULA
-
-          cd "$(mktemp -d)"
-          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" tap
-          cd tap
+          sed \
+            -e "s|__VERSION__|${VERSION}|g" \
+            -e "s|__BASE_URL__|${BASE_URL}|g" \
+            -e "s|__DARWIN_ARM64_SHA__|${DARWIN_ARM64_SHA}|g" \
+            -e "s|__LINUX_ARM64_SHA__|${LINUX_ARM64_SHA}|g" \
+            -e "s|__LINUX_AMD64_SHA__|${LINUX_AMD64_SHA}|g" \
+            .github/formula-template.rb > formula.rb
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#v}"
+          WORK="$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" "$WORK/tap"
+          cd "$WORK/tap"
           mkdir -p Formula
-          cp "${OLDPWD}/formula.rb" Formula/glitch.rb
+          cp "$GITHUB_WORKSPACE/formula.rb" Formula/glitch.rb
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/glitch.rb
