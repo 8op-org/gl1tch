@@ -14,7 +14,7 @@
 
   (step "route"
     (llm
-      :provider "lmstudio"
+      :provider "openrouter"
       :tools []
       :prompt (str
         "You are a router for a documentation site workflow.\n\n"

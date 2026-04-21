@@ -10,7 +10,8 @@
 
   (step "gate-voice"
     (llm
-      :provider "copilot"
+      :provider "openrouter"
+      :tools []
       :format "json"
       :prompt (str
         "You are a documentation reviewer using the C.L.E.A.R. method.\n"
@@ -44,7 +45,8 @@
 
   (step "gate-accuracy"
     (llm
-      :provider "copilot"
+      :provider "openrouter"
+      :tools []
       :format "json"
       :prompt (str
         "You are a documentation accuracy reviewer using the C.L.E.A.R. method.\n"

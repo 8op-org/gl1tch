@@ -7,21 +7,26 @@
 
 ;; Lazy pod loading — only loads SQLite pod on first actual DB operation.
 ;; Prevents segfault on quick-exit commands (version, up, mcp) that never
-;; touch the store.
+;; touch the store. Uses atoms to hold pod fns since resolve doesn't work
+;; in uberscript mode.
 (def ^:private pod-loaded? (atom false))
+(def ^:private execute!-fn (atom nil))
+(def ^:private query-fn (atom nil))
 
 (defn- ensure-pod! []
   (when (compare-and-set! pod-loaded? false true)
     (pods/load-pod 'org.babashka/go-sqlite3 "0.2.8")
-    (require '[pod.babashka.go-sqlite3 :as sql])))
+    (require '[pod.babashka.go-sqlite3 :as sql])
+    (reset! execute!-fn (resolve 'pod.babashka.go-sqlite3/execute!))
+    (reset! query-fn (resolve 'pod.babashka.go-sqlite3/query))))
 
 (defn- sql-execute! [db stmt-vec]
   (ensure-pod!)
-  ((resolve 'pod.babashka.go-sqlite3/execute!) db stmt-vec))
+  (@execute!-fn db stmt-vec))
 
 (defn- sql-query [db stmt-vec]
   (ensure-pod!)
-  ((resolve 'pod.babashka.go-sqlite3/query) db stmt-vec))
+  (@query-fn db stmt-vec))
 
 ;; ---------------------------------------------------------------------------
 ;; Schema DDL — executed on every open to ensure tables exist.

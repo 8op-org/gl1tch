@@ -47,8 +47,9 @@
 
 (provider/register "copilot"
   (fn [{:keys [prompt tool-defs]}]
-    (let [args   (cond-> ["copilot" "-p" "-" "--disable-builtin-mcps"]
-                   (seq tool-defs) (into ["--additional-mcp-config" mcp-config]))
+    (let [args   (if (seq tool-defs)
+                   ["copilot" "-p" "-" "--disable-builtin-mcps" "--additional-mcp-config" mcp-config]
+                   ["copilot" "-p" "-" "--available-tools="])
           result (apply bp/shell {:out :string :err :string :continue true
                                    :in prompt}
                         args)]
