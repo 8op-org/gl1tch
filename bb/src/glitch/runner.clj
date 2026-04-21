@@ -7,6 +7,8 @@
             [glitch.tool_loop]
             [glitch.mcp.tools :as mcp-tools]
             [glitch.mcp.handlers :as mcp-handlers]
+            [glitch.mcp.indexer :as indexer]
+            [glitch.mcp.search :as search]
             [sci.core :as sci]
             [cheshire.core :as json]
             [clojure.string :as str]
@@ -26,10 +28,12 @@
                      (if (keyword? (first b))
                        (recur (nnext b) acc)
                        (recur (next b) (conj acc (first b))))))]
-       `(let [result# (do ~@forms)]
-          {:name ~name
-           :output (str result#)
-           :steps (get-steps)})))
+       `(do
+          (glitch.core/trace \">>\" ~name)
+          (let [result# (do ~@forms)]
+            {:name ~name
+             :output (str result#)
+             :steps (get-steps)}))))
 
    (defmacro par [& forms]
      (let [futs (mapv (fn [f] `(future-call (fn [] ~f))) forms)]
@@ -56,6 +60,15 @@
           (throw (ex-info (str \"timeout after \" ~seconds \"s\") {})))
         result#))
 
+   (defmacro step [id body & opts]
+     `(do
+        (glitch.core/trace \"  >\" ~id)
+        (let [t0# (System/currentTimeMillis)
+              result# ~body
+              ms# (- (System/currentTimeMillis) t0#)]
+          (glitch.core/trace \"  ✓\" ~id (str \"(\" ms# \"ms)\"))
+          (glitch.core/_step ~id result# ~@opts))))
+
    (defmacro phase [name & body]
      `(do
         (when-let [rec# @~(symbol \"glitch.core/*step-recorder*\")]
@@ -73,6 +86,9 @@
 
 ;; Atom holding the current SCI ctx — needed so call-workflow can reuse it.
 (def ^:private ^:dynamic *sci-ctx* nil)
+
+;; Atom holding the search function — bound at run time when index is available.
+(def ^:private *search-fn* (atom nil))
 
 (defn- sci-call-workflow
   "SCI-compatible call-workflow: resolves the child workflow file and evals
@@ -110,8 +126,7 @@
   []
   (let [str-ns  (into {} (map (fn [[k v]] [(symbol (name k)) @v]))
                        (ns-publics 'clojure.string))
-        user-ns {;; core primitives
-                 'step           g/step
+        user-ns {;; core primitives (step is a SCI macro, see sci-macros)
                  'ref            g/ref
                  'input          g/input
                  'params         g/params
@@ -133,6 +148,12 @@
                  'check-contract  g/check-contract
                  'grounded?       g/grounded?
                  'consensus       g/consensus
+
+                 ;; search (bound at run time via *search-fn*)
+                 'search          (fn [query & {:keys [limit] :or {limit 10}}]
+                                   (if-let [f @*search-fn*]
+                                     (f query limit)
+                                     (throw (ex-info "search not available — no index" {}))))
 
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
@@ -172,7 +193,10 @@
                            'parse-string   json/parse-string
                            'generate-string json/generate-string}
                     'glitch.core
-                    {'*step-recorder* g/*step-recorder*
+                    {'_step           g/_step
+                     'step            g/_step
+                     'trace           g/trace
+                     '*step-recorder* g/*step-recorder*
                      '*provider-fn*   g/*provider-fn*
                      '*steps*         g/*steps*
                      '*step-order*    g/*step-order*
@@ -221,20 +245,35 @@
                        ".")))]
     ;; Reset core state
     (g/reset!)
+    (reset! *search-fn* nil)
     (g/set-input! input)
     (g/set-params! params)
     (g/set-workflows-dir! wf-dir)
 
     ;; Build tool handler for this workspace
     (let [workspace-path (System/getProperty "user.dir")
+          _  (g/trace "  indexing" workspace-path)
+          t0 (System/currentTimeMillis)
+          search-db (try (indexer/open-search-db workspace-path) (catch Exception _ nil))
+          _         (when search-db
+                      (try (indexer/index-repo search-db workspace-path) (catch Exception _ nil))
+                      (g/trace "  ✓ indexed" (str "(" (- (System/currentTimeMillis) t0) "ms)"))
+                      (reset! *search-fn*
+                        (fn [query limit]
+                          (let [results (search/hybrid-search search-db query workspace-path :limit limit)]
+                            (str/join "\n\n"
+                              (map (fn [{:keys [path content score]}]
+                                     (str "--- " path " (score: " (format "%.2f" (double score)) ") ---\n" content))
+                                   results))))))
           tool-context {:workspace-path workspace-path
-                        :search-db nil
+                        :search-db search-db
                         :embed-fn nil}
           tool-handler (mcp-handlers/make-handler tool-context)
-          ;; Tools that require search-db — exclude from defaults when unavailable
-          search-tools #{"glitch_search" "glitch_index" "glitch_symbols"}
-          available-defs (filterv #(not (contains? search-tools (get % "name")))
-                                  mcp-tools/tool-definitions)]
+          available-defs (if search-db
+                           mcp-tools/tool-definitions
+                           (let [search-tools #{"glitch_search" "glitch_index" "glitch_symbols"}]
+                             (filterv #(not (contains? search-tools (get % "name")))
+                                      mcp-tools/tool-definitions)))]
 
       ;; Wire provider dispatch
       (g/set-provider-fn!
