@@ -6,7 +6,8 @@
             [glitch.provider-test]
             [glitch.store-test]
             [glitch.runner-test]
-            [glitch.graph-test]))
+            [glitch.graph-test]
+            [glitch.repl-test]))
 
 (defn -main [& _]
   (let [results (mapv #(t/run-tests %)
@@ -15,7 +16,8 @@
                    'glitch.provider-test
                    'glitch.store-test
                    'glitch.runner-test
-                   'glitch.graph-test])
+                   'glitch.graph-test
+                   'glitch.repl-test])
         total-fail (apply + (map :fail results))
         total-err  (apply + (map :error results))]
     (println (str "\n=== " (apply + (map :test results)) " tests, "
