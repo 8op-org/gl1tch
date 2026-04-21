@@ -36,6 +36,10 @@
       (let [pname (or (:provider opts) "lmstudio")]
         (prov/call-provider pname opts))))
 
+  ;; Inject glitch DSL into user namespace so no require is needed
+  (binding [*ns* (the-ns 'user)]
+    (refer 'glitch.core))
+
   (let [port-file (io/file (port-file-path dir))]
     (spit port-file (str port))
     (.deleteOnExit port-file))

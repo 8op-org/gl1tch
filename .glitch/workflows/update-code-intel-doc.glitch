@@ -1,0 +1,64 @@
+;; update-code-intel-doc.glitch — generate/update the code intelligence doc
+;;
+;; Usage:
+;;   glitch run update-code-intel-doc "add code graph section with tree-sitter details"
+;;
+;; Gathers the design spec, existing site docs for voice/format reference,
+;; and the current doc (if any), then rewrites via openrouter.
+
+(workflow "update-code-intel-doc"
+  :description "Update the code intelligence documentation page"
+
+  ;; 1. Gather the design spec as ground truth
+  (step "spec"
+    (read-file "docs/superpowers/specs/2026-04-17-code-graph-design.md"))
+
+  ;; 2. Grab an existing doc for voice/format reference
+  (step "voice-ref"
+    (read-file "site/src/content/docs/tool-use.md"))
+
+  ;; 3. Read current doc if it exists, otherwise empty
+  (step "current"
+    (sh "cat site/src/content/docs/code-intelligence.md 2>/dev/null || echo '(new file)'"))
+
+  ;; 4. Search codebase for relevant implementation details
+  (step "impl-context"
+    (search "tree-sitter|symbol.*graph|code.*index" :limit 20))
+
+  ;; 5. Generate the doc
+  (step "draft"
+    (llm
+      :provider "openrouter"
+      :model "google/gemini-2.5-flash"
+      :tools []
+      :prompt (str
+        "You are writing user-facing documentation for gl1tch.\n\n"
+        "DESIGN SPEC (ground truth — all claims must come from here):\n"
+        (ref "spec") "\n\n"
+        "VOICE/FORMAT REFERENCE (match this style exactly):\n"
+        (ref "voice-ref") "\n\n"
+        "CURRENT DOC:\n"
+        (ref "current") "\n\n"
+        "IMPLEMENTATION CONTEXT:\n"
+        (ref "impl-context") "\n\n"
+        "INSTRUCTIONS: " (input) "\n\n"
+        "RULES:\n"
+        "- Frontmatter: title 'Code Intelligence', description, order: 8\n"
+        "- Voice: user-first, 'your' framing, examples before explanation\n"
+        "- Every code example must use real DSL syntax from the spec\n"
+        "- Never mention internals: tree-sitter, Elasticsearch field names, SHA256 hashing\n"
+        "- Focus on what the user can DO, not how it works underneath\n"
+        "- Keep it concise — one page, not a manual\n\n"
+        "Return the complete markdown file content including frontmatter.")))
+
+  ;; 6. Verify claims are grounded in the spec
+  (step "verify"
+    (grounded? "draft" (ref "spec")
+      :provider "openrouter"
+      :model "google/gemma-3-12b-it"
+      :strict false))
+
+
+  ;; 7. Save
+  (step "save"
+        (save "site/src/content/docs/code-intelligence.md" (ref "draft"))))

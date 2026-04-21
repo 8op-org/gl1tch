@@ -139,8 +139,6 @@
 ;; Atom holding the current SCI ctx — needed so call-workflow can reuse it.
 (def ^:private ^:dynamic *sci-ctx* nil)
 
-;; Atom holding the search function — bound at run time when index is available.
-(def ^:private *search-fn* (atom nil))
 
 (defn- sci-call-workflow
   "SCI-compatible call-workflow: resolves the child workflow file and evals
@@ -213,11 +211,7 @@
                  'confidence-gap    graph/sci-confidence-gap
                  'suggest-next      graph/sci-suggest-next
 
-                 ;; search (bound at run time via *search-fn*)
-                 'search          (fn [query & {:keys [limit path] :or {limit 10}}]
-                                   (if-let [f @*search-fn*]
-                                     (f query limit path)
-                                     (throw (ex-info "search not available" {}))))
+                 'search          g/search
 
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
@@ -348,20 +342,9 @@
                        ".")))]
     ;; Reset core state
     (g/reset!)
-    (reset! *search-fn* nil)
     (g/set-input! input)
     (g/set-params! params)
     (g/set-workflows-dir! wf-dir)
-
-    ;; Bind search to ripgrep
-    (reset! *search-fn*
-      (fn [query limit path]
-        (let [search-path (or path (System/getProperty "user.dir"))
-              cmd ["rg" "-n" "-S" "-C" "2" "-m" (str limit) "--" query search-path]
-              result (bp/shell {:out :string :err :string :continue true} cmd)]
-          (if (<= (:exit result) 1)
-            (or (:out result) "")
-            (throw (ex-info (str "search failed: " (:err result)) {}))))))
 
     ;; Wire provider dispatch
     (g/set-provider-fn!

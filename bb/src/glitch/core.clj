@@ -134,6 +134,18 @@
                       {:cmd cmd :exit (:exit result) :err (:err result)})))
     (str/trim (:out result))))
 
+(defn search
+  "Search files with ripgrep. Returns matching lines with context.
+   Options: :limit (max matches, default 10), :path (search root, default cwd)."
+  [query & {:keys [limit path] :or {limit 10}}]
+  (let [search-path (or path (System/getProperty "user.dir"))
+        cmd (str "rg -n -S -C 2 -m " limit " -- " (pr-str query) " " search-path)
+        result (bp/shell {:out :string :err :string :continue true}
+                         "bash" "-c" cmd)]
+    (if (<= (:exit result) 1)
+      (or (str/trim (:out result)) "")
+      (throw (ex-info (str "search failed: " (:err result)) {})))))
+
 (defn save [path content]
   (io/make-parents path)
   (spit path content)
@@ -469,12 +481,13 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
 
 (defn grounded?
   "Verify that a step's output is factually supported by provided context.
-   Options: :provider, :strict (default true), :max-unsupported (default 0)"
-  [step-id context & {:keys [provider strict max-unsupported]
+   Options: :provider, :model, :strict (default true), :max-unsupported (default 0)"
+  [step-id context & {:keys [provider model strict max-unsupported]
                        :or {strict true max-unsupported 0}}]
   (let [output   (ref step-id)
         prompt   (format grounding-prompt context output)
-        response (@*provider-fn* {:prompt prompt :provider provider :tools []})
+        response (@*provider-fn* (cond-> {:prompt prompt :provider provider :tools []}
+                                   model (assoc :model model)))
         extracted (json-extract (:response response))
         parsed   (try (json/parse-string extracted) (catch Exception _ nil))
         grounded (get parsed "grounded")
