@@ -174,6 +174,30 @@
 ;; step upsert (INSERT OR REPLACE)
 ;; ---------------------------------------------------------------------------
 
+;; ---------------------------------------------------------------------------
+;; confidence column
+;; ---------------------------------------------------------------------------
+
+(deftest test-step-confidence-column
+  (testing "record-step persists confidence value"
+    (let [run-id (store/record-run *db* {:name "conf-test" :input "x"})
+          _      (store/record-step *db*
+                   {:run-id run-id :step-id "s1" :output "done"
+                    :kind "llm" :confidence 0.85})
+          steps  (store/get-steps *db* run-id)]
+      (is (= 0.85 (:confidence (first steps))))))
+
+  (testing "confidence is nil when not set"
+    (let [run-id (store/record-run *db* {:name "no-conf" :input "y"})
+          _      (store/record-step *db*
+                   {:run-id run-id :step-id "s1" :output "done" :kind "step"})
+          steps  (store/get-steps *db* run-id)]
+      (is (nil? (:confidence (first steps)))))))
+
+;; ---------------------------------------------------------------------------
+;; step upsert (INSERT OR REPLACE)
+;; ---------------------------------------------------------------------------
+
 (deftest test-step-upsert
   (testing "recording a step with same run-id+step-id replaces the old row"
     (let [run-id (store/record-run *db* {:name "upsert-test" :input "x"})

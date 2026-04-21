@@ -69,6 +69,7 @@
       tokens_out  INTEGER,
       gate_passed INTEGER,
       artifacts   TEXT,
+      confidence  REAL,
       UNIQUE(run_id, step_id)
     )"
    "CREATE TABLE IF NOT EXISTS research_events (
@@ -188,8 +189,8 @@
     ["INSERT OR REPLACE INTO steps
         (run_id, step_id, prompt, output, model,
          duration_ms, kind, exit_status,
-         tokens_in, tokens_out, gate_passed, artifacts)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+         tokens_in, tokens_out, gate_passed, artifacts, confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
      (:run-id rec)
      (:step-id rec)
      (:prompt rec)
@@ -201,7 +202,8 @@
      (:tokens-in rec)
      (:tokens-out rec)
      (:gate rec)
-     (:artifacts rec)]))
+     (:artifacts rec)
+     (:confidence rec)]))
 
 (defn get-steps
   "Fetch all steps for a run, ordered by id."
