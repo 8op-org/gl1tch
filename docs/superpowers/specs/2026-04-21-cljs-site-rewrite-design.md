@@ -16,6 +16,7 @@ Align the site toolchain with the rest of gl1tch (Babashka/Clojure). Astro is a 
 | UI | Reagent | Reactive components via hiccup |
 | Routing | Reitit | Client-side hash routing |
 | Styling | Garden | CSS-in-Clojure, token-based |
+| Syntax Highlighting | Highlight.js | Code blocks, custom glitch language def |
 | Diagrams | Custom DSL | Flowchart specs → hiccup SVG |
 | Deployment | GitHub Pages | Static files, same as today |
 | SEO | Headless Chrome prerender | bb task captures static HTML per route |
@@ -45,7 +46,7 @@ site/
 │       │   ├── nav.cljs      # top nav
 │       │   ├── sidebar.cljs  # doc sidebar (derived from content index)
 │       │   ├── toc.cljs      # in-page table of contents
-│       │   ├── code.cljs     # syntax-highlighted code blocks
+│       │   ├── code.cljs     # syntax highlighting via Highlight.js
 │       │   └── hex_rain.cljs # evolved visual effect
 │       ├── diagrams/
 │       │   ├── core.cljs     # layout engine
@@ -196,7 +197,7 @@ Sequence diagrams, state diagrams, auto-sizing — add when a real doc needs the
 - Dark terminal aesthetic, monospace-first typography — evolved from current site
 - Tighter spacing, subtler borders, less glow — more "real terminal" less "movie hacker"
 - HexRain stays on landing page as a Reagent component, REPL-tweakable
-- Code blocks: syntax highlighting with dark theme matching the palette
+- Code blocks: Highlight.js via shadow-cljs npm interop, custom glitch language definition derived from `glitch.tmLanguage.json`, dark theme matching the palette
 - Docs: clean reading experience, generous line height, clear heading hierarchy
 - Labs: focused single-column, no distractions
 
