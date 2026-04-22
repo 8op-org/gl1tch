@@ -19,56 +19,57 @@
       (:out result)
       (throw (ex-info (str "workflow failed (exit " (:exit result) "): " (:err result)) {})))))
 
-(defn- handle-eval [arguments]
+(defn- make-sci-ctx []
+  (sci/init {:namespaces
+             {'user
+              {'trace            g/trace
+               'input            g/input
+               'params           g/params
+               'param            g/param
+               'ref              g/ref
+               'sh              g/sh
+               'search           g/search
+               'save             g/save
+               'read-file        g/read-file
+               'write-file       g/write-file
+               'get-steps        g/get-steps
+               'last-output      g/last-output
+               'gate             g/gate
+               'call-workflow    g/call-workflow
+               'json-extract     g/json-extract
+               'validate-schema  g/validate-schema
+               'validate         g/validate
+               'llm              g/llm
+               'grounded?        g/grounded?
+               'consensus        g/consensus
+               'composite-score  g/composite-score
+               'search-symbols   g/search-symbols
+               'search-edges     g/search-edges
+               'symbol-context   g/symbol-context}
+              'clojure.string
+              {'upper-case   clojure.string/upper-case
+               'lower-case   clojure.string/lower-case
+               'trim         clojure.string/trim
+               'split        clojure.string/split
+               'join         clojure.string/join
+               'replace      clojure.string/replace
+               'starts-with? clojure.string/starts-with?
+               'ends-with?   clojure.string/ends-with?
+               'includes?    clojure.string/includes?
+               'blank?       clojure.string/blank?}}}))
+
+(defn- handle-eval [sci-ctx arguments]
   (let [expression (get arguments "expression")
-        ctx (sci/init {:namespaces
-                       {'user
-                        {'trace            g/trace
-                         'input            g/input
-                         'params           g/params
-                         'param            g/param
-                         'ref              g/ref
-                         'sh              g/sh
-                         'search           g/search
-                         'save             g/save
-                         'read-file        g/read-file
-                         'write-file       g/write-file
-                         'get-steps        g/get-steps
-                         'last-output      g/last-output
-                         'gate             g/gate
-                         'call-workflow    g/call-workflow
-                         'json-extract     g/json-extract
-                         'validate-schema  g/validate-schema
-                         'validate         g/validate
-                         'llm              g/llm
-                         'grounded?        g/grounded?
-                         'consensus        g/consensus
-                         'composite-score  g/composite-score
-                         'search-symbols   g/search-symbols
-                         'search-edges     g/search-edges
-                         'symbol-context   g/symbol-context}
-                        'clojure.string
-                        {'upper-case   clojure.string/upper-case
-                         'lower-case   clojure.string/lower-case
-                         'trim         clojure.string/trim
-                         'split        clojure.string/split
-                         'join         clojure.string/join
-                         'replace      clojure.string/replace
-                         'starts-with? clojure.string/starts-with?
-                         'ends-with?   clojure.string/ends-with?
-                         'includes?    clojure.string/includes?
-                         'blank?       clojure.string/blank?}}})
-        result (sci/eval-string* ctx expression)]
+        result (sci/eval-string* sci-ctx expression)]
     (str result)))
 
 (defn- handle-check [arguments]
   (let [file (get arguments "file")
-        content (slurp file)]
-    (try
-      (read-string (str "[" content "]"))
-      "ok"
-      (catch Exception e
-        (str "error: " (.getMessage e))))))
+        result (bp/shell {:out :string :err :string :continue true}
+                         "glitch" "check" file)]
+    (if (zero? (:exit result))
+      (str/trim (:out result))
+      (str "error: " (str/trim (:err result))))))
 
 (defn- handle-search-symbols [arguments]
   (let [repo (or (get arguments "repo")
@@ -116,7 +117,7 @@
   (let [path (or (get arguments "path") ".glitch/workflows")
         dir  (java.io.File. path)]
     (if (.isDirectory dir)
-      (let [files (->> (.listFiles dir)
+      (let [files (->> (or (.listFiles dir) [])
                        (filter #(or (str/ends-with? (.getName %) ".glitch")
                                     (str/ends-with? (.getName %) ".clj")))
                        sort)
@@ -130,13 +131,14 @@
 
 (defn make-handler
   [_context]
-  (fn [tool-name arguments]
-    (case tool-name
-      "glitch_run"            (handle-run arguments)
-      "glitch_eval"           (handle-eval arguments)
-      "glitch_check"          (handle-check arguments)
-      "glitch_search_symbols" (handle-search-symbols arguments)
-      "glitch_search_edges"   (handle-search-edges arguments)
-      "glitch_symbol_context" (handle-symbol-context arguments)
-      "glitch_list_workflows" (handle-list-workflows arguments)
-      (throw (ex-info (str "unknown tool: " tool-name) {})))))
+  (let [sci-ctx (make-sci-ctx)]
+    (fn [tool-name arguments]
+      (case tool-name
+        "glitch_run"            (handle-run arguments)
+        "glitch_eval"           (handle-eval sci-ctx arguments)
+        "glitch_check"          (handle-check arguments)
+        "glitch_search_symbols" (handle-search-symbols arguments)
+        "glitch_search_edges"   (handle-search-edges arguments)
+        "glitch_symbol_context" (handle-symbol-context arguments)
+        "glitch_list_workflows" (handle-list-workflows arguments)
+        (throw (ex-info (str "unknown tool: " tool-name) {}))))))
