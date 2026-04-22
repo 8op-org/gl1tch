@@ -1,0 +1,24 @@
+;; Generate changelog EDN from git history
+;; Usage: glitch run workflows/site/generate-changelog.glitch --param date=2026-04-21
+
+(step "commits"
+  (sh "git log --oneline --since='~(param :date) 00:00:00' --until='~(param :date) 23:59:59' -- bb/ workflows/ site/"))
+
+(step "generate"
+  (llm :provider "lmstudio"
+    :prompt ```
+    Classify these commits into a changelog EDN:
+
+    ~(ref "commits")
+
+    Output MUST be:
+    {:date "~(param :date)"
+     :entries [{:type :feat :summary "description"}
+               {:type :fix :summary "description"}]}
+
+    Types: :feat :fix :docs :refactor
+    Output raw EDN only.
+    ```))
+
+(step "save"
+  (sh "echo '~(ref \"generate\")' > site/content/changelog/~(param :date).edn"))

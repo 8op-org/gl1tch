@@ -1,0 +1,24 @@
+;; Orchestrator — generate all content + run all gates
+;; Usage: glitch run workflows/site/sync.glitch
+
+(step "generate-docs"
+  (sh ```
+    for slug in getting-started workflow-syntax dsl-reference providers plugins workspaces code-intelligence tool-use local-models phases-and-gates compare; do
+      glitch run workflows/site/generate-doc.glitch --param slug=$slug
+    done
+    ```))
+
+(step "generate-changelog"
+  (sh "glitch run workflows/site/generate-changelog.glitch --param date=$(date +%Y-%m-%d)"))
+
+(step "gate-syntax"
+  (sh "glitch run workflows/site/gate-syntax.glitch"))
+
+(step "gate-structure"
+  (sh "glitch run workflows/site/gate-structure.glitch"))
+
+(step "gate-links"
+  (sh "glitch run workflows/site/gate-links.glitch"))
+
+(step "gate-hallucinations"
+  (sh "glitch run workflows/site/gate-hallucinations.glitch"))

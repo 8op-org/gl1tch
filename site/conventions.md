@@ -58,3 +58,28 @@ Only reference commands that exist. Current valid commands:
 - `glitch plugin list`, `glitch plugin`
 - `glitch config show`, `glitch config set`
 - `glitch index`, `glitch version`, `glitch --help`
+
+## Content Format (EDN)
+
+All generated content MUST be valid EDN. Output raw EDN, never markdown.
+
+### Doc schema:
+{:title "Page Title"
+ :description "One-line description"
+ :order 1
+ :sections [{:heading "Section" :level 2
+             :body [[:p "text"]
+                    [:code {:lang "bash"} "command"]
+                    [:code "inline-code"]
+                    [:a {:href "/docs/other"} "link"]
+                    [:diagram {:type :flowchart :direction :lr}
+                     [:node :a "Start"] [:node :b "End"] [:edge :a :b]]]}]}
+
+### Lab schema:
+{:title "Lab Title" :slug "slug" :description "desc"
+ :date "2026-04-21" :duration "15min"
+ :steps [{:heading "Step" :body [[:p "text"]]}]}
+
+### Changelog schema:
+{:date "2026-04-21"
+ :entries [{:type :feat :summary "what changed"}]}

@@ -1,0 +1,13 @@
+;; Validate EDN syntax — if edn/read succeeds, it's valid
+;; Usage: glitch run workflows/site/gate-syntax.glitch [--param file=content/docs/foo.edn]
+
+(step "validate"
+  (sh ```
+    if [ -n "~(param :file "")" ]; then
+      bb -e "(clojure.edn/read-string (slurp \"site/~(param :file)\"))" && echo "PASS: ~(param :file)" || echo "FAIL: ~(param :file)"
+    else
+      for f in site/content/docs/*.edn site/content/labs/*.edn site/content/changelog/*.edn; do
+        bb -e "(clojure.edn/read-string (slurp \"$f\"))" 2>/dev/null && echo "PASS: $f" || echo "FAIL: $f"
+      done
+    fi
+    ```))

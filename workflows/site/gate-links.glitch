@@ -1,0 +1,43 @@
+;; Walk hiccup trees for [:a {:href}], verify all internal links resolve
+;; Usage: glitch run workflows/site/gate-links.glitch
+
+(step "check-links"
+  (sh ```
+    bb -e '
+    (require (quote [clojure.edn :as edn])
+             (quote [clojure.java.io :as io])
+             (quote [clojure.string :as str]))
+    (defn collect-hrefs [form]
+      (cond
+        (and (vector? form) (= :a (first form)) (map? (second form)))
+        [(get (second form) :href)]
+        (vector? form) (mapcat collect-hrefs form)
+        :else []))
+    (defn all-slugs [dir]
+      (->> (file-seq (io/file dir))
+           (filter #(.endsWith (str %) ".edn"))
+           (map #(str/replace (.getName %) #"\.edn$" ""))
+           set))
+    (let [doc-slugs (all-slugs "site/content/docs")
+          lab-slugs (all-slugs "site/content/labs")
+          valid-routes (into #{"/docs" "/labs" "/changelog" "/"}
+                        (concat
+                          (map #(str "/docs/" %) doc-slugs)
+                          (map #(str "/labs/" %) lab-slugs)))
+          errors (atom [])]
+      (doseq [dir ["site/content/docs" "site/content/labs"]
+              f (file-seq (io/file dir))
+              :when (.endsWith (str f) ".edn")]
+        (let [data (edn/read-string (slurp (str f)))
+              body (or (:sections data) (:steps data))
+              hrefs (mapcat #(collect-hrefs (:body %)) body)]
+          (doseq [href hrefs]
+            (when (and (str/starts-with? href "/")
+                       (not (valid-routes href)))
+              (swap! errors conj (str f " -> " href))))))
+      (if (empty? @errors)
+        (println "PASS: all internal links valid")
+        (do (doseq [e @errors] (println "FAIL:" e))
+            (System/exit 1))))
+    '
+    ```))
