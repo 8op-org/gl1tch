@@ -38,7 +38,8 @@
   (testing "initialize"
     (let [resp (proto/dispatch {"id" 1 "method" "initialize"} {})
           parsed (json/parse-string resp)]
-      (is (= "glitch" (get-in parsed ["result" "serverInfo" "name"])))))
+      (is (= "glitch" (get-in parsed ["result" "serverInfo" "name"])))
+      (is (= "2024-11-05" (get-in parsed ["result" "protocolVersion"])))))
   (testing "tools/list"
     (let [tools [{"name" "test"}]
           resp (proto/dispatch {"id" 2 "method" "tools/list"} {:tools tools})

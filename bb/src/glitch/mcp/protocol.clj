@@ -32,7 +32,8 @@
                      "content" [{"type" "text" "text" text}]}))
 
 (defn- handle-initialize []
-  {"serverInfo" {"name" "glitch" "version" "0.2.0-bb"}
+  {"protocolVersion" "2024-11-05"
+   "serverInfo" {"name" "glitch" "version" "0.3.0"}
    "capabilities" {"tools" {}}})
 
 (defn dispatch
