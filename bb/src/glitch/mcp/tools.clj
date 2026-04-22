@@ -2,7 +2,7 @@
 
 (def tool-definitions
   [{"name" "glitch_run"
-    "description" "Execute a glitch workflow file."
+    "description" "Execute a glitch workflow file and return its output. Use this to run automation pipelines defined in .glitch/workflows/. Pass input text and/or key-value parameters. Returns the workflow's stdout on success, or the error message on failure."
     "inputSchema"
     {"type" "object"
      "properties"
@@ -12,7 +12,7 @@
      "required" ["file"]}}
 
    {"name" "glitch_eval"
-    "description" "Evaluate a Clojure expression via SCI and return the result."
+    "description" "Evaluate a Clojure expression with the full glitch DSL loaded. Use this to programmatically compose and execute workflow steps, query state, or build pipelines dynamically. Available functions: llm, sh, ref, input, params, param, search, save, read-file, call-workflow, json-extract, validate, validate-schema, gate, consensus, composite-score, search-symbols, search-edges, symbol-context, trace, grounded?"
     "inputSchema"
     {"type" "object"
      "properties"
@@ -20,7 +20,7 @@
      "required" ["expression"]}}
 
    {"name" "glitch_check"
-    "description" "Check a workflow file for syntax errors."
+    "description" "Validate a glitch workflow file for syntax errors without executing it. Returns 'ok' if valid, or a description of the syntax error found."
     "inputSchema"
     {"type" "object"
      "properties"
@@ -28,7 +28,7 @@
      "required" ["file"]}}
 
    {"name" "glitch_search_symbols"
-    "description" "Search indexed code symbols by name, kind, language, or file path"
+    "description" "Search the code intelligence index for symbol definitions (functions, methods, classes, types, structs, interfaces, traits, enums). Supports wildcard matching with *. Use this instead of grep when you need structured symbol metadata across a repository."
     "inputSchema"
     {"type" "object"
      "properties"
@@ -41,7 +41,7 @@
      "required" ["name"]}}
 
    {"name" "glitch_search_edges"
-    "description" "Search code relationships (calls, imports, contains, extends, implements, references) with optional depth traversal"
+    "description" "Query code relationships in the intelligence index: calls, imports, contains, extends, implements, references. Supports depth traversal for multi-hop queries (e.g. what calls the functions that call X). Use this to understand how code connects."
     "inputSchema"
     {"type" "object"
      "properties"
@@ -53,7 +53,7 @@
       "limit"  {"type" "integer" "description" "Max results (default: 50)"}}}}
 
    {"name" "glitch_symbol_context"
-    "description" "Get a symbol's definition and all its relationships (callers, callees, parent, children, implementors)"
+    "description" "Get a complete picture of a symbol: its definition plus all relationships (callers, callees, parent, children, implementors). Use this when you need to understand a symbol's role in the codebase in one call rather than multiple search_edges queries."
     "inputSchema"
     {"type" "object"
      "properties"
