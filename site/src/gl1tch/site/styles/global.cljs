@@ -26,12 +26,12 @@
     {:background "#1a1b2e"
      :border [["1px" :solid "rgba(0, 255, 159, 0.1)"]]
      :border-radius "6px"
-     :padding "20px 24px"
+     :padding "16px 20px"
      :font-family (t/fonts :mono)
      :font-size (t/sizes :sm)
      :line-height 1.9
      :overflow-x :auto
-     :margin-bottom "24px"
+     :margin-bottom "16px"
      :white-space :pre}]
    [:code
     {:font-family (t/fonts :mono)
@@ -59,6 +59,26 @@
      [:80% {:clip-path "inset(40% 0 34% 0)" :transform "translate(2px, -1px)"}]
      [:100% {:clip-path "inset(67% 0 5% 0)" :transform "translate(-2px, 0px)"}])])
 
+;; Highlight.js syntax colors — matches our terminal palette
+(def hljs-theme
+  [[:.hljs-keyword {:color "#7dcfff"}]
+   [:.hljs-built_in {:color "#7dcfff"}]
+   [:.hljs-type {:color "#7dcfff"}]
+   [:.hljs-string {:color "#e0af68"}]
+   [:.hljs-number {:color "#ff9e64"}]
+   [:.hljs-literal {:color "#ff9e64"}]
+   [:.hljs-comment {:color "#565f89"}]
+   [:.hljs-title {:color "#7aa2f7"}]
+   [:.hljs-function {:color "#7aa2f7"}]
+   [:.hljs-name {:color "#7dcfff"}]
+   [:.hljs-variable {:color "#c0caf5"}]
+   [:.hljs-attr {:color "#bb9af7"}]
+   [:.hljs-params {:color "#c0caf5"}]
+   [:.hljs-meta {:color "#565f89"}]
+   [:.hljs-symbol {:color "#00ff9f"}]
+   [:.hljs-selector-tag {:color "#7dcfff"}]
+   [:.hljs-selector-class {:color "#bb9af7"}]])
+
 (def nav-styles
   [[:.site-nav
     {:position :fixed
@@ -78,7 +98,7 @@
 
 (defn stylesheet []
   (garden/css
-    (concat reset base code-block glitch-animation nav-styles layout)))
+    (concat reset base code-block hljs-theme glitch-animation nav-styles layout)))
 
 (defn inject! []
   (let [style-el (or (.getElementById js/document "gl1tch-styles")

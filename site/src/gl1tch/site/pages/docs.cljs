@@ -44,7 +44,7 @@
 
 (defn- render-section [{:keys [heading level body]}]
   [:section {:id (heading->id heading)
-             :style {:margin-top (if (= level 2) "56px" "36px")}}
+             :style {:margin-top (if (= level 2) "32px" "20px")}}
    [(keyword (str "h" level))
     {:style {:color (if (= level 2) (t/colors :accent) (t/colors :accent-2))
              :margin-bottom "12px"}}
