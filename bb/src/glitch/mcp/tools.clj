@@ -59,4 +59,11 @@
      "properties"
      {"name" {"type" "string" "description" "Symbol name"}
       "repo" {"type" "string" "description" "Repo name"}}
-     "required" ["name"]}}])
+     "required" ["name"]}}
+
+   {"name" "glitch_list_workflows"
+    "description" "List available glitch workflows in .glitch/workflows/ with their filenames and descriptions. Use this to discover what automation is available before running a workflow."
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"path" {"type" "string" "description" "Directory to scan (default: .glitch/workflows/)"}}}}])
