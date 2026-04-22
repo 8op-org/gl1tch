@@ -1,33 +1,7 @@
 (ns glitch.mcp.tools)
 
 (def tool-definitions
-  [{"name" "glitch_search"
-    "description" "Search code using ripgrep. Returns structured results with file paths, line numbers, and matched content."
-    "inputSchema"
-    {"type" "object"
-     "properties"
-     {"query"      {"type" "string" "description" "Search pattern (regex by default)"}
-      "path"       {"type" "string" "description" "Directory to search in"}
-      "glob"       {"type" "string" "description" "File filter glob (e.g. *.clj, *.{ts,tsx})"}
-      "fixed"      {"type" "boolean" "description" "Literal string mode, no regex"}
-      "multiline"  {"type" "boolean" "description" "Match across newlines"}
-      "pcre2"      {"type" "boolean" "description" "Enable PCRE2 (lookaround, backreferences)"}
-      "context"    {"type" "integer" "description" "Lines of context around matches"}
-      "limit"      {"type" "integer" "description" "Max matches per file"}
-      "smart_case" {"type" "boolean" "description" "Case-insensitive unless uppercase present (default true)"}}
-     "required" ["query" "path"]}}
-
-   {"name" "glitch_symbols"
-    "description" "Search for symbol definitions (functions, types, classes) using language-aware ripgrep patterns."
-    "inputSchema"
-    {"type" "object"
-     "properties"
-     {"query"    {"type" "string" "description" "Symbol name to search for"}
-      "path"     {"type" "string" "description" "Directory to search in"}
-      "language" {"type" "string" "description" "Language hint: clojure, go, python, javascript, typescript, rust"}}
-     "required" ["query" "path"]}}
-
-   {"name" "glitch_run"
+  [{"name" "glitch_run"
     "description" "Execute a glitch workflow file."
     "inputSchema"
     {"type" "object"
@@ -52,14 +26,6 @@
      "properties"
      {"file" {"type" "string" "description" "Path to the workflow file to check"}}
      "required" ["file"]}}
-
-   {"name" "glitch_read_file"
-    "description" "Read a file and return its first 200 lines."
-    "inputSchema"
-    {"type" "object"
-     "properties"
-     {"path" {"type" "string" "description" "Path to the file to read"}}
-     "required" ["path"]}}
 
    {"name" "glitch_search_symbols"
     "description" "Search indexed code symbols by name, kind, language, or file path"
