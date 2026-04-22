@@ -9,27 +9,28 @@
         current-slug (get-in match [:path-params :slug])
         docs (content/docs-index)]
     [:nav {:style {:position :sticky
-                   :top "68px"
+                   :top "64px"
                    :max-height "calc(100vh - 80px)"
                    :overflow-y :auto
-                   :scrollbar-width :none}}
+                   :scrollbar-width :none
+                   :padding-right "8px"}}
      [:div {:style {:display :flex
                     :flex-direction :column
-                    :gap 0}}
+                    :gap "1px"}}
       (for [doc docs]
-        ^{:key (:slug doc)}
-        [:a {:href (rfe/href :docs/page {:slug (:slug doc)})
-             :style {:font-size "0.75rem"
-                     :color (if (= current-slug (:slug doc))
-                              (t/colors :accent)
-                              (t/colors :fg-dim))
-                     :text-decoration :none
-                     :padding "4px 10px"
-                     :border-left (str "2px solid "
-                                       (if (= current-slug (:slug doc))
-                                         (t/colors :accent)
-                                         "transparent"))
-                     :background (when (= current-slug (:slug doc))
-                                   "rgba(0, 255, 159, 0.04)")
-                     :line-height 1.5}}
-         (:title doc)])]]))
+        (let [active? (= current-slug (:slug doc))]
+          ^{:key (:slug doc)}
+          [:a {:href (rfe/href :docs/page {:slug (:slug doc)})
+               :style {:font-family (t/fonts :sans)
+                       :font-size "13px"
+                       :font-weight (if active? 500 400)
+                       :color (if active? (t/colors :accent) "#808098")
+                       :text-decoration :none
+                       :padding "5px 10px"
+                       :border-left (str "2px solid "
+                                         (if active? (t/colors :accent) "transparent"))
+                       :background (when active? "rgba(0, 255, 159, 0.04)")
+                       :border-radius "0 4px 4px 0"
+                       :line-height 1.4
+                       :transition "color 0.15s, background 0.15s"}}
+           (:title doc)]))]]))

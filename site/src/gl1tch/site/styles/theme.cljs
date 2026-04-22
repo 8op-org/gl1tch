@@ -13,7 +13,8 @@
    :glow     "rgba(0, 255, 159, 0.08)"})
 
 (def fonts
-  {:mono "'JetBrains Mono', 'Fira Code', monospace"})
+  {:mono "'JetBrains Mono', 'Fira Code', monospace"
+   :sans "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"})
 
 (def sizes
   {:base   "15px"

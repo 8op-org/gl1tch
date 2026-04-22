@@ -10,40 +10,43 @@
 (def base
   [[:html {:scroll-behavior :smooth}]
    [:body
-    {:font-family (t/fonts :mono)
+    {:font-family (t/fonts :sans)
      :background (t/colors :bg)
      :color (t/colors :fg)
      :line-height 1.6
      :overflow-x :hidden
      :-webkit-font-smoothing :antialiased
-     :font-size "14px"}]
+     :font-size "15px"}]
    [:a {:color (t/colors :accent)
         :text-decoration :none}]
-   [:a:hover {:text-decoration :underline}]])
+   [:a:hover {:opacity 0.8}]])
 
+;; ── Code ────────────────────────────────────────
 (def code-block
   [[:pre.code
-    {:background "#13141f"
-     :border [["1px" :solid "rgba(0, 255, 159, 0.08)"]]
-     :border-radius "4px"
-     :padding "10px 14px"
+    {:background "#11121b"
+     :border [["1px" :solid "rgba(255,255,255,0.06)"]]
+     :border-radius "6px"
+     :padding "14px 18px"
      :font-family (t/fonts :mono)
-     :font-size "0.78rem"
-     :line-height 1.65
+     :font-size "13px"
+     :line-height 1.7
      :overflow-x :auto
-     :margin "8px 0"
+     :margin "10px 0"
      :white-space :pre}]
    [:code
     {:font-family (t/fonts :mono)
-     :font-size "0.85em"
-     :color (t/colors :accent)
-     :background "rgba(0, 255, 159, 0.06)"
-     :padding "1px 5px"
-     :border-radius "3px"}]
+     :font-size "0.87em"
+     :color "#9dd6fc"
+     :background "rgba(157, 214, 252, 0.07)"
+     :padding "2px 6px"
+     :border-radius "4px"
+     :letter-spacing "-0.01em"}]
    ["pre.code > code"
-    {:background :none :padding 0 :color :inherit :font-size "inherit"}]])
+    {:background :none :padding 0 :color :inherit :font-size "inherit"
+     :letter-spacing 0}]])
 
-;; Highlight.js syntax colors — matches terminal palette
+;; ── Highlight.js ────────────────────────────────
 (def hljs-theme
   [[:.hljs-keyword {:color "#7dcfff"}]
    [:.hljs-built_in {:color "#7dcfff"}]
@@ -51,18 +54,19 @@
    [:.hljs-string {:color "#e0af68"}]
    [:.hljs-number {:color "#ff9e64"}]
    [:.hljs-literal {:color "#ff9e64"}]
-   [:.hljs-comment {:color "#565f89" :font-style :italic}]
+   [:.hljs-comment {:color "#4a4e69" :font-style :italic}]
    [:.hljs-title {:color "#7aa2f7"}]
    [:.hljs-function {:color "#7aa2f7"}]
    [:.hljs-name {:color "#7dcfff"}]
-   [:.hljs-variable {:color "#c0caf5"}]
+   [:.hljs-variable {:color "#bcc4e0"}]
    [:.hljs-attr {:color "#bb9af7"}]
-   [:.hljs-params {:color "#c0caf5"}]
-   [:.hljs-meta {:color "#565f89"}]
+   [:.hljs-params {:color "#bcc4e0"}]
+   [:.hljs-meta {:color "#4a4e69"}]
    [:.hljs-symbol {:color "#00ff9f"}]
    [:.hljs-selector-tag {:color "#7dcfff"}]
    [:.hljs-selector-class {:color "#bb9af7"}]])
 
+;; ── Animations ──────────────────────────────────
 (def glitch-animation
   [(at-keyframes :glitch-1
      [:0% {:clip-path "inset(40% 0 61% 0)" :transform "translate(-2px, -1px)"}]
@@ -79,105 +83,120 @@
      [:80% {:clip-path "inset(40% 0 34% 0)" :transform "translate(2px, -1px)"}]
      [:100% {:clip-path "inset(67% 0 5% 0)" :transform "translate(-2px, 0px)"}])])
 
+;; ── Nav ─────────────────────────────────────────
 (def nav-styles
   [[:.site-nav
     {:position :fixed
      :top 0 :left 0 :right 0
      :z-index 100
-     :background "rgba(10, 10, 15, 0.9)"
-     :backdrop-filter "blur(12px)"
-     :-webkit-backdrop-filter "blur(12px)"
-     :border-bottom [["1px" :solid (t/colors :border)]]}]])
+     :background "rgba(10, 10, 15, 0.92)"
+     :backdrop-filter "blur(16px)"
+     :-webkit-backdrop-filter "blur(16px)"
+     :border-bottom [["1px" :solid "rgba(255,255,255,0.05)"]]}]])
 
+;; ── Layout ──────────────────────────────────────
 (def layout
   [[:.wrap {:max-width "900px" :margin "0 auto" :padding "0 40px"
             :position :relative :z-index 1}]
    [:.wrap-wide {:max-width "1120px" :margin "0 auto" :padding "0 40px"
                  :position :relative :z-index 1}]
-   [:section {:padding "100px 0" :position :relative}]])
+   [:section {:padding "80px 0" :position :relative}]])
 
-;; ── Doc page typography ──────────────────────────
+;; ── Doc typography ──────────────────────────────
 (def doc-styles
-  [;; Layout
+  [;; 3-column layout
    [:.doc-layout
-    {:max-width "1200px"
+    {:max-width "1100px"
      :margin "0 auto"
-     :padding "64px 32px 0"
+     :padding "56px 28px 80px"
      :display :grid
-     :grid-template-columns "200px 1fr 180px"
-     :gap "0 40px"
+     :grid-template-columns "180px minmax(0, 1fr) 160px"
+     :gap "0 36px"
      :position :relative
      :z-index 1}]
    [:.doc-sidebar-col {:position :relative}]
    [:.doc-toc-col {:position :relative}]
 
-   ;; Article content
+   ;; Content area
    [:.doc-content
     {:min-width 0
-     :max-width "640px"
-     :color (t/colors :fg)
-     :font-size "0.88rem"
-     :line-height 1.75}]
+     :max-width "600px"
+     :color "#d0d0d8"
+     :font-size "14.5px"
+     :line-height 1.7
+     :letter-spacing "0.01em"}]
 
-   ;; Title
+   ;; Page title
    [:.doc-title
-    {:font-size "1.5rem"
+    {:font-family (t/fonts :sans)
+     :font-size "1.6rem"
      :font-weight 700
-     :letter-spacing "-0.02em"
-     :margin-bottom "4px"
-     :color (t/colors :fg)}]
-   [:.doc-desc
-    {:color (t/colors :fg-dim)
-     :font-size "0.82rem"
-     :margin-bottom "20px"
-     :padding-bottom "12px"
-     :border-bottom [["1px" :solid (t/colors :border)]]}]
-
-   ;; Section headings
-   [:.doc-section {:margin-top "20px"}]
-   [:.doc-section:first-child {:margin-top "0"}]
-   [:.doc-h2
-    {:font-size "1.05rem"
-     :font-weight 700
-     :color (t/colors :accent)
+     :letter-spacing "-0.025em"
      :margin-bottom "6px"
-     :border-bottom [["1px" :solid (t/colors :border)]]
-     :padding-bottom "6px"}]
-   [:.doc-h3
-    {:font-size "0.9rem"
+     :color "#e8e8f0"}]
+   [:.doc-desc
+    {:color "#808098"
+     :font-size "14px"
+     :line-height 1.5
+     :margin-bottom "24px"
+     :padding-bottom "16px"
+     :border-bottom [["1px" :solid "rgba(255,255,255,0.06)"]]}]
+
+   ;; Section spacing
+   [:.doc-section {:margin-top "28px"}]
+   [:.doc-section:first-child {:margin-top 0}]
+
+   ;; h2 — primary section header
+   [:.doc-h2
+    {:font-family (t/fonts :sans)
+     :font-size "1.1rem"
      :font-weight 600
-     :color (t/colors :accent-2)
+     :color (t/colors :accent)
+     :margin-bottom "10px"
+     :padding-bottom "8px"
+     :border-bottom [["1px" :solid "rgba(255,255,255,0.06)"]]}]
+
+   ;; h3 — subsection
+   [:.doc-h3
+    {:font-family (t/fonts :sans)
+     :font-size "0.95rem"
+     :font-weight 600
+     :color "#b4b4cc"
+     :margin-bottom "6px"
+     :margin-top "22px"}]
+
+   ;; h4
+   [:.doc-h4
+    {:font-family (t/fonts :sans)
+     :font-size "0.88rem"
+     :font-weight 600
+     :color "#9898b0"
      :margin-bottom "4px"
      :margin-top "16px"}]
-   [:.doc-h4
-    {:font-size "0.85rem"
-     :font-weight 600
-     :color (t/colors :fg)
-     :margin-bottom "4px"
-     :margin-top "12px"}]
 
-   ;; Paragraphs
+   ;; Paragraphs — the core reading experience
    [:.doc-p
-    {:margin-bottom "8px"
-     :color (t/colors :fg)
-     :opacity 0.85}]
+    {:margin-bottom "12px"
+     :color "#b8b8c8"
+     :line-height 1.75}]
 
    ;; Links
    [:.doc-link
     {:color (t/colors :accent)
      :text-decoration :none
-     :border-bottom [["1px" :solid "transparent"]]}]
-   [:.doc-link:hover
-    {:border-bottom-color (t/colors :accent)}]
+     :font-weight 500}]
+   [:.doc-link:hover {:opacity 0.8}]
 
-   ;; Lists
+   ;; Lists — tighter than paragraphs
    [:.doc-list
-    {:padding-left "20px"
-     :margin "8px 0"}]
+    {:padding-left "18px"
+     :margin "6px 0 12px"}]
    [:.doc-list>li
-    {:margin-bottom "4px"
-     :color (t/colors :fg)
-     :opacity 0.85}]])
+    {:margin-bottom "6px"
+     :color "#b8b8c8"
+     :line-height 1.65}]
+   ["li > code"
+    {:font-size "0.85em"}]])
 
 (defn stylesheet []
   (garden/css
