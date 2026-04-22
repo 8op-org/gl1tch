@@ -1,318 +1,296 @@
 ---
 name: glitch
-description: Complete reference for the gl1tch CLI (8op-org/gl1tch) — workflow authoring, CLI commands, providers, batch runs, workspace model, observer, and installation. Use when the user mentions glitch, wants to create/edit/run workflows, automate tasks with glitch, review PRs via glitch, run batch comparisons, query indexed data, install/update glitch, or describes a task that could be a glitch workflow.
+description: Complete reference for the gl1tch CLI (8op-org/gl1tch) — Babashka workflow engine with LLM integration, MCP server, code intelligence, investigation graphs, and plugin system. Use when the user mentions glitch, wants to create/edit/run workflows, automate tasks with glitch, use the MCP server, index code, write plugins, run investigations, or describes a task that could be a glitch workflow. Also use when reviewing or authoring .glitch files.
 ---
 
 # glitch
 
-gl1tch is a GitHub co-pilot CLI that orchestrates shell commands and LLM calls into automated workflows. Core design principle: **shell does the grunt work, LLM does the thinking.** Shell steps fetch and shape data (free, deterministic). LLM steps reason about it (expensive, so feed pre-processed data).
+gl1tch is a workflow engine built on Babashka (Clojure) that orchestrates shell commands and LLM calls. Core design principle: **shell does the grunt work, LLM does the thinking.** Shell steps fetch and shape data (free, deterministic). LLM steps reason about it (expensive, so feed pre-processed data).
 
 ## Installation
 
-Install from the Homebrew tap. Remove any locally built shadows first:
-
 ```bash
-# 1. Remove locally built shadows
-rm -f ~/.local/bin/glitch
-rm -f "$(go env GOPATH)/bin/glitch"
-
-# 2. Tap
-brew tap 8op-org/tap 2>/dev/null || true
-
-# 3. Reinstall
-brew reinstall glitch
-
-# 4. Verify
-brew list --versions glitch
-glitch --version
+cd ~/Projects/gl1tch/bb
+bb install
 ```
 
-**Prerequisites:** Ollama must be running locally (`ollama serve`) with `qwen2.5:7b` pulled (`ollama pull qwen2.5:7b`). GitHub CLI (`gh`) must be authenticated.
+This installs a wrapper script to `~/.local/bin/glitch` that runs:
+```bash
+exec bb -cp "$HOME/.local/share/glitch/src" -m glitch.main "$@"
+```
 
-| Formula | Source repo |
-|---------|------------|
-| `glitch` | `8op-org/gl1tch` |
+Source is rsync'd to `~/.local/share/glitch/src`, providers to `~/.config/glitch/providers/`.
 
-The tap auto-updates via goreleaser's `brews:` section. `HOMEBREW_TAP_GITHUB_TOKEN` must be set as a repo secret.
+**Prerequisites:** Babashka (`bb`), `curl`, `gh` (GitHub CLI, authenticated), `rg` (ripgrep), `sg` (ast-grep, for code intelligence). Run `glitch up` to verify.
+
+| Repo | Source |
+|------|--------|
+| `8op-org/gl1tch` | `~/Projects/gl1tch` |
 
 ## CLI Command Reference
 
 ```bash
-# Workflow management
-glitch workflow list                           # list available workflows
-glitch wf list                                 # alias
-glitch workflow run <name> [input]             # run a named workflow
-glitch workflow run <name> --set key=value     # parameterized run
-glitch workflow run <name> --path /some/repo   # run against different directory
+# Run a workflow
+glitch run <file> [input...]                    # execute a .glitch or .clj file
+glitch run <file> -p claude                     # use specific provider
+glitch run <file> -s key=value                  # set parameter (repeatable)
+glitch run <file> -m qwen3:8b                   # override model
 
-# Observer — query indexed activity via Elasticsearch
-glitch observe "How many issues were resolved this week?"
-glitch observe "Show all PRs that failed CI" --repo elastic/kibana
+# Validate syntax
+glitch check <file>                             # parse check (Clojure reader)
 
-# Infrastructure
-glitch up                                      # start ES + Kibana via docker-compose
-glitch down                                    # stop ES + Kibana
-glitch index [path]                            # index repo into ES for code search
+# Evaluate Clojure directly
+glitch eval <file>                              # load-file a .clj script
 
-# Configuration
-glitch config show
-glitch config set default_model qwen3:8b
-```
+# Environment check
+glitch up                                       # verify required tools: bb, curl, gh, rg, sg
 
-## Workspace Model
+# Code intelligence
+glitch index                                    # index current repo to ES
+glitch index --repo ~/Projects/foo              # index specific repo
+glitch index --languages go,clojure             # limit languages
+glitch index --full                             # skip hash check, full reindex
+glitch index --stats                            # show index stats only
+glitch index query --name "IndexRepo"           # query symbols
+glitch index query --kind function --language go
+glitch index query --edges --source "IndexRepo" # query relationships
+glitch index query --context "IndexRepo"        # definition + all edges
 
-The `--workspace` flag scopes workflows and results to a directory. Designed for cross-repo work where one command center (e.g., stokagent) manages workflows and results for multiple target repos.
+# REPL
+glitch repl                                     # start nREPL on port 1667
+glitch repl -p 7777                             # custom port
 
-```bash
-glitch --workspace ~/Projects/stokagent run issue-to-pr --set repo=elastic/observability-robots --set issue=3920
-```
+# Plugins
+glitch plugin list                              # list registered plugins
+glitch plugin <name> <command> [args...]        # run plugin command
+glitch <plugin-name> <command> [args...]        # shorthand
 
-Typical usage with a shell alias:
+# MCP server (for IDE integration)
+glitch mcp                                      # start JSON-RPC stdio server
 
-```bash
-alias gl='glitch --workspace ~/Projects/stokagent'
-```
-
-When `--workspace` is set:
-
-- **Workflows:** resolved from `<workspace>/workflows/` only. Global `~/.config/glitch/workflows/` is skipped.
-- **Results:** written to `<workspace>/results/<org>/<repo>/<issue|pr>-<number>/`.
-- **Without `--workspace`:** current behavior — global workflows, CWD-relative results.
-
-### Result directory structure
-
-```
-<workspace>/results/<org>/<repo>/
-  issue-3920/
-    README.md          # rollup — frontmatter metadata + action-ready content
-    evidence/          # raw tool call outputs, numbered
-      001-github-issue.md
-      002-grep-results.md
-      003-file-read.md
-    plan.md            # implementation plan (if goal=implement)
-    review.md          # post-impl review (if applicable)
-    run.json           # machine-readable run metadata
-```
-
-#### README.md rollup format
-
-```markdown
----
-repo: elastic/observability-robots
-ref: issue-3920
-title: "Fix flaky CI in integration tests"
-status: researched | planned | implemented
-created: 2026-04-14T10:30:00Z
-model: qwen2.5:7b
----
-
-## Summary
-<2-3 sentence findings>
-
-## Recommendation
-<what to do, concrete>
-
-## Response Draft
-<copy-paste ready PR comment, issue reply, or PR body>
-
-## Evidence Index
-- [001-github-issue.md](evidence/001-github-issue.md) — original issue body and comments
-- [002-grep-results.md](evidence/002-grep-results.md) — relevant code matches
-```
-
-#### Variant runs
-
-For comparing outputs across models/tools:
-
-```
-results/elastic/observability-robots/
-  issue-3920/           # default run
-  issue-3920--claude/   # variant
-  issue-3920--copilot/  # variant
-```
-
-#### run.json schema
-
-```json
-{
-  "repo": "elastic/observability-robots",
-  "ref_type": "issue",
-  "ref_number": 3920,
-  "workflow": "pr-review",
-  "status": "researched",
-  "created": "2026-04-14T10:30:00Z",
-  "duration_seconds": 45,
-  "model": "qwen2.5:7b",
-  "variant": null
-}
+# Version
+glitch version                                  # prints "glitch 0.3.0"
 ```
 
 ## Workflow Authoring
 
-gl1tch supports two workflow formats:
-
-- **`.glitch` (s-expression)** — preferred format, Lisp-like syntax
-- **`.yaml`** — legacy YAML format, still supported
+Workflows are `.glitch` files — Clojure s-expressions evaluated via SCI (Small Clojure Interpreter) in a sandbox with all glitch primitives pre-bound.
 
 ### File Locations
 
-- **Global workflows**: `~/.config/glitch/workflows/` — loaded by all `glitch` runs
-- **Project-local workflows**: `workflows/` — override globals for the project
-- **Workspace workflows**: `<workspace>/workflows/` — when `--workspace` is set (replaces global)
-- **Config**: `~/.config/glitch/config.yaml`
+- **Project-local**: `.glitch/workflows/` — loaded for the project
+- **Global plugins**: `~/.config/glitch/plugins/` — available everywhere
+- **Workflow dir**: `call-workflow` resolves siblings in the parent directory of the running file
 
-Loading order: global dir first, then `workflows/` (local overrides global). With `--workspace`, only `<workspace>/workflows/` is loaded.
-
-### S-Expression Format (.glitch) — Preferred
+### Syntax
 
 ```clojure
-;; comments start with ;;
+;; Comments are standard Clojure
 
-;; Top-level bindings
-(def model "qwen2.5:7b")
-(def provider "ollama")
-
-(workflow "workflow-name"
+(workflow "name"
   :description "what it does"
 
-  (step "step-id"
-    (run "shell command here"))
+  ;; Shell step — runs bash -c
+  (step "fetch"
+    (sh "gh issue view 42 --json title,body"))
 
-  (step "another-step"
+  ;; LLM step — calls configured provider
+  (step "analyze"
     (llm
-      :provider provider        ;; resolves def binding
-      :model model
-      :prompt ```
-        Multiline prompt with triple-backtick delimiters.
-        Use ~(step step-id) for prior step output.
-        Use ~input for user input.
-        Use ~param.key for --set key=value params.
-        ```))
+      :provider "claude"
+      :model "claude-haiku-4-5-20251001"
+      :prompt (str "Analyze this issue:\n" (ref "fetch"))))
 
-  (step "write-file"
-    (save "results/~param.repo/output.md" :from "another-step"))
-
-  ;; Disable a step without deleting it:
-  #_(step "skipped"
-    (run "echo this is disabled")))
+  ;; Save output to file
+  (save "results/output.md" (ref "analyze")))
 ```
 
-### S-Expression Syntax Reference
+### Triple-Backtick Strings
+
+The preprocessor converts ` ``` ` blocks into `(str ...)` forms. Use `~(ref "id")` and `~(param "key")` for interpolation inside them:
+
+```clojure
+(step "summarize"
+  (llm :prompt ```
+    Summarize this data for a developer:
+    ~(ref "fetch")
+
+    User asked: ~(input)
+    Repo: ~(param "repo")
+    ```))
+```
+
+### DSL Reference
+
+#### Core Primitives
 
 | Form | Description |
 |------|-------------|
-| `(def name "value")` | Top-level binding, substituted in keyword values and run commands |
-| `(workflow "name" ...)` | Workflow definition, one per file |
-| `:description "text"` | Workflow metadata keyword |
-| `(step "id" ...)` | Step definition, id must be unique |
-| `(run "command")` | Shell step (sh -c) |
-| `(run varname)` | Shell step using a def binding |
-| `(llm :prompt "..." [:provider "x"] [:model "y"])` | LLM call |
-| `(llm ... :skill "name")` | LLM call with skill content prepended to prompt |
-| `(llm ... :tier 1)` | LLM call pinned to a specific escalation tier |
-| `(llm ... :format "json")` | LLM call with output format hint |
-| `(save "path" :from "step-id")` | Write step output to file |
-| `(retry N (step ...))` | Retry step up to N times on failure |
-| `(timeout "30s" (step ...))` | Kill step after duration (Go duration string) |
-| `(let ((name val) ...) body...)` | Scoped bindings — like def but lexically scoped |
-| `(catch (step ...) (step ...))` | Run primary step; on failure, run fallback instead |
-| `(cond (pred (step ...)) ...)` | Multi-branch conditional — predicates are shell commands (exit 0 = true) |
-| `(map "step-id" (step ...))` | Iterate over prior step output (newline-split), run body per item |
-| `` ``` `` | Triple-backtick multiline string (auto-dedented) |
-| `#_(...)` | Reader discard — comments out entire s-expression |
-| `;; text` | Line comment |
+| `(workflow "name" :description "..." body...)` | Workflow definition |
+| `(step "id" body)` | Evaluate body, record output under id |
+| `(ref "id")` | Retrieve output of a previous step |
+| `(input)` | User input passed to the workflow |
+| `(params)` | All runtime parameters as a map |
+| `(param "key")` | Single parameter from `--set key=value` |
+| `(sh "command")` | Shell command (bash -c), returns stdout |
+| `(run "command")` | Alias for `sh` |
+| `(save "path" content)` | Write content to file |
+| `(read-file "path")` | Read file contents |
+| `(write-file "path" content)` | Alias for save |
+| `(last-output)` | Output of the most recent step |
+| `(get-steps)` | Map of all step outputs |
+| `(search "query" :limit 10 :path ".")` | Ripgrep wrapper |
 
-### Control Flow Forms
-
-Forms compose — `retry` can wrap `timeout`, `let` can contain `retry`, etc.
+#### LLM Invocation
 
 ```clojure
-;; Retry a flaky API call up to 3 times
+(llm
+  :prompt "..."                    ;; required
+  :provider "lmstudio"             ;; optional, uses default if omitted
+  :model "qwen3:8b"                ;; optional
+  :schema {:required ["key"]       ;; JSON schema validation
+           :types {"key" :string}
+           :enum {"status" ["ok" "fail"]}}
+  :retries 2                       ;; retry on schema/confidence failure
+  :min-confidence 0.8              ;; minimum confidence threshold
+  :skill "path/to/skill.md"       ;; prepend skill content to prompt
+  :tools [...]                     ;; tool definitions for tool-calling providers
+  :agentic true                    ;; enable multi-round tool calling
+  :max-rounds 5                    ;; cap tool-calling rounds
+  :domain-check true               ;; apply domain-relevance adjustment
+  :step-id "custom-id"             ;; custom step recording ID
+  :format "json")                  ;; output format hint
+```
+
+#### Control Flow
+
+```clojure
+;; Concurrent execution
+(par
+  (step "a" (sh "curl http://api1"))
+  (step "b" (sh "curl http://api2")))
+
+;; Retry on failure
 (retry 3
-  (step "fetch"
-    (run "curl -sf https://api.example.com/data")))
+  (step "flaky" (sh "curl -sf https://api.example.com/data")))
 
-;; Kill an LLM step if it hangs beyond 2 minutes
-(timeout "2m"
-  (step "analyze"
-    (llm :prompt "Analyze: ~(step fetch)")))
+;; Timeout (seconds)
+(with-timeout 120
+  (step "slow" (llm :prompt "Analyze everything...")))
 
-;; Compose: retry + timeout
-(retry 2
-  (timeout "30s"
-    (step "flaky-slow"
-      (run "curl -sf https://slow-api.example.com"))))
+;; Gate — boolean check (non-fatal, records pass/fail)
+(gate "has-tests" (not (str/blank? (ref "find-tests"))))
 
-;; Scoped bindings (shadows outer defs within body)
-(let ((endpoint "https://api.example.com")
-      (token "abc123"))
-  (step "call"
-    (run "curl -H 'Auth: ~param.token' endpoint"))
-  (step "parse"
-    (run "echo '~(step call)' | jq '.data'")))
+;; Phase — progress grouping
+(phase "research"
+  (step "fetch" (sh "gh issue view 42 --json body"))
+  (step "analyze" (llm :prompt (str "..." (ref "fetch")))))
 
-;; Error recovery — if primary fails, run fallback
-(catch
-  (step "try"
-    (run "gh api graphql -f query='...'"))
-  (step "fallback"
-    (run "gh issue view ~param.issue --json body")))
+;; Call sub-workflow (resolves from same directory)
+(call-workflow "site-write"
+  :input "update the getting-started page"
+  :set {"page" "getting-started" "instructions" "add babashka syntax"})
 
-;; Multi-branch conditional — predicates are shell commands
+;; Conditional (standard Clojure)
 (cond
-  ("test -f critical.log"
-    (step "alert"
-      (run "notify-send 'Critical issue found'")))
-  ("test -f warning.log"
-    (step "warn"
-      (run "echo 'Warnings detected'")))
-  (else
-    (step "ok"
-      (run "echo 'All clear'"))))
-
-;; Iterate over prior step output (one item per line)
-;; ~param.item and ~param.item_index available in body
-(step "list-files"
-  (run "find . -name '*.go' -maxdepth 2"))
-
-(map "list-files"
-  (step "check"
-    (run "wc -l ~param.item")))
+  (= action "write") (call-workflow "write" :set {"page" slug})
+  (= action "dev")   (call-workflow "dev")
+  :else              (str "unknown: " action))
 ```
 
-### Template Expressions (Tilde Interpolation)
+#### Validation & Confidence
 
-| Expression | Description |
-|-----------|-------------|
-| `~input` | User input passed to the workflow |
-| `~param.key` | Runtime parameter from `--set key=value` |
-| `~param.item` | Current item in a `(map ...)` iteration |
-| `~param.item_index` | Current index (0-based) in a `(map ...)` iteration |
-| `~(step id)` | Output of a previous step |
-| `~(stepfile id)` | Write step output to temp file, return path |
+```clojure
+;; Contract validation on step output
+(step "classify" (llm :prompt "...")
+  :expects {:non-empty true :json true :keys ["type" "severity"]})
 
-### YAML Format (Legacy)
+;; Schema validation against a step
+(validate "classify"
+  {:required ["type" "severity"]
+   :types {"type" :string "severity" :string}
+   :enum {"severity" ["low" "medium" "high" "critical"]}})
 
-```yaml
-name: workflow-name
-description: what it does
+;; Grounding check — verify output against source context
+(grounded? "summary" (ref "raw-data")
+  :provider "claude" :strict true :max-unsupported 0)
 
-steps:
-  - id: step-id
-    run: |
-      shell command here
+;; Multi-provider consensus
+(consensus ["claude" "openrouter" "lmstudio"]
+  :prompt "Classify this issue: ..."
+  :schema {:required ["severity"]}
+  :compare-key "severity")
 
-  - id: another-step
-    llm:
-      provider: claude
-      model: claude-haiku-4-5-20251001
-      prompt: |
-        Prompt with ~(step step-id) and ~input
-
-  - id: write-file
-    save: "results/output.md"
-    save_step: another-step
+;; Composite quality score (harmonic mean of gate results)
+(composite-score "classify")
 ```
+
+#### Investigation Graphs (Bayesian Reasoning)
+
+```clojure
+;; Structured investigation with fact tracking
+(investigate "The deploy failure was caused by a config change"
+
+  ;; Create facts with confidence scores
+  (step "check-logs"
+    (sh "kubectl logs deploy/app --tail 100"))
+  (fact "logs-show-config-error"
+    :claim "Logs contain ConfigMap parse failure"
+    :confidence 0.6
+    :source-step "check-logs")
+
+  ;; Corroborate from another source
+  (step "check-git"
+    (sh "git log --oneline -5 -- k8s/"))
+  (corroborate-from "config-changed-recently"
+    :claim "ConfigMap was modified in last commit"
+    :step "check-git"
+    :corroborates "logs-show-config-error")
+
+  ;; Query graph state
+  (approve! "logs-show-config-error")   ;; mark as trusted (confidence 1.0)
+  (reachable? "goal")                    ;; can we reach the goal from approved facts?
+  (confidence-gap "goal")                ;; find weakest link
+  (suggest-next)                         ;; what to investigate next
+  (graph-stats))                         ;; introspection
+```
+
+Confidence rules:
+- Single-source cap: 0.70 max from one source
+- Bayesian combination breaks the cap when multiple sources corroborate
+- Contradiction detection: keyword overlap + negation polarity flip
+- Geometric decay (0.7^n) when contradictions are detected
+
+#### Code Intelligence Queries
+
+Requires `glitch index` to have been run against the repo with Elasticsearch running.
+
+```clojure
+;; Search indexed symbols
+(search-symbols {:name "Index*" :kind "function" :language "go"})
+
+;; Search code relationships (calls, imports, extends, implements, references, contains)
+(search-edges {:source "IndexRepo" :kind "calls" :depth 2})
+
+;; Full context: definition + all relationships
+(symbol-context "IndexRepo")
+```
+
+#### Available Utilities
+
+Full Clojure standard library via SCI, plus:
+
+| Symbol | Description |
+|--------|-------------|
+| `str/*` | All of `clojure.string` (e.g., `str/trim`, `str/split`) |
+| `json/decode` | Parse JSON string to map |
+| `json/encode` | Map to JSON string |
+| `json-extract` | Extract first JSON object/array from LLM noise |
+| `mkdir-p` | Create directories |
+| `slurp` / `spit` | Read/write files |
+| `atom` / `swap!` / `reset!` | Concurrency primitives |
+| `future-call` / `deref` | Async execution |
+| `def` / `let` / `cond` / `when` / `map` / `filter` / `reduce` | Standard Clojure |
 
 ### The Cardinal Rule: Shell First, LLM Last
 
@@ -337,291 +315,318 @@ steps:
 
 #### Anti-patterns
 
-- Asking the LLM to parse JSON (use `jq`)
+- Asking the LLM to parse JSON (use `jq` or `json/decode`)
 - Asking the LLM to calculate dates (use `date`)
 - Putting all logic in one massive LLM step
 - Using multiple LLM steps when one suffices
-- Relying on LLM/MCP for live API calls (shell steps own data fetching)
+- Relying on LLM for live API calls (shell steps own data fetching)
 
 ## Workflow Patterns
 
 ### Pattern 1: Simple fetch + format
 
 ```clojure
-(def model "qwen3:8b")
-
 (workflow "git-status"
   :description "Summarize current git state"
 
   (step "status"
-    (run "git status --short"))
+    (sh "git status --short"))
 
   (step "summary"
-    (llm :model model
-      :prompt ```
-        Summarize this git status for a developer:
-        ~(step status)
-        ```)))
+    (llm :prompt (str "Summarize this git status for a developer:\n" (ref "status")))))
 ```
 
 ### Pattern 2: Multi-source aggregation
 
 ```clojure
-(def model "qwen3:8b")
-
 (workflow "morning-briefing"
   :description "Aggregate multiple sources into daily briefing"
 
-  (step "prs"
-    (run "gh pr list --author @me --json number,title,state | jq '.'"))
-
-  (step "reviews"
-    (run "gh pr list --search 'review-requested:@me' --json number,title,url | jq '.'"))
-
-  (step "issues"
-    (run "gh issue list --assignee @me --json number,title,labels | jq '.'"))
+  (par
+    (step "prs" (sh "gh pr list --author @me --json number,title,state | jq '.'"))
+    (step "reviews" (sh "gh pr list --search 'review-requested:@me' --json number,title,url | jq '.'"))
+    (step "issues" (sh "gh issue list --assignee @me --json number,title,labels | jq '.'")))
 
   (step "briefing"
-    (llm :model model
-      :prompt ```
-        Create a morning briefing from these sources:
+    (llm :prompt ```
+      Create a morning briefing from these sources:
 
-        My PRs:
-        ~(step prs)
+      My PRs:
+      ~(ref "prs")
 
-        Pending reviews:
-        ~(step reviews)
+      Pending reviews:
+      ~(ref "reviews")
 
-        My issues:
-        ~(step issues)
+      My issues:
+      ~(ref "issues")
 
-        Format: bullet list, no emoji, terse.
-        ```)))
+      Format: bullet list, no emoji, terse.
+      ```)))
 ```
 
 ### Pattern 3: Parameterized with --set
 
 ```clojure
-(workflow "parameterized"
-  :description "Pass runtime params with --set"
+(workflow "analyze-issue"
+  :description "Analyze a GitHub issue"
 
   (step "fetch"
-    (run "gh issue view ~param.issue --repo ~param.repo --json number,title,body"))
+    (sh (str "gh issue view " (param "issue") " --repo " (param "repo") " --json number,title,body")))
 
   (step "analyze"
-    (llm :prompt ```
-      Analyze this issue:
-      ~(step fetch)
-      ```))
+    (llm :prompt (str "Analyze this issue:\n" (ref "fetch"))))
 
-  (step "save-it"
-    (save "results/~param.repo/~param.issue.md" :from "analyze")))
+  (save (str "results/" (param "repo") "/" (param "issue") ".md") (ref "analyze")))
 ```
 
-Run with: `glitch workflow run parameterized --set issue=3442 --set repo=elastic/ensemble`
+Run with: `glitch run analyze-issue.glitch -s issue=3442 -s repo=elastic/ensemble`
 
-### Pattern 4: Issue-to-PR pipeline (full)
-
-The most complex pattern. Structure:
-
-1. `fetch-issue` — `gh issue view` with full JSON
-2. `fetch-related` — linked PRs via GraphQL timeline
-3. `repo-context` — local repo structure, recent commits, config files
-4. `prior-results` — previous iteration feedback (for iterative improvement)
-5. `classify` — LLM extracts type, complexity, requirements, acceptance criteria
-6. `research` — LLM produces detailed implementation plan
-7. `build-pr` — LLM generates PR title, body, and next steps
-8. `review` — LLM grades against acceptance criteria (PASS/FAIL per criterion)
-9. `save-results` — shell step writes all artifacts to results dir
-
-### Pattern 5: Using stepfile for complex shell escaping
-
-When step output contains characters that break shell escaping:
+### Pattern 4: Router with sub-workflows
 
 ```clojure
-(step "use-prior-output"
-  (run "cat '~(stepfile big-json-step)' | jq '.items[]'"))
+(workflow "site"
+  :description "Route freeform input to the right site operation"
+
+  (step "route"
+    (llm
+      :provider "openrouter"
+      :tools []
+      :prompt (str "Classify intent. Return JSON: {\"action\": \"...\", \"slug\": \"...\"}.\n"
+                   "User said: " (input))))
+
+  (step "dispatch"
+    (let [parsed (json/decode (json-extract (ref "route")))
+          action (get parsed "action")]
+      (cond
+        (= action "write-page")
+        (:output (call-workflow "site-write"
+                   :set {"page" (get parsed "slug")}))
+        (= action "dev")
+        (:output (call-workflow "site-dev"))
+        :else
+        (str "unknown action: " action)))))
 ```
 
-`~(stepfile id)` writes the step output to a temp file and returns the path.
+### Pattern 5: Validated LLM with schema
+
+```clojure
+(workflow "classify"
+  :description "Classify an issue with schema validation"
+
+  (step "fetch" (sh "gh issue view 42 --json title,body,labels"))
+
+  (step "classify"
+    (llm
+      :prompt (str "Classify:\n" (ref "fetch"))
+      :schema {:required ["type" "severity" "confidence"]
+               :types {"type" :string "severity" :string "confidence" :number}
+               :enum {"severity" ["low" "medium" "high" "critical"]}}
+      :retries 2
+      :min-confidence 0.7))
+
+  (validate "classify"
+    {:required ["type" "severity"]
+     :types {"type" :string "severity" :string}}))
+```
 
 ## Provider & Model Configuration
 
-Config at `~/.config/glitch/config.yaml`:
+### Provider Registry
 
-```yaml
-default_model: qwen3:8b
-default_provider: ollama
+Providers are `.clj` files in `~/.config/glitch/providers/` that call `(glitch.provider/register name fn)` at load time.
 
-providers:
-  openrouter:
-    type: openai-compatible
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    default_model: google/gemma-3-12b-it:free
-
-tiers:
-  - providers: [ollama]
-    model: qwen3:8b
-  - providers: [openrouter]
-    model: google/gemma-3-12b-it:free
-  - providers: [copilot, claude]
-```
-
-### Provider Reference
+Built-in providers (installed by `bb install`):
 
 | Provider | How it runs | Notes |
 |----------|------------|-------|
-| `ollama` | Local Ollama server at `localhost:11434` | Free, default. Requires `ollama serve` |
-| `claude` | `claude -p --output-format text` | Strong reasoning, tool-use agent |
-| `copilot` | `gh copilot explain` / Copilot CLI | Premium requests |
-| `gemini` | `gemini -p` | Google agent |
-| `openrouter` | OpenAI-compatible API | Free tiers available |
-| (omitted) | Uses `default_provider` from config | |
+| `lmstudio` | HTTP to localhost:1234 (OpenAI-compatible) | Default local provider. Supports tool calling |
+| `claude` | `claude -p` CLI | Strong reasoning, MCP tool support |
+| `copilot` | `copilot` CLI | Premium requests |
+| `openrouter` | HTTP to openrouter.ai/api/v1 | Free tiers available. Requires `OPENROUTER_API_KEY` |
 
-### Available Models (Current)
+### Default Provider Fallback
 
-| Tier | Models |
-|------|--------|
-| **Local (Ollama)** | qwen3:8b (default), qwen2.5:7b, qwen3-coder:30b, qwen3.5:35b-a3b |
-| **OpenRouter free** | google/gemma-3-12b-it:free, meta-llama/llama-4-scout:free |
-| **Claude** | claude-haiku-4-5-20251001, claude-sonnet-4-6-20250514 |
-| **Copilot** | uses default model |
+When no provider is specified in a workflow step, glitch tries `lmstudio` first, then falls through default tiers:
 
-### Tiered Escalation
+1. copilot
+2. claude
+3. openrouter
+4. lmstudio
 
-When no provider is pinned in a workflow step and tiers are configured, glitch uses smart routing:
+When a provider IS specified (`:provider "claude"`), it calls that provider directly with no fallback.
 
-1. Try tier 1 (e.g., local Ollama)
-2. Self-eval the response with local LLM (score 1-5)
-3. If score < threshold (default: 4), escalate to next tier
-4. Escalation reasons: malformed output, empty response, hallucination, provider error, structural failure, low eval score
+### Provider Interface
 
-## Batch Comparison Runs
-
-Batch runs execute the same workflow across multiple LLM variants to compare output quality.
-
-**Concept:** batch = issues x variants x iterations + cross-review + manifest.
-
-### Naming Convention
-
-```
-issue-to-pr-local.glitch      # ollama/qwen2.5:7b
-issue-to-pr-claude.glitch     # claude CLI
-issue-to-pr-copilot.glitch    # copilot CLI
-issue-to-pr-gemma.glitch      # openrouter/gemma
-cross-review.glitch            # neutral grader
+Every provider implements:
+```clojure
+(fn [{:keys [prompt model tool-defs]}]
+  {:response "..." :tokens-in N :tokens-out M})
 ```
 
-Keep pipeline structure identical across variants — only change `(def provider ...)` and `(def model ...)`.
+### Custom Providers
 
-### Batch Script Pattern
+Create a `.clj` file in `~/.config/glitch/providers/`:
 
-```bash
-#!/bin/bash
-set -euo pipefail
+```clojure
+(ns my-provider
+  (:require [glitch.provider :as prov]))
 
-cd ~/Projects/gl1tch
-go build -o /tmp/glitch-batch .
-GLITCH="/tmp/glitch-batch"
-
-VARIANTS="local claude copilot"
-
-for variant in $VARIANTS; do
-  echo ">>> ($variant) — $(date)"
-  $GLITCH workflow run "task-name-$variant" 2>&1 || echo "WARN: $variant failed"
-done
+(prov/register "my-provider"
+  (fn [{:keys [prompt model]}]
+    ;; call your API here
+    {:response "..." :tokens-in 0 :tokens-out 0}))
 ```
 
-### Results Structure
+## MCP Server
 
+`glitch mcp` starts a JSON-RPC stdio server for IDE integration (Claude Code, Cursor, VS Code Copilot).
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `glitch_search` | Ripgrep wrapper (regex, glob, multiline, PCRE2, context) |
+| `glitch_symbols` | Language-aware symbol search (go, python, js, ts, rust, clojure) |
+| `glitch_run` | Execute a workflow |
+| `glitch_eval` | Evaluate Clojure expressions via SCI |
+| `glitch_check` | Syntax validation |
+| `glitch_read_file` | Read file (200 lines max) |
+| `glitch_search_symbols` | Elasticsearch indexed symbol lookup |
+| `glitch_search_edges` | Code relationship queries (calls, imports, extends, implements, references, contains) |
+| `glitch_symbol_context` | Full symbol definition + all relationships |
+
+### IDE Configuration
+
+**Claude Code** (`.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "glitch": {
+      "command": "glitch",
+      "args": ["mcp"]
+    }
+  }
+}
 ```
-results/<issue>/
-  iteration-1/
-    local/
-      classification.json
-      plan.md
-      review.md
-      pr-title.txt
-      pr-body.md
-    claude/
-      ...
-    cross-review.md
-  manifest.md
-```
-
-## Observer & Elasticsearch
-
-glitch indexes workflow events to Elasticsearch for observation and telemetry.
-
-```bash
-# Start infrastructure
-glitch up          # docker-compose: ES + Kibana
-
-# Index a repo for code search
-glitch index ~/Projects/ensemble
-
-# Query indexed data
-glitch observe "How many issues were resolved this week?"
-glitch observe "Show all PRs that failed CI" --repo elastic/kibana
-
-# Stop
-glitch down
-```
-
-### ES Indices
-
-| Index | Contents |
-|-------|----------|
-| `glitch-events` | Raw workflow events |
-| `glitch-research-runs` | Research loop executions |
-| `glitch-tool-calls` | Tool invocations |
-| `glitch-llm-calls` | LLM call telemetry (tokens, cost, latency) |
-| `glitch-code-<repo>` | Chunked source + symbols (from `glitch index`) |
-
-Kibana dashboard at `http://localhost:5601/app/dashboards#/view/glitch-llm-dashboard`.
 
 ## Plugin System
 
-### Naming Convention
+### Plugin Discovery
+
+Plugins are loaded from:
+1. `.glitch/plugins/` (project-local)
+2. `~/.config/glitch/plugins/` (global)
+
+### Two Plugin Types
+
+**.glitch file plugins** — each file becomes a command:
+```
+~/.config/glitch/plugins/github/
+  fetch-issue.glitch    -> glitch github fetch-issue
+  list-prs.glitch       -> glitch github list-prs
+```
+
+**.clj namespace plugins** — self-register via `defcommand`:
+```clojure
+(ns my-plugin
+  (:require [glitch.plugin :refer [defcommand]]))
+
+(defcommand my-func
+  "Description of what this does"
+  {:args [{:name "repo" :required true}]}
+  [opts]
+  (str "Result for " (:repo opts)))
+```
+
+### Plugin Naming Convention
 
 - **Repos:** `gl1tch-<plugin>` (e.g., `gl1tch-github`)
 - **Binaries:** `glitch-<plugin>` (e.g., `glitch-github`)
 
-### Custom Providers
+## Code Intelligence
 
-YAML-defined in `~/.config/glitch/providers/`:
+`glitch index` uses ast-grep to extract symbols and relationships, storing them in Elasticsearch.
 
-```yaml
-name: "my-provider"
-command: "command template with ~prompt and ~model"
+**Supported languages:** Go, Python, JavaScript, Rust, Java, C, Clojure
+
+**ES indices:**
+- `glitch-symbols-<repo>` — functions, vars, types, macros, protocols
+- `glitch-edges-<repo>` — calls, imports, contains, extends, implements, references
+
+```bash
+# Index a repo
+glitch index --repo ~/Projects/ensemble --languages go,python
+
+# Query from CLI
+glitch index query --name "Run*" --kind function
+glitch index query --edges --source "IndexRepo" --depth 2
+glitch index query --context "IndexRepo"
 ```
 
-### Release Pipeline
+From workflows:
+```clojure
+(search-symbols {:name "Run*" :kind "function" :language "go"})
+(search-edges {:source "IndexRepo" :kind "calls" :depth 2})
+(symbol-context "IndexRepo")
+```
 
-Plugins use GoReleaser + GitHub Actions. Tag a release → GoReleaser builds binaries → auto-updates the Homebrew tap formula at `8op-org/homebrew-tap`.
+**Environment variables:**
+- `GLITCH_ES_URL` — Elasticsearch endpoint (default: `http://localhost:9200`)
+- `GLITCH_TEI_URL` — Text Embeddings Inference endpoint (default: `http://localhost:8090`)
+
+## Data Persistence
+
+EDN-based store at `~/.local/share/glitch/glitch.edn`. Tracks runs, steps, facts, and edges. No external database required.
+
+```clojure
+;; State shape
+{:counter N
+ :runs    {id {:name :input :workflow-file :model :status :output ...}}
+ :steps   {id {:run-id :step-id :output :kind :duration ...}}
+ :facts   {id {:claim :confidence :source-step ...}}
+ :edges   {id {:source :target :kind ...}}}
+```
 
 ## Project Reference
 
 - **Repo**: `8op-org/gl1tch` at `~/Projects/gl1tch`
-- **Language**: Go (Cobra CLI)
-- **Module**: `github.com/8op-org/gl1tch`
-- **Config**: `~/.config/glitch/config.yaml`
+- **Runtime**: Babashka (Clojure)
+- **Version**: 0.3.0
+- **Entry point**: `bb/src/glitch/main.clj`
+- **Config**: `~/.config/glitch/providers/`
+- **Store**: `~/.local/share/glitch/glitch.edn`
+- **Global plugins**: `~/.config/glitch/plugins/`
 - **Environment**: `~/.config/glitch/.env` and `./.env`
-- **Global workflows**: `~/.config/glitch/workflows/`
-- **Custom providers**: `~/.config/glitch/providers/`
 
-### Key Packages
+### Key Modules
 
-| Package | Path | Purpose |
-|---------|------|---------|
-| `cmd` | `cmd/` | CLI commands (Cobra) |
-| `pipeline` | `internal/pipeline/` | Workflow execution engine |
-| `sexpr` | `internal/sexpr/` | S-expression lexer/parser |
-| `provider` | `internal/provider/` | Multi-LLM routing and execution |
-| `research` | `internal/research/` | Evidence gathering tool-use loop |
-| `router` | `internal/router/` | Input → workflow matching |
-| `batch` | `internal/batch/` | Multi-issue batch orchestration |
-| `observer` | `internal/observer/` | Natural language ES query engine |
-| `esearch` | `internal/esearch/` | Elasticsearch HTTP client |
-| `store` | `internal/store/` | SQLite persistence |
+| Module | Path | Purpose |
+|--------|------|---------|
+| `main` | `bb/src/glitch/main.clj` | CLI entry point, arg parsing, command dispatch |
+| `core` | `bb/src/glitch/core.clj` | DSL primitives, LLM invocation, validation |
+| `runner` | `bb/src/glitch/runner.clj` | SCI sandbox, preprocessor, workflow execution |
+| `provider` | `bb/src/glitch/provider.clj` | Provider registry, tiered fallback |
+| `graph` | `bb/src/glitch/graph.clj` | Investigation fact graph, Bayesian reasoning |
+| `confidence` | `bb/src/glitch/confidence.clj` | Scoring, authority weights, embeddings |
+| `index` | `bb/src/glitch/index.clj` | Code intelligence (ast-grep + ES) |
+| `store` | `bb/src/glitch/store.clj` | EDN-backed persistence |
+| `mcp` | `bb/src/glitch/mcp.clj` | MCP JSON-RPC stdio server |
+| `plugin` | `bb/src/glitch/plugin.clj` | Plugin registry, defcommand macro |
+| `plugin_loader` | `bb/src/glitch/plugin_loader.clj` | Plugin discovery from filesystem |
+| `tool_loop` | `bb/src/glitch/tool_loop.clj` | OpenAI-compatible tool calling loop |
+| `repl` | `bb/src/glitch/repl.clj` | nREPL server with DSL pre-loaded |
+
+### Development
+
+```bash
+cd ~/Projects/gl1tch/bb
+bb install        # install to ~/.local/bin
+bb test           # run test suite
+bb clean          # clean build artifacts
+```
+
+Site development:
+```bash
+bb site:dev       # shadow-cljs dev server (port 3000, nREPL 7888)
+bb site:build     # production build
+```
