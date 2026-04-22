@@ -9,24 +9,27 @@
         current-slug (get-in match [:path-params :slug])
         docs (content/docs-index)]
     [:nav {:style {:position :sticky
-                   :top "80px"
-                   :max-height "calc(100vh - 100px)"
-                   :overflow-y :auto}}
+                   :top "68px"
+                   :max-height "calc(100vh - 80px)"
+                   :overflow-y :auto
+                   :scrollbar-width :none}}
      [:div {:style {:display :flex
                     :flex-direction :column
-                    :gap "2px"}}
+                    :gap 0}}
       (for [doc docs]
         ^{:key (:slug doc)}
         [:a {:href (rfe/href :docs/page {:slug (:slug doc)})
-             :style {:font-size (t/sizes :xs)
+             :style {:font-size "0.75rem"
                      :color (if (= current-slug (:slug doc))
                               (t/colors :accent)
                               (t/colors :fg-dim))
                      :text-decoration :none
-                     :padding "5px 12px"
-                     :border-radius t/radius
+                     :padding "4px 10px"
                      :border-left (str "2px solid "
                                        (if (= current-slug (:slug doc))
                                          (t/colors :accent)
-                                         "transparent"))}}
+                                         "transparent"))
+                     :background (when (= current-slug (:slug doc))
+                                   "rgba(0, 255, 159, 0.04)")
+                     :line-height 1.5}}
          (:title doc)])]]))

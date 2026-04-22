@@ -14,25 +14,27 @@
 (defn toc [sections]
   (when (seq sections)
     [:nav {:style {:position :sticky
-                   :top "80px"}}
-     [:div {:style {:font-size (t/sizes :xxs)
+                   :top "68px"}}
+     [:div {:style {:font-size "0.6rem"
                     :text-transform :uppercase
-                    :letter-spacing "0.2em"
-                    :color (t/colors :accent)
-                    :margin-bottom "16px"
-                    :opacity 0.6}}
+                    :letter-spacing "0.15em"
+                    :color (t/colors :fg-dim)
+                    :margin-bottom "10px"
+                    :opacity 0.5}}
       "On this page"]
      [:div {:style {:display :flex
                     :flex-direction :column
-                    :gap "8px"}}
+                    :gap "3px"
+                    :border-left (str "1px solid " (t/colors :border))}}
       (for [{:keys [heading level]} sections]
         ^{:key heading}
         [:a {:href "javascript:void(0)"
              :on-click (scroll-to (heading->id heading))
-             :style {:font-size (t/sizes :xs)
+             :style {:font-size "0.7rem"
                      :color (t/colors :fg-dim)
                      :text-decoration :none
-                     :padding-left (str (* (- level 2) 12) "px")
-                     :border-left "1px solid transparent"
-                     :cursor :pointer}}
+                     :padding-left (str (+ 8 (* (- level 2) 10)) "px")
+                     :line-height 1.5
+                     :cursor :pointer
+                     :opacity 0.7}}
          heading])]]))
