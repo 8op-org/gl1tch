@@ -51,9 +51,8 @@
     heading]
    (into [:div] (map render-hiccup body))])
 
-(defn page []
-  (fn [slug]
-    (if-let [doc (content/doc-by-slug slug)]
+(defn page [slug]
+  (if-let [doc (content/doc-by-slug slug)]
       [:div {:style {:max-width "1280px"
                      :margin "0 auto"
                      :padding "80px 40px 0"
@@ -73,7 +72,7 @@
           ^{:key (:heading section)}
           [render-section section])]
        [:div [toc/toc (content/extract-toc doc)]]]
-      [:div.wrap [:h1 "Doc not found"]])))
+      [:div.wrap [:h1 "Doc not found"]]))
 
 (defn index []
   [:div.wrap {:style {:padding-top "80px"}}

@@ -2,7 +2,6 @@
 ;; Usage: glitch run workflows/site/generate-doc.glitch --param slug=getting-started
 
 (include "site/shared.glitch")
-(include "workflows/site-manifest.glitch")
 
 (step "context"
   (sh "cat bb/src/glitch/core.clj bb/src/glitch/dsl.clj 2>/dev/null || true"))

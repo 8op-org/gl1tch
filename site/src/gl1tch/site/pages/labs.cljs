@@ -3,9 +3,8 @@
             [gl1tch.site.pages.docs :as docs]
             [gl1tch.site.styles.theme :as t]))
 
-(defn page []
-  (fn [slug]
-    (if-let [lab (content/lab-by-slug slug)]
+(defn page [slug]
+  (if-let [lab (content/lab-by-slug slug)]
       [:div.wrap {:style {:padding-top "80px" :max-width "720px"}}
        [:h1 {:style {:margin-bottom "8px"}} (:title lab)]
        [:div {:style {:display :flex :gap "16px" :margin-bottom "40px"
@@ -32,7 +31,7 @@
                          :margin 0}}
             (:heading step)]]
           (into [:div] (map docs/render-hiccup (:body step)))])]
-      [:div.wrap [:h1 "Lab not found"]])))
+      [:div.wrap [:h1 "Lab not found"]]))
 
 (defn index []
   [:div.wrap {:style {:padding-top "80px"}}

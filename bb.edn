@@ -13,6 +13,8 @@
               :task (shell {:dir "site"} "npx shadow-cljs release app")}
   site:repl  {:doc "Connect nREPL to site dev server"
               :task (shell {:dir "site"} "npx shadow-cljs cljs-repl app")}
+  site:test  {:doc "Run site CLJS tests"
+              :task (shell {:dir "site"} "npx shadow-cljs compile test")}
   dev:setup   {:doc "Verify dev environment dependencies"
                :task (shell "glitch run dev/workflows/dev-setup.glitch")}
   dev:docs    {:doc "Generate documentation from source"

@@ -5,6 +5,12 @@
 (defn- heading->id [heading]
   (-> heading str/lower-case (str/replace #"[^a-z0-9]+" "-") (str/replace #"^-|-$" "")))
 
+(defn- scroll-to [id]
+  (fn [e]
+    (.preventDefault e)
+    (when-let [el (.getElementById js/document id)]
+      (.scrollIntoView el #js {:behavior "smooth" :block "start"}))))
+
 (defn toc [sections]
   (when (seq sections)
     [:nav {:style {:position :sticky
@@ -21,10 +27,12 @@
                     :gap "8px"}}
       (for [{:keys [heading level]} sections]
         ^{:key heading}
-        [:a {:href (str "#" (heading->id heading))
+        [:a {:href "javascript:void(0)"
+             :on-click (scroll-to (heading->id heading))
              :style {:font-size (t/sizes :xs)
                      :color (t/colors :fg-dim)
                      :text-decoration :none
                      :padding-left (str (* (- level 2) 12) "px")
-                     :border-left "1px solid transparent"}}
+                     :border-left "1px solid transparent"
+                     :cursor :pointer}}
          heading])]]))

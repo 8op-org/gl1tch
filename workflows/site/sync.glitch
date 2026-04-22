@@ -8,6 +8,13 @@
     done
     ```))
 
+(step "generate-labs"
+  (sh ```
+    for slug in repl-driven-docs; do
+      glitch run workflows/site/generate-lab.glitch --param slug=$slug
+    done
+    ```))
+
 (step "generate-changelog"
   (sh "glitch run workflows/site/generate-changelog.glitch --param date=$(date +%Y-%m-%d)"))
 
