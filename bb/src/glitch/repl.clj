@@ -1,7 +1,8 @@
 (ns glitch.repl
   "nREPL server with glitch DSL preloaded.
    Starts babashka.nrepl and writes .nrepl-port for CIDER."
-  (:require [babashka.nrepl.server :as nrepl]
+  (:require [babashka.classpath :as cp]
+            [babashka.nrepl.server :as nrepl]
             [clojure.java.io :as io]
             [glitch.core :as g]
             [glitch.provider :as prov]
@@ -22,6 +23,13 @@
                            dir (System/getProperty "user.dir")}}]
   (prov/load-providers)
   (plugin-loader/load-plugins)
+
+  ;; Add project-local source to classpath for require support
+  (let [local-src (io/file dir ".glitch" "src")]
+    (when (.isDirectory local-src)
+      (cp/add-classpath (.getAbsolutePath local-src))
+      (binding [*out* *err*]
+        (println (str "added " (.getAbsolutePath local-src) " to classpath")))))
 
   ;; Inject plugin commands as real namespaces for nREPL use
   (doseq [[pname pmap] (plugin/all-plugins)]
