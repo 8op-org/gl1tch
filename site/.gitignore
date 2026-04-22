@@ -1,5 +1,12 @@
 # build output
 dist/
+resources/public/js/
+out/
+
+# shadow-cljs
+.shadow-cljs/
+.cpcache/
+
 # generated types
 .astro/
 
