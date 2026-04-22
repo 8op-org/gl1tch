@@ -1,0 +1,41 @@
+{:title "Tool Use"
+ :description "How agentic LLM steps use tools to read, search, and run workflows"
+ :order 6
+ :sections
+ [{:heading "Agentic steps" :level 2
+   :body [[:p "When you set " [:code ":agentic true"] " on an LLM step, the model can call tools between rounds instead of returning a single response. The tool loop sends results back and lets the model iterate up to " [:code ":max-rounds"] " times (default 5)."]
+          [:code {:lang "clojure"} "(step \"investigate\"\n  (llm :provider \"copilot\"\n    :agentic true\n    :max-rounds 3\n    :prompt \"Find every public function in this repo that writes to disk\"))"]
+          [:p "Without " [:code ":agentic true"] ", tools run for one round only and the model must answer immediately after."]]}
+
+  {:heading "Available tools" :level 2
+   :body [[:p "Every agentic step receives the following tools automatically."]
+
+          [:p [:code "glitch_search"] " — Search code with ripgrep. Accepts a regex query, a path, optional glob filter, context lines, and match limit. Smart-case by default."]
+          [:code {:lang "clojure"} "(step \"find-errors\"\n  (llm :agentic true\n    :prompt \"Search for error handling patterns in bb/src/\"))"]
+
+          [:p [:code "glitch_symbols"] " — Search for symbol definitions (functions, types, classes) using language-aware patterns. Pass a query, a path, and an optional language hint."]
+
+          [:p [:code "glitch_read_file"] " — Read a file and return its first 200 lines. The model calls this to inspect files found via search."]
+
+          [:p [:code "glitch_run"] " — Execute a glitch workflow file. The model can compose workflows by calling other " [:code ".glitch"] " files with optional input and parameters."]
+
+          [:p [:code "glitch_eval"] " — Evaluate a Clojure expression via SCI and return the result. Useful for data transformation or quick computation mid-step."]
+
+          [:p [:code "glitch_check"] " — Check a workflow file for syntax errors before running it."]]}
+
+  {:heading "Code intelligence tools" :level 2
+   :body [[:p "When your repo is indexed (see " [:a {:href "/docs/code-intelligence"} "Code Intelligence"] "), three additional tools become available."]
+
+          [:p [:code "glitch_search_symbols"] " — Search indexed symbols by name, kind, language, or file path. Supports wildcards (e.g. " [:code "Index*"] "). Returns symbol definitions with file locations, signatures, and docstrings."]
+
+          [:p [:code "glitch_search_edges"] " — Search code relationships: calls, imports, contains, extends, implements, references. Supports BFS depth traversal for multi-hop queries."]
+
+          [:p [:code "glitch_symbol_context"] " — Get a symbol's full context: its definition plus all callers, callees, parent, children, and implementors in one call."]]}
+
+  {:heading "How the tool loop works" :level 2
+   :body [[:p "The tool loop follows the OpenAI function-calling protocol. Your provider sends a request with tool definitions attached. When the model returns " [:code "tool_calls"] " instead of text, glitch executes each call and sends results back as " [:code "tool"] " messages."]
+          [:p "In agentic mode, this continues until the model returns a text response or " [:code ":max-rounds"] " is reached. In single-round mode, tools run once and then a final text-only call is made."]
+          [:p "If the tool loop fails (e.g. the model hallucinates a tool name), glitch retries without tools so you always get a response."]]}
+
+  {:heading "Example: agentic research step" :level 2
+   :body [[:code {:lang "clojure"} "(workflow \"research\"\n  (step \"gather\"\n    (llm :provider \"copilot\"\n      :agentic true\n      :max-rounds 5\n      :prompt (str\n        \"You are a code researcher. Find all functions in this repo \"\n        \"that interact with Elasticsearch. List each with its file, \"\n        \"line number, and a one-line summary.\")))\n\n  (step \"summarize\"\n    (llm :provider \"copilot\"\n      :prompt (str\n        \"Summarize these findings into a table:\\n\"\n        (ref \"gather\")))))"]]}]}
