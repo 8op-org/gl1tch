@@ -10,7 +10,7 @@ class Glitch < Formula
   sha256 "__SHA__"
 
   def install
-    (share/"glitch/src").install Dir["src/**/*.{clj,cljs,cljc}"]
+    (share/"glitch").install "src"
     (share/"glitch/providers").install Dir["providers/*.clj"]
     (share/"glitch").install "ast-grep-rules"
 
