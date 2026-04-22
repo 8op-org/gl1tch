@@ -8,29 +8,22 @@
           [:p "Without " [:code ":agentic true"] ", tools run for one round only and the model must answer immediately after."]]}
 
   {:heading "Available tools" :level 2
-   :body [[:p "Every agentic step receives the following tools automatically."]
-
-          [:p [:code "glitch_search"] " — Search code with ripgrep. Accepts a regex query, a path, optional glob filter, context lines, and match limit. Smart-case by default."]
-          [:code {:lang "clojure"} "(step \"find-errors\"\n  (llm :agentic true\n    :prompt \"Search for error handling patterns in bb/src/\"))"]
-
-          [:p [:code "glitch_symbols"] " — Search for symbol definitions (functions, types, classes) using language-aware patterns. Pass a query, a path, and an optional language hint."]
-
-          [:p [:code "glitch_read_file"] " — Read a file and return its first 200 lines. The model calls this to inspect files found via search."]
-
-          [:p [:code "glitch_run"] " — Execute a glitch workflow file. The model can compose workflows by calling other " [:code ".glitch"] " files with optional input and parameters."]
-
-          [:p [:code "glitch_eval"] " — Evaluate a Clojure expression via SCI and return the result. Useful for data transformation or quick computation mid-step."]
-
-          [:p [:code "glitch_check"] " — Check a workflow file for syntax errors before running it."]]}
+   :body [[:p "Every agentic step receives the following tools automatically:"]
+          [:ul
+           [:li [:code "glitch_search"] " -- search code with ripgrep. Regex, glob filters, smart case."]
+           [:li [:code "glitch_symbols"] " -- find symbol definitions (functions, types, classes) using language-aware patterns."]
+           [:li [:code "glitch_read_file"] " -- read a file (first 200 lines). The model calls this to inspect files found via search."]
+           [:li [:code "glitch_run"] " -- execute a workflow file with optional input and parameters."]
+           [:li [:code "glitch_eval"] " -- evaluate a Clojure expression via SCI."]
+           [:li [:code "glitch_check"] " -- check a workflow file for syntax errors."]]
+          [:code {:lang "clojure"} "(step \"find-errors\"\n  (llm :agentic true\n    :prompt \"Search for error handling patterns in bb/src/\"))"]]}
 
   {:heading "Code intelligence tools" :level 2
-   :body [[:p "When your repo is indexed (see " [:a {:href "/docs/code-intelligence"} "Code Intelligence"] "), three additional tools become available."]
-
-          [:p [:code "glitch_search_symbols"] " — Search indexed symbols by name, kind, language, or file path. Supports wildcards (e.g. " [:code "Index*"] "). Returns symbol definitions with file locations, signatures, and docstrings."]
-
-          [:p [:code "glitch_search_edges"] " — Search code relationships: calls, imports, contains, extends, implements, references. Supports BFS depth traversal for multi-hop queries."]
-
-          [:p [:code "glitch_symbol_context"] " — Get a symbol's full context: its definition plus all callers, callees, parent, children, and implementors in one call."]]}
+   :body [[:p "When your repo is indexed (see " [:a {:href "/docs/code-intelligence"} "Code Intelligence"] "), three additional tools become available:"]
+          [:ul
+           [:li [:code "glitch_search_symbols"] " -- search indexed symbols by name, kind, language, or file path. Supports wildcards."]
+           [:li [:code "glitch_search_edges"] " -- search code relationships (calls, imports, contains, extends, implements, references) with BFS depth traversal."]
+           [:li [:code "glitch_symbol_context"] " -- get a symbol's full context: definition plus all callers, callees, parent, children, and implementors."]]]}
 
   {:heading "How the tool loop works" :level 2
    :body [[:p "The tool loop follows the OpenAI function-calling protocol. Your provider sends a request with tool definitions attached. When the model returns " [:code "tool_calls"] " instead of text, glitch executes each call and sends results back as " [:code "tool"] " messages."]

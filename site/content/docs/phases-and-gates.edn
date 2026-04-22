@@ -10,11 +10,12 @@
 
   {:heading "C.L.E.A.R. method" :level 2
    :body [[:p "C.L.E.A.R. is a structured review framework for LLM-generated content:"]
-          [:p [:code "C"] " -- Clarity: Is the writing explicit and easy to follow? Examples before explanation, no vague hand-waving."]
-          [:p [:code "L"] " -- Logic: Does the structure make sense? Are commands, flags, and code examples real and correct?"]
-          [:p [:code "E"] " -- Empathy: Review the content, not the writer. Frame issues as problems with the text, not the author."]
-          [:p [:code "A"] " -- Actionability: Every issue found must include a specific, immediately actionable fix."]
-          [:p [:code "R"] " -- Relevance: Content stays on-topic. No scope creep, no leaked internals."]
+          [:ul
+           [:li [:code "C"] " -- Clarity: Is the writing explicit and easy to follow? Examples before explanation, no vague hand-waving."]
+           [:li [:code "L"] " -- Logic: Does the structure make sense? Are commands, flags, and code examples real and correct?"]
+           [:li [:code "E"] " -- Empathy: Review the content, not the writer. Frame issues as problems with the text, not the author."]
+           [:li [:code "A"] " -- Actionability: Every issue found must include a specific, immediately actionable fix."]
+           [:li [:code "R"] " -- Relevance: Content stays on-topic. No scope creep, no leaked internals."]]
           [:code {:lang "clojure"} ";; Run a C.L.E.A.R. review as a sub-workflow\n(step \"reviewed\"\n  (call-workflow \"site-gate\"\n    :set {\"slug\" \"getting-started\"\n          \"content\" (ref \"draft\")\n          \"context\" (ref \"source-code\")}))"]]}
 
   {:heading "Grounding checks" :level 2

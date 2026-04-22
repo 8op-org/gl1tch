@@ -9,9 +9,10 @@
 
   {:heading "Three-phase pipeline" :level 2
    :body [[:p "The indexer runs in three phases:"]
-          [:p "Phase 1 extracts symbols from each file: functions, methods, structs, interfaces, classes, enums, traits, constants, and imports. Each symbol gets an ID, file location, kind, language, and signature."]
-          [:p "Phase 2 resolves cross-file relationships: imports are matched to their target symbols, and extends/implements declarations are linked to their parent types."]
-          [:p "Phase 3 resolves function calls and references across files, building a complete call graph."]
+          [:ul
+           [:li "Phase 1 extracts symbols from each file: functions, methods, structs, interfaces, classes, enums, traits, constants, and imports. Each symbol gets an ID, file location, kind, language, and signature."]
+           [:li "Phase 2 resolves cross-file relationships: imports are matched to their target symbols, and extends/implements declarations are linked to their parent types."]
+           [:li "Phase 3 resolves function calls and references across files, building a complete call graph."]]
           [:p "The result is two Elasticsearch indices per repo: " [:code "glitch-symbols-<repo>"] " for symbol definitions and " [:code "glitch-edges-<repo>"] " for relationships (calls, imports, contains, extends, implements, references, exports)."]]}
 
   {:heading "Query symbols" :level 2

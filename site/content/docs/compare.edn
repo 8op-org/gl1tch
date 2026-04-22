@@ -23,11 +23,13 @@
           [:code {:lang "clojure"} "(compare\n  (branch \"local\"\n    :provider \"lmstudio\" :model \"qwen3-8b\")\n  (branch \"copilot\"\n    :provider \"copilot\")\n  (branch \"claude\"\n    :provider \"claude\")\n\n  (review :criteria (\"completeness\" \"specificity\" \"accuracy\")\n    :judge \"lmstudio\"\n    :model \"qwen3-8b\"))"]
           [:p "Each " [:code "(branch ...)"] " runs the same workflow steps with its provider override. The " [:code "(review ...)"] " block scores branches against your criteria using a neutral judge and picks a winner automatically."]
           [:p "Planned CLI flags:"]
-          [:p [:code "--variant <provider>"] " -- inject an ad-hoc comparison branch without editing the workflow"]
-          [:p [:code "--compare"] " -- discover sibling variant workflows and cross-review them"]
-          [:p [:code "--review-criteria \"criteria\""] " -- override the review criteria from the command line"]]}
+          [:ul
+           [:li [:code "--variant <provider>"] " -- inject an ad-hoc comparison branch without editing the workflow"]
+           [:li [:code "--compare"] " -- discover sibling variant workflows and cross-review them"]
+           [:li [:code "--review-criteria \"criteria\""] " -- override the review criteria from the command line"]]]}
   {:heading "Tips"
    :level 2
-   :body [[:p [:strong "Use a local model as judge."] " The grader should be cheap and fast. " [:code "qwen3-8b"] " handles scoring well."]
-          [:p [:strong "Save results."] " Use " [:code "(save ...)"] " so you can compare across runs over time."]
-          [:p [:strong "Pin the grader."] " Always use an explicit " [:code ":provider"] " for the grading step so it doesn't escalate through tiers."]]}]}
+   :body [[:ul
+           [:li [:strong "Use a local model as judge."] " The grader should be cheap and fast. " [:code "qwen3-8b"] " handles scoring well."]
+           [:li [:strong "Save results."] " Use " [:code "(save ...)"] " so you can compare across runs over time."]
+           [:li [:strong "Pin the grader."] " Always use an explicit " [:code ":provider"] " for the grading step so it doesn't escalate through tiers."]]]}]}

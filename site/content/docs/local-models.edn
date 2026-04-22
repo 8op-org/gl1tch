@@ -28,10 +28,12 @@
 
   {:heading "When to use local vs cloud" :level 2
    :body [[:p "Use local models when:"]
-          [:p "- You need fast iteration on workflow development"]
-          [:p "- Your prompts contain sensitive code you cannot send to a cloud API"]
-          [:p "- You want to run workflows offline"]
+          [:ul
+           [:li "You need fast iteration on workflow development"]
+           [:li "Your prompts contain sensitive code you cannot send to a cloud API"]
+           [:li "You want to run workflows offline"]]
           [:p "Use cloud providers when:"]
-          [:p "- You need the highest quality output for content generation"]
-          [:p "- Your workflow relies on consensus across multiple providers"]
-          [:p "- The task requires a model with a large context window"]]}]}
+          [:ul
+           [:li "You need the highest quality output for content generation"]
+           [:li "Your workflow relies on consensus across multiple providers"]
+           [:li "The task requires a model with a large context window"]]]}]}

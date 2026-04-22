@@ -1,12 +1,32 @@
 {:title "REPL-Driven Docs"
  :slug "repl-driven-docs"
- :description "Build documentation from a live REPL session"
+ :description "Write documentation from a live REPL connected to your project"
  :date "2026-04-15"
  :duration "15min"
  :steps
- [{:heading "Connect your REPL"
-   :body [[:p "Start glitch with a REPL server:"]
-          [:code {:lang "bash"} "glitch repl --nrepl 7888"]]}
-  {:heading "Query your workflows"
-   :body [[:p "From Emacs, evaluate:"]
-          [:code {:lang "clojure"} "(glitch/list-workflows)"]]}]}
+ [{:heading "Start the REPL"
+   :body [[:p "Launch glitch with an nREPL server your editor can connect to:"]
+          [:code {:lang "bash"} "glitch repl --nrepl 7888"]
+          [:p "Connect from Emacs with " [:code "cider-connect"] ", or from VS Code with Calva. The REPL has the full glitch DSL available."]]}
+  {:heading "Explore your workflows"
+   :body [[:p "List all workflows discovered in your project:"]
+          [:code {:lang "clojure"} "(glitch/list-workflows)"]
+          [:p "Read a specific workflow:"]
+          [:code {:lang "clojure"} "(slurp \".glitch/workflows/hello.glitch\")"]]}
+  {:heading "Run a workflow from the REPL"
+   :body [[:p "Execute any workflow and get the result back as data:"]
+          [:code {:lang "clojure"} "(glitch/run \"hello\")"]
+          [:p "Pass input or parameters:"]
+          [:code {:lang "clojure"} "(glitch/run \"review\" :input \"42\" :set {\"repo\" \"gl1tch\"})"]]}
+  {:heading "Eval expressions live"
+   :body [[:p "Use " [:code "glitch/eval"] " to run DSL expressions directly:"]
+          [:code {:lang "clojure"} "(glitch/eval '(sh \"git\" \"log\" \"--oneline\" \"-5\"))"]
+          [:p "Compose with LLM calls:"]
+          [:code {:lang "clojure"} "(glitch/eval\n  '(llm :provider \"copilot\"\n       :prompt (str \"Summarize: \" (sh \"git diff --stat\"))))"]]}
+  {:heading "Generate a doc page"
+   :body [[:p "Combine REPL exploration with the site workflows to generate a doc page interactively:"]
+          [:code {:lang "bash"} "glitch run workflows/site/generate-doc.glitch --param slug=getting-started"]
+          [:p "Check the output:"]
+          [:code {:lang "bash"} "cat site/content/docs/getting-started.edn"]
+          [:p "Gate-check it:"]
+          [:code {:lang "bash"} "glitch run workflows/site/gate-syntax.glitch --param file=content/docs/getting-started.edn"]]}]}
