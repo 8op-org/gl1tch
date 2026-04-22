@@ -1,0 +1,35 @@
+{:title "Plugins"
+ :description "Extend glitch with reusable command plugins"
+ :order 5
+ :sections
+ [{:heading "What is a plugin"
+   :level 2
+   :body [[:p "A plugin is a directory of " [:code ".glitch"] " or " [:code ".clj"]
+           " files that registers new commands under a name. "
+           "Each file becomes a subcommand you can call from the CLI or from other workflows."]
+          [:code {:lang "bash"} "glitch plugin list\nglitch plugin github fetch-issue --repo my-org/my-repo"]
+          [:p "Plugins also work as top-level commands:"]
+          [:code {:lang "bash"} "glitch github fetch-issue --repo my-org/my-repo"]]}
+  {:heading "Creating a plugin"
+   :level 2
+   :body [[:p "Create a directory under " [:code ".glitch/plugins/"] " named after your plugin. "
+           "Add one " [:code ".glitch"] " file per subcommand:"]
+          [:code {:lang "bash"} "mkdir -p .glitch/plugins/github\ntouch .glitch/plugins/github/fetch-issue.glitch"]
+          [:p "Each file is a regular workflow. The first comment line becomes the command description. "
+           "Declare arguments with " [:code "(arg ...)"] " forms:"]
+          [:code {:lang "clojure"} ";; Fetch a GitHub issue by number\n(arg \"repo\" \"Owner/repo\" :required true)\n(arg \"number\" \"Issue number\" :required true)\n\n(workflow \"fetch-issue\"\n  (step \"issue\"\n    (sh \"gh\" \"issue\" \"view\" (param \"number\")\n         \"-R\" (param \"repo\") \"--json\" \"title,body\")))"]
+          [:p "Arguments become " [:code "--flags"] " on the CLI and are available via "
+           [:code "(param \"name\")"] " in your workflow."]]}
+  {:heading "Plugin discovery"
+   :level 2
+   :body [[:p "glitch looks for plugins in two places, checked in order:"]
+          [:code {:lang "bash"} ".glitch/plugins/     # project-local\n~/.config/glitch/plugins/  # global"]
+          [:p "Each subdirectory becomes a plugin. Files ending in " [:code ".glitch"]
+           " are loaded as workflow commands. Files ending in " [:code ".clj"]
+           " self-register using " [:code "defcommand"] " for more complex plugins."]]}
+  {:heading "Using plugins in workflows"
+   :level 2
+   :body [[:p "Call any registered plugin command from inside a workflow:"]
+          [:code {:lang "clojure"} "(workflow \"triage\"\n  (step \"issue\"\n    (plugin \"github\" \"fetch-issue\"\n      :repo \"my-org/my-repo\"\n      :number \"42\")))"]
+          [:p "Plugins are also exposed as SCI namespaces, so you can call them directly:"]
+          [:code {:lang "clojure"} "(github/fetch-issue :repo \"my-org/my-repo\" :number \"42\")"]]}]}

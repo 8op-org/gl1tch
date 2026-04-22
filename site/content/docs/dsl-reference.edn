@@ -1,0 +1,65 @@
+{:title "DSL Reference"
+ :description "Reference for all glitch workflow forms"
+ :order 3
+ :sections
+ [{:heading "Core forms"
+   :level 2
+   :body [[:p [:code "workflow"] " — top-level wrapper. Returns a map with " [:code ":name"] ", "
+           [:code ":output"] ", and " [:code ":steps"] "."]
+          [:code {:lang "clojure"} "(workflow \"name\"\n  (step ...)\n  (step ...))"]
+          [:p [:code "step"] " — evaluate a body and record the result under an id. "
+           "Supports " [:code ":expects"] " for contract validation."]
+          [:code {:lang "clojure"} "(step \"fetch\" (sh \"curl\" \"-s\" \"https://api.example.com/status\"))\n(step \"strict\"\n  (llm :prompt \"Return JSON\")\n  :expects {:json true :keys [\"status\"]})"]
+          [:p [:code "ref"] " — retrieve a previous step's output by id."]
+          [:code {:lang "clojure"} "(ref \"fetch\")"]
+          [:p [:code "input"] " — returns the input string passed on the CLI."]
+          [:p [:code "param"] " — returns a named parameter from " [:code "--set key=value"] "."]
+          [:code {:lang "clojure"} "(param \"repo\" \"default-value\")"]]}
+  {:heading "Execution"
+   :level 2
+   :body [[:p [:code "sh"] " — run a shell command, return stdout. Throws on non-zero exit."]
+          [:code {:lang "clojure"} "(sh \"git\" \"diff\" \"--stat\")"]
+          [:p [:code "llm"] " — call an LLM provider. Key options: " [:code ":prompt"] ", "
+           [:code ":provider"] ", " [:code ":model"] ", " [:code ":schema"] ", "
+           [:code ":retries"] ", " [:code ":min-confidence"] ", " [:code ":tools"] "."]
+          [:code {:lang "clojure"} "(llm :provider \"copilot\"\n     :prompt \"Explain this error\"\n     :schema {:required [\"explanation\" \"severity\"]\n              :types {\"severity\" :string}}\n     :retries 2)"]
+          [:p [:code "call-workflow"] " — invoke another workflow by name. Resolves from your "
+           [:code ".glitch/workflows/"] " directory."]
+          [:code {:lang "clojure"} "(call-workflow \"sub-task\" :input \"some data\" :set {\"key\" \"val\"})"]]}
+  {:heading "Control flow"
+   :level 2
+   :body [[:p [:code "retry"] " — retry a body N times before failing."]
+          [:code {:lang "clojure"} "(retry 3\n  (sh \"curl\" \"-sf\" \"https://flaky-api.example.com/health\"))"]
+          [:p [:code "with-timeout"] " — abort after N seconds."]
+          [:code {:lang "clojure"} "(with-timeout 30\n  (llm :prompt \"Analyze this large codebase...\"))"]
+          [:p [:code "par"] " — run forms concurrently and collect results."]
+          [:code {:lang "clojure"} "(par\n  (step \"a\" (sh \"make\" \"test\"))\n  (step \"b\" (sh \"make\" \"lint\")))"]
+          [:p [:code "gate"] " — record a boolean check. Does not throw on false."]
+          [:code {:lang "clojure"} "(gate \"has-tests\" (not (empty? (ref \"test-files\"))))"]
+          [:p [:code "phase"] " — group steps under a named phase for progress tracking."]
+          [:code {:lang "clojure"} "(phase \"setup\"\n  (step \"deps\" (sh \"npm\" \"install\")))"]]}
+  {:heading "Validation and confidence"
+   :level 2
+   :body [[:p [:code "grounded?"] " — verify a step's output against source context. "
+           "Throws in strict mode when claims are unsupported."]
+          [:code {:lang "clojure"} "(grounded? \"summary\" (slurp \"README.md\")\n  :provider \"copilot\" :strict true)"]
+          [:p [:code "consensus"] " — run the same prompt through multiple providers and compare. "
+           "Returns JSON with agreement status and confidence."]
+          [:code {:lang "clojure"} "(consensus [\"copilot\" \"openrouter\"]\n  :prompt \"What version of Go does this project use?\"\n  :schema {:required [\"version\"]}\n  :compare-key \"version\")"]
+          [:p [:code "validate"] " — validate a step's JSON output against a schema."]
+          [:code {:lang "clojure"} "(validate \"result\"\n  {:required [\"status\" \"count\"]\n   :types {\"count\" :number}})"]
+          [:p [:code "check-contract"] " — check output against constraints like "
+           [:code ":non-empty"] ", " [:code ":min-length"] ", " [:code ":json"] ", "
+           [:code ":matches"] "."]]}
+  {:heading "Utility"
+   :level 2
+   :body [[:p [:code "search"] " — search files with ripgrep. Returns matching lines."]
+          [:code {:lang "clojure"} "(search \"TODO\" :limit 5 :path \"./src\")"]
+          [:p [:code "save"] " — write content to a file (creates parent dirs)."]
+          [:code {:lang "clojure"} "(save \"output/report.md\" (ref \"report\"))"]
+          [:p [:code "read-file"] " / " [:code "write-file"] " — read or write files."]
+          [:p [:code "json-extract"] " — pull the first JSON object or array from a string, "
+           "stripping markdown fences and LLM noise."]
+          [:p [:code "search-symbols"] " / " [:code "search-edges"] " / "
+           [:code "symbol-context"] " — query your code intelligence index (requires "
+           [:a {:href "/docs/getting-started"} "Elasticsearch"] " running)."]]}]}
