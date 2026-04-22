@@ -101,8 +101,7 @@
 
 (defn run-sg
   "Run ast-grep on a file with a rule. Returns parsed JSON matches.
-   Each match has: :text :range :file :ruleId :language :labels etc.
-   Uses --json=stream which wraps each match in {\"type\":\"match\",\"data\":{...}}."
+   Each match has: :text :range :file :ruleId :language :labels etc."
   [rule-file source-file]
   (let [result (proc/shell {:out :string :err :string :continue true}
                            "sg" "scan" "--rule" rule-file
@@ -110,11 +109,14 @@
     (if (and (zero? (:exit result))
              (not (str/blank? (:out result))))
       (->> (str/split-lines (str/trim (:out result)))
-           (map #(json/parse-string % true))
-           ;; --json=stream wraps matches in {:type "match" :data {...}}
-           ;; Filter for match types and unwrap the data
-           (filter #(= "match" (:type %)))
-           (mapv :data))
+           (mapv #(json/parse-string % true))
+           ;; ast-grep >=0.38 emits matches directly as JSON objects;
+           ;; older versions wrapped them in {"type":"match","data":{...}}.
+           ;; Unwrap if needed, otherwise use as-is.
+           (mapv (fn [m]
+                   (if (= "match" (:type m))
+                     (:data m)
+                     m))))
       [])))
 
 ;; ---------------------------------------------------------------------------

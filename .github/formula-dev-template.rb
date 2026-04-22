@@ -7,11 +7,14 @@ class GlitchDev < Formula
   depends_on "babashka"
 
   def install
-    cd "bb" do
-      system "bb", "build"
-      bin.install "build/glitch"
-    end
+    (share/"glitch/src").install Dir["bb/src/**/*.{clj,cljs,cljc}"]
     (share/"glitch/providers").install Dir["bb/providers/*.clj"]
+    (share/"glitch").install "bb/resources/ast-grep-rules"
+
+    (bin/"glitch").write <<~SH
+      #!/bin/bash
+      exec bb -cp "#{share}/glitch/src" -m glitch.main "$@"
+    SH
   end
 
   def post_install

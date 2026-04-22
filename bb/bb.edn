@@ -1,27 +1,30 @@
 {:paths ["src" "providers"]
  :deps {}
  :tasks
- {build {:doc "Build the glitch uberscript"
-         :task (do (babashka.fs/create-dirs "build")
-                   (shell "bb uberscript build/glitch --main glitch.main")
-                   (spit "build/glitch.tmp"
-                     (str "#!/usr/bin/env bb\n" (slurp "build/glitch")))
-                   (babashka.fs/move "build/glitch.tmp" "build/glitch" {:replace-existing true})
-                   (shell "chmod +x build/glitch"))}
-  install {:doc "Install glitch to ~/.local/bin"
-           :depends [build]
-           :task (do (let [bin-dir (str (System/getProperty "user.home") "/.local/bin")]
-                       (babashka.fs/create-dirs bin-dir)
-                       (babashka.fs/copy "build/glitch" (str bin-dir "/glitch")
-                         {:replace-existing true}))
-                     (babashka.fs/create-dirs
-                       (str (System/getProperty "user.home") "/.config/glitch/providers"))
-                     (doseq [f (babashka.fs/glob "providers" "*.clj")]
-                       (babashka.fs/copy f
-                         (str (System/getProperty "user.home") "/.config/glitch/providers/"
-                              (babashka.fs/file-name f))
-                         {:replace-existing true}))
-                     (println "installed providers to ~/.config/glitch/providers/"))}
+ {install {:doc "Install glitch to ~/.local/bin via classpath wrapper"
+           :task (let [home     (System/getProperty "user.home")
+                       bin-dir  (str home "/.local/bin")
+                       lib-dir  (str home "/.local/share/glitch")
+                       src-dir  (str lib-dir "/src")
+                       rule-dir (str lib-dir "/ast-grep-rules")
+                       prov-dir (str home "/.config/glitch/providers")]
+                   ;; Copy source tree
+                   (babashka.fs/create-dirs src-dir)
+                   (shell "rsync" "-a" "--delete" "src/" src-dir)
+                   ;; Copy ast-grep rules
+                   (babashka.fs/create-dirs rule-dir)
+                   (shell "rsync" "-a" "--delete" "resources/ast-grep-rules/" rule-dir)
+                   ;; Write wrapper script
+                   (babashka.fs/create-dirs bin-dir)
+                   (spit (str bin-dir "/glitch")
+                     (str "#!/bin/bash\nexec bb -cp \"" src-dir "\" -m glitch.main \"$@\"\n"))
+                   (shell "chmod" "+x" (str bin-dir "/glitch"))
+                   ;; Copy providers
+                   (babashka.fs/create-dirs prov-dir)
+                   (doseq [f (babashka.fs/glob "providers" "*.clj")]
+                     (babashka.fs/copy f (str prov-dir "/" (babashka.fs/file-name f))
+                       {:replace-existing true}))
+                   (println "installed to" bin-dir))}
   test {:doc "Run tests"
         :task (shell "bb -cp src:test:providers -m glitch.test-runner")}
   clean {:doc "Clean build artifacts"

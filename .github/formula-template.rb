@@ -6,24 +6,26 @@ class Glitch < Formula
 
   depends_on "babashka"
 
-  on_macos do
-    url "__BASE_URL__/glitch___VERSION___darwin_arm64.tar.gz"
-    sha256 "__DARWIN_ARM64_SHA__"
-  end
-
-  on_linux do
-    if Hardware::CPU.arm?
-      url "__BASE_URL__/glitch___VERSION___linux_arm64.tar.gz"
-      sha256 "__LINUX_ARM64_SHA__"
-    else
-      url "__BASE_URL__/glitch___VERSION___linux_amd64.tar.gz"
-      sha256 "__LINUX_AMD64_SHA__"
-    end
-  end
+  url "__BASE_URL__/glitch___VERSION__.tar.gz"
+  sha256 "__SHA__"
 
   def install
-    bin.install "glitch"
+    (share/"glitch/src").install Dir["src/**/*.{clj,cljs,cljc}"]
+    (share/"glitch/providers").install Dir["providers/*.clj"]
     (share/"glitch").install "ast-grep-rules"
+
+    (bin/"glitch").write <<~SH
+      #!/bin/bash
+      exec bb -cp "#{share}/glitch/src" -m glitch.main "$@"
+    SH
+  end
+
+  def post_install
+    provider_dir = etc/"glitch/providers"
+    provider_dir.mkpath
+    (share/"glitch/providers").each_child do |f|
+      provider_dir.install_symlink f unless (provider_dir/f.basename).exist?
+    end
   end
 
   test do
