@@ -2,13 +2,15 @@
   (:require [reagent.dom :as rdom]
             [gl1tch.site.router :as router]
             [gl1tch.site.state :as state]
-            [gl1tch.site.styles.global :as styles]))
+            [gl1tch.site.styles.global :as styles]
+            [gl1tch.site.components.nav :as nav]))
 
 (defn current-page []
   (let [match @state/current-match
         name (get-in match [:data :name])]
     [:div.app
-     [:main
+     [nav/nav]
+     [:main {:style {:padding-top "52px"}}
       (case name
         :home [:div.wrap [:h1 "gl1tch"]]
         :docs/index [:div.wrap [:h1 "Docs"]]
