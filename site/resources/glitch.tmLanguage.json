@@ -1,0 +1,62 @@
+{
+  "name": "glitch",
+  "scopeName": "source.glitch",
+  "fileTypes": ["glitch"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#triple-backtick-string" },
+    { "include": "#keyword-arg" },
+    { "include": "#number" },
+    { "include": "#form-name" },
+    { "include": "#variable" },
+    { "include": "#paren" }
+  ],
+  "repository": {
+    "comment": {
+      "match": ";;.*$",
+      "name": "comment.line.semicolon.glitch"
+    },
+    "triple-backtick-string": {
+      "begin": "```",
+      "end": "```",
+      "name": "string.quoted.other.glitch",
+      "patterns": [
+        {
+          "match": "\\{\\{[^}]*\\}\\}",
+          "name": "variable.other.template.glitch"
+        }
+      ]
+    },
+    "string": {
+      "match": "\"(?:[^\"\\\\]|\\\\.)*\"",
+      "name": "string.quoted.double.glitch",
+      "patterns": [
+        {
+          "match": "\\{\\{[^}]*\\}\\}",
+          "name": "variable.other.template.glitch"
+        }
+      ]
+    },
+    "keyword-arg": {
+      "match": ":[a-zA-Z_][a-zA-Z0-9_-]*",
+      "name": "entity.other.attribute-name.glitch"
+    },
+    "number": {
+      "match": "\\b[0-9]+\\b",
+      "name": "constant.numeric.glitch"
+    },
+    "form-name": {
+      "match": "(?<=\\()\\s*(workflow|step|run|llm|phase|gate|retry|timeout|par|when|each|def|plugin|env)\\b",
+      "name": "keyword.control.glitch"
+    },
+    "variable": {
+      "match": "(?<=\\()\\s*[a-zA-Z_][a-zA-Z0-9_-]*",
+      "name": "entity.name.function.glitch"
+    },
+    "paren": {
+      "match": "[()]",
+      "name": "punctuation.paren.glitch"
+    }
+  }
+}
