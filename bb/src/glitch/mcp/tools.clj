@@ -66,4 +66,12 @@
     "inputSchema"
     {"type" "object"
      "properties"
-     {"path" {"type" "string" "description" "Directory to scan (default: .glitch/workflows/)"}}}}])
+     {"path" {"type" "string" "description" "Directory to scan (default: .glitch/workflows/)"}}}}
+
+   {"name" "glitch_recall"
+    "description" "Search for workflows by what they do, not by filename. Returns matching workflows with descriptions and paths. Use this to find workflows before running them with glitch_run."
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"query" {"type" "string" "description" "Natural language description of what you're looking for (e.g. 'summarize ES errors', 'fetch github issues')"}}
+     "required" ["query"]}}])

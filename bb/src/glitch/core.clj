@@ -16,6 +16,29 @@
 (def ^:dynamic *params* (atom {}))
 (def ^:dynamic *step-recorder* (atom nil))
 
+;; --- Session recording ---
+;; When *recording* is true (REPL mode), primitives emit entries to
+;; glitch.session/record! for ambient session capture.  Recording
+;; failures are silently swallowed so they never break user work.
+
+(def ^:dynamic *recording* false)
+
+(defn- record-entry!
+  "When session recording is active, send an entry to glitch.session/record!.
+   Silently catches any error so recording never breaks the user's work."
+  [type id args output duration tokens]
+  (when *recording*
+    (try
+      (let [record-fn (requiring-resolve 'glitch.session/record!)]
+        (record-fn {:type type
+                    :id id
+                    :args args
+                    :output output
+                    :duration duration
+                    :tokens tokens
+                    :timestamp (System/currentTimeMillis)}))
+      (catch Exception _ nil))))
+
 ;; --- Stderr trace logging ---
 
 (defn trace
@@ -67,7 +90,9 @@
         default)))
 
 (defn ref [step-id]
-  (get @*steps* step-id))
+  (let [val (get @*steps* step-id)]
+    (record-entry! :ref step-id [step-id] val nil nil)
+    val))
 
 (declare json-extract)
 
@@ -122,18 +147,23 @@
       (recorder {:step-id id :output val :kind "step"
                  :artifacts (when expects
                               (json/generate-string {:contract "pass"}))}))
+    (record-entry! :step id nil val nil nil)
     val))
 
 (def step _step)
 
 (defn sh [& args]
   (let [cmd    (str/join " " args)
+        start  (System/nanoTime)
         result (bp/shell {:out :string :err :string :continue true}
-                         "bash" "-c" cmd)]
+                         "bash" "-c" cmd)
+        elapsed (/ (- (System/nanoTime) start) 1e6)]
     (when (not= 0 (:exit result))
       (throw (ex-info (str "sh: command failed (exit " (:exit result) "): " (:err result))
                       {:cmd cmd :exit (:exit result) :err (:err result)})))
-    (str/trim (:out result))))
+    (let [out (str/trim (:out result))]
+      (record-entry! :sh cmd (vec args) out (Math/round elapsed) nil)
+      out)))
 
 (defn search
   "Search files with ripgrep. Returns matching lines with context.
@@ -141,10 +171,14 @@
   [query & {:keys [limit path] :or {limit 10}}]
   (let [search-path (or path (System/getProperty "user.dir"))
         cmd (str "rg -n -S -C 2 -m " limit " -- " (pr-str query) " " search-path)
+        start  (System/nanoTime)
         result (bp/shell {:out :string :err :string :continue true}
-                         "bash" "-c" cmd)]
+                         "bash" "-c" cmd)
+        elapsed (/ (- (System/nanoTime) start) 1e6)]
     (if (<= (:exit result) 1)
-      (or (str/trim (:out result)) "")
+      (let [out (or (str/trim (:out result)) "")]
+        (record-entry! :search query [query] out (Math/round elapsed) nil)
+        out)
       (throw (ex-info (str "search failed: " (:err result)) {})))))
 
 (defn save [path content]
@@ -413,6 +447,9 @@
                                  :tokens-out (or (:tokens-out result) 0)
                                  :artifacts (json/generate-string {:schema_valid true})
                                  :confidence conf-val}))
+                    (record-entry! :llm sid nil response (Math/round elapsed)
+                                   {:in (or (:tokens-in result) 0)
+                                    :out (or (:tokens-out result) 0)})
                     response)
                   ;; Confidence too low — retry or throw
                   (if (< attempt max-retries)
@@ -461,6 +498,9 @@
                          :duration (Math/round elapsed) :kind "llm"
                          :tokens-in (or (:tokens-in result) 0)
                          :tokens-out (or (:tokens-out result) 0)}))
+            (record-entry! :llm sid nil response (Math/round elapsed)
+                           {:in (or (:tokens-in result) 0)
+                            :out (or (:tokens-out result) 0)})
             response))))))
 
 ;; --- Grounding ---

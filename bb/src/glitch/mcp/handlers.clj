@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [glitch.core :as g]
             [glitch.index :as index]
+            [glitch.session :as session]
             [sci.core :as sci]))
 
 (defn- handle-run [arguments]
@@ -129,6 +130,17 @@
         (json/generate-string entries {:pretty true}))
       (json/generate-string [] {:pretty true}))))
 
+(defn- handle-recall [arguments]
+  (let [query   (get arguments "query")
+        results (session/recall-search query)]
+    (if (seq results)
+      (str/join "\n" (map (fn [r]
+                            (str (:path r "")
+                                 " — "
+                                 (:description r "")))
+                          results))
+      "No matching workflows found.")))
+
 (defn make-handler
   [_context]
   (let [sci-ctx (make-sci-ctx)]
@@ -141,4 +153,5 @@
         "glitch_search_edges"   (handle-search-edges arguments)
         "glitch_symbol_context" (handle-symbol-context arguments)
         "glitch_list_workflows" (handle-list-workflows arguments)
+        "glitch_recall"         (handle-recall arguments)
         (throw (ex-info (str "unknown tool: " tool-name) {}))))))

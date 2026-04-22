@@ -4,10 +4,108 @@
   (:require [babashka.classpath :as cp]
             [babashka.nrepl.server :as nrepl]
             [clojure.java.io :as io]
+            [clojure.pprint :as pp]
+            [clojure.string :as str]
             [glitch.core :as g]
             [glitch.provider :as prov]
             [glitch.plugin :as plugin]
-            [glitch.plugin-loader :as plugin-loader]))
+            [glitch.plugin-loader :as plugin-loader]
+            [glitch.session :as session]
+            [glitch.promote :as promote]))
+
+;; ---------------------------------------------------------------------------
+;; REPL-injected session, promote, recall functions
+;; ---------------------------------------------------------------------------
+
+(defn- session-summary
+  "Pretty-print a session summary: step count, types used, duration."
+  [entries]
+  (let [cnt    (count entries)
+        types  (->> entries (map :type) (remove nil?) distinct sort vec)
+        t0     (some :timestamp entries)
+        t1     (some :timestamp (reverse entries))
+        dur    (if (and t0 t1) (- t1 t0) 0)]
+    (pp/pprint {:steps cnt
+                :types types
+                :duration-ms dur
+                :session-id @session/*session-id*})))
+
+(defn repl-session
+  "Session inspector for the REPL.
+   (session)                           — print summary
+   (session :clear)                    — clear and restart session
+   (session :slice :from \"id\")         — set slice start
+   (session :slice :from \"a\" :to \"b\") — set slice range"
+  [& args]
+  (cond
+    (empty? args)
+    (session-summary (session/current-session))
+
+    (= :clear (first args))
+    (do (session/clear-session!)
+        (println "session cleared"))
+
+    (= :slice (first args))
+    (let [opts (apply hash-map (rest args))]
+      (session/set-slice! opts)
+      (println (str "slice set: " (pr-str opts))))
+
+    :else
+    (println (str "unknown session command: " (first args)))))
+
+(defn repl-promote
+  "Promote the current session into a .glitch workflow.
+   (promote \"description\")
+   (promote \"description\" :from \"step-a\" :to \"step-b\")"
+  [description & {:keys [from to] :as opts}]
+  (let [entries (session/get-slice)
+        result  (promote/promote! description
+                                  :session entries
+                                  :from from
+                                  :to to)
+        source  (:workflow-source result)
+        path    (:path result)]
+    (println "--- generated workflow ---")
+    (println source)
+    (println "---")
+    ;; nREPL does not support interactive read-line, so always save
+    (io/make-parents path)
+    (spit path source)
+    (session/index-workflow! {:path          path
+                              :description   description
+                              :promoted-from @session/*session-id*
+                              :tags          (:tags result)})
+    (println (str "saved to " path))
+    path))
+
+(defn repl-recall
+  "Search the workflow index.
+   (recall \"deploy\")
+   (recall \"deploy\" :run true)
+   (recall \"deploy\" :run true :input \"some input\")"
+  [query & {:keys [run input] :as opts}]
+  (let [results (session/recall-search query)]
+    (cond
+      (empty? results)
+      (println "no matching workflows found")
+
+      (= 1 (count results))
+      (let [r (first results)]
+        (pp/pprint r)
+        (when (and (:promoted-from r) (not (:path r)))
+          (println "hint: this is an unpromoted session — use (promote ...) to save as a workflow"))
+        (when (and run (:path r))
+          (println (str "running " (:path r) " ..."))
+          (g/call-workflow (-> (:path r)
+                               (str/replace #"\.glitch/workflows/" "")
+                               (str/replace #"\.(glitch|clj)$" ""))
+                           :input (or input ""))))
+
+      :else
+      (doseq [[i r] (map-indexed vector results)]
+        (println (str (inc i) ". " (:description r) " — " (:path r)))
+        (when (:promoted-from r)
+          (println (str "   (promoted from session " (:promoted-from r) ")")))))))
 
 (defn port-file-path
   "Return the .nrepl-port file path for a directory."
@@ -23,6 +121,10 @@
                            dir (System/getProperty "user.dir")}}]
   (prov/load-providers)
   (plugin-loader/load-plugins)
+
+  ;; Start session recording
+  (session/init-session!)
+  (alter-var-root #'g/*recording* (constantly true))
 
   ;; Add project-local source to classpath for require support
   (let [local-src (io/file dir ".glitch" "src")]
@@ -47,6 +149,11 @@
   ;; Inject glitch DSL into user namespace so no require is needed
   (binding [*ns* (the-ns 'user)]
     (refer 'glitch.core))
+
+  ;; Inject session, promote, recall into user namespace
+  (intern 'user 'session  repl-session)
+  (intern 'user 'promote  repl-promote)
+  (intern 'user 'recall   repl-recall)
 
   (let [port-file (io/file (port-file-path dir))]
     (spit port-file (str port))
