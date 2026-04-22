@@ -4,7 +4,10 @@
             [gl1tch.site.state :as state]
             [gl1tch.site.styles.global :as styles]
             [gl1tch.site.components.nav :as nav]
-            [gl1tch.site.pages.docs :as docs]))
+            [gl1tch.site.pages.home :as home]
+            [gl1tch.site.pages.docs :as docs]
+            [gl1tch.site.pages.labs :as labs]
+            [gl1tch.site.pages.changelog :as changelog]))
 
 (defn current-page []
   (let [match @state/current-match
@@ -14,12 +17,12 @@
      [nav/nav]
      [:main {:style {:padding-top "52px"}}
       (case name
-        :home [:div.wrap [:h1 "gl1tch"]]
+        :home [home/page]
         :docs/index [docs/index]
         :docs/page [docs/page slug]
-        :labs/index [:div.wrap [:h1 "Labs"]]
-        :labs/page [:div.wrap [:h1 (str "Lab: " slug)]]
-        :changelog [:div.wrap [:h1 "Changelog"]]
+        :labs/index [labs/index]
+        :labs/page [labs/page slug]
+        :changelog [changelog/page]
         [:div.wrap [:h1 "404"]])]]))
 
 (defn ^:export init []
