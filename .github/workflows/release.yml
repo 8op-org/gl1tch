@@ -9,57 +9,22 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            os: linux
-            arch: amd64
-          - runner: ubuntu-24.04-arm
-            os: linux
-            arch: arm64
-          - runner: macos-latest
-            os: darwin
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Babashka
-        run: |
-          curl -sLO https://raw.githubusercontent.com/babashka/babashka/master/install
-          chmod +x install
-          sudo ./install --dir /usr/local/bin
-      - name: Build uberscript
-        working-directory: bb
-        run: bb run build
-      - name: Package archive
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          ARCHIVE="glitch_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
-          cp -r bb/resources/ast-grep-rules bb/build/ast-grep-rules
-          tar czf "${ARCHIVE}" -C bb/build glitch ast-grep-rules
-          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: glitch-${{ matrix.os }}-${{ matrix.arch }}
-          path: ${{ env.ARCHIVE }}
-
-  publish:
-    needs: build
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: Generate checksums
+      - name: Package source archive
         run: |
-          cd artifacts
-          sha256sum glitch_*.tar.gz > checksums.txt
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="glitch_${VERSION}.tar.gz"
+          tar czf "${ARCHIVE}" \
+            -C bb src providers resources/ast-grep-rules
+          SHA=$(sha256sum "${ARCHIVE}" | awk '{print $1}')
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+          echo "SHA=${SHA}" >> "$GITHUB_ENV"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
       - name: Generate changelog
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
@@ -76,30 +41,19 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "glitch $GITHUB_REF_NAME" \
             --notes-file changelog.md \
-            artifacts/*
+            "${ARCHIVE}"
       - name: Generate Homebrew formula
-        env:
-          REF_NAME: ${{ github.ref_name }}
         run: |
-          VERSION="${REF_NAME#v}"
-          DARWIN_ARM64_SHA=$(grep "darwin_arm64" artifacts/checksums.txt | awk '{print $1}')
-          LINUX_ARM64_SHA=$(grep "linux_arm64" artifacts/checksums.txt | awk '{print $1}')
-          LINUX_AMD64_SHA=$(grep "linux_amd64" artifacts/checksums.txt | awk '{print $1}')
           BASE_URL="https://github.com/8op-org/gl1tch/releases/download/v${VERSION}"
-
           sed \
             -e "s|__VERSION__|${VERSION}|g" \
             -e "s|__BASE_URL__|${BASE_URL}|g" \
-            -e "s|__DARWIN_ARM64_SHA__|${DARWIN_ARM64_SHA}|g" \
-            -e "s|__LINUX_ARM64_SHA__|${LINUX_ARM64_SHA}|g" \
-            -e "s|__LINUX_AMD64_SHA__|${LINUX_AMD64_SHA}|g" \
+            -e "s|__SHA__|${SHA}|g" \
             .github/formula-template.rb > formula.rb
       - name: Update Homebrew tap
         env:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-          REF_NAME: ${{ github.ref_name }}
         run: |
-          VERSION="${REF_NAME#v}"
           WORK="$(mktemp -d)"
           git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/8op-org/homebrew-tap.git" "$WORK/tap"
           cd "$WORK/tap"
