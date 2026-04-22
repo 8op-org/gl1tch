@@ -1,0 +1,89 @@
+;; lab-gate.glitch — structural + voice gate for lab EDN files
+;;
+;; Validates lab content before it lands in the site.
+;; Params: --set slug=investigate-bug
+
+(workflow "lab-gate"
+  :description "Structural and voice quality gate for lab EDN files"
+
+  (step "gate-structure"
+    (sh "bb" "-e" (str
+      "(require '[cheshire.core :as json])"
+      "(let [slug \"" (param "slug") "\""
+      "      file (str \"site/content/labs/\" slug \".edn\")"
+      "      allowed-tags #{:p :code :a :strong :em :ul :ol :li}"
+      "      issues (atom [])"
+      "      add! (fn [msg] (swap! issues conj {\"category\" \"S\" \"fix\" msg}))]"
+      "  (if-not (.exists (java.io.File. file))"
+      "    (println (json/generate-string {\"pass\" false \"issues\" [{\"category\" \"S\" \"fix\" (str file \" does not exist\")}]}))"
+      "    (let [raw (slurp file)"
+      "          data (try (read-string raw) (catch Exception e :parse-error))]"
+      "      (if (= data :parse-error)"
+      "        (println (json/generate-string {\"pass\" false \"issues\" [{\"category\" \"S\" \"fix\" \"File is not valid EDN\"}]}))"
+      "        (do"
+      "          (when-not (:title data) (add! \"Missing required key :title\"))"
+      "          (when-not (:description data) (add! \"Missing required key :description\"))"
+      "          (when-not (:date data) (add! \"Missing required key :date\"))"
+      "          (when-not (:steps data) (add! \"Missing required key :steps\"))"
+      "          (when (sequential? (:steps data))"
+      "            (doseq [[i step] (map-indexed vector (:steps data))]"
+      "              (when-not (:heading step)"
+      "                (add! (str \"Step \" (inc i) \" missing :heading\")))"
+      "              (when-not (:body step)"
+      "                (add! (str \"Step \" (inc i) \" missing :body\")))"
+      "              (when (sequential? (:body step))"
+      "                (doseq [[j elem] (map-indexed vector (:body step))]"
+      "                  (when (vector? elem)"
+      "                    (let [tag (first elem)]"
+      "                      (when-not (contains? allowed-tags tag)"
+      "                        (add! (str \"Step \" (inc i) \", element \" (inc j) \": unknown tag \" tag \"; allowed: \" allowed-tags)))"
+      "                      (when (= tag :code)"
+      "                        (when-not (and (>= (count elem) 2) (map? (second elem)) (contains? (second elem) :lang))"
+      "                          (add! (str \"Step \" (inc i) \", element \" (inc j) \": :code element must have a map with :lang as second argument\"))))))))))"
+      "          (let [issues-val @issues]"
+      "            (println (json/generate-string {\"pass\" (empty? issues-val) \"issues\" issues-val}))))))))"
+    )))
+
+  (step "gate-voice"
+    (llm
+      :provider "openrouter"
+      :tools []
+      :format "json"
+      :prompt (str
+        "You are a lab content reviewer using C.L.E.A.R. adapted for labs.\n"
+        "Review the lab EDN file below for VOICE and FLOW quality.\n\n"
+        "Evaluate:\n\n"
+        "**Flow**: Steps must flow logically — each builds on the previous.\n"
+        "A reader should never wonder \"wait, why are we doing this now?\"\n\n"
+        "**No internal details**: No implementation internals leaking through.\n"
+        "Banned terms (fail immediately if present): Ollama, \"glitch ask\",\n"
+        "BubbleTea, tmux, OTel, SQLite.\n\n"
+        "**Real code**: Code blocks must contain real commands or expressions,\n"
+        "not pseudocode, placeholder comments, or hand-waving.\n\n"
+        "**Clarity**: Prose in :p elements should be explicit and easy to follow.\n"
+        "No jargon walls, no vague references.\n\n"
+        "LAB SLUG: " (param "slug") "\n\n"
+        "LAB CONTENT (EDN):\n"
+        (slurp (str "site/content/labs/" (param "slug") ".edn")) "\n\n"
+        "OUTPUT: A single JSON object, no markdown fence:\n"
+        "{\n"
+        "  \"pass\": true,\n"
+        "  \"issues\": []\n"
+        "}\n\n"
+        "If there are problems:\n"
+        "{\n"
+        "  \"pass\": false,\n"
+        "  \"issues\": [\n"
+        "    {\"category\": \"V\", \"fix\": \"specific actionable fix\"}\n"
+        "  ]\n"
+        "}\n\n"
+        "Only fail for real problems. Minor style preferences are not failures.")))
+
+  ;; Merge both gate results
+  (step "merged"
+    (let [structure (json/decode (json-extract (ref "gate-structure")))
+          voice (json/decode (json-extract (ref "gate-voice")))
+          all-issues (into [] (concat (or (get structure "issues") [])
+                                      (or (get voice "issues") [])))
+          passed (and (get structure "pass") (get voice "pass"))]
+      (json/encode {"pass" passed "issues" all-issues}))))

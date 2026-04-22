@@ -1,0 +1,34 @@
+{:title "Tiered Routing"
+ :slug "tiered-routing"
+ :description "Compare local and cloud models with cost-based fallback routing"
+ :date "2026-04-22"
+ :duration "10min"
+ :steps
+ [{:heading "Same prompt, three tiers"
+   :body [[:code {:lang "clojure"} ";; .glitch/workflows/tier-compare.glitch\n\n(step \"local\"\n  (llm :tier 0\n       :prompt \"Explain what a Kubernetes liveness probe does in one paragraph.\"))\n\n(step \"free-cloud\"\n  (llm :tier 1\n       :prompt \"Explain what a Kubernetes liveness probe does in one paragraph.\"))\n\n(step \"premium\"\n  (llm :tier 2\n       :prompt \"Explain what a Kubernetes liveness probe does in one paragraph.\"))"]
+          [:p "Tier 0 routes to your local LM Studio instance. Tier 1 uses free cloud providers like Copilot. Tier 2 reaches premium APIs like Claude or OpenRouter. Same prompt, three different cost profiles."]]}
+  {:heading "Compare the results"
+   :body [[:p "Add a step that compares all three outputs:"]
+          [:code {:lang "clojure"} "(step \"compare\"\n  (llm :tier 1\n       :prompt \"Rate these three explanations on accuracy and clarity (1-10 each).\n\nLocal model:\n```\n~(step local)\n```\n\nFree cloud:\n```\n~(step free-cloud)\n```\n\nPremium:\n```\n~(step premium)\n```\"))"]
+          [:code {:lang "bash"} "glitch workflow run tier-compare"]
+          [:p "This tells you when local is good enough and when you actually need to pay for a cloud model."]]}
+  {:heading "Let glitch pick"
+   :body [[:p "Omit " [:code ":tier"] " and " [:code ":provider"] " entirely:"]
+          [:code {:lang "clojure"} "(step \"auto\"\n  (llm :prompt \"Explain what a Kubernetes liveness probe does in one paragraph.\"))"]
+          [:p "When no tier is specified, glitch starts at tier 0 (local) and escalates if the local model is unavailable or if format validation fails. This is automatic cost optimization — you only pay for cloud when local can't deliver."]]}
+  {:heading "Force JSON validation"
+   :body [[:p "Add " [:code ":format \"json\""] " to trigger structural validation:"]
+          [:code {:lang "clojure"} "(step \"structured\"\n  (llm :prompt \"Return a JSON object with keys: concept, summary, use_case.\n       Topic: Kubernetes liveness probes.\"\n       :format \"json\"))"]
+          [:p "If the model returns text that doesn't parse as valid JSON, glitch re-routes to the next tier and tries again. The " [:code ":format"] " flag turns the LLM step into a validated step — the workflow won't proceed with broken output."]]}
+  {:heading "When to pin"
+   :body [[:p "Pin " [:code ":tier"] " and " [:code ":provider"] " when:"]
+          [:ul
+           [:li "You need deterministic costs (budgeted CI runs)"]
+           [:li "You are comparing models and need to control which one runs"]
+           [:li "A specific model handles your domain better (e.g., code review → premium)"]]
+          [:p "Let glitch pick when:"]
+          [:ul
+           [:li "You want the cheapest model that can produce valid output"]
+           [:li "You're running locally most of the time but want cloud fallback"]
+           [:li "You're prototyping and don't care which model answers"]]
+          [:p "Start unpinned. Pin later if you need control."]]}]}

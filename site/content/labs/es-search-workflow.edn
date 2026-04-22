@@ -1,0 +1,29 @@
+{:title "ES-Backed Search Workflow"
+ :slug "es-search-workflow"
+ :description "Index project docs into Elasticsearch and query them from workflows"
+ :date "2026-04-22"
+ :duration "20min"
+ :steps
+ [{:heading "Start Elasticsearch"
+   :body [[:code {:lang "bash"} "docker run -d --name es \\\n  -p 9200:9200 \\\n  -e \"discovery.type=single-node\" \\\n  -e \"xpack.security.enabled=false\" \\\n  docker.elastic.co/elasticsearch/elasticsearch:8.17.0"]
+          [:p "Wait a few seconds, then verify:"]
+          [:code {:lang "bash"} "curl -s localhost:9200 | jq .version.number"]
+          [:p "If you already have Elasticsearch running locally, skip this step."]]}
+  {:heading "Index your docs"
+   :body [[:p "This workflow finds all markdown files in your project and indexes each one with an embedding:"]
+          [:code {:lang "clojure"} ";; .glitch/workflows/index-docs.glitch\n\n(step \"find-docs\"\n  (run \"find . -name '*.md' -not -path './.git/*'\"))\n\n(each \"find-docs\"\n  (step \"index-doc\"\n    (index :index \"project-docs\"\n           :doc (run \"cat ~item\")\n           :embed :field \"content\"\n           :provider \"lmstudio\"\n           :model \"nomic-embed-text\")))"]
+          [:p "The " [:code "(each \"find-docs\" ...)"] " form iterates over each line of the find-docs output. Every markdown file gets indexed with a vector embedding of its content."]
+          [:code {:lang "bash"} "glitch workflow run index-docs"]]}
+  {:heading "Query from a workflow"
+   :body [[:p "Run a keyword search against your indexed docs:"]
+          [:code {:lang "clojure"} ";; .glitch/workflows/search-docs.glitch\n\n(step \"results\"\n  (search :index \"project-docs\"\n          :query {:match {:content \"~param.q\"}}))\n\n(step \"summarize\"\n  (llm :provider \"lmstudio\"\n       :model \"qwen3-8b\"\n       :prompt \"Answer the question based on these search results.\n\nQuestion: ~param.q\n\nResults:\n```\n~(step results)\n```\"))"]
+          [:code {:lang "bash"} "glitch workflow run search-docs --set q=\"how do I configure providers\""]]}
+  {:heading "Semantic search with embeddings"
+   :body [[:p "Replace the keyword match with a vector similarity search:"]
+          [:code {:lang "clojure"} "(step \"embed-query\"\n  (embed :input \"~param.q\"\n         :provider \"lmstudio\"\n         :model \"nomic-embed-text\"))\n\n(step \"results\"\n  (search :index \"project-docs\"\n          :query {:knn {:field \"embedding\"\n                        :query_vector \"~(step embed-query)\"\n                        :k 5}}))"]
+          [:p "This embeds your question with the same model used at index time, then finds the 5 nearest documents by cosine similarity. Semantic search catches meaning that keyword matching misses."]]}
+  {:heading "Build a Q&A workflow"
+   :body [[:p "Combine everything into a single workflow that searches your docs and answers questions:"]
+          [:code {:lang "clojure"} ";; .glitch/workflows/qa.glitch\n\n(step \"embed-query\"\n  (embed :input \"~param.q\"\n         :provider \"lmstudio\"\n         :model \"nomic-embed-text\"))\n\n(step \"results\"\n  (search :index \"project-docs\"\n          :query {:knn {:field \"embedding\"\n                        :query_vector \"~(step embed-query)\"\n                        :k 5}}))\n\n(step \"answer\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :prompt \"You are a project assistant. Answer the question using only the context provided.\nIf the context doesn't contain the answer, say so.\n\nQuestion: ~param.q\n\nContext:\n```\n~(step results)\n```\"))\n\n(save \"answers/latest.md\" :from \"answer\")"]
+          [:code {:lang "bash"} "glitch workflow run qa --set q=\"what providers are available\""]
+          [:p "You now have a project-specific Q&A system backed by your own docs. Re-run " [:code "index-docs"] " whenever your documentation changes to keep the index fresh."]]}]}

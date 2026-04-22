@@ -1,7 +1,7 @@
 ;; site-gate.glitch — C.L.E.A.R. content gate
 ;;
 ;; Called by site-write.glitch. Validates generated doc content.
-;; Params: slug, content, context
+;; Params: slug, content, context, content-type (optional: "lab" or "doc")
 ;;
 ;; C.L.E.A.R. = Clarity, Logic, Empathy, Actionability, Relevance
 
@@ -15,13 +15,15 @@
       :format "json"
       :prompt (str
         "You are a documentation reviewer using the C.L.E.A.R. method.\n"
-        "Review the content below for VOICE and STRUCTURE quality.\n\n"
+        "Review the EDN hiccup content below for VOICE and STRUCTURE quality.\n\n"
         "Evaluate these dimensions:\n\n"
         "**C - Clarity**: Is the writing explicit and easy to follow?\n"
         "Are examples shown before explanation? No vague hand-waving?\n\n"
-        "**L - Logic**: Does the structure make sense? Are headings\n"
-        "properly nested (## then ###)? Do cross-links use valid slugs\n"
-        "from the page list? Is there a logical flow from intro to details?\n\n"
+        "**L - Logic**: Does the structure make sense? Are sections\n"
+        "properly ordered? Do cross-links use valid slugs from the page list\n"
+        "(format: #/docs/slug or #/labs/slug)? Is there a logical flow\n"
+        "from intro to details? Is the EDN valid — proper use of keywords,\n"
+        "vectors, maps, and hiccup tags like [:p], [:code], [:a], [:ul]?\n\n"
         "**R - Relevance**: Does the content stay on-topic for the page slug?\n"
         "No scope creep into other pages? No internal implementation details\n"
         "leaking through (BubbleTea, tmux, SQLite, Go types, OTel)?\n\n"
@@ -50,11 +52,13 @@
       :format "json"
       :prompt (str
         "You are a documentation accuracy reviewer using the C.L.E.A.R. method.\n"
-        "Verify the content below against the real repo context.\n\n"
+        "Verify the EDN hiccup content below against the real repo context.\n\n"
         "Evaluate these dimensions:\n\n"
         "**L - Logic**: Does every command, flag, and code example\n"
         "actually exist in the repo context below? Are there any\n"
-        "hallucinated features, invented flags, or made-up commands?\n\n"
+        "hallucinated features, invented flags, or made-up commands?\n"
+        "Is the EDN structure valid — keywords prefixed with :, vectors\n"
+        "with [], maps with {}, hiccup elements as [:tag ...] vectors?\n\n"
         "**A - Actionability**: For each issue found, provide a specific\n"
         "fix with enough detail to act on immediately. Include what to\n"
         "replace the problematic text with.\n\n"

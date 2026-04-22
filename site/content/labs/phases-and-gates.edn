@@ -1,0 +1,25 @@
+{:title "Phases and Gates"
+ :slug "phases-and-gates"
+ :description "Build a pipeline with retry semantics and verification gates"
+ :date "2026-04-22"
+ :duration "15min"
+ :steps
+ [{:heading "A basic two-phase workflow"
+   :body [[:code {:lang "clojure"} ";; .glitch/workflows/phased.glitch\n\n(phase \"gather\" :retries 2\n  (step \"logs\"\n    (run \"git log --oneline -20\"))\n  (step \"status\"\n    (run \"git status --short\")))\n\n(phase \"process\" :retries 1\n  (step \"analyze\"\n    (llm :provider \"lmstudio\"\n         :model \"qwen3-8b\"\n         :format \"json\"\n         :prompt \"Summarize the repo state as JSON with keys: recent_commits, uncommitted_changes, health.\n\nCommit log:\n```\n~(step logs)\n```\n\nStatus:\n```\n~(step status)\n```\")))"]
+          [:p "Phases group related steps. If any step in a phase fails, the entire phase retries up to " [:code ":retries"] " times before the workflow aborts."]]}
+  {:heading "Add a gate"
+   :body [[:p "A gate runs after a phase completes and decides whether the output is acceptable:"]
+          [:code {:lang "clojure"} "(gate \"json-check\"\n  (run \"echo '~(step analyze)' | jq . > /dev/null 2>&1\"))"]
+          [:p "This gate pipes the LLM output through " [:code "jq"] ". If the JSON is malformed, the gate fails and the " [:code "process"] " phase retries."]]}
+  {:heading "Test the retry"
+   :body [[:code {:lang "bash"} "glitch workflow run phased"]
+          [:p "If the LLM returns invalid JSON on the first attempt, you will see the phase retry in your terminal output. The gate acts as a quality check — the workflow only moves forward when the output actually parses."]
+          [:p "Retries are cheap with local models. A " [:code ":retries 2"] " on the process phase gives the LLM three total attempts (one initial + two retries) to produce valid JSON."]]}
+  {:heading "Combine with timeout"
+   :body [[:p "Wrap the LLM step in a timeout so a hung model doesn't block your pipeline forever:"]
+          [:code {:lang "clojure"} "(phase \"process\" :retries 2\n  (step \"analyze\"\n    (timeout \"30s\"\n      (llm :provider \"lmstudio\"\n           :model \"qwen3-8b\"\n           :format \"json\"\n           :prompt \"Summarize the repo state as JSON with keys: recent_commits, uncommitted_changes, health.\n\nCommit log:\n```\n~(step logs)\n```\n\nStatus:\n```\n~(step status)\n```\"))))"]
+          [:p "If the model takes longer than 30 seconds, the step is killed and the phase retries with a fresh attempt."]]}
+  {:heading "The full pattern"
+   :body [[:p "Here is the complete workflow with both phases, the gate, timeout, and saves:"]
+          [:code {:lang "clojure"} ";; .glitch/workflows/phased.glitch\n\n(phase \"gather\" :retries 2\n  (step \"logs\"\n    (run \"git log --oneline -20\"))\n  (step \"status\"\n    (run \"git status --short\")))\n\n(phase \"process\" :retries 2\n  (step \"analyze\"\n    (timeout \"30s\"\n      (llm :provider \"lmstudio\"\n           :model \"qwen3-8b\"\n           :format \"json\"\n           :prompt \"Summarize the repo state as JSON with keys: recent_commits, uncommitted_changes, health.\n\nCommit log:\n```\n~(step logs)\n```\n\nStatus:\n```\n~(step status)\n```\"))))\n\n(gate \"json-check\"\n  (run \"echo '~(step analyze)' | jq . > /dev/null 2>&1\"))\n\n(save \"reports/repo-state.json\" :from \"analyze\")"]
+          [:p "This pattern — gather, process, gate, save — is the backbone of most glitch workflows. Start here and add complexity only when you need it."]]}]}

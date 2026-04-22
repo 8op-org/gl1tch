@@ -1,0 +1,24 @@
+{:title "Build a Code Review Pipeline"
+ :slug "code-review-pipeline"
+ :description "Chain shell data gathering with LLM analysis in a multi-step workflow"
+ :date "2026-04-22"
+ :duration "15min"
+ :steps
+ [{:heading "Create the workflow file"
+   :body [[:code {:lang "clojure"} ";; .glitch/workflows/code-review.glitch\n\n(step \"diff\"\n  (run \"git diff --cached\"))\n\n(step \"review\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :prompt \"Review this diff for bugs, style issues, and missed edge cases.\nBe specific — reference file names and line numbers.\n\n```\n~(step diff)\n```\"))\n\n(save \"reviews/latest.md\" :from \"review\")"]
+          [:p "This workflow has three moving parts: a shell step that grabs your staged diff, an LLM step that reviews it, and a save that writes the result to disk."]]}
+  {:heading "Run it on staged changes"
+   :body [[:p "Stage some files, then run:"]
+          [:code {:lang "bash"} "git add -p\nglitch workflow run code-review"]
+          [:p "The diff step captures exactly what you staged. The review step sends it to your LLM provider and streams the analysis back."]]}
+  {:heading "Inspect the output"
+   :body [[:code {:lang "bash"} "cat reviews/latest.md"]
+          [:p "Your review is a plain markdown file. Pipe it, commit it, paste it into a PR — it's just text."]]}
+  {:heading "Add a summary step"
+   :body [[:p "Chain a second LLM step that reads the full review and distills it:"]
+          [:code {:lang "clojure"} "(step \"summary\"\n  (llm :provider \"lmstudio\"\n       :model \"qwen3-8b\"\n       :prompt \"Condense this code review into a single sentence.\nKeep it under 100 words.\n\n```\n~(step review)\n```\"))"]
+          [:p "Because " [:code "~(step review)"] " references the output of the review step, glitch knows to run review first. You never wire execution order by hand — data dependencies handle it."]]}
+  {:heading "Save both outputs"
+   :body [[:p "Add a second save for the summary:"]
+          [:code {:lang "clojure"} "(save \"reviews/latest.md\" :from \"review\")\n(save \"reviews/latest-summary.txt\" :from \"summary\")"]
+          [:p "Now every run produces both the full review and a one-liner you can drop into a commit message or Slack thread."]]}]}

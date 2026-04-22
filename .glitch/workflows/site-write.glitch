@@ -1,24 +1,34 @@
-;; site-write.glitch — create or update a doc page
+;; site-write.glitch — create or update a doc page or lab
 ;;
 ;; Called by site.glitch router. Not typically run directly.
-;; Params: page (slug), instructions (freeform)
+;; Params: page (slug), instructions (freeform), content-type (optional: "lab" or "doc")
 ;;
 ;; Route: openrouter (fast JSON). Write: openrouter (reliable structured output).
 ;; Gate: openrouter (reliable JSON). Copilot reserved for agentic tool-use only.
 
 (workflow "site-write"
-  :description "Write or update a documentation page"
+  :description "Write or update a documentation page or lab in EDN hiccup format"
+
+  (step "content-type"
+    (or (param "content-type") "doc"))
+
+  (step "content-dir"
+    (if (= (ref "content-type") "lab")
+      "site/content/labs"
+      "site/content/docs"))
 
   (step "check-existing"
     (sh "bash" "-c"
-      (str "f='site/src/content/docs/" (param "page") ".md'; "
+      (str "f='" (ref "content-dir") "/" (param "page") ".edn'; "
            "if [ -f \"$f\" ]; then cat \"$f\"; else echo '__NEW_PAGE__'; fi")))
 
   (step "gather-context"
     (sh "bash" "-c"
       (str
-        "echo '=== DOC STUBS ==='; "
-        "for f in docs/site/*.md; do echo \"--- $f ---\"; cat \"$f\"; echo; done 2>/dev/null; "
+        "echo '=== EXISTING EDN DOCS ==='; "
+        "for f in site/content/docs/*.edn; do echo \"--- $f ---\"; head -5 \"$f\"; echo; done 2>/dev/null; "
+        "echo '=== EXISTING EDN LABS ==='; "
+        "for f in site/content/labs/*.edn; do echo \"--- $f ---\"; head -5 \"$f\"; echo; done 2>/dev/null; "
         "echo '=== EXAMPLES ==='; "
         "for f in examples/*.glitch; do echo \"--- $f ---\"; cat \"$f\"; echo; done 2>/dev/null; "
         "echo '=== SOURCE FILES ==='; "
@@ -29,13 +39,19 @@
         "for f in bb/providers/*.clj; do echo \"--- $f ---\"; head -20 \"$f\"; echo; done 2>/dev/null; "
         "echo '=== RECENT COMMITS ==='; "
         "git log --oneline -20 2>/dev/null; "
-        "echo '=== ALL PAGE SLUGS ==='; "
-        "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null")))
+        "echo '=== ALL DOC SLUGS ==='; "
+        "for f in site/content/docs/*.edn; do basename \"$f\" .edn; done 2>/dev/null; "
+        "echo '=== ALL LAB SLUGS ==='; "
+        "for f in site/content/labs/*.edn; do basename \"$f\" .edn; done 2>/dev/null")))
 
-  (step "existing-frontmatter"
+  (step "existing-metadata"
     (sh "bash" "-c"
-      (str "f='site/src/content/docs/" (param "page") ".md'; "
-           "if [ -f \"$f\" ]; then sed -n '/^---$/,/^---$/p' \"$f\"; else echo '__NONE__'; fi")))
+      (str "f='" (ref "content-dir") "/" (param "page") ".edn'; "
+           "if [ -f \"$f\" ]; then "
+           "bb -e '(let [d (read-string (slurp \"'\"$f\"'\"))] "
+           "(prn {:title (:title d) :order (:order d) :description (:description d) "
+           ":date (:date d) :duration (:duration d)}))'; "
+           "else echo '__NONE__'; fi")))
 
   (step "write"
     (llm
@@ -53,20 +69,45 @@
         "- no glitch ask — it has been decommissioned\n"
         "- no Ollama — LM Studio is the local LLM runtime\n\n"
         "TASK: " (param "instructions") "\n\n"
-        "PAGE SLUG: " (param "page") "\n\n"
+        "PAGE SLUG: " (param "page") "\n"
+        "CONTENT TYPE: " (ref "content-type") "\n\n"
         "EXISTING CONTENT (if updating — __NEW_PAGE__ means create from scratch):\n"
         (ref "check-existing") "\n\n"
         "REPO CONTEXT:\n" (ref "gather-context") "\n\n"
-        "OUTPUT: Return the complete markdown file including frontmatter:\n"
-        "---\n"
-        "title: \"Page Title\"\n"
-        "order: 5\n"
-        "description: \"one-line description\"\n"
-        "---\n\n"
-        "## First heading\n\n"
-        "Content here...\n\n"
-        "If updating, preserve existing title/order/description unless told otherwise.\n\n"
-        "EXISTING FRONTMATTER:\n" (ref "existing-frontmatter"))))
+        "EXISTING METADATA:\n" (ref "existing-metadata") "\n\n"
+        (if (= (ref "content-type") "lab")
+          (str
+            "OUTPUT FORMAT: Return a valid EDN map for a lab page.\n"
+            "The schema is:\n"
+            "{:title \"Lab Title\"\n"
+            " :description \"One-line description\"\n"
+            " :date \"2026-04-22\"\n"
+            " :duration \"15min\"\n"
+            " :steps\n"
+            " [{:heading \"Step Name\"\n"
+            "   :body [[:p \"Explanation text with \" [:code \"inline code\"] \" examples.\"]\n"
+            "          [:code {:lang \"clojure\"} \"(some-expression)\"]]}]}\n\n"
+            "If updating, preserve existing metadata (title, date, duration) unless told otherwise.\n"
+            "Return ONLY the EDN — no markdown fences, no preamble.")
+          (str
+            "OUTPUT FORMAT: Return a valid EDN map for a doc page.\n"
+            "The schema is:\n"
+            "{:title \"Page Title\"\n"
+            " :description \"One-line description\"\n"
+            " :order 5\n"
+            " :sections\n"
+            " [{:heading \"Section Name\"\n"
+            "   :level 2\n"
+            "   :body [[:p \"Text with \" [:code \"inline code\"] \" and \" [:a {:href \"#/docs/other\"} \"links\"]]\n"
+            "          [:code {:lang \"glitch\"} \"(step \\\"example\\\" (run \\\"echo hi\\\"))\"]]}]}\n\n"
+            "HICCUP ELEMENTS you can use:\n"
+            "- [:p \"text\" [:code \"inline\"] [:a {:href \"#/docs/slug\"} \"link text\"] [:strong \"bold\"] [:em \"italic\"]]\n"
+            "- [:code {:lang \"glitch\"} \"code block content\"] — for code blocks\n"
+            "- [:ul [:li \"item\"]] — for lists\n"
+            "- [:ol [:li \"item\"]] — for ordered lists\n\n"
+            "Cross-links between docs use #/docs/slug format.\n"
+            "If updating, preserve existing title/order/description unless told otherwise.\n"
+            "Return ONLY the EDN — no markdown fences, no preamble.")))))
 
   ;; Gate the content (openrouter for reliable JSON)
   (step "gate-result"
@@ -79,12 +120,15 @@
           "Check for:\n"
           "- Banned terms: Ollama, glitch ask, BubbleTea, tmux, OTel, SQLite\n"
           "- Hallucinated commands or flags\n"
-          "- Internal implementation details leaking\n\n"
-          "PAGE SLUG: " (param "page") "\n\n"
+          "- Internal implementation details leaking\n"
+          "- Valid EDN syntax (maps use {}, vectors use [], keywords use :prefix)\n"
+          "- Valid hiccup structure ([:tag attrs? children...])\n\n"
+          "PAGE SLUG: " (param "page") "\n"
+          "CONTENT TYPE: " (ref "content-type") "\n\n"
           "CONTENT:\n" content "\n\n"
           "Return JSON only: {\"pass\": true, \"issues\": []} or\n"
           "{\"pass\": false, \"issues\": [{\"category\": \"L\", \"fix\": \"description\"}]}\n"
-          "Only fail for factual errors, not style preferences."))))
+          "Only fail for factual errors or invalid EDN, not style preferences."))))
 
   ;; Save — log gate issues but don't block
   (step "save"
@@ -98,5 +142,5 @@
                           (map (fn [issue]
                                  (str "[" (get issue "category") "] " (get issue "fix")))
                                (get gate-out "issues")))))))
-      (save (str "site/src/content/docs/" (param "page") ".md") content)
-      (str "Wrote " (param "page") ".md"))))
+      (save (str (ref "content-dir") "/" (param "page") ".edn") content)
+      (str "Wrote " (param "page") ".edn"))))

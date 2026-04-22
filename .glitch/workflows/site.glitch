@@ -1,16 +1,20 @@
 ;; site.glitch — unified site workflow router
 ;;
 ;; Usage:
-;;   glitch run site "update getting-started to use janet syntax"
+;;   glitch run site "update getting-started to use babashka syntax"
 ;;   glitch run site "add a page about the par form"
 ;;   glitch run site "refresh all doc pages"
 ;;   glitch run site "start dev server"
+;;   glitch run site "create a lab about repl-driven workflows"
 
 (workflow "site"
   :description "Unified site workflow — routes freeform input to the right operation"
 
   (step "pages"
-    (sh "bash" "-c" "for f in site/src/content/docs/*.md; do basename \"$f\" .md; done 2>/dev/null || echo none"))
+    (sh "bash" "-c" "for f in site/content/docs/*.edn; do basename \"$f\" .edn; done 2>/dev/null || echo none"))
+
+  (step "labs"
+    (sh "bash" "-c" "for f in site/content/labs/*.edn; do basename \"$f\" .edn; done 2>/dev/null || echo none"))
 
   (step "route"
     (llm
@@ -20,18 +24,25 @@
         "You are a router for a documentation site workflow.\n\n"
         "The user said: " (input) "\n\n"
         "Existing doc page slugs:\n" (ref "pages") "\n\n"
+        "Existing lab slugs:\n" (ref "labs") "\n\n"
         "Classify the user's intent into exactly one action.\n"
         "Return a JSON object (no markdown fence, no preamble):\n\n"
-        "For updating the homepage (index.astro landing page):\n"
+        "For updating the homepage (ClojureScript landing page):\n"
         "{\"action\": \"homepage\", \"instructions\": \"what to do\"}\n\n"
         "For creating or updating a single doc page:\n"
         "{\"action\": \"write-page\", \"slug\": \"the-page-slug\", \"instructions\": \"what to do\"}\n\n"
+        "For creating or updating a lab:\n"
+        "{\"action\": \"lab\", \"slug\": \"the-lab-slug\", \"instructions\": \"what to do\"}\n\n"
+        "For gating (validating) a lab:\n"
+        "{\"action\": \"gate-lab\", \"slug\": \"the-lab-slug\"}\n\n"
         "For regenerating all pages:\n"
         "{\"action\": \"write-all\", \"instructions\": \"what to do\"}\n\n"
         "For starting the dev server:\n"
         "{\"action\": \"dev\"}\n\n"
         "Rules:\n"
         "- \"homepage\", \"landing page\", \"index\" → homepage\n"
+        "- \"lab\", \"walkthrough\", \"tutorial\" → lab\n"
+        "- \"gate lab\", \"validate lab\", \"check lab\" → gate-lab\n"
         "- If the user mentions a specific page, use its slug\n"
         "- If the page doesn't exist yet, invent a kebab-case slug from the topic\n"
         "- \"refresh\", \"regenerate\", \"update all\" → write-all\n"
@@ -59,6 +70,19 @@
                         (get result :output))))
                   ""
                   slugs))
+
+        (= action "lab")
+        (let [result (call-workflow "site-write"
+                       :set {"page" (get parsed "slug")
+                             "instructions" (get parsed "instructions")
+                             "content-type" "lab"})]
+          (get result :output))
+
+        (= action "gate-lab")
+        (let [result (call-workflow "site-gate"
+                       :set {"slug" (get parsed "slug")
+                             "content-type" "lab"})]
+          (get result :output))
 
         (= action "homepage")
         (let [result (call-workflow "site-homepage"

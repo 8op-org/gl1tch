@@ -1,0 +1,26 @@
+{:title "Investigating a Bug"
+ :slug "investigate-bug"
+ :description "Triage a GitHub issue using shell commands and LLM analysis"
+ :date "2026-04-22"
+ :duration "15min"
+ :steps
+ [{:heading "Fetch the issue"
+   :body [[:code {:lang "clojure"} ";; .glitch/workflows/investigate-bug.glitch\n\n(step \"issue\"\n  (run \"gh issue view ~param.issue --repo ~param.repo --json title,body,labels,assignees,comments\"))"]
+          [:code {:lang "bash"} "glitch workflow run investigate-bug --set repo=8op-org/gl1tch issue=42"]
+          [:p "The " [:code "gh issue view --json"] " flag returns structured data. This gives the LLM clean input rather than terminal-formatted text."]]}
+  {:heading "Gather context"
+   :body [[:p "Pull in related signals — recent PRs, commit history around the reported area, and linked issues:"]
+          [:code {:lang "clojure"} "(step \"recent-prs\"\n  (run \"gh pr list --repo ~param.repo --state merged --limit 10 --json title,number,mergedAt\"))\n\n(step \"recent-commits\"\n  (run \"gh api repos/~param.repo/commits?per_page=15 --jq '.[].commit.message'\"))\n\n(step \"linked-issues\"\n  (run \"gh issue list --repo ~param.repo --state open --label bug --json number,title --limit 10\"))"]
+          [:p "Each step runs independently. glitch executes them in parallel because none depends on another's output."]]}
+  {:heading "Triage with LLM"
+   :body [[:p "Feed everything to the LLM for a structured triage:"]
+          [:code {:lang "clojure"} "(step \"triage\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :format \"json\"\n       :prompt \"You are a senior engineer triaging a bug report.\n\nIssue:\n```\n~(step issue)\n```\n\nRecent merged PRs:\n```\n~(step recent-prs)\n```\n\nRecent commits:\n```\n~(step recent-commits)\n```\n\nRelated open bugs:\n```\n~(step linked-issues)\n```\n\nReturn JSON with keys:\n- severity: critical | high | medium | low\n- likely_cause: one sentence\n- related_prs: list of PR numbers that might be related\n- related_issues: list of issue numbers that look similar\n- confidence: 0-100\"))"]]}
+  {:heading "Check the code"
+   :body [[:p "Use the triage output to search for relevant source files:"]
+          [:code {:lang "clojure"} "(step \"relevant-files\"\n  (run \"git log --all --oneline --diff-filter=M -- '*.go' | head -20\"))\n\n(step \"code-context\"\n  (llm :provider \"lmstudio\"\n       :model \"qwen3-8b\"\n       :prompt \"Based on this bug triage, which of these recently modified files are most likely involved?\n\nTriage:\n```\n~(step triage)\n```\n\nRecently modified files:\n```\n~(step relevant-files)\n```\n\nList the top 3 files and explain why each is suspicious.\"))"]]}
+  {:heading "Propose next steps"
+   :body [[:p "Generate an investigation plan:"]
+          [:code {:lang "clojure"} "(step \"plan\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :prompt \"Given this bug triage and code context, write a concrete investigation plan.\n\nTriage:\n```\n~(step triage)\n```\n\nSuspicious files:\n```\n~(step code-context)\n```\n\nInclude:\n1. Exact commands to reproduce the bug\n2. Specific lines or functions to inspect\n3. A hypothesis to test first\n4. What to do if the hypothesis is wrong\"))"]]}
+  {:heading "Save the report"
+   :body [[:code {:lang "clojure"} "(save \"investigations/~param.issue-triage.json\" :from \"triage\")\n(save \"investigations/~param.issue-plan.md\" :from \"plan\")"]
+          [:p "You now have two artifacts: a structured JSON triage and a human-readable investigation plan. Open the plan, start debugging, and re-run the workflow as you learn more."]]}]}

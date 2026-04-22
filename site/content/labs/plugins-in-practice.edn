@@ -1,0 +1,29 @@
+{:title "Plugins in Practice"
+ :slug "plugins-in-practice"
+ :description "Use plugin subcommands to package reusable data-gathering steps"
+ :date "2026-04-22"
+ :duration "15min"
+ :steps
+ [{:heading "What's a plugin"
+   :body [[:code {:lang "clojure"} "(gh/issues :repo \"8op-org/gl1tch\" :state \"open\")"]
+          [:p "A plugin is a namespaced subcommand that gathers data. The " [:code "gh"] " prefix is the plugin name, " [:code "issues"] " is the subcommand. Plugins handle authentication, pagination, and output formatting so your workflows stay focused on analysis."]
+          [:p "The shorthand above is equivalent to the verbose form:"]
+          [:code {:lang "clojure"} "(plugin \"gh\" \"issues\" :repo \"8op-org/gl1tch\" :state \"open\")"]]}
+  {:heading "Use a plugin in a workflow"
+   :body [[:code {:lang "clojure"} ";; .glitch/workflows/issue-scan.glitch\n\n(step \"issues\"\n  (gh/issues :repo \"~param.repo\" :state \"open\"))\n\n(step \"triage\"\n  (llm :provider \"lmstudio\"\n       :model \"qwen3-8b\"\n       :prompt \"Categorize these open issues by theme.\nGroup related issues together and identify the top 3 priorities.\n\n```\n~(step issues)\n```\"))"]
+          [:code {:lang "bash"} "glitch workflow run issue-scan --set repo=8op-org/gl1tch"]
+          [:p "The plugin step fetches the raw data. The LLM step does the analysis. This separation keeps your pipeline predictable — the plugin always returns the same shape of data regardless of which model you use."]]}
+  {:heading "Verbose form"
+   :body [[:p "The shorthand and verbose forms are interchangeable. Use whichever reads better in context:"]
+          [:code {:lang "clojure"} ";; shorthand — clean, reads like a function call\n(step \"prs\"\n  (gh/pulls :repo \"~param.repo\" :state \"merged\" :limit 10))\n\n;; verbose — useful when building plugin names dynamically\n(step \"prs\"\n  (plugin \"gh\" \"pulls\" :repo \"~param.repo\" :state \"merged\" :limit 10))"]
+          [:p "Both produce identical output. The shorthand form is preferred in most workflows."]]}
+  {:heading "Chain plugin output with LLM"
+   :body [[:p "Plugins shine when you chain their output through multiple analysis steps:"]
+          [:code {:lang "clojure"} "(step \"issues\"\n  (gh/issues :repo \"~param.repo\" :state \"open\"))\n\n(step \"prs\"\n  (gh/pulls :repo \"~param.repo\" :state \"open\"))\n\n(step \"report\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :prompt \"Write a weekly project status report.\n\nOpen issues:\n```\n~(step issues)\n```\n\nOpen PRs:\n```\n~(step prs)\n```\n\nInclude: summary, blockers, and suggested focus for next week.\"))\n\n(save \"reports/weekly-status.md\" :from \"report\")"]
+          [:p "Two plugin calls gather data in parallel. One LLM step synthesizes everything into a report."]]}
+  {:heading "Pass parameters"
+   :body [[:code {:lang "bash"} "glitch workflow run issue-scan --set repo=8op-org/gl1tch"]
+          [:p "The " [:code "--set"] " flag injects runtime parameters. Inside your workflow, " [:code "~param.repo"] " resolves to whatever you pass on the command line."]
+          [:p "You can pass multiple parameters:"]
+          [:code {:lang "bash"} "glitch workflow run issue-scan --set repo=8op-org/gl1tch state=closed limit=50"]
+          [:p "Keep your workflows parameterized from the start. Hardcoded repo names make workflows brittle and non-reusable."]]}]}

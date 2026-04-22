@@ -1,0 +1,29 @@
+{:title "Shipping a Feature Request"
+ :slug "ship-feature-request"
+ :description "Break down a feature issue into tasks and generate a skeleton workflow"
+ :date "2026-04-22"
+ :duration "15min"
+ :steps
+ [{:heading "Fetch the feature request"
+   :body [[:code {:lang "clojure"} ";; .glitch/workflows/ship-feature.glitch\n\n(step \"feature\"\n  (run \"gh issue view ~param.issue --repo ~param.repo --json title,body,labels,comments\"))"]
+          [:code {:lang "bash"} "glitch workflow run ship-feature --set repo=8op-org/gl1tch issue=15"]
+          [:p "Start with the raw issue data. The " [:code "--json"] " flag gives you structured fields the LLM can parse cleanly."]]}
+  {:heading "Break into tasks"
+   :body [[:code {:lang "clojure"} "(step \"tasks\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :format \"json\"\n       :prompt \"Break this feature request into implementable tasks.\n\nFeature:\n```\n~(step feature)\n```\n\nReturn a JSON array of objects, each with:\n- id: short identifier (e.g. task-1)\n- title: one-line description\n- effort: small | medium | large\n- dependencies: list of task ids this depends on\n- acceptance_criteria: how to verify this task is done\n\nOrder tasks so dependencies come first.\"))"]
+          [:p "The " [:code ":format \"json\""] " flag ensures the output parses. If the model returns malformed JSON, glitch will retry or escalate to a higher tier."]]}
+  {:heading "Generate a skeleton workflow"
+   :body [[:p "Ask the LLM to produce a glitch workflow for the first task:"]
+          [:code {:lang "clojure"} "(step \"skeleton\"\n  (llm :provider \"copilot\"\n       :model \"claude-sonnet\"\n       :prompt \"Write a .glitch workflow file for the first task in this list.\n\nTasks:\n```\n~(step tasks)\n```\n\nThe workflow should use the glitch DSL:\n- (step \\\"id\\\" (run \\\"shell command\\\")) for shell steps\n- (step \\\"id\\\" (llm :provider \\\"lmstudio\\\" :model \\\"qwen3-8b\\\" :prompt \\\"...\\\")) for LLM steps\n- (save \\\"path\\\" :from \\\"step-id\\\") to write output\n- ~(step id) to reference another step's output\n\nReturn only the workflow code, no explanation.\"))"]]}
+  {:heading "Gate-check the workflow"
+   :body [[:p "Verify the generated workflow uses valid DSL syntax:"]
+          [:code {:lang "clojure"} "(gate \"syntax-check\"\n  (run \"glitch workflow lint <<'WORKFLOW'\n~(step skeleton)\nWORKFLOW\"))"]
+          [:p "The gate runs " [:code "glitch workflow lint"] " against the generated code. If the skeleton has syntax errors, the gate fails and the phase retries — giving the LLM another shot at producing valid DSL."]]}
+  {:heading "Run a dry pass"
+   :body [[:p "Write the skeleton to a temp file and execute it:"]
+          [:code {:lang "clojure"} "(save \".glitch/workflows/generated-task.glitch\" :from \"skeleton\")"]
+          [:code {:lang "bash"} "glitch workflow run generated-task"]
+          [:p "Inspect the output. Does each step produce reasonable data? Are the shell commands correct for your project? This is your feedback loop — read the output, tweak the workflow, run again."]]}
+  {:heading "Save and iterate"
+   :body [[:code {:lang "clojure"} "(save \"plans/~param.issue-tasks.json\" :from \"tasks\")\n(save \".glitch/workflows/~param.issue-impl.glitch\" :from \"skeleton\")"]
+          [:p "You have two artifacts: a task breakdown and a starter workflow. The workflow lives in " [:code ".glitch/workflows/"] " so you can run it directly."]
+          [:p "The iteration loop is: run the workflow, read the output, edit the " [:code ".glitch"] " file, run again. Each cycle takes seconds with a local model. Keep iterating until the workflow does what you need, then move on to the next task in your list."]]}]}

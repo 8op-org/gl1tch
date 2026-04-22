@@ -4,16 +4,20 @@
 ;;   glitch run site-homepage "update features to reflect tool-use providers"
 ;;
 ;; Uses the search index for context, openrouter for fast rewrite,
-;; grounded? for verification, Playwright for integration tests.
+;; grounded? for verification.
 
 (workflow "site-homepage"
-  :description "Update the gl1tch homepage (index.astro)"
+  :description "Update the gl1tch homepage (home.cljs)"
 
   (step "context"
     (str
       (search "providers tool-use workflow DSL" :limit 5)
-      "\n\n"
-      (read-file "site/src/pages/index.astro")))
+      "\n\n=== CURRENT HOMEPAGE ===\n"
+      (read-file "site/src/gl1tch/site/pages/home.cljs")
+      "\n\n=== SITE COMPONENTS ===\n"
+      (read-file "site/src/gl1tch/site/core.cljs")
+      "\n\n=== EDN DOC SAMPLES ===\n"
+      (sh "bash" "-c" "head -10 site/content/docs/getting-started.edn 2>/dev/null")))
 
   (step "rewrite"
     (llm
@@ -27,11 +31,12 @@
         "- Never mention: Ollama, tmux, BubbleTea, OTel, SQLite, 'glitch ask', 'glitch observe'\n"
         "- Voice: user-first, 'your' framing, examples before explanation\n"
         "- Every code example must use real DSL syntax from the context above\n"
+        "- This is a ClojureScript file using Reagent hiccup syntax\n"
         "- Keep all existing CSS class names exactly as they are\n"
-        "- Keep the Astro frontmatter exactly as-is\n"
+        "- Keep the namespace declaration (ns form) exactly as-is\n"
         "- Install command: brew install 8op-org/tap/glitch\n"
         "- Tagline: Shell does the work. LLM does the thinking. You own the workflow.\n\n"
-        "Return the complete updated file content for site/src/pages/index.astro.")))
+        "Return the complete updated file content for site/src/gl1tch/site/pages/home.cljs.")))
 
   (step "verify"
     (grounded? "rewrite" (ref "context")
@@ -39,11 +44,8 @@
       :strict false))
 
   (step "save"
-    (save "site/src/pages/index.astro" (ref "rewrite"))
+    (save "site/src/gl1tch/site/pages/home.cljs" (ref "rewrite"))
     "Saved homepage")
 
-  (step "playwright"
-    (sh "bash" "-c" "cd site && npx playwright test --reporter=line"))
-
   (step "dev"
-    (sh "bash" "-c" "cd site && npx astro dev --port 4322")))
+    (sh "bash" "-c" "cd site && npx shadow-cljs watch app")))

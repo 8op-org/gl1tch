@@ -6,27 +6,36 @@
  :steps
  [{:heading "Start the REPL"
    :body [[:p "Launch glitch with an nREPL server your editor can connect to:"]
-          [:code {:lang "bash"} "glitch repl --nrepl 7888"]
-          [:p "Connect from Emacs with " [:code "cider-connect"] ", or from VS Code with Calva. The REPL has the full glitch DSL available."]]}
+          [:code {:lang "bash"} "glitch repl"]
+          [:p "This starts an nREPL on port 1667 and writes " [:code ".nrepl-port"] " for your editor. Connect from Emacs with " [:code "cider-connect"] " (localhost 1667), or from VS Code with Calva."]
+          [:p "The REPL has the full glitch DSL injected into the " [:code "user"] " namespace — no require needed for core functions."]]}
   {:heading "Explore your workflows"
    :body [[:p "List all workflows discovered in your project:"]
-          [:code {:lang "clojure"} "(glitch/list-workflows)"]
+          [:code {:lang "clojure"} "(sh \"ls\" \".glitch/workflows/\")"]
           [:p "Read a specific workflow:"]
           [:code {:lang "clojure"} "(slurp \".glitch/workflows/hello.glitch\")"]]}
   {:heading "Run a workflow from the REPL"
-   :body [[:p "Execute any workflow and get the result back as data:"]
-          [:code {:lang "clojure"} "(glitch/run \"hello\")"]
-          [:p "Pass input or parameters:"]
-          [:code {:lang "clojure"} "(glitch/run \"review\" :input \"42\" :set {\"repo\" \"gl1tch\"})"]]}
-  {:heading "Eval expressions live"
-   :body [[:p "Use " [:code "glitch/eval"] " to run DSL expressions directly:"]
-          [:code {:lang "clojure"} "(glitch/eval '(sh \"git\" \"log\" \"--oneline\" \"-5\"))"]
-          [:p "Compose with LLM calls:"]
-          [:code {:lang "clojure"} "(glitch/eval\n  '(llm :provider \"copilot\"\n       :prompt (str \"Summarize: \" (sh \"git diff --stat\"))))"]]}
+   :body [[:p "Use " [:code "sh"] " to run any workflow through the router:"]
+          [:code {:lang "clojure"} "(sh \"glitch\" \"run\" \"hello\")"]
+          [:p "Pass parameters with " [:code "--set"] ":"]
+          [:code {:lang "clojure"} "(sh \"glitch\" \"run\" \"review\" \"--set\" \"repo=gl1tch\")"]]}
+  {:heading "Use the core primitives"
+   :body [[:p "Run a shell command and capture its output:"]
+          [:code {:lang "clojure"} "(sh \"git\" \"log\" \"--oneline\" \"-5\")"]
+          [:p "Call an LLM:"]
+          [:code {:lang "clojure"} "(llm :provider \"openrouter\" :prompt \"Summarize this project in one sentence\")"]
+          [:p "Create a named step and reference it later:"]
+          [:code {:lang "clojure"} "(step \"diff\" (sh \"git\" \"diff\" \"--stat\"))\n(step \"summary\" (llm :provider \"openrouter\"\n                      :prompt (str \"Summarize: \" (ref \"diff\"))))"]
+          [:p "Save output to a file:"]
+          [:code {:lang "clojure"} "(save \"out/summary.md\" (ref \"summary\"))"]]}
   {:heading "Generate a doc page"
-   :body [[:p "Combine REPL exploration with the site workflows to generate a doc page interactively:"]
-          [:code {:lang "bash"} "glitch run workflows/site/generate-doc.glitch --param slug=getting-started"]
+   :body [[:p "Use the site workflow router to generate a doc page interactively:"]
+          [:code {:lang "bash"} "glitch run site \"update getting-started\""]
           [:p "Check the output:"]
           [:code {:lang "bash"} "cat site/content/docs/getting-started.edn"]
-          [:p "Gate-check it:"]
-          [:code {:lang "bash"} "glitch run workflows/site/gate-syntax.glitch --param file=content/docs/getting-started.edn"]]}]}
+          [:p "Gate-check the lab:"]
+          [:code {:lang "bash"} "glitch run lab-gate --set slug=repl-driven-docs"]]}
+  {:heading "Capture a lab session"
+   :body [[:p "Use the " [:code "lab-capture"] " library to record a live REPL session as a lab EDN file:"]
+          [:code {:lang "clojure"} "(require '[lab-capture :as lab])\n(lab/start-lab \"my-lab\" {:title \"My Lab\" :description \"Testing\" :duration \"10min\"})\n(lab/record! \"First step\" (sh \"echo\" \"hello\"))\n(lab/save-lab!)"]
+          [:p "This writes " [:code "site/content/labs/my-lab.edn"] " with each recorded step captured as EDN data."]]}]}

@@ -1,13 +1,13 @@
-;; site-dev.glitch — start astro dev server
+;; site-dev.glitch — start shadow-cljs dev server
 ;;
 ;; Called by site.glitch router or run directly:
 ;;   glitch run site-dev
 
 (workflow "site-dev"
-  :description "Start the astro dev server"
+  :description "Start the shadow-cljs dev server"
 
   (step "ensure-dirs"
-    (sh "bash" "-c" "mkdir -p site/generated"))
+    (sh "bash" "-c" "mkdir -p site/resources/public"))
 
   (step "dev"
-    (sh "bash" "-c" "cd site && npx astro dev --port 4322")))
+    (sh "bash" "-c" "cd site && npx shadow-cljs watch app")))
