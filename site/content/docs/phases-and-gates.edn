@@ -1,0 +1,40 @@
+{:title "Phases and Gates"
+ :description "Verify LLM output with C.L.E.A.R. gates, grounding checks, and multi-provider consensus"
+ :order 9
+ :sections
+ [{:heading "Gates" :level 2
+   :body [[:p "A gate is a boolean checkpoint in your workflow. If the predicate is false, you can branch, retry, or halt."]
+          [:code {:lang "clojure"} "(step \"draft\"\n  (llm :provider \"copilot\"\n    :prompt \"Write release notes for v2.1\"))\n\n(gate \"length-ok\" (> (count (ref \"draft\")) 200))\n(gate \"no-jargon\" (not (re-find #\"(?i)refactor|tech debt\" (ref \"draft\"))))"]
+          [:p "Gates record their result so you can inspect pass/fail status for every run. Combine gates with " [:code "retry"] " to automatically re-prompt on failure:"]
+          [:code {:lang "clojure"} "(retry 2\n  (step \"draft\"\n    (llm :prompt \"Write release notes. No jargon.\"))\n  (gate \"no-jargon\" (not (re-find #\"(?i)refactor|tech debt\" (ref \"draft\")))))"]]}
+
+  {:heading "C.L.E.A.R. method" :level 2
+   :body [[:p "C.L.E.A.R. is a structured review framework for LLM-generated content:"]
+          [:ul
+           [:li [:code "C"] " -- Clarity: Is the writing explicit and easy to follow? Examples before explanation, no vague hand-waving."]
+           [:li [:code "L"] " -- Logic: Does the structure make sense? Are commands, flags, and code examples real and correct?"]
+           [:li [:code "E"] " -- Empathy: Review the content, not the writer. Frame issues as problems with the text, not the author."]
+           [:li [:code "A"] " -- Actionability: Every issue found must include a specific, immediately actionable fix."]
+           [:li [:code "R"] " -- Relevance: Content stays on-topic. No scope creep, no leaked internals."]]
+          [:code {:lang "clojure"} ";; Run a C.L.E.A.R. review as a sub-workflow\n(step \"reviewed\"\n  (call-workflow \"site-gate\"\n    :set {\"slug\" \"getting-started\"\n          \"content\" (ref \"draft\")\n          \"context\" (ref \"source-code\")}))"]]}
+
+  {:heading "Grounding checks" :level 2
+   :body [[:p "Grounding verifies that a step's output is factually supported by provided context. It catches hallucinated commands, invented flags, and made-up features."]
+          [:code {:lang "clojure"} "(step \"docs\"\n  (llm :prompt (str \"Document the CLI flags:\\n\" (ref \"help-output\"))))\n\n;; Verify against the actual help output\n(grounded? \"docs\" (ref \"help-output\"))"]
+          [:p "By default, " [:code "grounded?"] " throws on failure. Set " [:code ":strict false"] " to get a boolean instead:"]
+          [:code {:lang "clojure"} "(grounded? \"docs\" (ref \"help-output\") :strict false)"]
+          [:p "You can also set " [:code ":max-unsupported 1"] " to tolerate minor inferences while catching outright fabrication."]]}
+
+  {:heading "Multi-provider consensus" :level 2
+   :body [[:p "When accuracy matters, run the same prompt through multiple providers and compare their answers."]
+          [:code {:lang "clojure"} "(step \"answer\"\n  (consensus [\"copilot\" \"claude\" \"openrouter\"]\n    :prompt \"What is the default port for Elasticsearch?\"\n    :schema {:required [\"port\" \"confidence\"]}\n    :compare-key \"port\"))"]
+          [:p "Consensus returns a JSON result with " [:code "agreed"] " (boolean), " [:code "value"] " (the agreed answer), " [:code "confidence"] " (Bayesian-combined score), and " [:code "votes"] " (each provider's response and authority weight)."]
+          [:p "Each provider has a trust weight: claude (0.95), copilot (0.90), openrouter (0.85), lmstudio (0.65). These weights feed into the Bayesian confidence calculation."]]}
+
+  {:heading "Schema validation and contracts" :level 2
+   :body [[:p "Force LLM output into a specific shape with schemas and contracts. The LLM is re-prompted automatically on failure when " [:code ":retries"] " is set."]
+          [:code {:lang "clojure"} "(step \"classify\"\n  (llm :provider \"lmstudio\"\n    :retries 2\n    :schema {:required [\"severity\" \"category\" \"confidence\"]\n             :types {\"severity\" :string \"confidence\" :number}\n             :enum {\"severity\" [\"low\" \"medium\" \"high\" \"critical\"]}}\n    :min-confidence 0.7\n    :prompt \"Classify this alert:\\n...\"))"]
+          [:p "You can also apply contracts to any step output with " [:code ":expects"] ":"]
+          [:code {:lang "clojure"} "(step \"summary\"\n  (llm :prompt \"Summarize the report\")\n  :expects {:non-empty true\n            :min-length 100\n            :max-length 5000})"]
+          [:p "Use " [:code "validate"] " to check a step after the fact:"]
+          [:code {:lang "clojure"} "(validate \"classify\"\n  {:required [\"severity\"]\n   :types {\"severity\" :string}})"]]}]}

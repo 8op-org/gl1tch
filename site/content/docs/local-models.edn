@@ -1,0 +1,39 @@
+{:title "Local Models"
+ :description "Run workflows against local LLMs with LM Studio"
+ :order 7
+ :sections
+ [{:heading "LM Studio setup" :level 2
+   :body [[:p "LM Studio is the local LLM runtime for glitch. Download it from " [:a {:href "https://lmstudio.ai"} "lmstudio.ai"] ", load a model, and start the local server. Glitch connects to the OpenAI-compatible API on port 1234 by default."]
+          [:code {:lang "bash"} "# Verify LM Studio is running\ncurl http://localhost:1234/v1/models"]
+          [:p "To use a custom address, set the " [:code "LMSTUDIO_BASE_URL"] " environment variable:"]
+          [:code {:lang "bash"} "export LMSTUDIO_BASE_URL=http://localhost:1234"]]}
+
+  {:heading "Choosing models" :level 2
+   :body [[:p "Different tasks call for different model sizes."]
+          [:p "For operational steps (shell commands, data extraction, structured JSON), a small model like " [:code "gemma4"] " works well. It responds quickly and follows schemas reliably."]
+          [:p "For content generation (writing docs, summarizing research, drafting reports), use a larger model to get better prose quality."]
+          [:code {:lang "clojure"} ";; Fast operational step with a small model\n(step \"extract\"\n  (llm :provider \"lmstudio\"\n    :model \"gemma4\"\n    :prompt \"Extract all function names from this output:\\n...\"\n    :schema {:required [\"functions\"]\n             :types {\"functions\" :array}}))\n\n;; Content step with a larger model\n(step \"draft\"\n  (llm :provider \"lmstudio\"\n    :model \"qwen2.5-coder-14b\"\n    :prompt \"Write a summary of these findings...\"))"]]}
+
+  {:heading "Provider configuration" :level 2
+   :body [[:p "The " [:code "lmstudio"] " provider is registered automatically. When you omit " [:code ":provider"] " from an LLM call, glitch tries " [:code "lmstudio"] " as the default and falls back through the provider tiers if it fails."]
+          [:p "The tier order is: " [:code "copilot"] " > " [:code "claude"] " > " [:code "openrouter"] " > " [:code "lmstudio"] ". To force a specific provider, set it explicitly:"]
+          [:code {:lang "clojure"} "(llm :provider \"lmstudio\"\n  :model \"gemma4\"\n  :prompt \"Classify this log line\")"]
+          [:p "To override the default tier list for a run:"]
+          [:code {:lang "bash"} "glitch run my-workflow --provider lmstudio --model gemma4"]]}
+
+  {:heading "Tool use with local models" :level 2
+   :body [[:p "Local models support tool calling through the same OpenAI-compatible function-calling protocol as cloud providers. When " [:code ":agentic true"] " is set, glitch sends tool definitions to LM Studio and processes tool calls in the same loop."]
+          [:code {:lang "clojure"} "(step \"explore\"\n  (llm :provider \"lmstudio\"\n    :model \"gemma4\"\n    :agentic true\n    :prompt \"Find all test files in this repo\"))"]
+          [:p "If the model fails to use tools correctly, glitch automatically retries without tools and returns a plain text response."]]}
+
+  {:heading "When to use local vs cloud" :level 2
+   :body [[:p "Use local models when:"]
+          [:ul
+           [:li "You need fast iteration on workflow development"]
+           [:li "Your prompts contain sensitive code you cannot send to a cloud API"]
+           [:li "You want to run workflows offline"]]
+          [:p "Use cloud providers when:"]
+          [:ul
+           [:li "You need the highest quality output for content generation"]
+           [:li "Your workflow relies on consensus across multiple providers"]
+           [:li "The task requires a model with a large context window"]]]}]}

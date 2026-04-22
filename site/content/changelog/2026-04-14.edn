@@ -1,0 +1,14 @@
+{:date "2026-04-14"
+ :entries
+ [{:type :feat :summary "plugin system -- discovery, manifest parsing, CLI dispatch, SDK forms, and end-to-end integration tests"}
+  {:type :feat :summary "6 sexpr control-flow forms: retry, timeout, let, catch, cond, map"}
+  {:type :feat :summary "workspace-aware workflow resolution with config override and --workspace flag"}
+  {:type :feat :summary "agent executor with skill injection"}
+  {:type :feat :summary "smart provider routing -- RunSmart escalation loop with structural validation and self-eval"}
+  {:type :feat :summary "Kibana dashboard visualizations: model leaderboard, cross-review charts, tier distribution, cost savings"}
+  {:type :feat :summary "parallel variant execution per issue using goroutines"}
+  {:type :feat :summary "site migration to Astro with doc generation workflow"}
+  {:type :feat :summary "observer searches knowledge indices and supports any LLM provider"}
+  {:type :fix :summary "triple-gate verification fixes and first successful site generation"}
+  {:type :fix :summary "template expression rendering in plugin call args"}
+  {:type :fix :summary "parseWorkflowName uses last segment as comparison_group instead of hardcoded list"}]}

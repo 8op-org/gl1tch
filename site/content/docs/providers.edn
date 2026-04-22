@@ -1,0 +1,51 @@
+{:title "Providers"
+ :description "Configure and switch between LLM providers"
+ :order 4
+ :sections
+ [{:heading "How providers work"
+   :level 2
+   :body [[:p "A provider is a small adapter that connects glitch to an LLM backend. "
+           "Four providers ship out of the box: "
+           [:code "lmstudio"] ", " [:code "copilot"] ", " [:code "openrouter"] ", and " [:code "claude"] "."]
+          [:p "Set your default provider on the CLI:"]
+          [:code {:lang "bash"} "glitch run workflow.glitch --provider copilot"]
+          [:p "Or specify it per-step inside your workflow:"]
+          [:code {:lang "clojure"} "(step \"draft\"\n  (llm :provider \"openrouter\"\n       :model \"google/gemma-3-12b-it\"\n       :prompt \"Draft a changelog entry\"))"]]}
+  {:heading "LM Studio"
+   :level 2
+   :body [[:p [:code "lmstudio"] " is the default provider. It talks to a local LM Studio server "
+           "over the OpenAI-compatible API."]
+          [:p "Set the base URL if your server is not on the default port:"]
+          [:code {:lang "bash"} "export LMSTUDIO_BASE_URL=http://localhost:1234"]
+          [:p "Supports tool calling when your loaded model handles function calls. "
+           "Falls back to a plain completion if tool use fails."]]}
+  {:heading "Copilot"
+   :level 2
+   :body [[:p [:code "copilot"] " shells out to the GitHub Copilot CLI ("
+           [:code "copilot -p -"] "). No API key needed if you have Copilot installed and authenticated."]
+          [:p "When your step uses tools, Copilot runs with MCP enabled. Otherwise tools are disabled "
+           "to keep responses fast."]
+          [:code {:lang "clojure"} "(llm :provider \"copilot\"\n     :prompt \"Summarize the last 5 commits\")"]]}
+  {:heading "OpenRouter"
+   :level 2
+   :body [[:p [:code "openrouter"] " routes through the OpenRouter API, giving you access to "
+           "hundreds of models from a single key."]
+          [:code {:lang "bash"} "export OPENROUTER_API_KEY=sk-or-..."]
+          [:p "Override the model per call or set a default:"]
+          [:code {:lang "bash"} "export OPENROUTER_MODEL=google/gemma-3-12b-it"]
+          [:code {:lang "clojure"} "(llm :provider \"openrouter\"\n     :model \"anthropic/claude-sonnet-4\"\n     :prompt \"Review this PR\")"]
+          [:p "Supports tool calling and agentic loops via "
+           [:code ":tools"] " and " [:code ":agentic true"] "."]]}
+  {:heading "Claude"
+   :level 2
+   :body [[:p [:code "claude"] " shells out to the Claude Code CLI ("
+           [:code "claude --print"] "). Requires the Claude CLI installed and authenticated."]
+          [:code {:lang "clojure"} "(llm :provider \"claude\"\n     :model \"sonnet\"\n     :prompt \"Explain why this test is flaky\")"]
+          [:p "When tools are needed, Claude is invoked with MCP config pointing at " [:code "glitch mcp"] "."]]}
+  {:heading "Tier fallback"
+   :level 2
+   :body [[:p "When you do not specify a provider, glitch tries a default tier list in order: "
+           [:code "copilot"] " then " [:code "claude"] " then " [:code "openrouter"] " then "
+           [:code "lmstudio"] ". The first provider that returns a non-empty response wins."]
+          [:p "This means your workflows keep running even if one provider is down. "
+           "To force a specific provider with no fallback, always set " [:code ":provider"] " explicitly."]]}]}

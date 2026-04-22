@@ -1,0 +1,43 @@
+;; Generate a single doc page as EDN
+;; Usage: glitch run workflows/site/generate-doc.glitch --param slug=getting-started
+
+(include "site/shared.glitch")
+
+(step "context"
+  (sh "cat bb/src/glitch/core.clj bb/src/glitch/dsl.clj 2>/dev/null || true"))
+
+(step "existing"
+  (sh "cat site/content/docs/~(param :slug).edn 2>/dev/null || echo ':none'"))
+
+(step "generate"
+  (llm :provider "copilot" :agentic true
+    :tools ["glitch_read_file" "glitch_grep"]
+    :prompt ```
+    Generate documentation for the page slug: ~(param :slug)
+
+    Output MUST be a valid EDN map with this exact schema:
+    {:title "Page Title"
+     :description "One-line description"
+     :order N
+     :sections [{:heading "Section Name" :level 2
+                 :body [[:p "Text"] [:code {:lang "clojure"} "code"]]}]}
+
+    Body elements are hiccup vectors:
+    - [:p "text"] for paragraphs
+    - [:p "text " [:code "inline"] " more text"] for inline code
+    - [:code {:lang "bash"} "code here"] for code blocks
+    - [:a {:href "/docs/other-page"} "link text"] for links
+    - [:diagram {:type :flowchart :direction :lr} [:node :a "A"] [:node :b "B"] [:edge :a :b]] for diagrams
+
+    RULES:
+    - All code examples MUST come from the actual codebase, never invent syntax
+    - Use "your" framing, examples before explanation
+    - No internal details (BubbleTea, tmux, SQLite, OTel, lipgloss)
+    - Output raw EDN only, no markdown wrapping
+
+    Existing page (if any): ~(ref "existing")
+    Source context: ~(ref "context")
+    ```))
+
+(step "save"
+  (sh "echo '~(ref \"generate\")' > site/content/docs/~(param :slug).edn"))

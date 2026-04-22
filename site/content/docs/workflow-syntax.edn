@@ -1,0 +1,41 @@
+{:title "Workflow Syntax"
+ :description "How to write workflows using s-expression syntax"
+ :order 2
+ :sections
+ [{:heading "The basics"
+   :level 2
+   :body [[:p "Every " [:code ".glitch"] " file is a Clojure s-expression evaluated by Babashka. "
+           "Your workflow starts with " [:code "(workflow ...)"] " and contains one or more steps."]
+          [:code {:lang "clojure"} "(workflow \"check-health\"\n  (step \"status\"\n    (sh \"curl\" \"-s\" \"http://localhost:9200/_cluster/health\")))"]
+          [:p "Save this as " [:code ".glitch/workflows/check-health.glitch"] " and run it:"]
+          [:code {:lang "bash"} "glitch run .glitch/workflows/check-health.glitch"]]}
+  {:heading "Steps"
+   :level 2
+   :body [[:p "A " [:code "(step \"id\" body)"] " evaluates its body, records the result under that id, "
+           "and makes it available to later steps via " [:code "(ref \"id\")"] "."]
+          [:code {:lang "clojure"} "(workflow \"two-step\"\n  (step \"raw\"\n    (sh \"git\" \"log\" \"--oneline\" \"-5\"))\n  (step \"summary\"\n    (llm :prompt (str \"Summarize these commits:\\n\" (ref \"raw\")))))"]
+          [:p "Steps run in order. Each step's output is a string stored by id."]]}
+  {:heading "Shell and LLM calls"
+   :level 2
+   :body [[:p [:code "(sh ...)"] " runs a shell command and returns its stdout. "
+           [:code "(llm ...)"] " sends a prompt to your configured LLM provider and returns the response."]
+          [:code {:lang "clojure"} "(step \"files\"\n  (sh \"find\" \".\" \"-name\" \"*.go\" \"-type\" \"f\"))"]
+          [:code {:lang "clojure"} "(step \"review\"\n  (llm :provider \"copilot\"\n       :prompt (str \"Review these files:\\n\" (ref \"files\"))))"]
+          [:p [:code "(sh ...)"] " throws on non-zero exit. "
+           [:code "(llm ...)"] " accepts " [:code ":provider"] ", " [:code ":model"] ", "
+           [:code ":prompt"] ", " [:code ":schema"] ", and " [:code ":retries"] " among other options."]]}
+  {:heading "Parameters and input"
+   :level 2
+   :body [[:p "Pass parameters with " [:code "--set key=value"] " on the CLI. "
+           "Access them in your workflow with " [:code "(param \"key\")"] "."]
+          [:code {:lang "bash"} "glitch run .glitch/workflows/deploy.glitch --set env=staging"]
+          [:code {:lang "clojure"} "(workflow \"deploy\"\n  (step \"target\"\n    (sh \"kubectl\" \"config\" \"use-context\" (param \"env\"))))"]
+          [:p "The " [:code "(input)"] " function returns any text passed after the workflow path:"]
+          [:code {:lang "bash"} "glitch run .glitch/workflows/ask.glitch \"Why is the build failing?\""]]}
+  {:heading "Backtick strings"
+   :level 2
+   :body [[:p "Triple-backtick blocks are preprocessed into string expressions. "
+           "Use " [:code "~(ref \"id\")"] " for interpolation inside them:"]
+          [:code {:lang "clojure"} "(step \"prompt\"\n  (llm :prompt ```\nHere are the recent commits:\n~(ref \"log\")\n\nSummarize the changes.\n```))"]
+          [:p "This is equivalent to " [:code "(str \"Here are the recent commits:\\n\" (ref \"log\") \"\\n\\nSummarize the changes.\\n\")"]
+           " but easier to read for multi-line prompts."]]}]}

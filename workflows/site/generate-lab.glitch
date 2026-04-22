@@ -1,0 +1,27 @@
+;; Generate a single lab page as EDN
+;; Usage: glitch run workflows/site/generate-lab.glitch --param slug=repl-driven-docs
+
+(include "site/shared.glitch")
+
+(step "generate"
+  (llm :provider "copilot" :agentic true
+    :tools ["glitch_read_file" "glitch_grep"]
+    :prompt ```
+    Generate a 15-minute lab tutorial for slug: ~(param :slug)
+
+    Output MUST be a valid EDN map:
+    {:title "Lab Title"
+     :slug "~(param :slug)"
+     :description "One-line description"
+     :date "~(sh "date +%Y-%m-%d")"
+     :duration "15min"
+     :steps [{:heading "Step Name"
+              :body [[:p "text"] [:code {:lang "bash"} "command"]]}]}
+
+    Body elements use the same hiccup format as doc pages.
+    Keep it focused — one concept, clear steps, working examples.
+    Output raw EDN only.
+    ```))
+
+(step "save"
+  (sh "echo '~(ref \"generate\")' > site/content/labs/~(param :slug).edn"))

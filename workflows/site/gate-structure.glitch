@@ -1,0 +1,42 @@
+;; Schema validation — check required keys and types
+;; Usage: glitch run workflows/site/gate-structure.glitch
+
+(step "validate"
+  (sh ```
+    bb -e '
+    (require (quote [clojure.edn :as edn]))
+    (defn check-doc [f]
+      (let [d (edn/read-string (slurp f))]
+        (assert (:title d) (str f " missing :title"))
+        (assert (number? (:order d)) (str f " missing :order"))
+        (assert (vector? (:sections d)) (str f " missing :sections"))
+        (doseq [s (:sections d)]
+          (assert (:heading s) (str f " section missing :heading"))
+          (assert (#{2 3 4} (:level s)) (str f " invalid :level"))
+          (assert (vector? (:body s)) (str f " section missing :body")))
+        (println "PASS:" f)))
+    (defn check-lab [f]
+      (let [d (edn/read-string (slurp f))]
+        (assert (:title d) (str f " missing :title"))
+        (assert (:slug d) (str f " missing :slug"))
+        (assert (vector? (:steps d)) (str f " missing :steps"))
+        (doseq [s (:steps d)]
+          (assert (:heading s) (str f " step missing :heading"))
+          (assert (vector? (:body s)) (str f " step missing :body")))
+        (println "PASS:" f)))
+    (defn check-changelog [f]
+      (let [d (edn/read-string (slurp f))]
+        (assert (:date d) (str f " missing :date"))
+        (assert (vector? (:entries d)) (str f " missing :entries"))
+        (doseq [e (:entries d)]
+          (assert (:type e) (str f " entry missing :type"))
+          (assert (:summary e) (str f " entry missing :summary")))
+        (println "PASS:" f)))
+    (doseq [f (file-seq (clojure.java.io/file "site/content/docs"))]
+      (when (.endsWith (str f) ".edn") (check-doc (str f))))
+    (doseq [f (file-seq (clojure.java.io/file "site/content/labs"))]
+      (when (.endsWith (str f) ".edn") (check-lab (str f))))
+    (doseq [f (file-seq (clojure.java.io/file "site/content/changelog"))]
+      (when (.endsWith (str f) ".edn") (check-changelog (str f))))
+    '
+    ```))

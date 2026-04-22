@@ -1,0 +1,13 @@
+{:date "2026-04-15"
+ :entries
+ [{:type :feat :summary "compare as core primitive -- (compare ...) (branch ...) (review ...) forms with parallel execution and winner selection"}
+  {:type :feat :summary "CLI flags --variant, --compare, and --review-criteria for workflow run"}
+  {:type :feat :summary "DSL improvements -- threading macro, filter, reduce, when/when-not, flatten, pick, assoc"}
+  {:type :feat :summary "Elasticsearch DSL forms -- search, index, delete, embed with workspace ES URL passthrough"}
+  {:type :feat :summary "GUI settings page with workflow defaults, workspace config, and provider registry"}
+  {:type :feat :summary "site updates -- 4 new doc pages, TOC sidebar, landing page refresh"}
+  {:type :feat :summary "workspace params field in defaults and (params ...) form parsing"}
+  {:type :feat :summary "workspace-aware plugins and GUI action bar redesign"}
+  {:type :fix :summary "GUI syntax highlighting, Kibana telemetry field name, and ActionBar reactivity"}
+  {:type :fix :summary "deterministic fallback and key naming in pipeline compare output"}
+  {:type :chore :summary "add Taskfile.yml for build automation"}]}

@@ -1,0 +1,32 @@
+{:title "Code Intelligence"
+ :description "Index your codebase with ast-grep and query symbols, edges, and call graphs"
+ :order 8
+ :sections
+ [{:heading "Index your repo" :level 2
+   :body [[:p "Glitch extracts symbols and relationships from your codebase using " [:a {:href "https://ast-grep.github.io"} "ast-grep"] " and stores them in Elasticsearch. This gives your workflows a semantic understanding of code structure."]
+          [:code {:lang "bash"} "# Index the current repo\nglitch index\n\n# Full reindex (skip incremental hash check)\nglitch index --full\n\n# Index specific languages only\nglitch index --languages go,python"]
+          [:p "Indexing is incremental by default. Glitch tracks file SHA256 hashes and only re-indexes files that have changed since the last run."]]}
+
+  {:heading "Three-phase pipeline" :level 2
+   :body [[:p "The indexer runs in three phases:"]
+          [:ul
+           [:li "Phase 1 extracts symbols from each file: functions, methods, structs, interfaces, classes, enums, traits, constants, and imports. Each symbol gets an ID, file location, kind, language, and signature."]
+           [:li "Phase 2 resolves cross-file relationships: imports are matched to their target symbols, and extends/implements declarations are linked to their parent types."]
+           [:li "Phase 3 resolves function calls and references across files, building a complete call graph."]]
+          [:p "The result is two Elasticsearch indices per repo: " [:code "glitch-symbols-<repo>"] " for symbol definitions and " [:code "glitch-edges-<repo>"] " for relationships (calls, imports, contains, extends, implements, references, exports)."]]}
+
+  {:heading "Query symbols" :level 2
+   :body [[:p "Search for symbols by name, kind, language, or file path. Wildcards are supported."]
+          [:code {:lang "clojure"} ";; Find all functions named Index*\n(search-symbols {:name \"Index*\" :kind \"function\"})\n\n;; Find all Go interfaces\n(search-symbols {:kind \"interface\" :language \"go\"})\n\n;; Find symbols in a specific file\n(search-symbols {:file \"bb/src/glitch/core.clj\"})"]
+          [:p "In agentic steps, the model calls " [:code "glitch_search_symbols"] " automatically when it needs to understand code structure."]]}
+
+  {:heading "Query relationships" :level 2
+   :body [[:p "Search for edges between symbols to understand how your code connects."]
+          [:code {:lang "clojure"} ";; What does IndexRepo call?\n(search-edges {:source \"IndexRepo\" :kind \"calls\"})\n\n;; What calls the run function?\n(search-edges {:target \"run\" :kind \"calls\"})\n\n;; Multi-hop: follow call chains 3 levels deep\n(search-edges {:source \"main\" :kind \"calls\" :depth 3})"]
+          [:p "Edge kinds: " [:code "calls"] ", " [:code "imports"] ", " [:code "contains"] " (parent-child nesting), " [:code "extends"] ", " [:code "implements"] ", " [:code "references"] ", " [:code "exports"] "."]]}
+
+  {:heading "Symbol context" :level 2
+   :body [[:p "Get the full picture for a single symbol in one call: its definition plus all incoming and outgoing relationships."]
+          [:code {:lang "clojure"} "(symbol-context \"IndexRepo\")"]
+          [:p "Returns a map with " [:code ":symbol"] " (the definition), " [:code ":callers"] ", " [:code ":callees"] ", " [:code ":parent"] ", " [:code ":children"] ", " [:code ":imports"] ", and " [:code ":references"] "."]
+          [:p "This is the tool that agentic steps use most often when the model needs to understand how a function fits into the larger codebase."]]}]}

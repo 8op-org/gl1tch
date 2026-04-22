@@ -1,0 +1,31 @@
+;; Grounding check — verify claims in content against source code
+;; Usage: glitch run workflows/site/gate-hallucinations.glitch [--param file=content/docs/foo.edn]
+
+(include "site/shared.glitch")
+
+(step "content"
+  (sh ```
+    if [ -n "~(param :file "")" ]; then
+      cat "site/~(param :file)"
+    else
+      cat site/content/docs/*.edn
+    fi
+    ```))
+
+(step "verify"
+  (llm :provider "copilot" :agentic true
+    :tools ["glitch_read_file" "glitch_grep"]
+    :prompt ```
+    You are a verification gate. Check that every technical claim in the
+    content below is grounded in the actual codebase.
+
+    For each code example, command, or feature mentioned:
+    1. Search the codebase to verify it exists
+    2. Verify syntax matches actual usage
+
+    Content to verify:
+    ~(ref "content")
+
+    Output a JSON object: {"pass": true/false, "issues": ["description of any ungrounded claims"]}
+    If all claims are grounded, return {"pass": true, "issues": []}
+    ```))

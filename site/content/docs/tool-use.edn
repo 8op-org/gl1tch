@@ -1,0 +1,34 @@
+{:title "Tool Use"
+ :description "How agentic LLM steps use tools to read, search, and run workflows"
+ :order 6
+ :sections
+ [{:heading "Agentic steps" :level 2
+   :body [[:p "When you set " [:code ":agentic true"] " on an LLM step, the model can call tools between rounds instead of returning a single response. The tool loop sends results back and lets the model iterate up to " [:code ":max-rounds"] " times (default 5)."]
+          [:code {:lang "clojure"} "(step \"investigate\"\n  (llm :provider \"copilot\"\n    :agentic true\n    :max-rounds 3\n    :prompt \"Find every public function in this repo that writes to disk\"))"]
+          [:p "Without " [:code ":agentic true"] ", tools run for one round only and the model must answer immediately after."]]}
+
+  {:heading "Available tools" :level 2
+   :body [[:p "Every agentic step receives the following tools automatically:"]
+          [:ul
+           [:li [:code "glitch_search"] " -- search code with ripgrep. Regex, glob filters, smart case."]
+           [:li [:code "glitch_symbols"] " -- find symbol definitions (functions, types, classes) using language-aware patterns."]
+           [:li [:code "glitch_read_file"] " -- read a file (first 200 lines). The model calls this to inspect files found via search."]
+           [:li [:code "glitch_run"] " -- execute a workflow file with optional input and parameters."]
+           [:li [:code "glitch_eval"] " -- evaluate a Clojure expression via SCI."]
+           [:li [:code "glitch_check"] " -- check a workflow file for syntax errors."]]
+          [:code {:lang "clojure"} "(step \"find-errors\"\n  (llm :agentic true\n    :prompt \"Search for error handling patterns in bb/src/\"))"]]}
+
+  {:heading "Code intelligence tools" :level 2
+   :body [[:p "When your repo is indexed (see " [:a {:href "/docs/code-intelligence"} "Code Intelligence"] "), three additional tools become available:"]
+          [:ul
+           [:li [:code "glitch_search_symbols"] " -- search indexed symbols by name, kind, language, or file path. Supports wildcards."]
+           [:li [:code "glitch_search_edges"] " -- search code relationships (calls, imports, contains, extends, implements, references) with BFS depth traversal."]
+           [:li [:code "glitch_symbol_context"] " -- get a symbol's full context: definition plus all callers, callees, parent, children, and implementors."]]]}
+
+  {:heading "How the tool loop works" :level 2
+   :body [[:p "The tool loop follows the OpenAI function-calling protocol. Your provider sends a request with tool definitions attached. When the model returns " [:code "tool_calls"] " instead of text, glitch executes each call and sends results back as " [:code "tool"] " messages."]
+          [:p "In agentic mode, this continues until the model returns a text response or " [:code ":max-rounds"] " is reached. In single-round mode, tools run once and then a final text-only call is made."]
+          [:p "If the tool loop fails (e.g. the model hallucinates a tool name), glitch retries without tools so you always get a response."]]}
+
+  {:heading "Example: agentic research step" :level 2
+   :body [[:code {:lang "clojure"} "(workflow \"research\"\n  (step \"gather\"\n    (llm :provider \"copilot\"\n      :agentic true\n      :max-rounds 5\n      :prompt (str\n        \"You are a code researcher. Find all functions in this repo \"\n        \"that interact with Elasticsearch. List each with its file, \"\n        \"line number, and a one-line summary.\")))\n\n  (step \"summarize\"\n    (llm :provider \"copilot\"\n      :prompt (str\n        \"Summarize these findings into a table:\\n\"\n        (ref \"gather\")))))"]]}]}

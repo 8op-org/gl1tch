@@ -1,0 +1,18 @@
+;; Build, commit, and push
+;; Usage: glitch run workflows/site/deploy.glitch
+
+(step "gates"
+  (sh ```
+    glitch run workflows/site/gate-syntax.glitch && \
+    glitch run workflows/site/gate-structure.glitch && \
+    glitch run workflows/site/gate-links.glitch
+    ```))
+
+(step "build"
+  (sh "cd site && npx shadow-cljs release app"))
+
+(step "commit"
+  (sh ```
+    git add site/content/ site/resources/public/
+    git commit -m "site: update content and build" || true
+    ```))

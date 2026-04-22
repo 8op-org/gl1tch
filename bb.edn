@@ -7,10 +7,14 @@
            :task (shell {:dir "bb"} "bb install")}
   clean   {:doc "Clean build artifacts"
            :task (shell {:dir "bb"} "bb clean")}
-  site:dev   {:doc "Run Astro dev server"
-              :task (shell {:dir "site"} "npm run dev")}
-  site:build {:doc "Build the 8op.org site"
-              :task (shell {:dir "site"} "npm run build")}
+  site:dev   {:doc "Start site dev server with nREPL"
+              :task (shell {:dir "site"} "npx shadow-cljs watch app")}
+  site:build {:doc "Build site for production"
+              :task (shell {:dir "site"} "npx shadow-cljs release app")}
+  site:repl  {:doc "Connect nREPL to site dev server"
+              :task (shell {:dir "site"} "npx shadow-cljs cljs-repl app")}
+  site:test  {:doc "Run site CLJS tests"
+              :task (shell {:dir "site"} "npx shadow-cljs compile test")}
   dev:setup   {:doc "Verify dev environment dependencies"
                :task (shell "glitch run dev/workflows/dev-setup.glitch")}
   dev:docs    {:doc "Generate documentation from source"
