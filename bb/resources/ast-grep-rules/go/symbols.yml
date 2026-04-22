@@ -1,0 +1,9 @@
+id: go-symbols
+language: Go
+rule:
+  any:
+    - kind: function_declaration
+    - kind: method_declaration
+    - kind: type_declaration
+    - kind: const_declaration
+    - kind: var_declaration

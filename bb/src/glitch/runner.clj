@@ -213,6 +213,11 @@
 
                  'search          g/search
 
+                 ;; code intelligence queries
+                 'search-symbols  g/search-symbols
+                 'search-edges    g/search-edges
+                 'symbol-context  g/symbol-context
+
                  'mkdir-p        (fn [dir] (.mkdirs (io/file dir)))
 
                  ;; state setters (rarely needed in workflows, but available)

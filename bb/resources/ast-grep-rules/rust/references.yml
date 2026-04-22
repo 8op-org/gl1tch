@@ -1,0 +1,7 @@
+id: rust-references
+language: Rust
+rule:
+  any:
+    - kind: field_expression
+    - kind: scoped_identifier
+    - kind: type_identifier

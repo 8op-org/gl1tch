@@ -1,0 +1,10 @@
+id: javascript-symbols
+language: JavaScript
+rule:
+  any:
+    - kind: function_declaration
+    - kind: class_declaration
+    - kind: method_definition
+    - kind: arrow_function
+    - kind: lexical_declaration
+    - kind: variable_declaration

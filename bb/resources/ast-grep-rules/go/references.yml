@@ -1,0 +1,7 @@
+id: go-references
+language: Go
+rule:
+  any:
+    - kind: selector_expression
+    - kind: type_identifier
+    - kind: qualified_type

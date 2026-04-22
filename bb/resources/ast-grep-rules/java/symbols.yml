@@ -1,0 +1,11 @@
+id: java-symbols
+language: Java
+rule:
+  any:
+    - kind: class_declaration
+    - kind: interface_declaration
+    - kind: method_declaration
+    - kind: enum_declaration
+    - kind: constructor_declaration
+    - kind: record_declaration
+    - kind: annotation_type_declaration

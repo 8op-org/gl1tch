@@ -1,0 +1,6 @@
+id: javascript-imports
+language: JavaScript
+rule:
+  any:
+    - kind: import_statement
+    - pattern: require($PATH)

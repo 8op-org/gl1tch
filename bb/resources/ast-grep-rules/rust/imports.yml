@@ -1,0 +1,4 @@
+id: rust-imports
+language: Rust
+rule:
+  kind: use_declaration

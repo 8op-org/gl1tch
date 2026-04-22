@@ -1,0 +1,6 @@
+id: python-imports
+language: Python
+rule:
+  any:
+    - kind: import_statement
+    - kind: import_from_statement

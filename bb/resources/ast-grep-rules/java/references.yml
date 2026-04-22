@@ -1,0 +1,7 @@
+id: java-references
+language: Java
+rule:
+  any:
+    - kind: field_access
+    - kind: type_identifier
+    - kind: scoped_type_identifier

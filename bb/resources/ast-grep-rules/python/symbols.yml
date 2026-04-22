@@ -1,0 +1,7 @@
+id: python-symbols
+language: Python
+rule:
+  any:
+    - kind: function_definition
+    - kind: class_definition
+    - kind: decorated_definition

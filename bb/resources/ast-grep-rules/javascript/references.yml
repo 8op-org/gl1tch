@@ -1,0 +1,4 @@
+id: javascript-references
+language: JavaScript
+rule:
+  kind: member_expression

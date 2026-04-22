@@ -1,0 +1,4 @@
+id: go-calls
+language: Go
+rule:
+  kind: call_expression

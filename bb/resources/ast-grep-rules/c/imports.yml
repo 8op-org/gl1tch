@@ -1,0 +1,4 @@
+id: c-imports
+language: C
+rule:
+  kind: preproc_include

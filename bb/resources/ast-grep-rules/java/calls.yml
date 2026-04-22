@@ -1,0 +1,4 @@
+id: java-calls
+language: Java
+rule:
+  kind: method_invocation

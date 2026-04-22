@@ -5,6 +5,8 @@
             [glitch.plugin :as plugin]
             [glitch.plugin-loader :as plugin-loader]
             [glitch.repl :as repl]
+            [glitch.index :as index]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.java.io :as io]))
 
@@ -135,7 +137,7 @@
 
 (defn- cmd-up []
   (println "checking required tools...")
-  (let [tools   ["bb" "curl" "gh" "rg"]
+  (let [tools   ["bb" "curl" "gh" "rg" "sg"]
         results (map (fn [t]
                        (try
                          (let [proc (-> (ProcessBuilder. ["which" t])
@@ -234,6 +236,55 @@
           (println "       glitch plugin list")
           (System/exit 1)))))
 
+(defn- cmd-index [args]
+  (let [;; Check if first positional arg is "query"
+        query? (= (first args) "query")
+        rest-args (if query? (rest args) args)
+        ;; Parse appropriate flags
+        valid-opts (if query?
+                     {:name {:kind :option} :kind {:kind :option}
+                      :language {:kind :option} :file {:kind :option}
+                      :edges {:kind :flag} :source {:kind :option}
+                      :target {:kind :option} :depth {:kind :option}
+                      :context {:kind :option} :repo {:kind :option}
+                      :es-url {:kind :option}}
+                     {:repo {:kind :option} :es-url {:kind :option}
+                      :languages {:kind :option} :full {:kind :flag}
+                      :stats {:kind :flag}})
+        {:keys [opts]} (parse-args rest-args valid-opts)
+        es-url (or (:es-url opts) (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        repo (or (:repo opts) (System/getProperty "user.dir"))
+        repo-name (last (str/split repo #"/"))]
+    (if query?
+      ;; Query mode
+      (let [results (cond
+                      (:context opts)
+                      (index/query-context es-url repo-name (:context opts))
+
+                      (:edges opts)
+                      (index/query-edges es-url repo-name
+                                        {:source (:source opts)
+                                         :target (:target opts)
+                                         :kind (:kind opts)
+                                         :depth (some-> (:depth opts) parse-long)
+                                         :limit 50})
+
+                      :else
+                      (index/query-symbols es-url repo-name
+                                          {:name (:name opts)
+                                           :kind (:kind opts)
+                                           :language (:language opts)
+                                           :file (:file opts)
+                                           :limit 20}))]
+        (println (json/generate-string results {:pretty true})))
+      ;; Index mode
+      (index/index-repo repo
+                       :es-url es-url
+                       :languages (when (:languages opts)
+                                   (set (str/split (:languages opts) #",")))
+                       :full (:full opts)
+                       :stats-only (:stats opts)))))
+
 (defn- cmd-repl [args]
   (let [{:keys [opts]} (parse-args args {:port {:short "p" :kind :option}})
         port (or (some-> (:port opts) parse-long) 1667)]
@@ -255,6 +306,7 @@
       (= cmd "check")   (cmd-check rest-args)
       (= cmd "eval")    (cmd-eval rest-args)
       (= cmd "up")      (cmd-up)
+      (= cmd "index")   (cmd-index rest-args)
       (= cmd "version") (println "glitch 0.3.0")
       (= cmd "plugin")  (cmd-plugin rest-args)
       (= cmd "repl")    (cmd-repl rest-args)
@@ -285,7 +337,7 @@
       (do (println "glitch - workflow engine (babashka)")
           (println)
           (println "built-in commands:")
-          (doseq [c (sort ["check" "eval" "mcp" "plugin" "repl" "run" "up" "version"])]
+          (doseq [c (sort ["check" "eval" "index" "mcp" "plugin" "repl" "run" "up" "version"])]
             (println (str "  " c)))
           (when (seq plugin-names)
             (println)

@@ -2,6 +2,7 @@
   (:require [babashka.process :as bp]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [glitch.index :as index]
             [sci.core :as sci]))
 
 (defn- handle-search [arguments]
@@ -104,14 +105,49 @@
           selected (take 200 lines)]
       (str/join "\n" selected))))
 
+(defn- handle-search-symbols [arguments]
+  (let [repo (or (get arguments "repo")
+                 (last (str/split (System/getProperty "user.dir") #"/")))
+        es-url (or (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        opts {:name     (get arguments "name")
+              :kind     (get arguments "kind")
+              :language (get arguments "language")
+              :file     (get arguments "file")
+              :limit    (or (get arguments "limit") 20)}
+        results (index/query-symbols es-url repo opts)]
+    (json/generate-string results {:pretty true})))
+
+(defn- handle-search-edges [arguments]
+  (let [repo (or (get arguments "repo")
+                 (last (str/split (System/getProperty "user.dir") #"/")))
+        es-url (or (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        opts {:source (get arguments "source")
+              :target (get arguments "target")
+              :kind   (get arguments "kind")
+              :depth  (or (get arguments "depth") 1)
+              :limit  (or (get arguments "limit") 50)}
+        results (index/query-edges es-url repo opts)]
+    (json/generate-string results {:pretty true})))
+
+(defn- handle-symbol-context [arguments]
+  (let [repo (or (get arguments "repo")
+                 (last (str/split (System/getProperty "user.dir") #"/")))
+        es-url (or (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        name (get arguments "name")
+        result (index/query-context es-url repo name)]
+    (json/generate-string (or result {:error "Symbol not found"}) {:pretty true})))
+
 (defn make-handler
   [_context]
   (fn [tool-name arguments]
     (case tool-name
-      "glitch_search"    (handle-search arguments)
-      "glitch_symbols"   (handle-symbols arguments)
-      "glitch_run"       (handle-run arguments)
-      "glitch_eval"      (handle-eval arguments)
-      "glitch_check"     (handle-check arguments)
-      "glitch_read_file" (handle-read-file arguments)
+      "glitch_search"         (handle-search arguments)
+      "glitch_symbols"        (handle-symbols arguments)
+      "glitch_run"            (handle-run arguments)
+      "glitch_eval"           (handle-eval arguments)
+      "glitch_check"          (handle-check arguments)
+      "glitch_read_file"      (handle-read-file arguments)
+      "glitch_search_symbols" (handle-search-symbols arguments)
+      "glitch_search_edges"   (handle-search-edges arguments)
+      "glitch_symbol_context" (handle-symbol-context arguments)
       (throw (ex-info (str "unknown tool: " tool-name) {})))))

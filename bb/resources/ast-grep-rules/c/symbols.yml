@@ -1,0 +1,9 @@
+id: c-symbols
+language: C
+rule:
+  any:
+    - kind: function_definition
+    - kind: struct_specifier
+    - kind: enum_specifier
+    - kind: type_definition
+    - kind: declaration

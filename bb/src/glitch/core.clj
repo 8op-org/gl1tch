@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [clojure.java.io :as io]
             [cheshire.core :as json]
-            [glitch.confidence :as conf]))
+            [glitch.confidence :as conf]
+            [glitch.index :as index]))
 
 ;; --- Workflow state — dynamic vars holding atoms ---
 ;; Atoms inside dynamic vars give us both rebindable scope (for call-workflow)
@@ -648,3 +649,29 @@ Return JSON: {\"grounded\": true/false, \"unsupported\": [{\"claim\": \"exact te
                       [(get w "contract" 1.0) v])])
         score    (conf/harmonic-mean pairs)]
     (str score)))
+
+;; --- Code intelligence queries ---
+
+(defn search-symbols
+  "Search indexed code symbols. Options: :name, :kind, :language, :file, :limit, :es-url, :repo.
+   Example: (search-symbols {:name \"Index*\" :kind \"function\" :language \"go\"})"
+  [opts]
+  (let [es-url (or (:es-url opts) (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        repo   (or (:repo opts) (last (str/split (System/getProperty "user.dir") #"/")))]
+    (index/query-symbols es-url repo (dissoc opts :es-url :repo))))
+
+(defn search-edges
+  "Search code relationships. Options: :source, :target, :kind, :depth, :limit, :es-url, :repo.
+   Example: (search-edges {:source \"IndexRepo\" :kind \"calls\" :depth 2})"
+  [opts]
+  (let [es-url (or (:es-url opts) (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        repo   (or (:repo opts) (last (str/split (System/getProperty "user.dir") #"/")))]
+    (index/query-edges es-url repo (dissoc opts :es-url :repo))))
+
+(defn symbol-context
+  "Get full context for a symbol: definition + all edges.
+   Example: (symbol-context \"IndexRepo\")"
+  [name & {:keys [es-url repo]}]
+  (let [es-url (or es-url (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        repo   (or repo (last (str/split (System/getProperty "user.dir") #"/")))]
+    (index/query-context es-url repo name)))

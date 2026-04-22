@@ -59,4 +59,38 @@
     {"type" "object"
      "properties"
      {"path" {"type" "string" "description" "Path to the file to read"}}
-     "required" ["path"]}}])
+     "required" ["path"]}}
+
+   {"name" "glitch_search_symbols"
+    "description" "Search indexed code symbols by name, kind, language, or file path"
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"name"     {"type" "string" "description" "Symbol name (wildcard with * OK)"}
+      "kind"     {"type" "string" "description" "Symbol kind: function, method, class, type, interface, trait, struct, enum"}
+      "language" {"type" "string" "description" "Language filter: go, python, javascript, rust, java, c"}
+      "file"     {"type" "string" "description" "File path pattern"}
+      "repo"     {"type" "string" "description" "Repo name (default: cwd basename)"}
+      "limit"    {"type" "integer" "description" "Max results (default: 20)"}}
+     "required" ["name"]}}
+
+   {"name" "glitch_search_edges"
+    "description" "Search code relationships (calls, imports, contains, extends, implements, references) with optional depth traversal"
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"source" {"type" "string" "description" "Source symbol name or ID"}
+      "target" {"type" "string" "description" "Target symbol name or ID"}
+      "kind"   {"type" "string" "description" "Edge kind: calls, imports, contains, extends, implements, references"}
+      "depth"  {"type" "integer" "description" "BFS traversal depth (default: 1)"}
+      "repo"   {"type" "string" "description" "Repo name"}
+      "limit"  {"type" "integer" "description" "Max results (default: 50)"}}}}
+
+   {"name" "glitch_symbol_context"
+    "description" "Get a symbol's definition and all its relationships (callers, callees, parent, children, implementors)"
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"name" {"type" "string" "description" "Symbol name"}
+      "repo" {"type" "string" "description" "Repo name"}}
+     "required" ["name"]}}])

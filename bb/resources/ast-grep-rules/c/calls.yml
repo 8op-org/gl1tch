@@ -1,0 +1,4 @@
+id: c-calls
+language: C
+rule:
+  kind: call_expression

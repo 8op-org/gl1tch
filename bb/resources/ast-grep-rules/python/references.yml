@@ -1,0 +1,6 @@
+id: python-references
+language: Python
+rule:
+  any:
+    - kind: attribute
+    - kind: type

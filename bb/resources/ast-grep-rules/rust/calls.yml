@@ -1,0 +1,6 @@
+id: rust-calls
+language: Rust
+rule:
+  any:
+    - kind: call_expression
+    - kind: macro_invocation

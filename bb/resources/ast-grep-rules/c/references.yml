@@ -1,0 +1,6 @@
+id: c-references
+language: C
+rule:
+  any:
+    - kind: field_expression
+    - kind: type_identifier

@@ -1,0 +1,4 @@
+id: java-imports
+language: Java
+rule:
+  kind: import_declaration

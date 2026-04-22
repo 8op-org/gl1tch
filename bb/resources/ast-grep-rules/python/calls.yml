@@ -1,0 +1,4 @@
+id: python-calls
+language: Python
+rule:
+  kind: call
