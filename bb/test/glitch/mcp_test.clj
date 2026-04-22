@@ -22,7 +22,7 @@
           @proc)))))
 
 (deftest mcp-tools-list-test
-  (testing "server lists 8 tools"
+  (testing "server lists 7 tools"
     (let [proc (bp/process {:dir "/Users/stokes/Projects/gl1tch/bb"
                             :in :pipe :out :pipe :err :inherit}
                  "bb" "-cp" "src:providers" "-m" "glitch.mcp")
@@ -39,7 +39,7 @@
         (.flush w)
         (let [line (.readLine r)
               resp (json/parse-string line)]
-          (is (= 8 (count (get-in resp ["result" "tools"])))))
+          (is (= 7 (count (get-in resp ["result" "tools"])))))
         (finally
           (.close w)
           @proc)))))
