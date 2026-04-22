@@ -6,6 +6,13 @@
    :level 2
    :body [[:p "Install via Homebrew:"]
           [:code {:lang "bash"} "brew install 8op-org/tap/glitch"]]}
+  {:heading "Agent skill"
+   :level 2
+   :body [[:p "Give your coding agent glitch expertise. Works with Claude Code, Cursor, Gemini CLI, Codex, and " [:a {:href "https://agentskills.io"} "30+ other agents"] "."]
+          [:code {:lang "bash"} "npx skills add 8op-org/gl1tch"]
+          [:p "This installs the glitch skill so your agent knows how to author workflows, use the DSL, configure providers, and call the MCP server."]
+          [:p "For a global install (available in all projects):"]
+          [:code {:lang "bash"} "npx skills add 8op-org/gl1tch -g"]]}
   {:heading "Your first workflow"
    :level 2
    :body [[:p "Create " [:code ".glitch/workflows/hello.glitch"] ":"]
