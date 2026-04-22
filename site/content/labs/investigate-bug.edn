@@ -1,5 +1,4 @@
 {:title "Investigating a Bug"
- :slug "investigate-bug"
  :description "Triage a GitHub issue using shell commands and LLM analysis"
  :date "2026-04-22"
  :duration "15min"

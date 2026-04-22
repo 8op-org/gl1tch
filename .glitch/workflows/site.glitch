@@ -79,9 +79,8 @@
           (get result :output))
 
         (= action "gate-lab")
-        (let [result (call-workflow "site-gate"
-                       :set {"slug" (get parsed "slug")
-                             "content-type" "lab"})]
+        (let [result (call-workflow "lab-gate"
+                       :set {"slug" (get parsed "slug")})]
           (get result :output))
 
         (= action "homepage")

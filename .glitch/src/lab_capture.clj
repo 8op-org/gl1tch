@@ -58,8 +58,7 @@
   `(let [src#    ~(form->str expr)
          result# ~expr
          step#   {:heading ~heading
-                  :body    [[:p ""]
-                            [:code {:lang "clojure"} src#]
+                  :body    [[:code {:lang "clojure"} src#]
                             [:code {:lang "output"} (result->str result#)]]}]
      (swap! *session
             (fn [s#]

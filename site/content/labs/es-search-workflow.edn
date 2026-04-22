@@ -1,5 +1,4 @@
 {:title "ES-Backed Search Workflow"
- :slug "es-search-workflow"
  :description "Index project docs into Elasticsearch and query them from workflows"
  :date "2026-04-22"
  :duration "20min"

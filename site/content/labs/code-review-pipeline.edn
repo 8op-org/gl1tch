@@ -1,5 +1,4 @@
 {:title "Build a Code Review Pipeline"
- :slug "code-review-pipeline"
  :description "Chain shell data gathering with LLM analysis in a multi-step workflow"
  :date "2026-04-22"
  :duration "15min"

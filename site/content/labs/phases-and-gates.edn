@@ -1,5 +1,4 @@
 {:title "Phases and Gates"
- :slug "phases-and-gates"
  :description "Build a pipeline with retry semantics and verification gates"
  :date "2026-04-22"
  :duration "15min"

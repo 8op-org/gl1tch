@@ -25,6 +25,7 @@
       "          (when-not (:description data) (add! \"Missing required key :description\"))"
       "          (when-not (:date data) (add! \"Missing required key :date\"))"
       "          (when-not (:steps data) (add! \"Missing required key :steps\"))"
+      "          (when-not (:duration data) (add! \"Missing required key :duration\"))"
       "          (when (sequential? (:steps data))"
       "            (doseq [[i step] (map-indexed vector (:steps data))]"
       "              (when-not (:heading step)"

@@ -1,5 +1,4 @@
 {:title "REPL-Driven Docs"
- :slug "repl-driven-docs"
  :description "Write documentation from a live REPL connected to your project"
  :date "2026-04-15"
  :duration "15min"

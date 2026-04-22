@@ -1,5 +1,4 @@
 {:title "Tiered Routing"
- :slug "tiered-routing"
  :description "Compare local and cloud models with cost-based fallback routing"
  :date "2026-04-22"
  :duration "10min"

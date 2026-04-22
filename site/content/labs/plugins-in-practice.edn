@@ -1,5 +1,4 @@
 {:title "Plugins in Practice"
- :slug "plugins-in-practice"
  :description "Use plugin subcommands to package reusable data-gathering steps"
  :date "2026-04-22"
  :duration "15min"
