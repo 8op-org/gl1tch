@@ -1,0 +1,33 @@
+{:title "Compare Runs"
+ :description "A/B test LLM outputs across models, providers, or prompt strategies"
+ :order 11
+ :sections
+ [{:heading "What compare runs do"
+   :level 2
+   :body [[:p "Compare runs let you evaluate the same task across different models or providers, then score the results with a neutral judge. You see which model produces the best output for your use case before committing to it."]]}
+  {:heading "Example: compare PR reviews"
+   :level 2
+   :body [[:p "Run the same prompt through three providers, then grade the results:"]
+          [:code {:lang "clojure"} "(workflow \"compare-models\"\n  :description \"Compare PR review quality across providers\"\n\n  (step \"diff\"\n    (run \"git diff main...HEAD\"))\n\n  (step \"review-local\"\n    (llm :provider \"lmstudio\" :model \"qwen3-8b\"\n      :prompt ```\n        Review this PR for correctness and security:\n        ~(ref \"diff\")\n        ```))\n\n  (step \"review-copilot\"\n    (llm :provider \"copilot\"\n      :prompt ```\n        Review this PR for correctness and security:\n        ~(ref \"diff\")\n        ```))\n\n  (step \"review-claude\"\n    (llm :provider \"claude\"\n      :prompt ```\n        Review this PR for correctness and security:\n        ~(ref \"diff\")\n        ```))\n\n  (step \"grade\"\n    (llm :provider \"lmstudio\" :model \"qwen3-8b\"\n      :prompt ```\n        Score each review 1-10 on completeness, specificity, and accuracy.\n\n        --- LOCAL ---\n        ~(ref \"review-local\")\n\n        --- COPILOT ---\n        ~(ref \"review-copilot\")\n\n        --- CLAUDE ---\n        ~(ref \"review-claude\")\n\n        Output format:\n        WINNER: <variant>\n        SCORES: local=N copilot=N claude=N\n        REASON: <one sentence>\n        ```)))"]]}
+  {:heading "Timeout for slow providers"
+   :level 2
+   :body [[:p "Wrap individual review steps with " [:code "with-timeout"] " to cap slow providers:"]
+          [:code {:lang "clojure"} "(with-timeout 60\n  (step \"review-claude\"\n    (llm :provider \"claude\" :prompt prompt)))"]]}
+  {:heading "Batch comparison across issues"
+   :level 2
+   :body [[:p "Combine iteration with comparison to evaluate across multiple inputs:"]
+          [:code {:lang "clojure"} "(step \"issues\"\n  (run \"gh issue list --repo acme/backend --json number --limit 5 | jq -r '.[].number'\"))\n\n(each \"issues\"\n  (step \"compare-issue\"\n    (call-workflow \"compare-models\"\n      :set (issue \"~param.item\"))))"]]}
+  {:heading "Planned: the compare form"
+   :level 2
+   :body [[:p "A dedicated " [:code "(compare ...)"] " form is planned to simplify this pattern:"]
+          [:code {:lang "clojure"} "(compare\n  (branch \"local\"\n    :provider \"lmstudio\" :model \"qwen3-8b\")\n  (branch \"copilot\"\n    :provider \"copilot\")\n  (branch \"claude\"\n    :provider \"claude\")\n\n  (review :criteria (\"completeness\" \"specificity\" \"accuracy\")\n    :judge \"lmstudio\"\n    :model \"qwen3-8b\"))"]
+          [:p "Each " [:code "(branch ...)"] " runs the same workflow steps with its provider override. The " [:code "(review ...)"] " block scores branches against your criteria using a neutral judge and picks a winner automatically."]
+          [:p "Planned CLI flags:"]
+          [:p [:code "--variant <provider>"] " -- inject an ad-hoc comparison branch without editing the workflow"]
+          [:p [:code "--compare"] " -- discover sibling variant workflows and cross-review them"]
+          [:p [:code "--review-criteria \"criteria\""] " -- override the review criteria from the command line"]]}
+  {:heading "Tips"
+   :level 2
+   :body [[:p [:strong "Use a local model as judge."] " The grader should be cheap and fast. " [:code "qwen3-8b"] " handles scoring well."]
+          [:p [:strong "Save results."] " Use " [:code "(save ...)"] " so you can compare across runs over time."]
+          [:p [:strong "Pin the grader."] " Always use an explicit " [:code ":provider"] " for the grading step so it doesn't escalate through tiers."]]}]}

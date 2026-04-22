@@ -1,0 +1,40 @@
+{:title "MCP Server"
+ :description "Run glitch as an MCP server for Claude Code, Copilot, Cursor, and other AI editors"
+ :order 12
+ :sections
+ [{:heading "What it does"
+   :level 2
+   :body [[:p "Running " [:code "glitch mcp"] " starts a Model Context Protocol server over stdio. Your AI editor connects to it and gets access to code search, workflow execution, code intelligence, and a Clojure eval sandbox -- all through standard MCP tool calls."]]}
+  {:heading "Start the server"
+   :level 2
+   :body [[:code {:lang "bash"} "glitch mcp"]
+          [:p "The server reads JSON-RPC messages from stdin and writes responses to stdout. Logs go to stderr."]]}
+  {:heading "Available tools"
+   :level 2
+   :body [[:p "Your editor sees these tools after connecting:"]
+          [:p [:strong "glitch_search"] " -- search code using ripgrep. Supports regex, glob filters, multiline, PCRE2, and smart case."]
+          [:p [:strong "glitch_symbols"] " -- find symbol definitions (functions, types, classes) using language-aware patterns. Supports Clojure, Go, Python, JavaScript, TypeScript, and Rust."]
+          [:p [:strong "glitch_run"] " -- execute a glitch workflow file, optionally passing input and parameters."]
+          [:p [:strong "glitch_eval"] " -- evaluate a Clojure expression via SCI and return the result."]
+          [:p [:strong "glitch_check"] " -- check a workflow file for syntax errors."]
+          [:p [:strong "glitch_read_file"] " -- read a file (first 200 lines)."]
+          [:p [:strong "glitch_search_symbols"] " -- search indexed code symbols by name, kind, language, or file path (requires Elasticsearch)."]
+          [:p [:strong "glitch_search_edges"] " -- search code relationships (calls, imports, contains, extends) with depth traversal (requires Elasticsearch)."]
+          [:p [:strong "glitch_symbol_context"] " -- get a symbol's definition plus all its relationships: callers, callees, parent, children, implementors (requires Elasticsearch)."]]}
+  {:heading "Connect from Claude Code"
+   :level 2
+   :body [[:p "Add to your " [:code ".claude/settings.json"] ":"]
+          [:code {:lang "json"} "{\n  \"mcpServers\": {\n    \"glitch\": {\n      \"command\": \"glitch\",\n      \"args\": [\"mcp\"]\n    }\n  }\n}"]]}
+  {:heading "Connect from Cursor"
+   :level 2
+   :body [[:p "Add to your Cursor MCP config (" [:code ".cursor/mcp.json"] "):"]
+          [:code {:lang "json"} "{\n  \"mcpServers\": {\n    \"glitch\": {\n      \"command\": \"glitch\",\n      \"args\": [\"mcp\"]\n    }\n  }\n}"]]}
+  {:heading "Connect from VS Code + Copilot"
+   :level 2
+   :body [[:p "Add to your VS Code " [:code "settings.json"] ":"]
+          [:code {:lang "json"} "{\n  \"mcp\": {\n    \"servers\": {\n      \"glitch\": {\n        \"type\": \"stdio\",\n        \"command\": \"glitch\",\n        \"args\": [\"mcp\"]\n      }\n    }\n  }\n}"]]}
+  {:heading "Code intelligence tools"
+   :level 2
+   :body [[:p "The " [:code "glitch_search_symbols"] ", " [:code "glitch_search_edges"] ", and " [:code "glitch_symbol_context"] " tools query an Elasticsearch index built by " [:code "glitch index"] ". Run the indexer first:"]
+          [:code {:lang "bash"} "# Index the current repo\nglitch index\n\n# Index a specific repo with language filter\nglitch index --repo ~/Projects/backend --languages go,python"]
+          [:p "Set " [:code "GLITCH_ES_URL"] " if your Elasticsearch is not at " [:code "http://localhost:9200"] "."]]}]}
