@@ -7,7 +7,7 @@ class GlitchDev < Formula
   depends_on "babashka"
 
   def install
-    (share/"glitch").install "bb/src"
+    (share/"glitch/src").install "bb/src/glitch"
     (share/"glitch/providers").install Dir["bb/providers/*.clj"]
     (share/"glitch").install "bb/resources/ast-grep-rules"
 
