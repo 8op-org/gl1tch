@@ -1,0 +1,5 @@
+{:date "2026-04-21"
+ :entries
+ [{:type :feat :summary "code intelligence — ast-grep indexer, ES storage, CLI/MCP/REPL queries"}
+  {:type :docs :summary "add REPL-driven docs lab — Emacs + glitch repl walkthrough"}
+  {:type :fix :summary "static require for glitch.repl so uberscript bundles it"}]}

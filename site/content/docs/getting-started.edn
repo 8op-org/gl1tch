@@ -1,0 +1,14 @@
+{:title "Getting Started"
+ :description "Install glitch and run your first workflow"
+ :order 1
+ :sections
+ [{:heading "Install"
+   :level 2
+   :body [[:p "Install via Homebrew:"]
+          [:code {:lang "bash"} "brew install 8op-org/tap/glitch"]]}
+  {:heading "Your first workflow"
+   :level 2
+   :body [[:p "Create " [:code ".glitch/workflows/hello.glitch"] ":"]
+          [:code {:lang "clojure"} "(workflow \"hello\"\n  (step \"greet\"\n    (llm :provider \"copilot\"\n      :prompt \"Summarize this repo\")))"]
+          [:p "Run it:"]
+          [:code {:lang "bash"} "glitch run hello"]]}]}

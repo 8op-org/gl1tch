@@ -1,0 +1,12 @@
+{:title "REPL-Driven Docs"
+ :slug "repl-driven-docs"
+ :description "Build documentation from a live REPL session"
+ :date "2026-04-15"
+ :duration "15min"
+ :steps
+ [{:heading "Connect your REPL"
+   :body [[:p "Start glitch with a REPL server:"]
+          [:code {:lang "bash"} "glitch repl --nrepl 7888"]]}
+  {:heading "Query your workflows"
+   :body [[:p "From Emacs, evaluate:"]
+          [:code {:lang "clojure"} "(glitch/list-workflows)"]]}]}
