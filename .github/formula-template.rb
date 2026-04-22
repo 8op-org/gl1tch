@@ -23,6 +23,7 @@ class Glitch < Formula
 
   def install
     bin.install "glitch"
+    (share/"glitch").install "ast-grep-rules"
   end
 
   test do

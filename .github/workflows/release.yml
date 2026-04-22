@@ -37,7 +37,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ARCHIVE="glitch_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
-          tar czf "${ARCHIVE}" -C bb/build glitch
+          cp -r bb/resources/ast-grep-rules bb/build/ast-grep-rules
+          tar czf "${ARCHIVE}" -C bb/build glitch ast-grep-rules
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:

@@ -5,6 +5,7 @@
             [cheshire.core :as json]
             [clojure.string :as str]
             [glitch.es :as es]
+            [glitch.index.clojure :as clj-index]
             [glitch.index.languages :as lang])
   (:import [java.security MessageDigest]))
 
@@ -636,7 +637,11 @@
                     (let [results (mapv (fn [f]
                                           (let [language (lang/detect-language f)]
                                             (log "    " f)
-                                            (extract-symbols repo-path f language)))
+                                            (if (lang/native-language? language)
+                                              (clj-index/extract-symbols
+                                                repo-path f language
+                                                (repo-name repo-path) (file-hash f) (now-iso))
+                                              (extract-symbols repo-path f language))))
                                         target-files)
 
                           all-symbols    (into [] (mapcat :symbols) results)
