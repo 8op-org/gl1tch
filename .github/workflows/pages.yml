@@ -26,6 +26,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - name: Install Clojure
+        uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          cli: latest
       - name: Install deps
         run: cd site && npm ci
       - name: Build
