@@ -26,12 +26,12 @@
     {:background "#13141f"
      :border [["1px" :solid "rgba(0, 255, 159, 0.08)"]]
      :border-radius "4px"
-     :padding "12px 16px"
+     :padding "10px 14px"
      :font-family (t/fonts :mono)
-     :font-size "0.8rem"
-     :line-height 1.7
+     :font-size "0.78rem"
+     :line-height 1.65
      :overflow-x :auto
-     :margin "12px 0"
+     :margin "8px 0"
      :white-space :pre}]
    [:code
     {:font-family (t/fonts :mono)
@@ -129,34 +129,36 @@
    [:.doc-desc
     {:color (t/colors :fg-dim)
      :font-size "0.82rem"
-     :margin-bottom "28px"
-     :padding-bottom "20px"
+     :margin-bottom "20px"
+     :padding-bottom "12px"
      :border-bottom [["1px" :solid (t/colors :border)]]}]
 
    ;; Section headings
-   [:.doc-section {:margin-top "28px"}]
+   [:.doc-section {:margin-top "20px"}]
+   [:.doc-section:first-child {:margin-top "0"}]
    [:.doc-h2
-    {:font-size "1.15rem"
+    {:font-size "1.05rem"
      :font-weight 700
      :color (t/colors :accent)
-     :margin-bottom "8px"
-     :padding-top "4px"}]
+     :margin-bottom "6px"
+     :border-bottom [["1px" :solid (t/colors :border)]]
+     :padding-bottom "6px"}]
    [:.doc-h3
-    {:font-size "0.95rem"
+    {:font-size "0.9rem"
      :font-weight 600
      :color (t/colors :accent-2)
-     :margin-bottom "6px"
-     :margin-top "20px"}]
+     :margin-bottom "4px"
+     :margin-top "16px"}]
    [:.doc-h4
-    {:font-size "0.88rem"
+    {:font-size "0.85rem"
      :font-weight 600
      :color (t/colors :fg)
      :margin-bottom "4px"
-     :margin-top "16px"}]
+     :margin-top "12px"}]
 
    ;; Paragraphs
    [:.doc-p
-    {:margin-bottom "10px"
+    {:margin-bottom "8px"
      :color (t/colors :fg)
      :opacity 0.85}]
 

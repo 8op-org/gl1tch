@@ -43,7 +43,7 @@
     :else (str element)))
 
 (defn- render-section [{:keys [heading level body]}]
-  [:section.doc-section {:id (heading->id heading)}
+  [:div.doc-section {:id (heading->id heading)}
    [(keyword (str "h" level))
     {:class (str "doc-h" level)}
     heading]
