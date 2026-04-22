@@ -4,7 +4,7 @@
  :sections
  [{:heading "What it does"
    :level 2
-   :body [[:p "Running " [:code "glitch mcp"] " starts a Model Context Protocol server over stdio. Your AI editor connects to it and gets access to code search, workflow execution, code intelligence, and a Clojure eval sandbox -- all through standard MCP tool calls."]]}
+   :body [[:p "Running " [:code "glitch mcp"] " starts a Model Context Protocol server over stdio. Your AI editor connects to it and gets access to workflow execution, the glitch DSL, code intelligence, and workflow discovery -- all through standard MCP tool calls."]]}
   {:heading "Start the server"
    :level 2
    :body [[:code {:lang "bash"} "glitch mcp"]
@@ -13,15 +13,13 @@
    :level 2
    :body [[:p "Your editor sees these tools after connecting:"]
           [:ul
-           [:li [:code "glitch_search"] " -- search code with ripgrep. Regex, glob filters, smart case."]
-           [:li [:code "glitch_symbols"] " -- find symbol definitions using language-aware patterns."]
            [:li [:code "glitch_run"] " -- execute a workflow file with optional input and parameters."]
-           [:li [:code "glitch_eval"] " -- evaluate a Clojure expression via SCI."]
-           [:li [:code "glitch_check"] " -- check a workflow file for syntax errors."]
-           [:li [:code "glitch_read_file"] " -- read a file (first 200 lines)."]
-           [:li [:code "glitch_search_symbols"] " -- search indexed symbols by name, kind, or language (requires ES)."]
-           [:li [:code "glitch_search_edges"] " -- search code relationships with depth traversal (requires ES)."]
-           [:li [:code "glitch_symbol_context"] " -- get a symbol's definition plus all relationships (requires ES)."]]]}
+           [:li [:code "glitch_eval"] " -- evaluate Clojure with the full glitch DSL loaded (llm, sh, ref, call-workflow, and more)."]
+           [:li [:code "glitch_check"] " -- validate a workflow file for syntax errors."]
+           [:li [:code "glitch_list_workflows"] " -- list available workflows with descriptions."]
+           [:li [:code "glitch_search_symbols"] " -- search indexed symbols by name, kind, or language."]
+           [:li [:code "glitch_search_edges"] " -- query code relationships with depth traversal."]
+           [:li [:code "glitch_symbol_context"] " -- get a symbol's definition plus all relationships."]]]}
   {:heading "Connect from your editor"
    :level 2
    :body [[:p "The server command is the same everywhere. Only the config file location differs."]

@@ -67,6 +67,8 @@ glitch <plugin-name> <command> [args...]        # shorthand
 
 # MCP server (for IDE integration)
 glitch mcp                                      # start JSON-RPC stdio server
+# Tools: glitch_run, glitch_eval, glitch_check, glitch_list_workflows,
+#         glitch_search_symbols, glitch_search_edges, glitch_symbol_context
 
 # Version
 glitch version                                  # prints "glitch 0.3.0"
@@ -485,15 +487,13 @@ Create a `.clj` file in `~/.config/glitch/providers/`:
 
 | Tool | Description |
 |------|-------------|
-| `glitch_search` | Ripgrep wrapper (regex, glob, multiline, PCRE2, context) |
-| `glitch_symbols` | Language-aware symbol search (go, python, js, ts, rust, clojure) |
-| `glitch_run` | Execute a workflow |
-| `glitch_eval` | Evaluate Clojure expressions via SCI |
-| `glitch_check` | Syntax validation |
-| `glitch_read_file` | Read file (200 lines max) |
-| `glitch_search_symbols` | Elasticsearch indexed symbol lookup |
-| `glitch_search_edges` | Code relationship queries (calls, imports, extends, implements, references, contains) |
-| `glitch_symbol_context` | Full symbol definition + all relationships |
+| `glitch_run` | Execute a workflow with optional input and parameters |
+| `glitch_eval` | Evaluate Clojure with the full glitch DSL loaded |
+| `glitch_check` | Validate a workflow file for syntax errors |
+| `glitch_list_workflows` | List available workflows with descriptions |
+| `glitch_search_symbols` | Search indexed symbols by name, kind, or language |
+| `glitch_search_edges` | Query code relationships with depth traversal |
+| `glitch_symbol_context` | Get a symbol's definition plus all relationships |
 
 ### IDE Configuration
 
