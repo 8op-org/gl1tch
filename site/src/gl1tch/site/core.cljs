@@ -3,20 +3,22 @@
             [gl1tch.site.router :as router]
             [gl1tch.site.state :as state]
             [gl1tch.site.styles.global :as styles]
-            [gl1tch.site.components.nav :as nav]))
+            [gl1tch.site.components.nav :as nav]
+            [gl1tch.site.pages.docs :as docs]))
 
 (defn current-page []
   (let [match @state/current-match
-        name (get-in match [:data :name])]
+        name (get-in match [:data :name])
+        slug (get-in match [:path-params :slug])]
     [:div.app
      [nav/nav]
      [:main {:style {:padding-top "52px"}}
       (case name
         :home [:div.wrap [:h1 "gl1tch"]]
-        :docs/index [:div.wrap [:h1 "Docs"]]
-        :docs/page [:div.wrap [:h1 (str "Doc: " (get-in match [:path-params :slug]))]]
+        :docs/index [docs/index]
+        :docs/page [docs/page slug]
         :labs/index [:div.wrap [:h1 "Labs"]]
-        :labs/page [:div.wrap [:h1 (str "Lab: " (get-in match [:path-params :slug]))]]
+        :labs/page [:div.wrap [:h1 (str "Lab: " slug)]]
         :changelog [:div.wrap [:h1 "Changelog"]]
         [:div.wrap [:h1 "404"]])]]))
 
