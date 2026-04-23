@@ -5,7 +5,11 @@
             [glitch.plugin :as plugin]
             [glitch.plugin-loader :as plugin-loader]
             [glitch.repl :as repl]
+            [glitch.es :as es]
             [glitch.index :as index]
+            [glitch.index.sources :as sources]
+            [glitch.index.sources.github]
+            [glitch.index.sources.gitlab]
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.java.io :as io]))
@@ -240,6 +244,7 @@
   (when (or (= (first args) "--help") (= (first args) "-h"))
     (println "Usage: glitch index [options]")
     (println "       glitch index query [options]")
+    (println "       glitch index sources")
     (println)
     (println "Index mode (default):")
     (println "  --repo <path>        Repository to index (default: cwd)")
@@ -247,12 +252,21 @@
     (println "  --languages <list>   Comma-separated languages to index (e.g. go,clojure)")
     (println "  --full               Full reindex (skip hash check)")
     (println "  --stats              Show index stats only")
+    (println "  --sources <list>     Comma-separated source names to index (e.g. github-issues,gitlab-mrs)")
+    (println "  --no-code            Skip code indexing (use with --sources)")
+    (println "  --since <date>       Date filter for sources (e.g. 2024-01-01)")
+    (println "  --limit <n>          Max items per source")
+    (println "  --state <state>      Issue/MR state filter (open/closed/all)")
+    (println)
+    (println "Subcommands:")
+    (println "  sources              List available index sources and detection status")
     (println)
     (println "Query mode:")
     (println "  --name <name>        Symbol name (supports wildcards: foo*)")
     (println "  --kind <kind>        Symbol kind (function, var, macro, protocol, ...)")
     (println "  --language <lang>    Filter by language")
     (println "  --file <path>        Filter by file")
+    (println "  --from <source>      Query a source index instead of symbols (e.g. github-issues)")
     (println "  --edges              Query edges instead of symbols")
     (println "  --source <id>        Edge source id")
     (println "  --target <id>        Edge target id")
@@ -261,6 +275,20 @@
     (println)
     (println "Supported languages: go, python, javascript, rust, java, c, clojure")
     (System/exit 0))
+  ;; Subcommand: glitch index sources
+  (when (= (first args) "sources")
+    (let [{:keys [opts]} (parse-args (rest args) {:repo {:kind :option}
+                                                   :es-url {:kind :option}})
+          repo (or (:repo opts) (System/getProperty "user.dir"))]
+      (let [srcs (sources/list-sources repo)]
+        (println "Available index sources:")
+        (doseq [{:keys [name doc detected]} (sort-by :name srcs)]
+          (println (str "  " (if detected "[detected]" "[--------]") " " name
+                        (when doc (str " — " doc)))))
+        (when (empty? srcs)
+          (println "  (none registered)")))
+      (System/exit 0)))
+
   (let [;; Check if first positional arg is "query"
         query? (= (first args) "query")
         rest-args (if query? (rest args) args)
@@ -268,13 +296,17 @@
         valid-opts (if query?
                      {:name {:kind :option} :kind {:kind :option}
                       :language {:kind :option} :file {:kind :option}
+                      :from {:kind :option}
                       :edges {:kind :flag} :source {:kind :option}
                       :target {:kind :option} :depth {:kind :option}
                       :context {:kind :option} :repo {:kind :option}
                       :es-url {:kind :option}}
                      {:repo {:kind :option} :es-url {:kind :option}
                       :languages {:kind :option} :full {:kind :flag}
-                      :stats {:kind :flag}})
+                      :stats {:kind :flag}
+                      :sources {:kind :option} :no-code {:kind :flag}
+                      :since {:kind :option} :limit {:kind :option}
+                      :state {:kind :option}})
         {:keys [opts]} (parse-args rest-args valid-opts)
         es-url (or (:es-url opts) (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
         repo (or (:repo opts) (System/getProperty "user.dir"))
@@ -293,6 +325,23 @@
                                          :depth (some-> (:depth opts) parse-long)
                                          :limit 50})
 
+                      (:from opts)
+                      (let [src (sources/get-source (:from opts))]
+                        (when-not src
+                          (println (str "error: unknown source '" (:from opts) "'"))
+                          (System/exit 1))
+                        (let [idx-name ((:index-name src) repo-name)
+                              clauses (cond-> []
+                                        (:name opts) (conj (if (str/includes? (str (:name opts)) "*")
+                                                             {:wildcard {:title (:name opts)}}
+                                                             {:match {:title (:name opts)}}))
+                                        (:kind opts) (conj {:term {:kind (:kind opts)}}))
+                              query {:size (or (some-> (:limit opts) parse-long) 20)
+                                     :query (if (seq clauses)
+                                              {:bool {:must clauses}}
+                                              {:match_all {}})}]
+                          (es/search es-url idx-name query)))
+
                       :else
                       (index/query-symbols es-url repo-name
                                           {:name (:name opts)
@@ -302,12 +351,22 @@
                                            :limit 20}))]
         (println (json/generate-string results {:pretty true})))
       ;; Index mode
-      (index/index-repo repo
-                       :es-url es-url
-                       :languages (when (:languages opts)
-                                   (set (str/split (:languages opts) #",")))
-                       :full (:full opts)
-                       :stats-only (:stats opts)))))
+      (do
+        ;; Code indexing (unless --no-code)
+        (when-not (:no-code opts)
+          (index/index-repo repo
+                           :es-url es-url
+                           :languages (when (:languages opts)
+                                       (set (str/split (:languages opts) #",")))
+                           :full (:full opts)
+                           :stats-only (:stats opts)))
+        ;; Source indexing
+        (when-let [src-names (:sources opts)]
+          (doseq [src-name (str/split src-names #",")]
+            (sources/fetch-and-index es-url repo src-name
+                                     {:since (:since opts)
+                                      :limit (some-> (:limit opts) parse-long)
+                                      :state (:state opts)})))))))
 
 (defn- cmd-repl [args]
   (let [{:keys [opts]} (parse-args args {:port {:short "p" :kind :option}})
