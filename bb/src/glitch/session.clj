@@ -194,3 +194,29 @@
   "Return all entries from index.edn."
   []
   (read-index))
+
+(defn record-advise!
+  "Record an advisory recommendation in the current session.
+   Entry shape: {:type :advise, :task, :recommendation, :followed?, :timestamp}"
+  [{:keys [task recommendation]}]
+  (let [entry {:type :advise
+               :task task
+               :recommendation recommendation
+               :followed? nil
+               :timestamp (System/currentTimeMillis)}]
+    (swap! *current-session* conj entry)
+    (flush-session!)
+    entry))
+
+(defn mark-advise-followed!
+  "Update the most recent :advise entry's :followed? field."
+  [followed?]
+  (swap! *current-session*
+         (fn [entries]
+           (let [idx (some (fn [[i e]] (when (= :advise (:type e)) i))
+                           (map-indexed vector (reverse entries)))]
+             (if idx
+               (let [real-idx (- (dec (count entries)) idx)]
+                 (assoc-in entries [real-idx :followed?] followed?))
+               entries))))
+  (flush-session!))
