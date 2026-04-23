@@ -12,7 +12,8 @@
             [glitch.index-languages-test]
             [glitch.index-test]
             [glitch.session-test]
-            [glitch.mcp.handlers-test]))
+            [glitch.mcp.handlers-test]
+            [glitch.promote-test]))
 
 (defn -main [& _]
   (let [results (mapv #(t/run-tests %)
@@ -27,7 +28,8 @@
                    'glitch.index-languages-test
                    'glitch.index-test
                    'glitch.session-test
-                   'glitch.mcp.handlers-test])
+                   'glitch.mcp.handlers-test
+                   'glitch.promote-test])
         total-fail (apply + (map :fail results))
         total-err  (apply + (map :error results))]
     (println (str "\n=== " (apply + (map :test results)) " tests, "
