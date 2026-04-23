@@ -106,4 +106,20 @@
      {"path"   {"type" "string" "description" "Absolute or relative path to the file"}
       "offset" {"type" "integer" "description" "Line number to start reading from (1-based, default: 1)"}
       "limit"  {"type" "integer" "description" "Maximum number of lines to return (default: 200)"}}
-     "required" ["path"]}}])
+     "required" ["path"]}}
+
+   {"name" "glitch_query_source"
+    "description" "Query indexed GitHub issues/PRs or GitLab issues/MRs. Use this to find issues, PRs, or MRs by text search, date range, state, type, or label. Supports 'since' for date filtering — use this for 'what merged this week' queries instead of keyword search."
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"source" {"type" "string" "description" "Index source name: 'github' or 'gitlab'"}
+      "query"  {"type" "string" "description" "Text search across title and body (optional)"}
+      "since"  {"type" "string" "description" "Only items updated on or after this date (YYYY-MM-DD or ISO)"}
+      "state"  {"type" "string" "description" "Filter by state: open, closed, merged, all"}
+      "type"   {"type" "string" "description" "Filter by type: issue, pull_request, merge_request"}
+      "label"  {"type" "string" "description" "Filter by label name"}
+      "author" {"type" "string" "description" "Filter by author login/username"}
+      "repo"   {"type" "string" "description" "Repo name (default: cwd basename)"}
+      "limit"  {"type" "integer" "description" "Max results (default: 50)"}}
+     "required" ["source"]}}])

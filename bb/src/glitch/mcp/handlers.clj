@@ -2,7 +2,11 @@
   (:require [babashka.process :as bp]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [glitch.es :as es]
             [glitch.index :as index]
+            [glitch.index.sources :as sources]
+            [glitch.index.sources.github]
+            [glitch.index.sources.gitlab]
             [glitch.mcp.sci-bindings :as sci-bind]
             [glitch.session :as session]
             [sci.core :as sci]))
@@ -169,6 +173,40 @@
       1 "No matches found."
       (throw (ex-info (str "search failed: " (str/trim (:err result))) {})))))
 
+(defn- handle-query-source [arguments]
+  (let [source-name (get arguments "source")
+        src         (sources/get-source source-name)
+        _           (when-not src
+                      (throw (ex-info (str "unknown source: " source-name
+                                           ". Available: " (str/join ", " (map :name (sources/list-sources "."))))
+                                      {})))
+        repo    (or (get arguments "repo")
+                    (last (str/split (System/getProperty "user.dir") #"/")))
+        es-url  (or (System/getenv "GLITCH_ES_URL") "http://localhost:9200")
+        idx     ((:index-name src) repo)
+        limit   (or (get arguments "limit") 50)
+        clauses (cond-> []
+                  (get arguments "query")
+                  (conj {:multi_match {:query  (get arguments "query")
+                                       :fields ["title" "body"]}})
+                  (get arguments "since")
+                  (conj {:range {:updated_at {:gte (get arguments "since")}}})
+                  (get arguments "state")
+                  (conj {:term {:state (get arguments "state")}})
+                  (get arguments "type")
+                  (conj {:term {:type (get arguments "type")}})
+                  (get arguments "label")
+                  (conj {:term {:labels (get arguments "label")}})
+                  (get arguments "author")
+                  (conj {:term {:author (get arguments "author")}}))
+        query   {:size  limit
+                 :sort  [{:updated_at {:order "desc"}}]
+                 :query (if (seq clauses)
+                          {:bool {:must clauses}}
+                          {:match_all {}})}
+        results (es/search es-url idx query)]
+    (json/generate-string results {:pretty true})))
+
 (defn- handle-read-file [arguments]
   (let [path   (get arguments "path")
         offset (max 1 (or (get arguments "offset") 1))
@@ -207,4 +245,5 @@
         "glitch_advise"         (handle-advise arguments)
         "glitch_search"         (handle-search arguments)
         "glitch_read_file"      (handle-read-file arguments)
+        "glitch_query_source"   (handle-query-source arguments)
         (throw (ex-info (str "unknown tool: " tool-name) {}))))))
