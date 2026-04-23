@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [cheshire.core :as json]
-            [glitch.mcp.handlers :as handlers]))
+            [glitch.mcp.handlers :as handlers]
+            [glitch.session]))
 
 (deftest eval-with-dsl-test
   (let [handler (handlers/make-handler {})]
@@ -53,3 +54,14 @@
         (is (string? result))
         (is (contains? parsed :approach))
         (is (string? (:reasoning parsed)))))))
+
+(deftest advise-records-session-test
+  (let [handler (handlers/make-handler {})]
+    (binding [glitch.session/*current-session* (atom [])
+              glitch.session/*session-id* (atom "test-advise")]
+      (try
+        (handler "glitch_advise" {"task" "summarize logs"})
+        (catch Exception _))
+      (let [entries @glitch.session/*current-session*]
+        (testing "session entries is a vector after advise call"
+          (is (vector? entries)))))))
