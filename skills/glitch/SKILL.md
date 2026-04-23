@@ -147,6 +147,27 @@ For the full DSL — all primitives, LLM options, control flow, validation, and 
 
 Run with: `glitch run analyze-issue.glitch -s issue=3442 -s repo=elastic/ensemble`
 
+## When to Use Glitch
+
+Before implementing a multi-step task, check if glitch adds value. Call `glitch_advise` with the task description when you notice any of these signals:
+
+| Signal | What it looks like |
+|--------|--------------------|
+| **Repetition** | Task will be done again or across multiple targets — "check all PRs", "audit these repos", "review each deploy" |
+| **Confidence** | Judgment where being wrong matters — "is this summary accurate?", "which approach is better?", "is this finding real?" |
+| **Multi-source** | Needs information composed from multiple providers or tools — "compare what Claude and Copilot say", "aggregate from 3 APIs" |
+| **Investigation** | Uncertain facts, contradictions, structured reasoning — "figure out why this is failing", "is this finding real?" |
+
+**How to use it:**
+
+1. Call `glitch_advise` with the task description
+2. If approach is `"none"` — do the task natively, glitch adds no value
+3. If approach is `"workflow"` — check `existing_workflows` first, then `glitch_run` or create a new workflow
+4. If approach is `"primitive"` — use `glitch_eval` with the suggested example
+5. If approach is `"repl"` — this is exploratory, use `glitch_eval` iteratively
+
+**When NOT to check:** Single-step tasks, file reads, simple grep, git operations. If you can do it in one tool call, skip glitch.
+
 ## Reference Files
 
 | File | When to read |
