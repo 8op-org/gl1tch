@@ -107,7 +107,11 @@ Description of what this workflow does: %s")
                                         :provider provider
                                         :step-id "promote-tags")]
                      (mapv (comp str/trim str/lower-case) (str/split (str tag-str) #",")))
-                   (catch Exception _ []))]
+                   (catch Exception _ []))
+        task-shape (let [advise-entries (filter #(= :advise (:type %)) (or session []))]
+                     (when (seq advise-entries)
+                       (:task (last advise-entries))))]
     {:workflow-source cleaned
      :path           path
-     :tags           tags}))
+     :tags           tags
+     :task-shape     task-shape}))
