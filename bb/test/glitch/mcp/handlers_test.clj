@@ -43,3 +43,13 @@
         (.delete wf1)
         (.delete wf2)
         (.delete tmp-dir)))))
+
+(deftest advise-fallback-test
+  (let [handler (handlers/make-handler {})]
+    (testing "returns valid JSON with none approach on workflow failure"
+      (let [result (handler "glitch_advise"
+                            {"task" "some task that will fail without provider"})
+            parsed (json/parse-string result true)]
+        (is (string? result))
+        (is (contains? parsed :approach))
+        (is (string? (:reasoning parsed)))))))
