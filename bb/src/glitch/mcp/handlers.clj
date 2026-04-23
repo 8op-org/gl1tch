@@ -141,6 +141,50 @@
                           results))
       "No matching workflows found.")))
 
+(defn- handle-advise [arguments]
+  (let [task    (get arguments "task")
+        context (get arguments "context" "")
+        input   (if (seq context)
+                  (str task "\n\nContext: " context)
+                  task)
+        cmd     ["glitch" "run" ".glitch/workflows/advise.glitch" input]
+        result  (apply bp/shell {:out :string :err :string :continue true} cmd)]
+    (if (zero? (:exit result))
+      (let [raw (str/trim (:out result))]
+        (try
+          (let [extracted (-> raw
+                             (str/replace #"^```[a-z]*\n?" "")
+                             (str/replace #"\n?```\s*$" "")
+                             str/trim)
+                start (str/index-of extracted "{")
+                end   (when start (inc (str/last-index-of extracted "}")))
+                json-str (if (and start end)
+                           (subs extracted start end)
+                           extracted)
+                parsed (json/parse-string json-str)]
+            (json/generate-string
+              {"approach"           (get parsed "approach" "none")
+               "primitives"         (get parsed "primitives" [])
+               "reasoning"          (get parsed "reasoning" "")
+               "example"            (get parsed "example" "")
+               "existing_workflows" (get parsed "existing_workflows" [])}
+              {:pretty true}))
+          (catch Exception _
+            (json/generate-string
+              {"approach" "none"
+               "primitives" []
+               "reasoning" (str "Advisory workflow returned unparseable response: " raw)
+               "example" ""
+               "existing_workflows" []}
+              {:pretty true}))))
+      (json/generate-string
+        {"approach" "none"
+         "primitives" []
+         "reasoning" (str "Advisory workflow failed: " (str/trim (:err result)))
+         "example" ""
+         "existing_workflows" []}
+        {:pretty true}))))
+
 (defn make-handler
   [_context]
   (let [sci-ctx (make-sci-ctx)]
@@ -154,4 +198,5 @@
         "glitch_symbol_context" (handle-symbol-context arguments)
         "glitch_list_workflows" (handle-list-workflows arguments)
         "glitch_recall"         (handle-recall arguments)
+        "glitch_advise"         (handle-advise arguments)
         (throw (ex-info (str "unknown tool: " tool-name) {}))))))

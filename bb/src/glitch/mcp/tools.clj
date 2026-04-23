@@ -74,4 +74,13 @@
     {"type" "object"
      "properties"
      {"query" {"type" "string" "description" "Natural language description of what you're looking for (e.g. 'summarize ES errors', 'fetch github issues')"}}
-     "required" ["query"]}}])
+     "required" ["query"]}}
+
+   {"name" "glitch_advise"
+    "description" "Get a recommendation for which glitch primitives or workflows to use for a given task. Returns a structured recommendation with approach type, relevant primitives, reasoning, and a concrete example. Use this when you're unsure whether glitch can help with the current task."
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"task"    {"type" "string" "description" "Natural language description of the task"}
+      "context" {"type" "string" "description" "Optional additional context (repo, files, domain)"}}
+     "required" ["task"]}}])
