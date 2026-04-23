@@ -62,6 +62,13 @@
       (try
         (handler "glitch_advise" {"task" "summarize logs"})
         (catch Exception _))
-      (let [entries @glitch.session/*current-session*]
+      (let [entries @glitch.session/*current-session*
+            advise-entries (filter #(= :advise (:type %)) entries)]
         (testing "session entries is a vector after advise call"
-          (is (vector? entries)))))))
+          (is (vector? entries)))
+        (testing "advise entry has expected shape when present"
+          (when (seq advise-entries)
+            (let [entry (first advise-entries)]
+              (is (= :advise (:type entry)))
+              (is (= "summarize logs" (:task entry)))
+              (is (contains? entry :recommendation)))))))))

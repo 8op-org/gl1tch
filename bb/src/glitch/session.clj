@@ -168,8 +168,8 @@
 
 (defn recall-search
   "Fuzzy search the workflow index. Tokenizes the query and matches
-   against :description and :tags of each entry. Returns results
-   sorted by match score (descending)."
+   against :description, :tags, and :task-shape of each entry. Returns
+   results sorted by match score (descending)."
   [query]
   (let [tokens  (-> (str/lower-case (str query))
                     (str/split #"\s+")
@@ -179,10 +179,12 @@
                   (let [desc   (str/lower-case (or (:description entry) ""))
                         tag-s  (str/lower-case
                                 (str/join " "
-                                          (map str (or (:tags entry) []))))]
+                                          (map str (or (:tags entry) []))))
+                        task-s (str/lower-case (or (:task-shape entry) ""))]
                     (count (filter (fn [tok]
                                     (or (str/includes? desc tok)
-                                        (str/includes? tag-s tok)))
+                                        (str/includes? tag-s tok)
+                                        (str/includes? task-s tok)))
                                   tokens))))]
     (->> entries
          (map (fn [e] (assoc e ::score (score e))))
