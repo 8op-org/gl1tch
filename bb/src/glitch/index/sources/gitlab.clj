@@ -32,8 +32,11 @@
                          "git" "-C" repo-path "remote" "get-url" "origin")
         url (str/trim (:out res))]
     (or
-     ;; SSH:  git@gitlab.com:group/subgroup/project.git
+     ;; SSH shorthand:  git@gitlab.com:group/subgroup/project.git
      (when-let [[_ path] (re-find #"git@[^:]+:(.+?)(?:\.git)?$" url)]
+       path)
+     ;; SSH protocol:  ssh://git@gitlab.com/group/subgroup/project.git
+     (when-let [[_ path] (re-find #"ssh://[^/]+/(.+?)(?:\.git)?$" url)]
        path)
      ;; HTTPS: https://gitlab.com/group/subgroup/project.git
      (when-let [[_ path] (re-find #"https?://[^/]+/(.+?)(?:\.git)?$" url)]
@@ -158,10 +161,9 @@
    :cli-opts   [{:flag "--since" :doc "Only items created on or after this date (YYYY-MM-DD)"}
                 {:flag "--limit" :doc "Max items per category (default 100)"}
                 {:flag "--state" :doc "Issue/MR state: open, closed, merged, all (default open)"}]
-   :fetch      (fn [{:keys [repo-path since limit state]
-                     :or   {limit "100" state "open"}}]
+   :fetch      (fn [{:keys [repo-path since limit state]}]
                  (let [project-path (parse-project-path repo-path)
-                       per-page     (str limit)
+                       per-page     (str (or limit 100))
                        now          (.toString (java.time.Instant/now))
                        ;; Fetch issues
                        issue-args   (into ["glab" "issue" "list"

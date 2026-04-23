@@ -115,7 +115,7 @@
    :fetch
    (fn [{:keys [repo-path since limit state]}]
      (let [owner-repo   (detect-github-remote repo-path)
-           lim          (or limit "100")
+           lim          (str (or limit 100))
            st           (or state "all")
            issue-fields "number,title,body,state,labels,author,assignees,url,createdAt,updatedAt,closedAt"
            pr-fields    "number,title,body,state,labels,author,assignees,url,createdAt,updatedAt,closedAt,baseRefName,headRefName,mergedAt"
