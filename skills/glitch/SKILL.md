@@ -40,6 +40,10 @@ glitch up                             # verify required tools
 glitch repl                           # start nREPL on port 1667
 glitch mcp                            # start MCP server (JSON-RPC stdio)
 glitch index                          # index current repo (code intelligence)
+glitch index sources                  # list available index sources + detection
+glitch index --sources github         # index GitHub issues/PRs
+glitch index --sources gitlab --no-code --since 2026-01-01  # GitLab only
+glitch index query --from github --name "rate"  # query source index
 glitch plugin list                    # list plugins
 glitch version                        # prints version
 ```

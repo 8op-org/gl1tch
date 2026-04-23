@@ -17,6 +17,7 @@
 | `glitch_search_symbols` | Search indexed symbols by name, kind, or language |
 | `glitch_search_edges` | Query code relationships with depth traversal |
 | `glitch_symbol_context` | Get a symbol's definition plus all relationships |
+| `glitch_query_source` | Query indexed GitHub/GitLab data with date range, state, type, label, author filters |
 
 ## IDE Configuration
 
