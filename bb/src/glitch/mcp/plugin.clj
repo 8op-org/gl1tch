@@ -45,7 +45,8 @@
   (sci/init {:namespaces
              {'user           (assoc (sci-bind/user-bindings)
                                      'defmcp-tool defmcp-tool)
-              'clojure.string sci-bind/string-bindings}}))
+              'clojure.string sci-bind/string-bindings
+              'str            sci-bind/string-bindings}}))
 
 (defn load-tools!
   "Scan .glitch/mcp-tools/*.clj and evaluate each in a SCI context.
