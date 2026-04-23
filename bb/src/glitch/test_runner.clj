@@ -13,6 +13,7 @@
             [glitch.index-test]
             [glitch.session-test]
             [glitch.mcp.handlers-test]
+            [glitch.mcp.plugin-test]
             [glitch.promote-test]))
 
 (defn -main [& _]
@@ -29,6 +30,7 @@
                    'glitch.index-test
                    'glitch.session-test
                    'glitch.mcp.handlers-test
+                   'glitch.mcp.plugin-test
                    'glitch.promote-test])
         total-fail (apply + (map :fail results))
         total-err  (apply + (map :error results))]

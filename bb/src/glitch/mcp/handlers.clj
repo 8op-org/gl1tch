@@ -2,8 +2,8 @@
   (:require [babashka.process :as bp]
             [cheshire.core :as json]
             [clojure.string :as str]
-            [glitch.core :as g]
             [glitch.index :as index]
+            [glitch.mcp.sci-bindings :as sci-bind]
             [glitch.session :as session]
             [sci.core :as sci]))
 
@@ -22,42 +22,8 @@
 
 (defn- make-sci-ctx []
   (sci/init {:namespaces
-             {'user
-              {'trace            g/trace
-               'input            g/input
-               'params           g/params
-               'param            g/param
-               'ref              g/ref
-               'sh              g/sh
-               'search           g/search
-               'save             g/save
-               'read-file        g/read-file
-               'write-file       g/write-file
-               'get-steps        g/get-steps
-               'last-output      g/last-output
-               'gate             g/gate
-               'call-workflow    g/call-workflow
-               'json-extract     g/json-extract
-               'validate-schema  g/validate-schema
-               'validate         g/validate
-               'llm              g/llm
-               'grounded?        g/grounded?
-               'consensus        g/consensus
-               'composite-score  g/composite-score
-               'search-symbols   g/search-symbols
-               'search-edges     g/search-edges
-               'symbol-context   g/symbol-context}
-              'clojure.string
-              {'upper-case   clojure.string/upper-case
-               'lower-case   clojure.string/lower-case
-               'trim         clojure.string/trim
-               'split        clojure.string/split
-               'join         clojure.string/join
-               'replace      clojure.string/replace
-               'starts-with? clojure.string/starts-with?
-               'ends-with?   clojure.string/ends-with?
-               'includes?    clojure.string/includes?
-               'blank?       clojure.string/blank?}}}))
+             {'user           (sci-bind/user-bindings)
+              'clojure.string sci-bind/string-bindings}}))
 
 (defn- handle-eval [sci-ctx arguments]
   (let [expression (get arguments "expression")
@@ -184,6 +150,47 @@
       (catch Exception _ nil))
     (json/generate-string response {:pretty true})))
 
+(defn- handle-search [arguments]
+  (let [pattern   (get arguments "pattern")
+        path      (or (get arguments "path") ".")
+        glob      (get arguments "glob")
+        multiline (get arguments "multiline" false)
+        context   (get arguments "context")
+        max-count (or (get arguments "max_count") 200)
+        cmd (cond-> ["rg" "--no-heading" "-n"
+                     "--max-count" (str max-count)]
+              glob      (into ["--glob" glob])
+              multiline (into ["-U" "--multiline-dotall"])
+              context   (into ["-C" (str context)])
+              true      (conj pattern path))
+        result (apply bp/shell {:out :string :err :string :continue true} cmd)]
+    (case (:exit result)
+      0 (:out result)
+      1 "No matches found."
+      (throw (ex-info (str "search failed: " (str/trim (:err result))) {})))))
+
+(defn- handle-read-file [arguments]
+  (let [path   (get arguments "path")
+        offset (max 1 (or (get arguments "offset") 1))
+        limit  (min 200 (or (get arguments "limit") 200))
+        file   (java.io.File. path)]
+    (when-not (.exists file)
+      (throw (ex-info (str "file not found: " path) {})))
+    (when (.isDirectory file)
+      (throw (ex-info (str "path is a directory: " path) {})))
+    (let [lines (str/split-lines (slurp file))
+          total (count lines)
+          start (dec offset)]
+      (if (>= start total)
+        "\n"
+        (let [end   (min total (+ start limit))
+              selected (subvec (vec lines) start end)]
+          (str (str/join "\n"
+                         (map-indexed (fn [i line]
+                                        (str (+ offset i) "\t" line))
+                                      selected))
+               "\n"))))))
+
 (defn make-handler
   [_context]
   (let [sci-ctx (make-sci-ctx)]
@@ -198,4 +205,6 @@
         "glitch_list_workflows" (handle-list-workflows arguments)
         "glitch_recall"         (handle-recall arguments)
         "glitch_advise"         (handle-advise arguments)
+        "glitch_search"         (handle-search arguments)
+        "glitch_read_file"      (handle-read-file arguments)
         (throw (ex-info (str "unknown tool: " tool-name) {}))))))

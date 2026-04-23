@@ -4,12 +4,19 @@
   (:require [glitch.mcp.protocol :as proto]
             [glitch.mcp.tools :as tools]
             [glitch.mcp.handlers :as handlers]
+            [glitch.mcp.plugin :as mcp-plugin]
             [clojure.string :as str]))
 
 (defn start [_opts]
   (let [handler (handlers/make-handler {})
-        dispatch-ctx {:tools tools/tool-definitions
-                      :tool-handler handler}]
+        _       (mcp-plugin/load-tools!)
+        all-tools (into tools/tool-definitions (mcp-plugin/tool-definitions))
+        combined-handler (fn [tool-name args]
+                           (if (contains? @mcp-plugin/registry tool-name)
+                             (mcp-plugin/handle-tool tool-name args)
+                             (handler tool-name args)))
+        dispatch-ctx {:tools all-tools
+                      :tool-handler combined-handler}]
     (binding [*out* *err*]
       (println "[glitch-mcp] server started"))
     (try

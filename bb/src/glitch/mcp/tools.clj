@@ -83,4 +83,27 @@
      "properties"
      {"task"    {"type" "string" "description" "Natural language description of the task"}
       "context" {"type" "string" "description" "Optional additional context (repo, files, domain)"}}
-     "required" ["task"]}}])
+     "required" ["task"]}}
+
+   {"name" "glitch_search"
+    "description" "Search file contents using ripgrep. Supports regex patterns, glob filtering, multiline matching, and context lines. Use this for fast text search across a repository."
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"pattern"   {"type" "string" "description" "Regex pattern to search for"}
+      "path"      {"type" "string" "description" "File or directory to search (default: current directory)"}
+      "glob"      {"type" "string" "description" "Glob pattern to filter files (e.g. \"*.go\", \"*.{ts,tsx}\")"}
+      "multiline" {"type" "boolean" "description" "Enable multiline matching where . matches newlines (default: false)"}
+      "context"   {"type" "integer" "description" "Number of context lines before and after each match"}
+      "max_count" {"type" "integer" "description" "Maximum matches per file (default: 200)"}}
+     "required" ["pattern"]}}
+
+   {"name" "glitch_read_file"
+    "description" "Read the contents of a file. Returns up to 200 lines by default. Use offset and limit to read specific ranges of large files."
+    "inputSchema"
+    {"type" "object"
+     "properties"
+     {"path"   {"type" "string" "description" "Absolute or relative path to the file"}
+      "offset" {"type" "integer" "description" "Line number to start reading from (1-based, default: 1)"}
+      "limit"  {"type" "integer" "description" "Maximum number of lines to return (default: 200)"}}
+     "required" ["path"]}}])

@@ -1,6 +1,7 @@
 (ns glitch.mcp.handlers-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [cheshire.core :as json]
             [glitch.mcp.handlers :as handlers]
             [glitch.session]))
@@ -72,3 +73,66 @@
               (is (= :advise (:type entry)))
               (is (= "summarize logs" (:task entry)))
               (is (contains? entry :recommendation)))))))))
+
+(deftest search-test
+  (let [handler (handlers/make-handler {})
+        tmp-dir (doto (io/file (System/getProperty "java.io.tmpdir")
+                               (str "glitch-search-test-" (System/currentTimeMillis)))
+                  (.mkdirs))
+        f1 (io/file tmp-dir "hello.txt")
+        f2 (io/file tmp-dir "world.clj")]
+    (try
+      (spit f1 "hello world\ngoodbye world\nhello again")
+      (spit f2 "(defn greet [] \"hello\")")
+      (testing "basic pattern match"
+        (let [result (handler "glitch_search"
+                              {"pattern" "hello"
+                               "path"    (.getAbsolutePath tmp-dir)})]
+          (is (str/includes? result "hello"))))
+      (testing "glob filter"
+        (let [result (handler "glitch_search"
+                              {"pattern" "hello"
+                               "path"    (.getAbsolutePath tmp-dir)
+                               "glob"    "*.clj"})]
+          (is (str/includes? result "defn"))
+          (is (not (str/includes? result "goodbye")))))
+      (testing "no matches returns message"
+        (let [result (handler "glitch_search"
+                              {"pattern" "zzz_no_match"
+                               "path"    (.getAbsolutePath tmp-dir)})]
+          (is (= "No matches found." result))))
+      (finally
+        (.delete f1)
+        (.delete f2)
+        (.delete tmp-dir)))))
+
+(deftest read-file-test
+  (let [handler (handlers/make-handler {})
+        tmp-file (io/file (System/getProperty "java.io.tmpdir")
+                          (str "glitch-read-test-" (System/currentTimeMillis) ".txt"))]
+    (try
+      (spit tmp-file (str/join "\n" (map #(str "line " %) (range 1 11))))
+      (testing "reads full file with line numbers"
+        (let [result (handler "glitch_read_file"
+                              {"path" (.getAbsolutePath tmp-file)})]
+          (is (str/includes? result "1\tline 1"))
+          (is (str/includes? result "10\tline 10"))))
+      (testing "offset and limit"
+        (let [result (handler "glitch_read_file"
+                              {"path"   (.getAbsolutePath tmp-file)
+                               "offset" 3
+                               "limit"  2})]
+          (is (str/includes? result "3\tline 3"))
+          (is (str/includes? result "4\tline 4"))
+          (is (not (str/includes? result "5\tline 5")))))
+      (testing "offset beyond end of file returns empty"
+        (let [result (handler "glitch_read_file"
+                              {"path"   (.getAbsolutePath tmp-file)
+                               "offset" 999})]
+          (is (= "\n" result))))
+      (testing "file not found throws"
+        (is (thrown? Exception
+                     (handler "glitch_read_file"
+                              {"path" "/tmp/does-not-exist-glitch-test.txt"}))))
+      (finally
+        (.delete tmp-file)))))
