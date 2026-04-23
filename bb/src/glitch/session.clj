@@ -194,3 +194,13 @@
   "Return all entries from index.edn."
   []
   (read-index))
+
+;; ---------------------------------------------------------------------------
+;; Advisory recording
+;; ---------------------------------------------------------------------------
+
+(defn record-advise!
+  "Record an advisory call in the current session.
+   `entry` is a map with :task and :recommendation keys."
+  [entry]
+  (record! (merge {:type :advise} entry)))
