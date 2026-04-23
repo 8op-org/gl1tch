@@ -1,0 +1,80 @@
+;; advise.glitch — advisory workflow recommender
+;;
+;; Usage:
+;;   glitch run advise "I want to fetch GitHub issues and summarize them"
+;;   glitch run advise "scan my repo for security problems"
+;;   glitch run advise "run my test suite and report failures"
+
+(workflow "advise"
+  :description "Recommends the right glitch approach for a task — workflow, primitive, repl, or none"
+
+  ;; Shell fetches the workflow index — LLM does not call APIs
+  (step "index"
+    (sh "bash" "-c"
+      "cat ~/.local/share/glitch/index.edn 2>/dev/null || echo '{}'"))
+
+  ;; Shell lists existing workflows — LLM does not discover files
+  (step "existing-workflows"
+    (sh "bash" "-c"
+      "for f in .glitch/workflows/*.glitch; do basename \"$f\" .glitch; done 2>/dev/null || echo none"))
+
+  ;; LLM reasons over all context and returns structured recommendation
+  (step "recommend"
+    (llm
+      :provider "copilot"
+      :tools []
+      :format "json"
+      :schema {:required ["approach" "primitives" "reasoning" "example" "existing_workflows"]
+               :types {"approach" "string"
+                       "primitives" "array"
+                       "reasoning" "string"
+                       "example" "string"
+                       "existing_workflows" "array"}}
+      :retries 1
+      :prompt (str
+        "You are an advisor for the gl1tch workflow engine (Babashka/Clojure DSL).\n\n"
+        "The user wants to: " (input) "\n\n"
+        "WORKFLOW INDEX (saved workflows with metadata):\n"
+        (ref "index") "\n\n"
+        "EXISTING WORKFLOW FILES:\n"
+        (ref "existing-workflows") "\n\n"
+        "PRIMITIVE CATALOG:\n"
+        "- workflow     — top-level container; groups steps\n"
+        "- step         — named unit of work; result stored by name for (ref ...)\n"
+        "- sh           — run a shell command; owns all data fetching\n"
+        "- llm          — call an LLM; owns reasoning and formatting\n"
+        "- ref          — read a previous step's output by name\n"
+        "- input        — the freeform string the user passed to glitch run\n"
+        "- param        — a named parameter set via --set key=value\n"
+        "- par          — run steps concurrently\n"
+        "- phase        — group steps into a named phase\n"
+        "- gate         — assert a condition; halt on failure\n"
+        "- consensus    — run multiple LLM calls and synthesize agreement\n"
+        "- grounded?    — verify an LLM output is grounded in source material\n"
+        "- investigate  — iterative research loop over a codebase or data set\n"
+        "- validate     — validate structured output against a schema\n"
+        "- retry        — retry a step on failure with backoff\n"
+        "- with-timeout — wrap a step with a deadline\n"
+        "- call-workflow — invoke another .glitch workflow by name\n"
+        "- save         — write a string to a file path\n"
+        "- read-file    — read a file into a step result\n"
+        "- json-extract — pull a JSON object out of freeform LLM text\n\n"
+        "RULES:\n"
+        "- Shell steps own data fetching (sh); LLM steps own reasoning (llm)\n"
+        "- Never rely on an LLM to call APIs or read files — use sh or read-file\n"
+        "- Recommend an existing workflow when one already fits the task\n"
+        "- Recommend 'repl' when the task is exploratory or one-off\n"
+        "- Recommend 'none' only if glitch cannot help at all\n\n"
+        "Return a single JSON object (no markdown fence, no preamble):\n"
+        "{\n"
+        "  \"approach\": \"workflow | primitive | repl | none\",\n"
+        "  \"primitives\": [\"list\", \"of\", \"relevant\", \"primitives\"],\n"
+        "  \"reasoning\": \"why this approach fits the task\",\n"
+        "  \"example\": \"a short .glitch snippet or glitch run command showing how to do it\",\n"
+        "  \"existing_workflows\": [\"names of existing workflows that partially or fully address this task\"]\n"
+        "}\n\n"
+        "Choose 'approach' values:\n"
+        "- workflow   — build a new .glitch file combining multiple primitives\n"
+        "- primitive  — a single primitive (sh, llm, read-file) is enough\n"
+        "- repl       — use the glitch REPL for quick interactive exploration\n"
+        "- none       — glitch is not the right tool for this task"))))
