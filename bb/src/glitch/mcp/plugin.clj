@@ -46,7 +46,11 @@
              {'user           (assoc (sci-bind/user-bindings)
                                      'defmcp-tool defmcp-tool)
               'clojure.string sci-bind/string-bindings
-              'str            sci-bind/string-bindings}}))
+              'str            sci-bind/string-bindings
+              'System         {'getenv     (sci/new-var 'getenv
+                                            (fn [k] (System/getenv k)))
+                               'getProperty (sci/new-var 'getProperty
+                                             (fn [k] (System/getProperty k)))}}}))
 
 (defn load-tools!
   "Scan .glitch/mcp-tools/*.clj and evaluate each in a SCI context.
