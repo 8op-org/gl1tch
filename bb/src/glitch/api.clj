@@ -1,7 +1,8 @@
 (ns glitch.api
   "REPL-first agent primitives: deftool, agent, use-provider!, use-model!
-   These are injected into the user namespace by glitch.repl/start."
-  (:require [glitch.core :as g]))
+   Intentionally separate from glitch.mcp.plugin/registry — this registry
+   is for ad-hoc REPL tool definitions, not MCP server tools.
+   Injected into the user namespace by glitch.repl/start.")
 
 ;; ---------------------------------------------------------------------------
 ;; Tool registry — atom of {name-string -> tool-map}
@@ -13,7 +14,8 @@
 (defn register-tool!
   "Register a tool map in the registry. Keys: :name :description :parameters :fn"
   [{:keys [name] :as tool}]
-  (swap! tool-registry assoc name tool))
+  (swap! tool-registry assoc name tool)
+  nil)
 
 (defn list-tools
   "Return a sorted list of registered tool names."
