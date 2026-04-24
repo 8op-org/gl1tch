@@ -6,6 +6,7 @@
             [clojure.java.io :as io]
             [clojure.pprint :as pp]
             [clojure.string :as str]
+            [glitch.api :as api]
             [glitch.core :as g]
             [glitch.provider :as prov]
             [glitch.plugin :as plugin]
@@ -154,6 +155,15 @@
   (intern 'user 'session  repl-session)
   (intern 'user 'promote  repl-promote)
   (intern 'user 'recall   repl-recall)
+
+  ;; Inject glitch.api into user namespace
+  (binding [*ns* (the-ns 'user)]
+    (refer 'glitch.api :only '[agent list-tools use-provider! use-model!])
+    ;; deftool is a macro — intern the var directly so nREPL resolves it as a macro
+    (ns-unmap *ns* 'deftool)
+    (intern *ns* 'deftool @#'api/deftool)
+    ;; remove-tool exposed without bang per design spec
+    (intern *ns* 'remove-tool api/remove-tool!))
 
   (let [port-file (io/file (port-file-path dir))]
     (spit port-file (str port))
