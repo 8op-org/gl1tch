@@ -6,9 +6,11 @@
 (use-fixtures :each
   (fn [f]
     (reset! api/tool-registry {})
+    (reset! api/current-model nil)
     (g/set-provider-fn! nil)
     (f)
     (reset! api/tool-registry {})
+    (reset! api/current-model nil)
     (g/set-provider-fn! nil)))
 
 (deftest register-tool-test
@@ -104,3 +106,18 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"tool not registered"
                           (api/agent ["missing-tool"] "prompt")))))
+
+(deftest use-provider-test
+  (testing "use-provider! sets the provider fn"
+    (api/use-provider! "lmstudio")
+    ;; provider fn should now be set (not nil)
+    (is (some? @g/*provider-fn*)))
+  (testing "use-provider! returns nil"
+    (is (nil? (api/use-provider! "lmstudio")))))
+
+(deftest use-model-test
+  (testing "use-model! stores the model name"
+    (api/use-model! "gemma4")
+    (is (= "gemma4" @api/current-model)))
+  (testing "use-model! returns nil"
+    (is (nil? (api/use-model! "gemma4")))))

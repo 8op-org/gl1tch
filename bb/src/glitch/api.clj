@@ -3,7 +3,8 @@
    Intentionally separate from glitch.mcp.plugin/registry — this registry
    is for ad-hoc REPL tool definitions, not MCP server tools.
    Injected into the user namespace by glitch.repl/start."
-  (:require [glitch.core :as g]))
+  (:require [glitch.core :as g]
+            [glitch.provider :as prov]))
 
 ;; ---------------------------------------------------------------------------
 ;; Tool registry — atom of {name-string -> tool-map}
@@ -108,3 +109,36 @@
                               :tool-defs    tool-defs
                               :tool-handler tool-handler})]
      (apply g/llm (apply concat call-opts)))))
+
+;; ---------------------------------------------------------------------------
+;; Provider / model switching
+;; ---------------------------------------------------------------------------
+
+(def current-model (atom nil))
+
+(defn use-provider!
+  "Switch the active provider for subsequent llm and agent calls.
+   Provider must be registered (lmstudio, openrouter, claude, copilot).
+
+   Usage: (use-provider! \"openrouter\")"
+  [provider-name]
+  (prov/load-providers)
+  (let [model @current-model]
+    (g/set-provider-fn!
+      (fn [opts]
+        (prov/call-provider provider-name
+                            (cond-> opts
+                              model (assoc :model model))))))
+  (g/trace "provider:" provider-name)
+  nil)
+
+(defn use-model!
+  "Set the model used by subsequent llm and agent calls.
+   Takes effect immediately if a provider is already active.
+   Call use-provider! after this to apply the model to the provider fn.
+
+   Usage: (use-model! \"gemma4\")"
+  [model-name]
+  (reset! current-model model-name)
+  (g/trace "model:" model-name)
+  nil)
