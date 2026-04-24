@@ -1,8 +1,7 @@
 (ns glitch.api
   "REPL-first agent primitives: deftool, agent, use-provider!, use-model!
    These are injected into the user namespace by glitch.repl/start."
-  (:require [glitch.core :as g]
-            [clojure.pprint :as pp]))
+  (:require [glitch.core :as g]))
 
 ;; ---------------------------------------------------------------------------
 ;; Tool registry — atom of {name-string -> tool-map}

@@ -5,7 +5,8 @@
 (use-fixtures :each
   (fn [f]
     (reset! api/tool-registry {})
-    (f)))
+    (f)
+    (reset! api/tool-registry {})))
 
 (deftest register-tool-test
   (testing "registers a tool in the registry"
