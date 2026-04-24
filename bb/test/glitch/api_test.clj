@@ -1,6 +1,7 @@
 (ns glitch.api-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [glitch.api :as api]))
+            [glitch.api :as api]
+            [glitch.core :as g]))
 
 (use-fixtures :each
   (fn [f]
@@ -62,3 +63,44 @@
 (deftest deftool-returns-name-test
   (testing "deftool returns the tool name as a string"
     (is (= "ret-tool" (api/deftool ret-tool [x] "desc" x)))))
+
+(deftest agent-test
+  (testing "agent calls provider and returns text response"
+    (reset! api/tool-registry {})
+    (api/register-tool! {:name        "echo"
+                         :description "Echo the input"
+                         :parameters  {:type "object"
+                                       :properties {"msg" {:type "string"}}
+                                       :required ["msg"]}
+                         :fn          (fn [args] (str "echo: " (get args "msg")))})
+    ;; Stub provider: returns text immediately (no tool calls)
+    (g/set-provider-fn!
+      (fn [opts]
+        {:response   "done"
+         :tokens-in  0
+         :tokens-out 0}))
+    (let [result (api/agent ["echo"] "test prompt")]
+      (is (string? result))
+      (is (= "done" result))))
+
+  (testing "agent with no tools calls provider with empty tool-defs"
+    (g/set-provider-fn!
+      (fn [opts]
+        (is (empty? (:tool-defs opts)))
+        {:response "ok" :tokens-in 0 :tokens-out 0}))
+    (is (= "ok" (api/agent [] "prompt"))))
+
+  (testing "agent with opts map passes through options"
+    (g/set-provider-fn!
+      (fn [opts]
+        (is (= "be helpful" (:system opts)))
+        (is (= true (:agentic opts)))
+        {:response "ok" :tokens-in 0 :tokens-out 0}))
+    (is (= "ok" (api/agent {:system "be helpful"} [] "prompt"))))
+
+  (testing "agent throws when tool not in registry"
+    (reset! api/tool-registry {})
+    (g/set-provider-fn! (fn [_] {:response "" :tokens-in 0 :tokens-out 0}))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"tool not registered"
+                          (api/agent ["missing-tool"] "prompt")))))

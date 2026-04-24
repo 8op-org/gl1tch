@@ -2,7 +2,8 @@
   "REPL-first agent primitives: deftool, agent, use-provider!, use-model!
    Intentionally separate from glitch.mcp.plugin/registry — this registry
    is for ad-hoc REPL tool definitions, not MCP server tools.
-   Injected into the user namespace by glitch.repl/start.")
+   Injected into the user namespace by glitch.repl/start."
+  (:require [glitch.core :as g]))
 
 ;; ---------------------------------------------------------------------------
 ;; Tool registry — atom of {name-string -> tool-map}
@@ -54,3 +55,56 @@
                          (let [~@(mapcat (fn [a] [(symbol a) `(get ~args-sym ~a)]) arg-strs)]
                            ~@body))})
        ~name-str)))
+
+;; ---------------------------------------------------------------------------
+;; Agent — agentic tool loop
+;; ---------------------------------------------------------------------------
+
+(defn- tool->mcp-def
+  "Convert a registry tool map to MCP-format for the provider."
+  [{:keys [name description parameters]}]
+  {"name"        name
+   "description" description
+   "inputSchema" parameters})
+
+(defn- make-tool-handler
+  "Build a dispatch fn that calls the registered tool fn by name.
+   Traces each invocation to stderr."
+  []
+  (fn [tool-name args]
+    (let [tool (get @tool-registry tool-name)]
+      (when-not tool
+        (throw (ex-info (str "agent: unknown tool: " tool-name) {})))
+      (g/trace "  tool:" tool-name)
+      (str ((:fn tool) args)))))
+
+(defn agent
+  "Run an agentic LLM loop with the given tools.
+
+   Usage:
+     (agent [\"search\" \"run-tests\"] \"why is ci failing?\")
+     (agent {:system \"you are a senior engineer\"} [\"search\"] \"what broke?\")
+
+   tool-names — vector of string tool names registered via deftool/register-tool!
+   prompt     — user prompt string
+   opts       — optional map: :system :model :provider :max-rounds (default 10)
+
+   Streams tool call names to stderr. Returns final text string."
+  ([tool-names prompt]
+   (agent {} tool-names prompt))
+  ([opts tool-names prompt]
+   (let [tool-defs    (mapv (fn [n]
+                              (let [t (get @tool-registry n)]
+                                (when-not t
+                                  (throw (ex-info (str "agent: tool not registered: " n)
+                                                  {:tool n})))
+                                (tool->mcp-def t)))
+                            tool-names)
+         tool-handler (make-tool-handler)
+         call-opts    (merge {:agentic    true
+                              :max-rounds 10}
+                             opts
+                             {:prompt       prompt
+                              :tool-defs    tool-defs
+                              :tool-handler tool-handler})]
+     (apply g/llm (apply concat call-opts)))))
