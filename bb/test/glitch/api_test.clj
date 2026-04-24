@@ -6,8 +6,10 @@
 (use-fixtures :each
   (fn [f]
     (reset! api/tool-registry {})
+    (g/set-provider-fn! nil)
     (f)
-    (reset! api/tool-registry {})))
+    (reset! api/tool-registry {})
+    (g/set-provider-fn! nil)))
 
 (deftest register-tool-test
   (testing "registers a tool in the registry"
@@ -66,7 +68,6 @@
 
 (deftest agent-test
   (testing "agent calls provider and returns text response"
-    (reset! api/tool-registry {})
     (api/register-tool! {:name        "echo"
                          :description "Echo the input"
                          :parameters  {:type "object"
@@ -99,7 +100,6 @@
     (is (= "ok" (api/agent {:system "be helpful"} [] "prompt"))))
 
   (testing "agent throws when tool not in registry"
-    (reset! api/tool-registry {})
     (g/set-provider-fn! (fn [_] {:response "" :tokens-in 0 :tokens-out 0}))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"tool not registered"

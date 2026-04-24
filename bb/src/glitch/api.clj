@@ -74,7 +74,7 @@
   (fn [tool-name args]
     (let [tool (get @tool-registry tool-name)]
       (when-not tool
-        (throw (ex-info (str "agent: unknown tool: " tool-name) {})))
+        (throw (ex-info (str "agent: unknown tool: " tool-name) {:tool tool-name})))
       (g/trace "  tool:" tool-name)
       (str ((:fn tool) args)))))
 
