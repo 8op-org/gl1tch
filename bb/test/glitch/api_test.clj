@@ -37,3 +37,28 @@
     (is (empty? (api/list-tools))))
   (testing "no-ops on unknown tool"
     (is (nil? (api/remove-tool! "nonexistent")))))
+
+(deftest deftool-test
+  (testing "deftool registers a tool with correct shape"
+    (api/deftool my-search [query]
+      "Search the codebase for query"
+      (str "results for " query))
+    (let [t (get @api/tool-registry "my-search")]
+      (is (= "my-search" (:name t)))
+      (is (= "Search the codebase for query" (:description t)))
+      (is (= {:type "object"
+              :properties {"query" {:type "string"}}
+              :required ["query"]}
+             (:parameters t)))
+      (is (= "results for hello" ((:fn t) {"query" "hello"})))))
+
+  (testing "deftool with multiple args"
+    (api/deftool multi-arg [query limit]
+      "Search with limit"
+      (str query " " limit))
+    (let [t (get @api/tool-registry "multi-arg")]
+      (is (= #{"query" "limit"} (set (keys (get-in t [:parameters :properties]))))))))
+
+(deftest deftool-returns-name-test
+  (testing "deftool returns the tool name as a string"
+    (is (= "ret-tool" (api/deftool ret-tool [x] "desc" x)))))

@@ -27,3 +27,30 @@
   [name]
   (swap! tool-registry dissoc name)
   nil)
+
+(defmacro deftool
+  "Define and register a tool.
+
+   Usage:
+     (deftool search [query]
+       \"Search the codebase index\"
+       (index-query query))
+
+   Each symbol in the arg vector becomes a :type \"string\" parameter.
+   The body is called with a string-keyed args map — args are bound by name.
+   Returns the tool name as a string."
+  [tool-name args docstring & body]
+  (let [arg-strs  (mapv str args)
+        props     (into {} (map (fn [a] [a {:type "string"}]) arg-strs))
+        params    {:type "object" :properties props :required arg-strs}
+        name-str  (str tool-name)
+        args-sym  (gensym "args")]
+    `(do
+       (register-tool!
+         {:name        ~name-str
+          :description ~docstring
+          :parameters  ~params
+          :fn          (fn [~args-sym]
+                         (let [~@(mapcat (fn [a] [(symbol a) `(get ~args-sym ~a)]) arg-strs)]
+                           ~@body))})
+       ~name-str)))
