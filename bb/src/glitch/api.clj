@@ -16,6 +16,8 @@
 (defn register-tool!
   "Register a tool map in the registry. Keys: :name :description :parameters :fn"
   [{:keys [name] :as tool}]
+  (when-not name
+    (throw (ex-info "register-tool!: :name is required" {:tool tool})))
   (swap! tool-registry assoc name tool)
   nil)
 
@@ -102,12 +104,13 @@
                                 (tool->mcp-def t)))
                             tool-names)
          tool-handler (make-tool-handler)
-         call-opts    (merge {:agentic    true
-                              :max-rounds 10}
-                             opts
-                             {:prompt       prompt
-                              :tool-defs    tool-defs
-                              :tool-handler tool-handler})]
+         base-opts    {:agentic true :max-rounds 10}
+         ;; fixed opts always win — prompt/tool-defs/tool-handler/agentic cannot be overridden
+         fixed-opts   {:prompt       prompt
+                       :tool-defs    tool-defs
+                       :tool-handler tool-handler
+                       :agentic      true}
+         call-opts    (merge base-opts opts fixed-opts)]
      (apply g/llm (apply concat call-opts)))))
 
 ;; ---------------------------------------------------------------------------
@@ -134,8 +137,7 @@
 
 (defn use-model!
   "Set the model used by subsequent llm and agent calls.
-   Takes effect immediately if a provider is already active.
-   Call use-provider! after this to apply the model to the provider fn.
+   Takes effect on the next llm or agent call — no need to re-call use-provider!.
 
    Usage: (use-model! \"gemma4\")"
   [model-name]

@@ -121,3 +121,9 @@
     (is (= "gemma4" @api/current-model)))
   (testing "use-model! returns nil"
     (is (nil? (api/use-model! "gemma4")))))
+
+(deftest register-tool-requires-name-test
+  (testing "register-tool! throws when :name is missing"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #":name is required"
+                          (api/register-tool! {:description "x" :parameters {} :fn identity})))))
